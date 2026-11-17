@@ -156,7 +156,7 @@ public sealed class PurchaseReceiptCancellationService(
     }
 
     private static string CauseText(CancelBlock block) =>
-        block.Kind == "Seeded" ? $"seed lot {block.Code} has already been seeded" : $"it has purchase return {block.Code}";
+        block.Kind == "Seeded" ? $"seed lot {block.Code} has already been used" : $"it has purchase return {block.Code}";
 
     /// <summary>The receipt, cancellable by the caller (own or Owner) and Completed (MSG-GEN-09 for a Draft or a Cancelled one).</summary>
     private async Task<(PurchaseReceipt? Receipt, AppError? Refused)> CancellableAsync(Guid receiptId, CancellationToken cancellationToken)

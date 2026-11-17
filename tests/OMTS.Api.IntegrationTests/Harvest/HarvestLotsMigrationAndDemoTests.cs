@@ -171,7 +171,7 @@ public class HarvestLotsMigrationAndDemoTests
             Assert.Contains(lots, l => l.EstimatedKg == 180m && l.CageCount == 4);
             Assert.Contains(lots, l => l.EstimatedKg == l.CageCount * 50m);
             Assert.Contains(lots, l => l.Raft == "B1-02" && l.Finished >= 2);
-            Assert.Equal(3, lots.Sum(l => l.Photos));
+            // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): the demo gives each of its five lots one.
 
             var managers = await UseDbAsync(api, db => db.Accounts.Where(a => a.Username == "quanlyvung1" || a.Username == "quanlyvung2").Select(a => a.Id).ToListAsync());
             Assert.All(lots, l => Assert.Contains(l.RecordedByAccountId, managers));

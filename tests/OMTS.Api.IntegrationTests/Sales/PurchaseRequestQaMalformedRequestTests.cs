@@ -24,9 +24,9 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
         "[]",
         "123",
         "\"x\"",
-        """{ "requestedKg": "abc", "acceptedKg": "abc", "note": 1 }""",
-        """{ "requestedKg": 1e400, "acceptedKg": 1e400, "note": 1 }""",
-        """{ "requestedKg": true, "acceptedKg": true, "note": 1 }""",
+        """{ "requestedCages": "abc", "acceptedCages": "abc", "note": 1 }""",
+        """{ "requestedCages": 1e400, "acceptedCages": 1e400, "note": 1 }""",
+        """{ "requestedCages": true, "acceptedCages": true, "note": 1 }""",
         """{ "pickupDate": "31/12/2099", "note": 1 }""",
         """{ "pickupDate": "2099-02-30", "note": 1 }""",
         """{ "pickupDate": 20991231, "note": 1 }""",
@@ -69,7 +69,7 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
     {
         var (_, trader, productId) = await WorldAsync();
 
-        var field = await (await trader.Client.PostAsJsonRawAsync("/api/me/purchase-requests", $$"""{ "productId": "{{productId}}", "requestedKg": "abc", "pickupDate": "2099-01-01" }""")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
+        var field = await (await trader.Client.PostAsJsonRawAsync("/api/me/purchase-requests", $$"""{ "productId": "{{productId}}", "requestedCages": "abc", "pickupDate": "2099-01-01" }""")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
 
         Assert.Equal("request", field);
     }
@@ -83,7 +83,7 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
 
         var request = (await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new
         {
-            productId, requestedKg = 5m, pickupDate = PurchaseRequestTestKit.Today, customerId = other.Profile.Id, statusId = 3202, acceptedKg = 5m, payLaterAgreed = true, id = Guid.Empty,
+            productId, requestedCages = 5, pickupDate = PurchaseRequestTestKit.Today, customerId = other.Profile.Id, statusId = 3202, acceptedCages = 5, payLaterAgreed = true, id = Guid.Empty,
         })).ReadAsync(HttpStatusCode.Created)).GetProperty("request");
 
         var view = await owner.ViewedByStaffAsync(request.Id());

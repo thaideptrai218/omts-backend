@@ -119,7 +119,9 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         if (stored is null)
         {
             var view = DemoSeedContext.Ensure(await context.Get<PurchaseReceiptService>().GetAsync(receiptId, cancellationToken), $"reading {code}");
-            var line = view.Lines.Single(l => l.ItemCode == planned.Item);
+            // A receipt stored before the VT codes keeps the older code on its line: its item has the same name.
+            var name = DemoInputItemStep.NameOf(planned.Item);
+            var line = view.Lines.Single(l => l.ItemCode == planned.Item || l.ItemName == name);
             DemoSeedContext.Ensure(await returns.CreateAsync(
                 receiptId, new CreatePurchaseReturnRequest(planned.Reason, [new ReturnLineInput(line.Id, planned.Quantity)]), cancellationToken), $"return of {code}");
             stored = await db.PurchaseReturns.SingleAsync(r => r.ReceiptId == receiptId, cancellationToken);

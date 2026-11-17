@@ -1,7 +1,9 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Employees;
 
@@ -10,7 +12,8 @@ namespace OMTS.Application.Features.Employees;
 /// has passed, and removes the work assignments after that day through <see cref="IEmployeeWorkRecords"/>. An automatic
 /// action, so the audit row has no person (GBR-02).
 /// </summary>
-public sealed class EmploymentEndService(IEmployeeRepository employees, IEmployeeWorkRecords workRecords, AuditLogService audit, IUnitOfWork unitOfWork)
+public sealed class EmploymentEndService(
+    IEmployeeRepository employees, IEmployeeWorkRecords workRecords, EmployeeAppAccess employeeApp, AuditLogService audit, IUnitOfWork unitOfWork)
 {
     public Task<IReadOnlyList<Guid>> DueIdsAsync(DateOnly today, CancellationToken cancellationToken) =>
         employees.ListEmployedWithLastWorkingDayBeforeAsync(today, cancellationToken);
@@ -28,7 +31,9 @@ public sealed class EmploymentEndService(IEmployeeRepository employees, IEmploye
         await workRecords.RemoveAssignmentsAfterAsync(employee.Id, lastDay, cancellationToken);
         employee.StatusId = StatusIds.Employee.Left;
         audit.RecordStatusChange(nameof(Employee), employee.Id, null, StatusIds.Employee.Working, StatusIds.Employee.Left, $"Last working day {lastDay:yyyy-MM-dd}");
-        // LABOR-03 and LABOR-06 (L3): Left logs the employee out and unlinks the device (BR-LABOR-02), here.
+        // Left logs the employee out of the employee app and unlinks the device (BR-LABOR-02), in the same save. The app already refused
+        // them from the day after the last working day, whether or not this job had run.
+        await employeeApp.RevokeAsync(employee.Id, EmployeeDeviceUnlinkReason.EmploymentEnded, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }

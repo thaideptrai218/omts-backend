@@ -52,6 +52,9 @@ public interface IHarvestLotRepository
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);
 
+    /// <summary>The estimated kg of every lot of each cycle (all lots, not only a period); a cycle with no lot is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> KgByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     /// <summary>The date of the last harvest lot of the cycle, or null when it has none (BR-CYCLE-06).</summary>
     Task<DateOnly?> LastHarvestDateAsync(Guid cycleId, CancellationToken cancellationToken);
 
@@ -60,6 +63,12 @@ public interface IHarvestLotRepository
 
     /// <summary>The ids of the same lots, oldest first: what the daily close check looks at (GFR-05).</summary>
     Task<IReadOnlyList<Guid>> ListForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
+
+    /// <summary>The lots harvested for a purchase request with their raft and zone, read only, the earliest harvest first (decision of 11/11/2026).</summary>
+    Task<IReadOnlyList<HarvestLot>> ListOfPurchaseRequestAsync(Guid purchaseRequestId, CancellationToken cancellationToken);
+
+    /// <summary>How many cages the lots of each request hold; a request with no lot is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken);
 
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);
@@ -78,4 +87,7 @@ public interface IHarvestLotRepository
     void AddProductLine(HarvestLotProductLine line);
 
     void RemoveProductLine(HarvestLotProductLine line);
+    void AddCrew(HarvestLotCrewMember member);
+
+    void RemoveCrew(HarvestLotCrewMember member);
 }

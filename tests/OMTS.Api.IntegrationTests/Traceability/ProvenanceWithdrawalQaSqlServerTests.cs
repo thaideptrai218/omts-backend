@@ -151,6 +151,8 @@ public class ProvenanceWithdrawalQaSqlServerTests
         public Task<IReadOnlyList<HarvestLot>> SearchAsync(string? lotCode, string? invoiceCode, PermittedZones zones, int max, CancellationToken cancellationToken) =>
             inner.SearchAsync(lotCode, invoiceCode, zones, max, cancellationToken);
 
+        public Task<IReadOnlyList<LotSaleReturn>> SaleReturnsAsync(Guid lotId, CancellationToken cancellationToken) => inner.SaleReturnsAsync(lotId, cancellationToken);
+
         public async Task<IReadOnlyList<LotSaleLine>> SaleLinesAsync(Guid lotId, CancellationToken cancellationToken)
         {
             var lines = await inner.SaleLinesAsync(lotId, cancellationToken);

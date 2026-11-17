@@ -32,6 +32,9 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Raft> Rafts => Set<Raft>();
     public DbSet<RaftPhoto> RaftPhotos => Set<RaftPhoto>();
     public DbSet<Lane> Lanes => Set<Lane>();
+    public DbSet<LaneIncident> LaneIncidents => Set<LaneIncident>();
+    public DbSet<LaneIncidentPhoto> LaneIncidentPhotos => Set<LaneIncidentPhoto>();
+    public DbSet<LaneIncidentMaterial> LaneIncidentMaterials => Set<LaneIncidentMaterial>();
 
     // Seed, cultivation and water measurements
     public DbSet<FarmingInputItem> FarmingInputItems => Set<FarmingInputItem>();
@@ -60,10 +63,17 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CultivationLogPhoto> CultivationLogPhotos => Set<CultivationLogPhoto>();
     public DbSet<SeedingRecord> SeedingRecords => Set<SeedingRecord>();
     public DbSet<SeedingRecordLane> SeedingRecordLanes => Set<SeedingRecordLane>();
+    public DbSet<SeedingRecordPhoto> SeedingRecordPhotos => Set<SeedingRecordPhoto>();
+    public DbSet<CyclePlanPhoto> CyclePlanPhotos => Set<CyclePlanPhoto>();
+    public DbSet<LaneProgressChange> LaneProgressChanges => Set<LaneProgressChange>();
+    public DbSet<NurseryBatch> NurseryBatches => Set<NurseryBatch>();
+    public DbSet<NurseryBatchAllocation> NurseryBatchAllocations => Set<NurseryBatchAllocation>();
+    public DbSet<NurseryBatchPhoto> NurseryBatchPhotos => Set<NurseryBatchPhoto>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
     public DbSet<HarvestLot> HarvestLots => Set<HarvestLot>();
     public DbSet<HarvestLotLane> HarvestLotLanes => Set<HarvestLotLane>();
     public DbSet<HarvestLotPhoto> HarvestLotPhotos => Set<HarvestLotPhoto>();
+    public DbSet<HarvestLotCrewMember> HarvestLotCrew => Set<HarvestLotCrewMember>();
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
@@ -85,6 +95,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<QualityClaimPhoto> QualityClaimPhotos => Set<QualityClaimPhoto>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
+    public DbSet<PortWeighing> PortWeighings => Set<PortWeighing>();
+    public DbSet<PortWeighingCage> PortWeighingCages => Set<PortWeighingCage>();
     public DbSet<SalesInvoicePriceCut> SalesInvoicePriceCuts => Set<SalesInvoicePriceCut>();
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
     public DbSet<SalesOrderLine> SalesOrderLines => Set<SalesOrderLine>();
@@ -92,6 +104,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CustomerPaymentAllocation> CustomerPaymentAllocations => Set<CustomerPaymentAllocation>();
     public DbSet<CustomerDebtAdjustment> CustomerDebtAdjustments => Set<CustomerDebtAdjustment>();
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
+    public DbSet<SalesReturn> SalesReturns => Set<SalesReturn>();
+    public DbSet<SalesReturnLine> SalesReturnLines => Set<SalesReturnLine>();
 
     // Labor (LABOR-01, LABOR-02, LABOR-04, LABOR-05, LABOR-10, LABOR-11, LABOR-15)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
@@ -108,6 +122,11 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();
+
+    // Employee app (LABOR-03, LABOR-06): login codes, the linked device and the sessions of employees, apart from the staff ones
+    public DbSet<EmployeeLoginCode> EmployeeLoginCodes => Set<EmployeeLoginCode>();
+    public DbSet<EmployeeDevice> EmployeeDevices => Set<EmployeeDevice>();
+    public DbSet<EmployeeSession> EmployeeSessions => Set<EmployeeSession>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();

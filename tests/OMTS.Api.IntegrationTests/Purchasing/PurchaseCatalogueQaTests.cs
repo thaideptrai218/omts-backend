@@ -233,26 +233,31 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
     {
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
-        foreach (var code in new[] { "VT-050", "AVT070", "VT 080", "VTX", "VT1A" })
+        // Since 11/11/2026 the codes of a type come from a sequence of their own (VT000001 for materials, GI for seed, HK for the others): the proposal is the next free number, so a code typed outside
+        // the pattern never moves it. A typed code needs 1-30 letters, digits, "-", "_" or ".", so one with a space is refused.
+        foreach (var code in new[] { "VT-050", "AVT070", "VTX", "VT1A" })
         {
-            await owner.CreateItemAsync("Other", code: code);
+            await owner.CreateItemAsync("Material", code: code);
         }
 
-        Assert.Equal("VT001", await ProposedAsync(owner));
+        Assert.Equal("VT000001", await ProposedAsync(owner, "Material"));
 
-        // The Owner replaces the proposal with a code of the pattern: the next proposal follows it.
-        var item = await owner.CreateItemAsync("Other", code: "VT999");
-        Assert.Equal("VT1000", await ProposedAsync(owner));
-        await owner.CreateItemAsync("Other", code: await ProposedAsync(owner));
-        Assert.Equal("VT1001", await ProposedAsync(owner));
+        // The Owner replaces the proposal with a code of the pattern: the proposal skips it.
+        var item = await owner.CreateItemAsync("Material", code: "VT000001");
+        Assert.Equal("VT000002", await ProposedAsync(owner, "Material"));
+        await owner.CreateItemAsync("Material", code: await ProposedAsync(owner, "Material"));
+        Assert.Equal("VT000003", await ProposedAsync(owner, "Material"));
 
-        // The code of a used item changes (GBR-03): the old number is free for the proposal, the new one is counted.
+        // The proposals of the other types are not moved by the materials.
+        Assert.Equal(("GI000001", "HK000001"), (await ProposedAsync(owner, "Seed"), await ProposedAsync(owner, "Other")));
+
+        // The code of a used item changes (GBR-03): the old number is free for the proposal again, the new code is taken.
         var view = await owner.GetFromJsonAsync<JsonElement>($"{Items}/{item}");
         await (await owner.PutAsJsonAsync($"{Items}/{item}", new
         {
-            code = "vt2000", name = view.GetProperty("name").GetString(), group = "Other", unit = "kg", rowVersion = view.GetProperty("rowVersion").GetString(),
+            code = "vt2000", name = view.GetProperty("name").GetString(), group = "Material", unit = "kg", rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("VT2001", await ProposedAsync(owner));
+        Assert.Equal("VT000001", await ProposedAsync(owner, "Material"));
     }
 
     [Fact]
@@ -273,8 +278,8 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(100_000, costs.GetProperty("rafts").EnumerateArray().Single().Money("materialCost"));
     }
 
-    private static async Task<string> ProposedAsync(HttpClient owner) =>
-        (await (await owner.GetAsync($"{Items}/next-code")).ReadAsync(HttpStatusCode.OK)).GetProperty("code").GetString()!;
+    private static async Task<string> ProposedAsync(HttpClient owner, string? group = null) =>
+        (await (await owner.GetAsync(group is null ? $"{Items}/next-code" : $"{Items}/next-code?group={group}")).ReadAsync(HttpStatusCode.OK)).GetProperty("code").GetString()!;
 
     private static MultipartFormDataContent Form(string fileName)
     {

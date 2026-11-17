@@ -1,4 +1,5 @@
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
@@ -8,10 +9,10 @@ public enum SalesInvoiceAction
     /// <summary>SALE-06.1.</summary>
     Resend,
 
-    /// <summary>CLAIM-03 (no endpoint yet).</summary>
+    /// <summary>CLAIM-03.</summary>
     CreateReturn,
 
-    /// <summary>CLAIM-03.3 (no endpoint yet).</summary>
+    /// <summary>CLAIM-03.3.</summary>
     CancelReturn,
 
     /// <summary>SALE-07: the price cut after a claim.</summary>
@@ -36,7 +37,7 @@ public sealed record SalesInvoiceActionFacts(int StatusId, int LatestDeliverySta
 /// <summary>What the caller may do in the zone of the invoice (GFR-02, §I.4.4).</summary>
 /// <param name="MaySell">SALES_INVOICES Create in the zone: the Zone Manager of the zone and the Owner.</param>
 /// <param name="MayCreateReturn">SALES_RETURNS Create in the zone: the Zone Manager of the zone and the Owner.</param>
-/// <param name="MayPrint">SALES_INVOICES Export in the zone: the Accountant only views (§I.4.4, R).</param>
+/// <param name="MayPrint">SALES_INVOICES Export in the zone: the Zone Manager, the Accountant (PM answer 12/11/2026) and the Owner.</param>
 /// <param name="MayEdit">SALES_INVOICES Edit in the zone: the Owner only, until the right is given to another role.</param>
 /// <param name="MayDelete">SALES_INVOICES Delete in the zone: cancels the invoice; the Owner only, until the right is given to another role.</param>
 public sealed record SalesInvoiceCallerRights(bool IsCooperativeOwner, bool MaySell, bool MayCreateReturn, bool MayPrint, bool MayEdit = false, bool MayDelete = false);
@@ -47,6 +48,15 @@ public enum SalesInvoiceChangeRefusal
     NotPermitted,
     NotCompleted,
     HasSalesReturn,
+}
+
+/// <summary>Why CLAIM-03 and CLAIM-03.3 refuse an invoice; the endpoints answer this, and the same rule decides what is offered.</summary>
+public enum SalesReturnRefusal
+{
+    NotPermitted,
+    InvoiceCancelled,
+    HasSalesReturn,
+    NoSalesReturn,
 }
 
 /// <summary>
@@ -65,21 +75,36 @@ public static class SalesInvoiceAllowedActions
         : hasSalesReturn ? SalesInvoiceChangeRefusal.HasSalesReturn
         : null;
 
+    /// <summary>"Has a sales return": a return that is not cancelled (BR-CLAIM-03), by the one rule <see cref="SalesReturn.Standing"/>. The invoice comes with its returns loaded.</summary>
+    public static bool HasSalesReturn(SalesInvoice invoice) => invoice.Returns.Any(r => r.IsStanding);
+
+    /// <summary>BR-CLAIM-03: null when a sales return can be recorded, which is exactly when <see cref="Of"/> offers CreateReturn.</summary>
+    public static SalesReturnRefusal? CreateReturnRefusal(int statusId, bool hasSalesReturn, bool mayCreateReturn) =>
+        !mayCreateReturn ? SalesReturnRefusal.NotPermitted
+        : statusId == StatusIds.SalesInvoice.Cancelled ? SalesReturnRefusal.InvoiceCancelled
+        : hasSalesReturn ? SalesReturnRefusal.HasSalesReturn
+        : null;
+
+    /// <summary>BR-CLAIM-03: null when the sales return can be cancelled, which is exactly when <see cref="Of"/> offers CancelReturn.</summary>
+    public static SalesReturnRefusal? CancelReturnRefusal(bool returnStands, bool isCooperativeOwner) =>
+        !isCooperativeOwner ? SalesReturnRefusal.NotPermitted
+        : !returnStands ? SalesReturnRefusal.NoSalesReturn
+        : null;
+
     public static IReadOnlyList<SalesInvoiceAction> Of(SalesInvoiceActionFacts facts, SalesInvoiceCallerRights rights)
     {
-        var cancelled = facts.StatusId == StatusIds.SalesInvoice.Cancelled;
         var actions = new List<SalesInvoiceAction>();
-        if (rights.MaySell && !cancelled && facts.SaleFinished && facts.LatestDeliveryStatusId != StatusIds.MessageDelivery.Sending)
+        if (rights.MaySell && facts.StatusId != StatusIds.SalesInvoice.Cancelled && facts.SaleFinished && facts.LatestDeliveryStatusId != StatusIds.MessageDelivery.Sending)
         {
             actions.Add(SalesInvoiceAction.Resend);
         }
 
-        if (rights.MayCreateReturn && !cancelled && !facts.HasSalesReturn)
+        if (CreateReturnRefusal(facts.StatusId, facts.HasSalesReturn, rights.MayCreateReturn) is null)
         {
             actions.Add(SalesInvoiceAction.CreateReturn);
         }
 
-        if (rights.IsCooperativeOwner && facts.HasSalesReturn)
+        if (CancelReturnRefusal(facts.HasSalesReturn, rights.IsCooperativeOwner) is null)
         {
             actions.Add(SalesInvoiceAction.CancelReturn);
         }

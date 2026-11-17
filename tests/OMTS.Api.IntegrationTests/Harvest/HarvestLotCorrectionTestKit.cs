@@ -87,8 +87,12 @@ public static class HarvestLotCorrectionTestKit
 
     /// <summary>Sends a correction with the current version, keeping the photos named.</summary>
     public static async Task<HttpResponseMessage> SendCorrectionAsync(
-        this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, string? reason = "Wrong count at sea", IReadOnlyList<string>? keep = null) =>
-        await client.PutHarvestLotAsync(lotId, new HarvestCorrection(fields, reason, await factory.LotVersionAsync(lotId), keep));
+        this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, string? reason = "Wrong count at sea", IReadOnlyList<string>? keep = null)
+    {
+        // A lot that has photos keeps 1 to 3 (owner decision of 12/11/2026), and every lot a test records has one: a correction that names no photo keeps what the lot has.
+        keep ??= await KeysOfAsync(client, lotId);
+        return await client.PutHarvestLotAsync(lotId, new HarvestCorrection(fields, reason, await factory.LotVersionAsync(lotId), keep));
+    }
 
     /// <summary>A correction that must be saved: the whole answer.</summary>
     public static async Task<JsonElement> CorrectLotAsync(this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, IReadOnlyList<string>? keep = null) =>
@@ -100,6 +104,13 @@ public static class HarvestLotCorrectionTestKit
     /// <summary>A removal that must be saved.</summary>
     public static async Task RemoveLotAsync(this AuthApiFactory factory, HttpClient client, Guid lotId) =>
         Assert.Equal(HttpStatusCode.NoContent, (await factory.SendRemovalAsync(client, lotId)).StatusCode);
+
+    /// <summary>The photo keys of the lot as this caller reads it; none for a caller who may not read it (its correction is refused anyway).</summary>
+    public static async Task<IReadOnlyList<string>> KeysOfAsync(HttpClient client, Guid lotId)
+    {
+        var answer = await client.GetAsync($"/api/harvest-lots/{lotId}");
+        return answer.IsSuccessStatusCode ? JsonDocument.Parse(await answer.Content.ReadAsStringAsync()).RootElement.PhotoKeysOfLot() : [];
+    }
 
     public static List<string> PhotoKeysOfLot(this JsonElement lot) => lot.GetProperty("photos").EnumerateArray().Select(p => p.Text("key")).ToList();
 

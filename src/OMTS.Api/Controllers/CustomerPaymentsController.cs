@@ -79,14 +79,22 @@ public sealed class CustomerPaymentsController(CustomerPaymentService payments, 
     public async Task<IActionResult> PayBack(RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.RecordAsync(request, CustomerPaymentKind.PaidBack, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
 
-    /// <summary>DEBT-02.2 steps 3-6: confirm and cancel from the list in one save; one notice to the Owner. 409 MSG-GEN-09 when a payment is no longer Awaiting confirmation.</summary>
+    /// <summary>
+    /// DEBT-02.2 steps 3-6 and DEBT-02.6: confirm, cancel and settle from the list in one save; one notice to the Owner. <c>settle</c> takes a payment without a customer
+    /// (<c>needsSettlement</c> in the list) either to a profile (<c>{ id, customerId, allocations? }</c>, paying the invoices chosen or the oldest) or paid back
+    /// (<c>{ id, payBack }</c>); a plain confirmation of such a payment is 409 MSG-GEN-09. 409 MSG-GEN-09 also when a payment is no longer Awaiting confirmation
+    /// (a settlement sent again applies nothing twice).
+    /// </summary>
     [HttpPost("confirmations")]
     [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<CustomerPaymentsConfirmed>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Confirm(ConfirmCustomerPaymentsRequest request, CancellationToken cancellationToken) =>
         (await statuses.ConfirmAsync(request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>DEBT-02.4: a payment or money paid back that is not cancelled (one waiting for its transfer too), with a reason; 409 MSG-GEN-09 when it is already cancelled.</summary>
+    /// <summary>
+    /// DEBT-02.4: a payment or money paid back that is not cancelled (one waiting for its transfer too), with a reason; 409 MSG-GEN-09 when it is already cancelled, or (<c>hasMoneyPaidBack</c>)
+    /// when money paid back that settled it stands. Cancelling that money paid back puts the payment back Awaiting confirmation.
+    /// </summary>
     [HttpPost("{id:guid}/cancel")]
     [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<CustomerPaymentSaved>(StatusCodes.Status200OK)]

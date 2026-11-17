@@ -340,23 +340,22 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(newPhone, (await StoredAsync(holder)).PhoneNumber);
     }
 
-    // BR-ACCOUNT-09: removing the email cancels a recovery token of that email; the phone number keeps working.
+    // ACS-03: an email is not a recovery channel, so a verified one gets the usual answer and no code. Removing it
+    // (BR-ACCOUNT-09) leaves the recovery by phone number working.
     [Fact]
-    public async Task Removing_the_email_cancels_the_recovery_of_that_email_and_not_of_the_phone()
+    public async Task An_email_gets_no_recovery_code_and_removing_it_leaves_the_recovery_of_the_phone()
     {
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
         var email = $"staff-{NewCode()}@example.com";
         var staff = await AddStaffAsync(a => { a.Email = email; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
         var anonymous = factory.CreateClient();
-        var emailRecovery = await StartRecoveryAsync(anonymous, email);
-        var emailToken = await VerifyAsync(anonymous, emailRecovery, factory.LastEmailCode(email));
-        await factory.AgeAsync(emailRecovery, TwoMinutes);
+        await StartRecoveryAsync(anonymous, email);
+        Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email));
         var phoneToken = await VerifyAsync(anonymous, await StartRecoveryAsync(anonymous, staff.PhoneNumber!), factory.LastSmsCode(staff.PhoneNumber!));
 
         await EditStaffAsync(owner, staff, staff.PhoneNumber!);
 
         Assert.Null((await StoredAsync(staff)).Email);
-        Assert.Equal("MSG-ACCOUNT-16", await (await ResetAsync(anonymous, emailToken)).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, (await ResetAsync(anonymous, phoneToken)).StatusCode);
     }
 
@@ -428,7 +427,8 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
     public void A_quoted_email_or_a_final_dot_is_refused(string input) =>
         Assert.Null(EmailAddresses.Normalize(input));
 
-    // BR-ACCOUNT-02, BR-ACCOUNT-09: the mailbox of an account, quoted: refused as invalid, and no code goes out.
+    // BR-ACCOUNT-02, BR-ACCOUNT-09: the mailbox of an account, quoted: refused as invalid, and no code goes out. An email
+    // cannot register at all now, so the refusal names the channel.
     [Fact]
     public async Task A_taken_email_in_quotes_is_refused_as_invalid_and_gets_no_code()
     {
@@ -439,7 +439,7 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var started = await factory.CreateClient().StartRegistrationAsync("Email", quoted);
 
         Assert.Equal("MSG-GEN-01", await started.ErrorCodeAsync());
-        Assert.Equal("Email", (await started.BodyAsync()).GetProperty("field").GetString());
+        Assert.Equal("Channel", (await started.BodyAsync()).GetProperty("field").GetString());
         Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(quoted));
     }
 
@@ -459,34 +459,25 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(phone, (await saved.BodyAsync()).GetProperty("account").GetProperty("phoneNumber").GetString());
     }
 
-    // Fine: case and format of the contact do not get around the limit, and verifying a code does not clear it.
+    // Fine: the format of the number does not get around the limit, and verifying a code does not clear it.
     [Fact]
-    public async Task The_limit_holds_across_case_format_and_successful_verifications()
+    public async Task The_limit_holds_across_formats_of_the_number_and_successful_verifications()
     {
-        var email = $"limit-{NewCode()}@example.com";
         var phone = NewPhone();
         var client = factory.CreateClient();
+        var spellings = new[] { phone, "+84" + phone[1..], $"{phone[..4]} {phone[4..7]}.{phone[7..]}", "84" + phone[1..] };
 
-        foreach (var (channel, spellings) in new[]
+        for (var i = 0; i < VerificationCode.MaxCodesPerHour; i++)
         {
-            ("Email", new[] { email, email.ToUpperInvariant(), $"  {email}  ", email }),
-            ("Sms", new[] { phone, "+84" + phone[1..], $"{phone[..4]} {phone[4..7]}.{phone[7..]}", "84" + phone[1..] }),
-        })
-        {
-            for (var i = 0; i < VerificationCode.MaxCodesPerHour; i++)
-            {
-                var id = await VerificationIdAsync(await client.StartRegistrationAsync(channel, spellings[i]));
-                Assert.NotEmpty(await VerifyAsync(client, id, channel == "Sms" ? factory.LastSmsCode(phone) : factory.LastEmailCode(email)));
-                await factory.AgeAsync(id, TwoMinutes);
-            }
-
-            var refused = await client.StartRegistrationAsync(channel, spellings[3]);
-            Assert.Equal("MSG-ACCOUNT-18", await refused.ErrorCodeAsync());
-            Assert.InRange((await refused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 3000, 3600);
+            var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", spellings[i]));
+            Assert.NotEmpty(await VerifyAsync(client, id, factory.LastSmsCode(phone)));
+            await factory.AgeAsync(id, TwoMinutes);
         }
 
+        var refused = await client.StartRegistrationAsync("Sms", spellings[3]);
+        Assert.Equal("MSG-ACCOUNT-18", await refused.ErrorCodeAsync());
+        Assert.InRange((await refused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 3000, 3600);
         Assert.Equal(3, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count);
-        Assert.Equal(3, factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email).Count);
     }
 
     // Fine: a cancelled code is refused even when right, and an expired one too.

@@ -15,7 +15,7 @@ public class PurchaseRequestQaMergeTests(AuthApiFactory factory) : IClassFixture
 {
     private async Task<PurchaseRequest> RowOnAsync(Guid customerId, Guid productId)
     {
-        var row = new PurchaseRequest { CustomerId = customerId, ProductId = productId, RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+        var row = new PurchaseRequest { CustomerId = customerId, ProductId = productId, RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
         await factory.UseDbAsync(db => db.PurchaseRequests.Add(row));
         return row;
     }
@@ -89,7 +89,7 @@ public class PurchaseRequestQaMergeTests(AuthApiFactory factory) : IClassFixture
         var row = await RowOnAsync(offline.Id(), productId);
         (await owner.MergeAsync(trader.Profile.Id, offline.Id())).EnsureSuccessStatusCode();
 
-        var answer = await (await owner.AcceptAsync(await owner.ViewedByStaffAsync(row.Id), 5m)).ReadAsync(HttpStatusCode.OK);
+        var answer = await (await owner.AcceptAsync(await owner.ViewedByStaffAsync(row.Id), 5)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(trader.Profile.Id, answer.GetProperty("customer").GetProperty("id").GetGuid());
         var rows = await factory.NotificationRowsAsync(row.Id);
@@ -124,7 +124,7 @@ public class PurchaseRequestQaMergeTests(AuthApiFactory factory) : IClassFixture
         var row = await RowOnAsync(offline.Id(), productId);
         (await owner.MergeAsync(kept.Id(), offline.Id())).EnsureSuccessStatusCode();
 
-        var answer = await (await owner.AcceptAsync(await owner.ViewedByStaffAsync(row.Id), 5m)).ReadAsync(HttpStatusCode.OK);
+        var answer = await (await owner.AcceptAsync(await owner.ViewedByStaffAsync(row.Id), 5)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Empty(answer.GetProperty("sendings").EnumerateArray());
         Assert.Empty((await factory.NotificationRowsAsync(row.Id)).Where(n => n.Type == NotificationTypes.PurchaseRequestResponse));

@@ -24,6 +24,7 @@ public sealed class MaterialUsageEditService(
     IRaftRepository rafts,
     IFarmingInputItemRepository items,
     MaterialUsageCycleGuard cycleGuard,
+    MaterialUsageStockSync stockSync,
     RaftViews raftViews,
     MaterialUsageViews views,
     ZoneAccessGuard zoneAccess,
@@ -105,6 +106,11 @@ public sealed class MaterialUsageEditService(
             if ((await cycleGuard.HoldAsync(sourceRaft, sourceDate, cancellationToken) ?? await cycleGuard.HoldAsync(target, date, cancellationToken)) is { } lost)
             {
                 return lost;
+            }
+
+            if (await stockSync.ReplaceAsync(usage, item!, target, cancellationToken) is { } stockRefused)
+            {
+                return stockRefused;
             }
 
             audit.Record(MaterialUsageValues.Entry(MaterialUsageValues.Updated, usage, target) with { Before = changedBefore, After = changedAfter, Reason = reason });

@@ -20,18 +20,27 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     /// <summary>Not later than today and after the close date of the raft's previous cycle.</summary>
     public DateOnly StartDate { get; set; }
 
-    /// <summary>
-    /// The product farmed on the raft in this cycle, fixed when the cycle starts and changeable while the cycle has no harvest lot. Required for a
-    /// new cycle (checked on the write, not by the column): a cycle closed before products existed has none.
-    /// </summary>
-    public Guid? ProductId { get; set; }
-    public Product? Product { get; set; }
-
     /// <summary>Plan estimate, greater than 0.</summary>
     public decimal? ExpectedSeedQuantity { get; set; }
 
-    /// <summary>Plan estimate, after <see cref="StartDate"/>.</summary>
+    /// <summary>Kept in the table but no longer read or written (owner decision of 12/11/2026: the plan has no expected harvest date).</summary>
     public DateOnly? ExpectedHarvestDate { get; set; }
+
+    /// <summary>The nursery batch the cycle takes its seed from (chosen when the cycle is started, v2 13/11/2026; changeable until the first seeding record); null on a cycle started the old way, which keeps its old rules.</summary>
+    public Guid? NurseryBatchId { get; set; }
+
+    /// <summary>The product (kind of oyster) the cycle will yield and sell (owner decision of 13/11/2026): required to start a cycle, changeable until the first seeding record; a harvest lot split into products must hold this product, and the harvest plan lines of the raft expect it.
+    /// Null on a cycle started before: it keeps no check.</summary>
+    public Guid? ProductId { get; set; }
+    public Product? Product { get; set; }
+
+    /// <summary>Legacy (cycles completed from a nursery before v2): the share given to this cycle. Kept, no longer read or written.</summary>
+    public decimal? NurseryAllocatedQuantity { get; set; }
+
+    /// <summary>Free note of the plan (v2), at most 1000 characters.</summary>
+    public string? Note { get; set; }
+
+    public const int MaxNoteLength = 1000;
 
     /// <summary>Plan estimate in kg, greater than 0.</summary>
     public decimal? TargetYieldKg { get; set; }
@@ -49,6 +58,11 @@ public class CultivationCycle : AuditableEntity, IHasStatus
 
     /// <summary>When MSG-CYCLE-08 was sent, so it is sent once.</summary>
     public DateTimeOffset? CloseRemindedAt { get; set; }
+
+    public const int MaxPlanPhotos = 3;
+
+    /// <summary>Photos of the plan, 1 to <see cref="MaxPlanPhotos"/> on a cycle started without a nursery batch since 12/11/2026; none on an older one, none on one from a nursery batch (it shows the batch's completion photos).</summary>
+    public ICollection<CyclePlanPhoto> PlanPhotos { get; set; } = [];
 
     public int StatusId { get; set; } = StatusIds.CultivationCycle.Open;
     public Status Status { get; set; } = null!;

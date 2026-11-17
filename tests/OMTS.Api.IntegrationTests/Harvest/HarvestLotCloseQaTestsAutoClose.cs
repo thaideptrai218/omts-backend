@@ -37,6 +37,7 @@ public class HarvestLotCloseQaTestsAutoClose
         var runAt = new DateTimeOffset(2026, 10, 29, 17, 5, 0, TimeSpan.Zero);
         api.Clock.At = runAt;
         var hosted = new HarvestLotAutoCloseHostedService(
+            api.Services.GetRequiredService<PendingSaleEndOfDayStopJob>(),
             api.Services.GetRequiredService<HarvestLotAutoCloseJob>(),
             Options.Create(new HarvestLotAutoCloseOptions { CatchUpOnStart = true }),
             new FixedClock(runAt),

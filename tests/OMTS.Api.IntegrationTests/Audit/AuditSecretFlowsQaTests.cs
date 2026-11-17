@@ -10,14 +10,14 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Audit;
 
 /// <summary>
-/// QA of OMTS-216 PR 0.6 (GBR-02, NFR-01): the audit-writing flows the first secret scan did not run, ACCOUNT-01 by phone
-/// and by email, ACCOUNT-05.1 email and phone changes, ACCOUNT-04.2 (code by email) and a push device moving to another
-/// account, write no password, code, token or hash, and no ACCOUNT-10 answer shows one.
+/// QA of OMTS-216 PR 0.6 (GBR-02, NFR-01): the audit-writing flows the first secret scan did not run, ACCOUNT-01 (by phone,
+/// the only way now), ACCOUNT-05.1 email and phone changes, ACCOUNT-04 and a push device moving to another account, write
+/// no password, code, token or hash, and no ACCOUNT-10 answer shows one.
 /// </summary>
 public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task Registration_contact_changes_password_by_email_code_and_device_moves_write_and_show_no_secret()
+    public async Task Registration_contact_changes_password_change_and_device_moves_write_and_show_no_secret()
     {
         await factory.EnsureCooperativeAsync();
         var (ownerAccount, owner) = await factory.OwnerAsync();
@@ -25,8 +25,9 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
 
         var (phone, phonePassword) = (NewPhone(), NewPassword());
         var traderId = await RegisterAsync("Sms", phone, phonePassword, secrets);
-        var registrationEmail = $"r{NewCode()}@example.com";
-        var emailTraderId = await RegisterAsync("Email", registrationEmail, NewPassword(), secrets);
+        // A phone number is the only way to register now; a second trader stands where the email registration was.
+        var secondPhone = NewPhone();
+        var secondTraderId = await RegisterAsync("Sms", secondPhone, NewPassword(), secrets);
 
         var trader = factory.CreateClient();
         var tokens = await LoginTokensAsync(trader, phone, phonePassword);
@@ -38,12 +39,10 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var emailToken = await VerifyAsync(trader, emailChange, Keep(secrets, factory.LastEmailCode(email)));
         await ReadAsync(await trader.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = Keep(secrets, emailToken) }));
 
-        // ACCOUNT-04.2: the current password is forgotten, a code goes to the email.
-        var passwordCode = await VerificationIdAsync(await trader.PostAsync("/api/me/password/code", null));
-        var passwordToken = await VerifyAsync(trader, passwordCode, Keep(secrets, factory.LastEmailCode(email)));
+        // ACCOUNT-04: the password changes with the current one (the email code is gone).
         var newPassword = Keep(secrets, NewPassword());
         var changed = await ReadAsync(await trader.PostAsJsonAsync("/api/me/password",
-            new { verificationToken = Keep(secrets, passwordToken), newPassword, passwordConfirmation = newPassword }));
+            new { currentPassword = phonePassword, newPassword, passwordConfirmation = newPassword }));
         UseTokens(trader, changed.GetProperty("tokens"), secrets);
 
         // ACCOUNT-05.1: change the phone number.
@@ -57,8 +56,8 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         await ReadAsync(await trader.PostAsJsonAsync("/api/me/devices", new { token = pushToken, platform = "android", permissionGranted = true }), HttpStatusCode.NoContent, HttpStatusCode.OK);
         await ReadAsync(await owner.PostAsJsonAsync("/api/me/devices", new { token = pushToken, platform = "android", permissionGranted = true }), HttpStatusCode.NoContent, HttpStatusCode.OK);
 
-        Guid[] accounts = [traderId, emailTraderId];
-        string[] targets = [phone, registrationEmail, email, newPhone];
+        Guid[] accounts = [traderId, secondTraderId];
+        string[] targets = [phone, secondPhone, email, newPhone];
         secrets.AddRange(await factory.QueryAsync(db => db.Accounts.Where(a => accounts.Contains(a.Id)).Select(a => a.PasswordHash).ToListAsync()));
         secrets.AddRange(await factory.QueryAsync(db => db.VerificationCodes.Where(c => targets.Contains(c.Target)).Select(c => c.CodeHash).ToListAsync()));
         secrets.AddRange((await factory.QueryAsync(db => db.VerificationCodes.Where(c => targets.Contains(c.Target)).Select(c => c.TokenHash).ToListAsync())).OfType<string>());
@@ -66,8 +65,8 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.All(secrets, s => Assert.False(string.IsNullOrEmpty(s)));
 
         var deviceId = await factory.QueryAsync(db => db.PushDevices.Where(d => d.Token == pushToken).Select(d => d.Id).SingleAsync());
-        Guid?[] records = [traderId, emailTraderId, deviceId];
-        Guid?[] actors = [traderId, emailTraderId];
+        Guid?[] records = [traderId, secondTraderId, deviceId];
+        Guid?[] actors = [traderId, secondTraderId];
         var stored = await factory.QueryAsync(db => db.AuditEvents
             .Where(e => records.Contains(e.RecordId) || actors.Contains(e.ActorAccountId)).ToListAsync());
         Assert.Superset(
@@ -81,7 +80,7 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         }
 
         var answers = new List<string> { await owner.GetStringAsync("/api/audit-events/facets") };
-        foreach (var query in new[] { $"actorAccountId={traderId}", $"actorAccountId={emailTraderId}", $"actorAccountId={ownerAccount.Id}&action=PushDevice.Moved" })
+        foreach (var query in new[] { $"actorAccountId={traderId}", $"actorAccountId={secondTraderId}", $"actorAccountId={ownerAccount.Id}&action=PushDevice.Moved" })
         {
             var list = await owner.GetStringAsync($"/api/audit-events?{query}");
             answers.Add(list);

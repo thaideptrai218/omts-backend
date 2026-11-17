@@ -16,7 +16,7 @@ public class HarvestLotProductLine : Entity
     public Product Product { get; set; } = null!;
 
     /// <summary>Above 0.</summary>
-    public int CageCount { get; set; }
+    public decimal CageCount { get; set; }
 
     /// <summary>Above 0, at most 3 decimals: what was typed, or the cages times the kg of a cage of the product.</summary>
     public decimal Kg { get; set; }

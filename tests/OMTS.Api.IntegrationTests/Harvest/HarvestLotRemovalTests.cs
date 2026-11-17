@@ -43,7 +43,7 @@ public class HarvestLotRemovalTests
 
         // BR-HARVEST-05 limits only the removal: all the harvest data can still be corrected.
         var saved = await api.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1) with { Cages = "9" });
-        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetInt32());
+        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetDecimal());
 
         // Off the invoice, it can go.
         api.Sales.OnInvoice.Clear();

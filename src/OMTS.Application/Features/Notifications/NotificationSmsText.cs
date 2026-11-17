@@ -42,7 +42,7 @@ public static partial class NotificationSmsText
 
     public static string Render(NotificationTypeDefinition definition, NotificationSmsRule rule, NotificationContent content) =>
         Shorten(
-            rule.AmountParameter is { } amountParameter ? ToAlphabet(DocumentCodeAndAmount(definition, amountParameter, content)) : MessageText(content.Message),
+            rule.AmountParameter is { } amountParameter ? ToAlphabet(DocumentCodeAndAmount(definition, rule, amountParameter, content)) : MessageText(content.Message),
             MaxLength);
 
     private static string MessageText(UserMessage message)
@@ -82,18 +82,46 @@ public static partial class NotificationSmsText
         return excess > 0 ? null : ToAlphabet(form(kept));
     }
 
-    private static string DocumentCodeAndAmount(NotificationTypeDefinition definition, string amountParameter, NotificationContent content)
+    private static string DocumentCodeAndAmount(NotificationTypeDefinition definition, NotificationSmsRule rule, string amountParameter, NotificationContent content)
     {
-        var amount = FormatAmount(content.Message.Parameters?.GetValueOrDefault(amountParameter));
+        var amount = SplitAmounts(rule, content.Message) ?? (FormatAmount(AmountOf(content.Message.Parameters?.GetValueOrDefault(amountParameter))) is { } whole ? $"{whole} VND" : null);
         var code = content.Record?.Code;
-        return $"{definition.Name}{(code is null ? null : " " + code)}{(amount is null ? null : $": {amount} VND")}.";
+        return $"{definition.Name}{(code is null ? null : " " + code)}{(amount is null ? null : $": {amount}")}.";
     }
 
-    private static string? FormatAmount(object? amount) => amount switch
+    /// <summary>
+    /// "thu X VND, hủy Y VND" for a message that holds the total confirmed and the total cancelled (a list of confirmations, PM answer 12/11/2026, OMTS-224 [1.4]); a part of 0 is left
+    /// out. Null when the rule has no split, the message holds only one amount (a single transaction) or both are 0. Only numbers get in, as for any money type.
+    /// </summary>
+    private static string? SplitAmounts(NotificationSmsRule rule, UserMessage message)
     {
-        decimal or int or long or double => Convert.ToDecimal(amount, CultureInfo.InvariantCulture).ToString("#,0", CultureInfo.InvariantCulture),
+        if (rule.ConfirmedAmountParameter is not { } confirmedName || rule.CancelledAmountParameter is not { } cancelledName
+            || message.Parameters is not { } parameters || !parameters.ContainsKey(confirmedName) || !parameters.ContainsKey(cancelledName))
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        if (AmountOf(parameters[confirmedName]) is > 0 and { } confirmed)
+        {
+            parts.Add($"thu {FormatAmount(confirmed)} VND");
+        }
+
+        if (AmountOf(parameters[cancelledName]) is > 0 and { } cancelled)
+        {
+            parts.Add($"hủy {FormatAmount(cancelled)} VND");
+        }
+
+        return parts.Count == 0 ? null : string.Join(", ", parts);
+    }
+
+    private static decimal? AmountOf(object? amount) => amount switch
+    {
+        decimal or int or long or double => Convert.ToDecimal(amount, CultureInfo.InvariantCulture),
         _ => null,
     };
+
+    private static string? FormatAmount(decimal? amount) => amount?.ToString("#,0", CultureInfo.InvariantCulture);
 
     private static string ToAlphabet(string text)
     {

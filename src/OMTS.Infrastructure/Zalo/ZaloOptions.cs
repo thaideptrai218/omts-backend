@@ -18,6 +18,13 @@ public sealed class ZaloOptions
 
     public string BaseUrl { get; set; } = "https://graph.zalo.me/";
 
+    /// <summary>
+    /// Forward proxy for the Zalo calls, as <c>http://user:password@host:port</c> or <c>socks5://...</c> (user and password
+    /// percent-encoded). Zalo answers -501 to a caller whose IP is outside Vietnam, so a server abroad needs a proxy with a
+    /// Vietnamese IP. Empty (the default) keeps the host's default proxy settings. It holds the proxy password: user-secrets or environment only.
+    /// </summary>
+    public string ProxyUrl { get; set; } = "";
+
     /// <summary>After this a Zalo call is abandoned and the user gets MSG04.</summary>
     public int TimeoutSeconds { get; set; } = 10;
 }

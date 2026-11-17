@@ -22,6 +22,36 @@ internal static class FormNumbers
         return numbers;
     }
 
+    private static readonly System.Text.Json.JsonSerializerOptions PercentJson = new(System.Text.Json.JsonSerializerDefaults.Web)
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
+    };
+
+    /// <summary>
+    /// The <c>lanePercents</c> field: one JSON object from lane number to percent, e.g. <c>{"1":60,"2":100}</c> (owner decision of 12/11/2026). Null when the field is blank (every lane takes its default);
+    /// <paramref name="unreadable"/> when it is not such an object, so it is refused instead of read as a default.
+    /// </summary>
+    public static Dictionary<int, decimal>? LanePercents(string? json, out bool unreadable)
+    {
+        unreadable = false;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, decimal>>(json, PercentJson);
+            unreadable = parsed is null;
+            return parsed;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            unreadable = true;
+            return null;
+        }
+    }
+
     /// <summary>An integer in the invariant culture; a blank value is read as none.</summary>
     public static bool TryInt(string? value, out int? result)
     {

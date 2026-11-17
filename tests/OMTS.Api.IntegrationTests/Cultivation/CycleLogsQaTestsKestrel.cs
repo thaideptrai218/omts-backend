@@ -39,19 +39,19 @@ public class CycleLogsQaTestsKestrel(KestrelApiFactory api) : IClassFixture<Kest
         Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01", "Photos"), (response.StatusCode, problem.Text("code"), problem.Text("field")));
     }
 
-    // NFR-14: 10 files of 10 MB in one save must fit the limit with the other fields and the multipart envelope.
+    // NFR-14: the 3 files of 10 MB a log may hold (owner decision of 12/11/2026) must fit the limit with the other fields and the multipart envelope.
     [Fact]
-    public async Task Ten_photos_of_ten_megabytes_fit_the_request_limit()
+    public async Task Three_photos_of_ten_megabytes_fit_the_request_limit()
     {
         var setup = await api.CycleAsync();
         using var client = await OnKestrelAsync(setup.Owner.Account.Username);
         var photo = Sized(Jpeg, (int)(10 * Megabyte));
-        var form = new LogFields { Notes = new string('x', 2000), Photos = Enumerable.Repeat(photo, 10).ToList() }.ToForm();
+        var form = new LogFields { Notes = new string('x', 2000), Photos = Enumerable.Repeat(photo, 3).ToList() }.ToForm();
 
         using var response = await client.PostAsync($"api/cultivation-cycles/{setup.CycleId}/cultivation-logs", form);
 
         var saved = (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("log");
-        Assert.Equal(Enumerable.Range(1, 10), saved.PhotoSlots());
+        Assert.Equal(Enumerable.Range(1, 3), saved.PhotoSlots());
     }
 
     /// <summary>Zeros written on demand: never built in memory, and never sent when the body is refused.</summary>

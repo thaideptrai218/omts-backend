@@ -36,6 +36,7 @@ internal sealed class ExternalServicesStartupCheck(
         services.GetRequiredService<IPushSender>();
         services.GetRequiredService<IFileStorage>();
         services.GetRequiredService<IOcrService>();
+        services.GetRequiredService<IZaloOpenApi>();
         services.GetRequiredService<IPaymentNotificationService>();
         services.GetRequiredService<IZaloOpenApi>();
 

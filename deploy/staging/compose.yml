@@ -1,0 +1,214 @@
+# Staging: the API image from GHCR plus Redis, and SQL Server either on the host (profile localdb) or elsewhere (Azure SQL).
+# This file is the source of truth: the "CD staging" workflow copies it to /opt/omts/compose.yml on every deploy, so an
+# edit made on the server is overwritten. Edit it here, through a pull request.
+# Never put real credentials in this file; they live in the untracked /opt/omts/.env on the staging host. OMTS_IMAGE in
+# that .env is written by deploy.sh (deploy/staging/deploy.sh) and names the image that runs.
+# The host may run other projects (the Vietnamese VPS does): every long-running service has a memory cap (no extra
+# swap), a raised OOM score, so under memory pressure the kernel stops OMTS first, and rotated logs on the shared disk.
+name: omts-staging
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Staging
+  DOTNET_ENVIRONMENT: Staging
+  # Off unless SWAGGER_ENABLED=true; then /swagger asks for its own Basic login (password 16+ characters, e.g.
+  # openssl rand -hex 16, in .env). On without a usable login, the API does not start.
+  Swagger__Enabled: ${SWAGGER_ENABLED:-false}
+  Swagger__Username: ${SWAGGER_USERNAME:-}
+  Swagger__Password: ${SWAGGER_PASSWORD:-}
+  Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-}
+  Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-}
+  ConnectionStrings__OmtsDb: ${OMTS_DB_CONNECTION:?Set OMTS_DB_CONNECTION in .env}
+  ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+  Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+  Provenance__PublicBaseUrl: ${PROVENANCE_PUBLIC_BASE_URL:?Set PROVENANCE_PUBLIC_BASE_URL in .env}
+  Storage__Provider: Local
+  Storage__Local__RootPath: /app/App_Data/files
+  Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?Set STORAGE_SIGNING_KEY in .env}
+  Sms__Provider: None
+  Zalo__Provider: ${ZALO_PROVIDER:-}
+  Zalo__AppSecret: ${ZALO_APP_SECRET:-}
+  # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy
+  # password, so the value lives in .env; unset, the API connects to Zalo directly.
+  Zalo__ProxyUrl: ${ZALO_PROXY_URL:-}
+  # Save Azure SQL serverless vCore: no 10 s Redis sweeper (sessions checked in SQL per request),
+  # and every daily job in one 06:00-06:05 window so the database wakes once a day.
+  Revocation__Mode: Sql
+  Jobs__EmploymentEnd__RunAt: "06:00"
+  Jobs__HarvestLotAutoClose__RunAt: "06:01"
+  Jobs__OrphanFileCleanup__RunAt: "06:02"
+  Jobs__LoginSessionCleanup__RunAt: "06:03"
+  Jobs__WaterMeasurementOverdue__RunAt: "06:04"
+  Jobs__ZoneLicenseReminder__RunAt: "06:05"
+
+services:
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --save \"\" --appendonly no --maxmemory 128mb --maxmemory-policy noeviction"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    mem_limit: 160m
+    memswap_limit: 160m
+    oom_score_adj: 500
+    logging: *logging
+    restart: unless-stopped
+
+  # The staging database on the host itself (SQL Server 2022 Express, free; 10 GB per database). Started only with
+  # COMPOSE_PROFILES=localdb in .env, and OMTS_DB_CONNECTION then names Server=mssql. Without the profile the database
+  # is elsewhere (Azure SQL). Loopback port only, for an SSH-tunnelled import or admin; deploy/staging/backup-db.sh
+  # backs it up every night. The container needs a 2 GB memory limit to start at all; MSSQL_MEMORY_LIMIT_MB caps what
+  # SQL Server really uses inside it. Same collation as the Azure database it replaces.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04
+    profiles: ["localdb"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-}
+      # 1024 leaves room for the API on a ~3 GB host (Express caps its buffer pool near 1410 MB anyway); raise it
+      # only after watching docker stats.
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1024}
+      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS
+    ports:
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - omts-mssql:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: 2200m
+    memswap_limit: 2200m
+    oom_score_adj: 300
+    logging: *logging
+    restart: unless-stopped
+
+  api:
+    image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
+    environment: *api-environment
+    # Loopback only: the front (or host nginx on EC2), deploy.sh and the DB warm-up cron call it on the host itself.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - omts-files:/app/App_Data
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Only when the localdb profile runs the database here; otherwise ignored.
+      mssql:
+        condition: service_healthy
+        required: false
+    mem_limit: 512m
+    memswap_limit: 512m
+    oom_score_adj: 500
+    logging: *logging
+    restart: unless-stopped
+
+  # CloudFront origin on a host whose ports 80/443 belong to another project (the Vietnamese VPS): proxies to the API
+  # only the requests that carry the secret header CloudFront adds, answers 403 to anything else. Started only with
+  # COMPOSE_PROFILES=origin-front in .env; the EC2 host keeps its own nginx instead. Docker-published ports bypass ufw,
+  # so the header is what guards this port. The secret comes from .env: 32+ letters and digits (openssl rand -hex 32),
+  # because it becomes a key of an nginx map, where "~", quotes or ";" would change its meaning.
+  front:
+    image: nginx:1.27.5-alpine
+    profiles: ["origin-front"]
+    environment:
+      ORIGIN_VERIFY_SECRET: ${ORIGIN_VERIFY_SECRET:-}
+      NGINX_ENVSUBST_FILTER: "^ORIGIN_"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        case "$${ORIGIN_VERIFY_SECRET}" in *[!A-Za-z0-9]*) echo "front: ORIGIN_VERIFY_SECRET must be letters and digits only" >&2; exit 1;; esac
+        if [ "$${#ORIGIN_VERIFY_SECRET}" -lt 32 ]; then echo "front: set ORIGIN_VERIFY_SECRET (32+ characters) in .env" >&2; exit 1; fi
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
+    configs:
+      - source: origin-front-template
+        target: /etc/nginx/templates/default.conf.template
+    ports:
+      - "${ORIGIN_PORT:-8088}:8080"
+    depends_on:
+      - api
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: 500
+    logging: *logging
+    restart: unless-stopped
+
+  # First setup only, on an empty dedicated staging database, before the API starts (README "Demo on a shared server"):
+  #   docker compose --profile bootstrap run --rm seed
+  # The demo flag and password come from .env (DEMO_ALLOW_OUTSIDE_DEVELOPMENT=true, DEMO_PASSWORD); unset, the demo is
+  # refused. Deploys never use this service: deploy.sh runs a plain "seed --bootstrap" (migrations only).
+  seed:
+    image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
+    profiles: ["bootstrap"]
+    command: ["seed", "--bootstrap", "--demo"]
+    depends_on:
+      mssql:
+        condition: service_healthy
+        required: false
+    environment:
+      <<: *api-environment
+      Bootstrap__Cooperative__FullName: ${BOOTSTRAP_COOPERATIVE_NAME:-}
+      Bootstrap__Owner__DisplayName: ${BOOTSTRAP_OWNER_NAME:-}
+      Bootstrap__Owner__Username: ${BOOTSTRAP_OWNER_USERNAME:-owner}
+      Bootstrap__Owner__PhoneNumber: ${BOOTSTRAP_OWNER_PHONE:-}
+      Bootstrap__Owner__TemporaryPassword: ${BOOTSTRAP_OWNER_PASSWORD:-}
+      Demo__AllowOutsideDevelopment: ${DEMO_ALLOW_OUTSIDE_DEVELOPMENT:-false}
+      Demo__Password: ${DEMO_PASSWORD:-}
+    restart: "no"
+
+volumes:
+  omts-files:
+  omts-mssql:
+
+configs:
+  # nginx template for the front: "$$" is a literal "$" for compose; the official image's entrypoint fills
+  # $${ORIGIN_VERIFY_SECRET} (envsubst, ORIGIN_* variables only) and leaves the nginx variables alone.
+  origin-front-template:
+    content: |
+      # Room for a long secret as map key (the default 64-byte bucket refuses a 48+ character key at startup).
+      map_hash_bucket_size 256;
+
+      map $$http_x_origin_verify $$omts_from_cloudfront {
+          default 0;
+          "$${ORIGIN_VERIFY_SECRET}" 1;
+      }
+
+      server {
+          listen 8080 default_server;
+          server_name _;
+          server_tokens off;
+          client_max_body_size 20m;
+          # Refused requests (scanners on the public port) are not logged.
+          access_log /dev/stdout combined if=$$omts_from_cloudfront;
+          # Docker DNS at request time: each deploy recreates "api" with a new address.
+          resolver 127.0.0.11 valid=10s ipv6=off;
+
+          location / {
+              if ($$omts_from_cloudfront = 0) {
+                  return 403;
+              }
+              set $$omts_api http://api:8080;
+              proxy_pass $$omts_api;
+              proxy_http_version 1.1;
+              proxy_set_header Host $$host;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto https;
+              proxy_set_header X-Origin-Verify "";
+              proxy_read_timeout 60s;
+          }
+      }

@@ -25,5 +25,23 @@ public class SeedingRecord : AuditableEntity
     /// <summary>Who recorded it: a Zone Manager corrects only the sessions they recorded (BR-CYCLE-02).</summary>
     public Guid RecordedByAccountId { get; set; }
 
+    /// <summary>The stock issue (Xuất dùng) this session posted, one fact with it: null on a session recorded before stock was checked (legacy, its seed is counted from the session itself).</summary>
+    public Guid? IssueId { get; set; }
+    public InputIssue? Issue { get; set; }
+
+    /// <summary>
+    /// The nursery batch the seed came from: the session is capped by the cycle's allocation and posts no issue (the stock left when the nursery started), and <see cref="SeedLotLineId"/> is the
+    /// batch's lot, kept for tracing. Null on a session of a cycle started the old way.
+    /// </summary>
+    public Guid? NurseryBatchId { get; set; }
+
+    /// <summary>The reason given when the seed of the cycle went above 110 % of its planned seed quantity (confirmed by the caller); null otherwise.</summary>
+    public string? OverPlanReason { get; set; }
+
+    public const int MaxPhotos = 3;
+
     public ICollection<SeedingRecordLane> Lanes { get; set; } = [];
+
+    /// <summary>On-site photos, 1 to <see cref="MaxPhotos"/> on a session recorded since 12/11/2026, none on an older one.</summary>
+    public ICollection<SeedingRecordPhoto> Photos { get; set; } = [];
 }

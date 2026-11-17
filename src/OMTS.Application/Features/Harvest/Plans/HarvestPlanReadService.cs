@@ -176,12 +176,12 @@ public sealed class HarvestPlanReadService(
                 ? new EligibleLaneView(lane.Id, lane.LaneNumber, EligibleLaneState.InAnotherPlan, planCode)
                 : new EligibleLaneView(lane.Id, lane.LaneNumber, EligibleLaneState.Free, null);
 
-    /// <summary>Cages for a line of the order: its quantity when the line is in Lồng; else the kg of the line over the kg of one Lồng of the product, rounded up; null without a Lồng unit.</summary>
-    internal static int? CagesOf(SalesOrderLine line, Product? product)
+    /// <summary>Cages for a line of the order: its quantity when the line is in Lồng; else the kg of the line over the kg of one Lồng of the product, rounded up to a hundredth of a cage; null without a Lồng unit.</summary>
+    internal static decimal? CagesOf(SalesOrderLine line, Product? product)
     {
         if (HarvestLotProductLineService.IsCageUnit(line.UnitName))
         {
-            return CeilingToInt(line.Quantity);
+            return RoundUpToCages(line.Quantity);
         }
 
         var cage = product?.Units.FirstOrDefault(u => !u.IsBase && HarvestLotProductLineService.IsCageUnit(u.Unit?.Name));
@@ -190,8 +190,8 @@ public sealed class HarvestPlanReadService(
             return null;
         }
 
-        return CeilingToInt(line.Quantity * line.Factor / cage.Factor);
+        return RoundUpToCages(line.Quantity * line.Factor / cage.Factor);
     }
 
-    private static int? CeilingToInt(decimal value) => value > 0 && value <= int.MaxValue ? (int)Math.Ceiling(value) : null;
+    private static decimal? RoundUpToCages(decimal value) => value > 0 && value <= HarvestQuantityRules.MaxCages ? Math.Ceiling(value * 100m) / 100m : null;
 }

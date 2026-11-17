@@ -1,7 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
-using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -10,39 +9,45 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming.Rafts;
+using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Cultivation;
-using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>
-/// CYCLE-01 start, edit and cancel, for a Zone Manager of the raft's zone and the Cooperative Owner. These writes notify nobody.
+/// CYCLE-01 start (<see cref="CreateAsync"/>, from a nursery batch), edit and cancel, for a Zone Manager of the raft's zone and the Cooperative Owner. These writes notify nobody.
 /// A raft holds at most one Open cycle and its cycles never overlap (BR-CYCLE-01); the filtered unique index holds that against
-/// parallel starts. The product farmed on the raft is chosen when the cycle starts (a product In Use) and can change until the cycle has a harvest lot.
+/// parallel starts.
 /// </summary>
-public sealed class CultivationCycleService(
+public sealed partial class CultivationCycleService(
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
-    IProductRepository products,
-    IStatusCatalog statusCatalog,
     IRaftRepository rafts,
+    INurseryBatchRepository nurseries,
     RaftViews raftViews,
     CultivationCycleViews views,
     CycleWriteGuard writes,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
+    RecordPhotoStore photoStore,
+    UploadedFileSaver fileSaver,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
     private const string RecordType = nameof(CultivationCycle);
     private const string Saved = "Cultivation cycle";
-    private const string ProductField = "Product";
 
-    public async Task<Result<CycleStarted>> StartAsync(Guid raftId, StartCycleRequest request, CancellationToken cancellationToken)
+    /// <param name="photos">The photos of the plan (owner decision of 12/11/2026): 1 to 3 unless <paramref name="bootstrap"/>, else 400 on <c>Photos</c> and nothing is saved.</param>
+    /// <param name="bootstrap">
+    /// The OLD way of starting a cycle, with no nursery batch (the legacy free-lot path): no public route reaches it since v2 (13/11/2026), where a cycle is started with <see cref="CreateAsync"/>. Only the demo bootstrap and the test seam
+    /// call it, and they write cycles directly like the rest of their data: no photos are required.
+    /// </param>
+    public async Task<Result<CycleStarted>> StartAsync(
+        Guid raftId, StartCycleRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken, bool bootstrap = false)
     {
+        var photosRequired = !bootstrap;
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
         if (raft is null)
         {
@@ -67,29 +72,53 @@ public sealed class CultivationCycleService(
         var today = timeProvider.Today();
         var previousClose = await cycles.LastCloseDateAsync(raft.Id, cancellationToken);
         var check = CultivationCycleValues.Read(
-            request.StartDate ?? today, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg,
+            request.StartDate ?? today, request.ExpectedSeedQuantity, request.TargetYieldKg,
             new CycleDateLimits(today, previousClose, null), out var values);
-        var product = await FindProductAsync(request.ProductId, cancellationToken);
-        check.Check(product is not null, ProductField);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
         }
 
-        if (ProductRefusal(product!) is { } notInUse)
+        var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: photosRequired ? StepPhotoService.MinPhotos : 0);
+        if (!files.IsSuccess)
         {
-            return notInUse;
+            return files.Error!;
         }
 
-        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft, ProductId = product!.Id, Product = product };
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.CyclePlanPhotos, files.Value!, cancellationToken);
+        if (!uploaded.IsSuccess)
+        {
+            return uploaded.Error!;
+        }
+
+        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft };
         values.ApplyTo(cycle);
         cycles.Add(cycle);
+        var slot = 0;
+        foreach (var key in uploaded.Value!)
+        {
+            var photo = new CyclePlanPhoto { CycleId = cycle.Id, SortOrder = ++slot, FileKey = key };
+            cycle.PlanPhotos.Add(photo);
+            cycles.AddPlanPhoto(photo);
+        }
 
         // The raft row is part of this save: a parallel lane change or discontinue read "no open cycle", so one of the two fails with MSG06.
         unitOfWork.MarkChanged(raft);
         audit.Record(Entry("CultivationCycle.Started", cycle) with { After = CultivationCycleValues.Snapshot(cycle) });
-        if (await SaveNewAsync(raft, cancellationToken) is { } lost)
+        AppError? lost;
+        try
         {
+            lost = await SaveNewAsync(raft, cancellationToken);
+        }
+        catch
+        {
+            await fileSaver.DiscardAsync(uploaded.Value!);
+            throw;
+        }
+
+        if (lost is not null)
+        {
+            await fileSaver.DiscardAsync(uploaded.Value!);
             return lost;
         }
 
@@ -97,7 +126,7 @@ public sealed class CultivationCycleService(
         return new CycleStarted(await views.ViewAsync(cycle, cancellationToken), previousClose, raftViews.Lanes(raft), saved.Text, saved.Code);
     }
 
-    /// <summary>CYCLE-01.1: only an Open cycle, on a raft In Use; the start date stays within the limits of BR-CYCLE-01.</summary>
+    /// <summary>CYCLE-01.1: only an Open cycle, on a raft In Use; the start date stays within the limits of BR-CYCLE-01. A cycle without a nursery batch (legacy) keeps the old edit; the others <see cref="EditNurseryCycleAsync"/>.</summary>
     public async Task<Result<CycleSaved>> EditAsync(Guid cycleId, EditCycleRequest request, CancellationToken cancellationToken)
     {
         var cycle = await cycles.GetForEditAsync(cycleId, cancellationToken);
@@ -116,14 +145,17 @@ public sealed class CultivationCycleService(
             return refused;
         }
 
+        // A cycle that draws from a nursery batch (v2), or is given one now, has its own edit rules.
+        if (cycle.NurseryBatchId is not null || request.NurseryBatchId is not null)
+        {
+            return await EditNurseryCycleAsync(cycle, request, cancellationToken);
+        }
+
         var limits = new CycleDateLimits(
             timeProvider.Today(),
             await cycles.LastCloseDateAsync(cycle.RaftId, cancellationToken),
             await cycles.FirstRecordDateAsync(cycle.Id, cancellationToken));
-        var check = CultivationCycleValues.Read(request.StartDate, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg, limits, out var values);
-        var changesProduct = request.ProductId is { } chosen && chosen != cycle.ProductId;
-        var product = changesProduct ? await FindProductAsync(request.ProductId, cancellationToken) : null;
-        check.Check(!changesProduct || product is not null, ProductField);
+        var check = CultivationCycleValues.Read(request.StartDate, request.ExpectedSeedQuantity, request.TargetYieldKg, limits, out var values);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -134,27 +166,8 @@ public sealed class CultivationCycleService(
             return conflict;
         }
 
-        if (product is not null)
-        {
-            if (ProductRefusal(product) is { } notInUse)
-            {
-                return notInUse;
-            }
-
-            if (await cycles.HasHarvestLotAsync(cycle.Id, cancellationToken))
-            {
-                return ProductLocked(cycle);
-            }
-        }
-
         var before = CultivationCycleValues.Snapshot(cycle);
         values.ApplyTo(cycle);
-        if (product is not null)
-        {
-            cycle.ProductId = product.Id;
-            cycle.Product = product;
-        }
-
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.Snapshot(cycle));
         if (changedAfter is not null)
         {
@@ -196,10 +209,82 @@ public sealed class CultivationCycleService(
             return conflict;
         }
 
+        // The plan photos go with the cycle: the rows now, the files once the cancel is saved.
+        var planPhotos = await cycles.PlanPhotosForEditAsync(cycle.Id, cancellationToken);
+        foreach (var photo in planPhotos)
+        {
+            cycles.RemovePlanPhoto(photo);
+        }
+
         cycles.Remove(cycle);
         audit.Record(Entry("CultivationCycle.Cancelled", cycle) with { Before = CultivationCycleValues.Snapshot(cycle) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await fileSaver.SaveAsync([], planPhotos.Select(p => p.FileKey).ToList(), cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Changes the plan photos of a cycle (decision of 12/11/2026): exactly the kept ones and the new ones remain, 1 to 3 (a cycle saved before the photos may stay with none until it is given some, but never ends above three).
+    /// </summary>
+    public async Task<Result<CycleSaved>> ChangePlanPhotosAsync(Guid cycleId, ChangePlanPhotosRequest request, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
+    {
+        var cycle = await cycles.GetForEditAsync(cycleId, cancellationToken);
+        if (cycle is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (!await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Edit, cycle.Raft.ZoneId, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
+        if (writes.Refusal(cycle) is { } refused)
+        {
+            return refused;
+        }
+
+        var current = await cycles.PlanPhotosForEditAsync(cycle.Id, cancellationToken);
+        var keep = (request.KeepPhotoIds ?? []).ToHashSet();
+        var kept = current.Where(p => keep.Contains(p.Id)).ToList();
+        var files = StepPhotoService.Read(newPhotos, kept.Count, request.OtherFilePart, kept.Count == keep.Count, StepPhotoService.MinPhotos);
+        if (!files.IsSuccess)
+        {
+            return files.Error!;
+        }
+
+        if (await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.CyclePlanPhotos, files.Value!, cancellationToken);
+        if (!uploaded.IsSuccess)
+        {
+            return uploaded.Error!;
+        }
+
+        var removed = current.Where(p => !kept.Contains(p)).ToList();
+        foreach (var photo in removed)
+        {
+            cycles.RemovePlanPhoto(photo);
+        }
+
+        using (var free = Enumerable.Range(1, CultivationCycle.MaxPlanPhotos).Where(slot => kept.All(p => p.SortOrder != slot)).GetEnumerator())
+        {
+            foreach (var key in uploaded.Value!)
+            {
+                free.MoveNext();
+                var photo = new CyclePlanPhoto { CycleId = cycle.Id, SortOrder = free.Current, FileKey = key };
+                cycles.AddPlanPhoto(photo);
+            }
+        }
+
+        // The photos are rows of their own: the cycle row is part of the save, so a parallel edit loses with MSG06.
+        unitOfWork.MarkChanged(cycle);
+        audit.Record(Entry("CultivationCycle.Updated", cycle) with { Before = new { Photos = current.Count }, After = new { Photos = kept.Count + uploaded.Value!.Count } });
+        await fileSaver.SaveAsync(uploaded.Value!, removed.Select(p => p.FileKey).ToList(), cancellationToken);
+        var saved = UserMessages.Saved(Saved);
+        return new CycleSaved(await views.ViewAsync(cycle, cancellationToken), saved.Text, saved.Code);
     }
 
     /// <summary>
@@ -228,20 +313,6 @@ public sealed class CultivationCycleService(
             throw;
         }
     }
-
-    /// <summary>The product chosen, null when it was not sent, does not exist or is deleted (hidden): MSG-GEN-01 names the field.</summary>
-    private async Task<Product?> FindProductAsync(Guid? productId, CancellationToken cancellationToken) =>
-        productId is { } id ? (await products.GetByIdsAsync([id], cancellationToken)).FirstOrDefault(p => !p.IsHidden) : null;
-
-    /// <summary>MSG-GEN-09 (GBR-01) when the product chosen is Discontinued, which is not offered for a new choice.</summary>
-    private AppError? ProductRefusal(Product product) => product.StatusId == StatusIds.Usage.InUse
-        ? null
-        : AppError.NotUsableChoice($"Product {product.Code}", statusCatalog.DisplayNameOf(product.StatusId), ProductField);
-
-    /// <summary>MSG-GEN-09: the product is fixed once the cycle has a harvest lot, recorded and sold under it. Not MSG-GEN-06, which makes the screen ask for a reload.</summary>
-    private static AppError ProductLocked(CultivationCycle cycle) => AppError.Conflict(
-        UserMessages.WrongStatus($"The cultivation cycle of raft {cycle.Raft.Code}", "with harvest lots"),
-        new Dictionary<string, object?> { ["cycleId"] = cycle.Id, ["field"] = ProductField });
 
     /// <summary>MSG-GEN-06, as a cycle with records blocks the cancel the way an Open cycle blocks a start or a lane change.</summary>
     private static AppError HasRecords(CultivationCycle cycle, int records) => AppError.Conflict(

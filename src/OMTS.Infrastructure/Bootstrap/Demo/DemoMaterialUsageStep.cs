@@ -11,7 +11,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <summary>
 /// CYCLE-03: repairs on the first two rafts of each In Use demo zone, inside their Open cycles, and one on the sixth raft, which has no cycle, so the screen shows both kinds of
 /// group; recorded by the Zone Manager of the zone. Items are found by their group, not by code. Matched by the audit log, as a record has no code: a rerun adds nothing. A raft
-/// that has changed on an older database (Discontinued, no Open cycle, a cycle too young or a cycle on the date of the repair with no cycle) is passed over. Runs after the input item step.
+/// that has changed on an older database (Discontinued, no Open cycle, a cycle too young or a cycle on the date of the repair with no cycle) is passed over. Runs after the receipt step: a repair issues from the stock the receipts brought in.
 /// </summary>
 internal sealed class DemoMaterialUsageStep : IDemoSeedStep
 {

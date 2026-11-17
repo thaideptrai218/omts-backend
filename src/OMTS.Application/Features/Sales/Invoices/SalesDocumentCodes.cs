@@ -20,6 +20,8 @@ public static class SalesDocumentCodes
 
     /// <summary>DC followed by at least six digits: a customer debt adjustment.</summary>
     public static string AdjustmentCode(long number) => Code(DocumentSequenceKeys.CustomerDebtAdjustment, number);
+    /// <summary>TL000123, a sales return (CLAIM-03 gives no prefix: PM default).</summary>
+    public static string ReturnCode(long number) => Code(DocumentSequenceKeys.SalesReturn, number);
 
     private static string Code(string prefix, long number) => $"{prefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
 }

@@ -10,7 +10,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
 /// SALE-09.2 Print: the list and its total, or one invoice, as an .xlsx file the user downloads and prints (PM default until a print layout is decided). Export in the zone of the invoice:
-/// the Zone Manager of the zone and the Owner; the Accountant only views (§I.4.4, R). Changes nothing.
+/// the Zone Manager and the Accountant of the zone and the Owner (the Accountant prints and exports too: PM answer 12/11/2026, OMTS-224 [5.1]). The list holds at most
+/// <see cref="SalesInvoiceSearchService.MaxExportRows"/> invoices (MSG-GEN-01 on <c>Filters</c> above). Changes nothing.
 /// </summary>
 public sealed class SalesInvoiceExportService(
     SalesInvoiceSearchService search, ISalesInvoiceRepository invoices, SalesInvoiceViews views, ZoneAccessGuard zoneAccess, ISpreadsheetWriter spreadsheets)

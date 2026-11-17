@@ -13,8 +13,11 @@ internal static class QualityClaimRules
     public const string RecordType = nameof(QualityClaim);
     public const string ObjectName = "Quality claim";
 
-    /// <summary>A response cannot be changed (BR-CLAIM-02).</summary>
+    /// <summary>The Owner responds once, while the claim is Awaiting response (BR-CLAIM-02).</summary>
     public static bool AllowsResponse(int statusId) => statusId == StatusIds.QualityClaim.AwaitingResponse;
+
+    /// <summary>The trader answers once, while the offer of the Owner is waiting.</summary>
+    public static bool AllowsAnswer(int statusId) => statusId == StatusIds.QualityClaim.OfferMade;
 
     public static AppError WrongStatus(string status) => AppError.Conflict(UserMessages.WrongStatus(ObjectName, status));
 
@@ -25,7 +28,12 @@ internal static class QualityClaimRules
     /// The save of a response. The loser of a race gets the status that won when it is no longer Awaiting (MSG-GEN-09), otherwise the conflict goes on to the handler as 409 MSG06.
     /// Null when saved.
     /// </summary>
-    public static async Task<AppError?> SaveAsync(IUnitOfWork unitOfWork, QualityClaim claim, Func<QualityClaim, string> statusName, CancellationToken cancellationToken)
+    public static Task<AppError?> SaveAsync(IUnitOfWork unitOfWork, QualityClaim claim, Func<QualityClaim, string> statusName, CancellationToken cancellationToken) =>
+        SaveAsync(unitOfWork, claim, statusName, AllowsResponse, cancellationToken);
+
+    /// <summary>The same for an answer of the trader: the loser of a race gets the status that won when the offer is no longer waiting.</summary>
+    public static async Task<AppError?> SaveAsync(
+        IUnitOfWork unitOfWork, QualityClaim claim, Func<QualityClaim, string> statusName, Func<int, bool> stillOpen, CancellationToken cancellationToken)
     {
         try
         {
@@ -35,7 +43,7 @@ internal static class QualityClaimRules
         catch (ConcurrencyConflictException)
         {
             await unitOfWork.ReloadAsync(claim, cancellationToken);
-            if (AllowsResponse(claim.StatusId))
+            if (stillOpen(claim.StatusId))
             {
                 throw;
             }

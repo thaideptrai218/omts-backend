@@ -25,11 +25,18 @@ public interface ICultivationCycleRepository
     /// <summary>Those of the cycles that have a record, so they can no longer be cancelled (BR-CYCLE-01).</summary>
     Task<IReadOnlySet<Guid>> WithRecordsAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
 
-    /// <summary>Whether the cycle has a harvest lot: the product farmed in it is fixed once it has one.</summary>
-    Task<bool> HasHarvestLotAsync(Guid cycleId, CancellationToken cancellationToken);
-
     /// <summary>How many records hold the cycle: the same seeding sessions and logs as <see cref="WithRecordsAsync"/>.</summary>
     Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken);
+
+    /// <summary>The photos of the plan of the cycle in slot order, read only (decision of 12/11/2026).</summary>
+    Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosAsync(Guid cycleId, CancellationToken cancellationToken);
+
+    /// <summary>The same, tracked for editing.</summary>
+    Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosForEditAsync(Guid cycleId, CancellationToken cancellationToken);
+
+    void AddPlanPhoto(CyclePlanPhoto photo);
+
+    void RemovePlanPhoto(CyclePlanPhoto photo);
 
     void Add(CultivationCycle cycle);
 

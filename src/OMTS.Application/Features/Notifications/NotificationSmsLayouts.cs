@@ -42,11 +42,11 @@ internal static class NotificationSmsLayouts
         _ => null,
     };
 
-    // The note gives way first, then the customer, then the product; the kg and the pickup date are no free text and stay.
+    // The note gives way first, then the customer, then the product; the cages and the pickup date are no free text and stay.
     private static NotificationSmsLayout? PurchaseRequestNew(IReadOnlyDictionary<string, object?> parameters)
     {
         if (parameters.GetValueOrDefault("customer_name") is not string customer
-            || parameters.GetValueOrDefault("requested_kg") is not decimal kg
+            || parameters.GetValueOrDefault("requested_cages") is not int cages
             || parameters.GetValueOrDefault("product_name") is not string product
             || parameters.GetValueOrDefault("pickup_date") is not DateOnly pickup)
         {
@@ -55,7 +55,7 @@ internal static class NotificationSmsLayouts
 
         var note = parameters.GetValueOrDefault("note") as string;
 
-        string Full(IReadOnlyList<string> free) => UserMessages.PurchaseRequestNew(free[^2], kg, free[^1], pickup, note is null ? null : free[0]).Text;
+        string Full(IReadOnlyList<string> free) => UserMessages.PurchaseRequestNew(free[^2], cages, free[^1], pickup, note is null ? null : free[0]).Text;
 
         return new NotificationSmsLayout(
             note is null

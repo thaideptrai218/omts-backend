@@ -114,11 +114,11 @@ public class CultivationLogCorrectionTests(AuthApiFactory factory) : IClassFixtu
 
     // Keys come from the client: only the exact keys of this log are kept, never a photo of another log, and never a file by another spelling of its key.
     [Fact]
-    public async Task The_kept_photos_must_be_of_this_log_spelled_as_stored_and_at_least_one_and_at_most_ten_stay()
+    public async Task The_kept_photos_must_be_of_this_log_spelled_as_stored_and_at_most_three_stay()
     {
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
-        var log = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = Enumerable.Repeat(Jpeg, 9).ToList() });
+        var log = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = Enumerable.Repeat(Jpeg, 2).ToList() });
         var other = await owner.RecordLogAsync(setup.CycleId);
         var keys = log.PhotoKeys();
         var edit = await KeepAllAsync(log);
@@ -128,14 +128,14 @@ public class CultivationLogCorrectionTests(AuthApiFactory factory) : IClassFixtu
             Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { KeepPhotoKeys = [.. keys, wrong] })).InvalidFieldsAsync());
         }
 
-        Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { KeepPhotoKeys = [] })).InvalidFieldsAsync());
+        // The photos of a care log are optional (owner decision of 12/11/2026): keeping none is fine; four is not.
         Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = [Png, Png] })).InvalidFieldsAsync());
         Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = [TextPretendingToBeAFile] })).InvalidFieldsAsync());
         Assert.Equal(keys, (await owner.GetLogAsync(log.Id())).PhotoKeys());
         Assert.Equal(other.PhotoKeys(), (await owner.GetLogAsync(other.Id())).PhotoKeys());
 
-        var ten = (await (await owner.PutLogAsync(log.Id(), edit with { Photos = [Png] })).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
-        Assert.Equal(Enumerable.Range(1, 10), ten.PhotoSlots());
+        var three = (await (await owner.PutLogAsync(log.Id(), edit with { Photos = [Png] })).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
+        Assert.Equal(Enumerable.Range(1, 3), three.PhotoSlots());
     }
 
     [Fact]

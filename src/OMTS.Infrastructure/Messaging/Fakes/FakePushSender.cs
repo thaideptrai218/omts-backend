@@ -17,10 +17,11 @@ public sealed class FakePushSender(IOptions<PushOptions> options, TimeProvider t
 
     public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default)
     {
-        var recipient = message.RecipientAccountId.ToString();
+        // An account or an employee id, the only difference a reader of the dev inbox needs; the two never share an id.
+        var recipient = (message.RecipientAccountId ?? message.RecipientEmployeeId)?.ToString() ?? string.Empty;
         if (options.Value.Fake.FailFor.Contains(recipient, StringComparer.OrdinalIgnoreCase))
         {
-            logger.LogWarning("Fake push {Type} to account {Recipient} failed (configured to fail)", message.Type, recipient);
+            logger.LogWarning("Fake push {Type} to {Recipient} failed (configured to fail)", message.Type, recipient);
             return Task.FromResult(DeliveryResult.Failed("FAKE_CONFIGURED_FAILURE"));
         }
 
@@ -29,7 +30,7 @@ public sealed class FakePushSender(IOptions<PushOptions> options, TimeProvider t
             id, timeProvider.GetUtcNow(), recipient, message.Title, $"{message.Type}: {message.Body}", message.DeviceTokens,
             message.NotificationId, message.MessageCode, message.MessageParams is { } json ? JsonDocument.Parse(json).RootElement.Clone() : null));
         logger.LogInformation(
-            "Fake push {MessageId} {Type} to account {Recipient} on {DeviceCount} devices", id, message.Type, recipient, message.DeviceTokens.Count);
+            "Fake push {MessageId} {Type} to {Recipient} on {DeviceCount} devices", id, message.Type, recipient, message.DeviceTokens.Count);
         return Task.FromResult(DeliveryResult.Sent(id));
     }
 }

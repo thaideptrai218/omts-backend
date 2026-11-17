@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Sales;
@@ -16,6 +17,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasOne(x => x.SalesOrder).WithMany().HasForeignKey(x => x.SalesOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.SalesOrderId);
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
+        builder.HasOne(x => x.PortWeighing).WithMany(w => w.Invoices).HasForeignKey(x => x.PortWeighingId);
+        // One Completed invoice per weighing; a cancelled one frees it.
+        builder.HasIndex(x => x.PortWeighingId).IsUnique().HasFilter($"[PortWeighingId] IS NOT NULL AND [StatusId] = {StatusIds.SalesInvoice.Completed}");
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(SalesInvoice.CreatedByAccountId));
         builder.ReferencesAccount(nameof(SalesInvoice.CancelledByAccountId));
@@ -43,6 +47,7 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
             t.HasCheckConstraint("CK_SalesInvoice_Amounts", "[DiscountAmount] >= 0 AND [OtherCharges] >= 0 AND [Subtotal] >= 0 AND [PriceCutTotal] >= 0");
             t.HasCheckConstraint("CK_SalesInvoice_Total", "[Total] >= 0 AND [Total] = [Subtotal] - [DiscountAmount] + [OtherCharges] - [PriceCutTotal]");
             t.HasCheckConstraint("CK_SalesInvoice_Request_Has_Customer", "[PurchaseRequestId] IS NULL OR [CustomerId] IS NOT NULL");
+            t.HasCheckConstraint("CK_SalesInvoice_Weighing_Has_Request", "[PortWeighingId] IS NULL OR [PurchaseRequestId] IS NOT NULL");
             t.HasCheckConstraint("CK_SalesInvoice_PayLater_Has_Customer", "[PaymentTerm] <> 'PayLater' OR [CustomerId] IS NOT NULL");
         });
     }
@@ -118,6 +123,11 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
             .HasFilter("[Method] = 'VietQrInvoice' AND [BankReference] IS NOT NULL");
         builder.Property(x => x.TransferInvoiceCode).HasMaxLength(Lengths.Code);
         builder.HasIndex(x => x.TransferInvoiceCode);
+        // DEBT-02.6: a transfer is settled once by money paid back, whatever two saves read at the same moment; a cancelled one no longer counts, so the transfer can be settled again.
+        builder.HasOne(x => x.PaidBackForPayment).WithMany().HasForeignKey(x => x.PaidBackForPaymentId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasIndex(x => x.PaidBackForPaymentId, "IX_CustomerPayments_PaidBackForPayment")
+            .IsUnique()
+            .HasFilter($"[PaidBackForPaymentId] IS NOT NULL AND [StatusId] <> {StatusIds.CustomerPayment.Cancelled}");
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => x.DeduplicationKey).IsUnique();

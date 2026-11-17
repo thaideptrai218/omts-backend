@@ -19,7 +19,7 @@ public sealed record TraceSeedingCorrectionRequest(
 /// The photos that stay; a photo left out is removed, and no list at all removes them all, as the multipart save reads it. New photos are not previewed: they come with the save.
 /// </param>
 public sealed record TraceHarvestLotPreviewRequest(
-    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason);
+    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason);
 
 /// <summary>A harvest lot whose origin information a correction changes, with its origin state, which the correction never changes (BR-TRACE-05).</summary>
 public sealed record TraceAffectedLot(Guid Id, string LotCode, HarvestLotOriginState OriginState);
@@ -72,7 +72,7 @@ public sealed record TraceHarvestLotItem(
     DateOnly HarvestDate,
     IReadOnlyList<int> LaneNumbers,
     IReadOnlyList<int> FinishedLaneNumbers,
-    int CageCount,
+    decimal CageCount,
     decimal KgPerCage,
     decimal EstimatedKg,
     int StatusId,

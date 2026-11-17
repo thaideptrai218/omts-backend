@@ -3,18 +3,23 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Dashboard;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
@@ -37,6 +42,10 @@ using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
+using OMTS.Application.Features.Reports;
+using OMTS.Application.Features.Reports.PostSaleIssues;
+using OMTS.Application.Features.Reports.PriceTrends;
+using OMTS.Application.Features.Reports.SalesPerformance;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.Disposals;
@@ -46,11 +55,13 @@ using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
+using OMTS.Application.Features.Sales.Returns;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application;
 
@@ -67,6 +78,14 @@ public static class DependencyInjection
         services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
+        services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
+        services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -121,6 +140,15 @@ public static class DependencyInjection
         services.AddScoped<EmploymentService>();
         services.AddScoped<EmploymentEndService>();
 
+        // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
+        services.AddScoped<EmployeeAppAccess>();
+        services.AddScoped<EmployeeAppTokenIssuer>();
+        services.AddScoped<EmployeeAppLoginService>();
+        services.AddScoped<EmployeeAppSessionService>();
+        services.AddScoped<EmployeeLoginCodeService>();
+        services.AddScoped<EmployeeDeviceService>();
+        services.AddScoped<IEmployeeNotifier, EmployeeNotifier>();
+
         // DEBT-01 receiving bank account
         services.AddScoped<ReceivingAccountAcceptance>();
         services.AddScoped<ReceivingBankAccountService>();
@@ -156,14 +184,24 @@ public static class DependencyInjection
         services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();
+        services.AddScoped<LaneIncidentViews>();
+        services.AddScoped<LaneIncidentNotifier>();
+        services.AddScoped<LaneIncidentService>();
+        services.AddScoped<LaneIncidentReadService>();
+        services.AddScoped<LaneIncidentPhotoService>();
         services.AddScoped<RaftStatusService>();
 
         // CYCLE – cultivation cycles and the lane states derived from their records
         services.AddScoped<LaneStateReader>();
+        services.AddScoped<LaneProgressViews>();
+        services.AddScoped<LanePercentGuard>();
+        services.AddScoped<LaneProgressService>();
         services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CycleSeedLabels>();
         services.AddScoped<CycleWriteGuard>();
         services.AddScoped<CultivationLogViews>();
         services.AddScoped<RecordPhotoStore>();
+        services.AddScoped<StepPhotoService>();
         services.AddScoped<CultivationLogService>();
         services.AddScoped<CultivationLogCorrectionService>();
         services.AddScoped<CultivationLogReadService>();
@@ -171,12 +209,25 @@ public static class DependencyInjection
         services.AddScoped<SeedingViews>();
         services.AddScoped<SeedingReadService>();
         services.AddScoped<SeedingRecordService>();
+        services.AddScoped<SeedingStockSync>();
         services.AddScoped<SeedingRecordCorrectionService>();
         services.AddScoped<SeedingCompletionService>();
+
+        // NURSERY – ươm giống: batches of one seed lot per zone, completed into a pool the cycles seed from (v2)
+        services.AddScoped<NurseryBatchViews>();
+        services.AddScoped<NurseryNotifier>();
+        services.AddScoped<NurseryStockSync>();
+        services.AddScoped<NurseryBatchService>();
+        services.AddScoped<NurseryBatchEditService>();
+        services.AddScoped<NurseryCompletionService>();
+        services.AddScoped<NurseryReadService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();
         services.AddScoped<MaterialUsageService>();
+        services.AddScoped<MaterialUsageStockSync>();
         services.AddScoped<MaterialUsageEditService>();
+        services.AddScoped<MaterialUsageRemoveService>();
+        services.AddScoped<RecordHistoryService>();
         services.AddScoped<MaterialUsageReadService>();
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
@@ -186,7 +237,10 @@ public static class DependencyInjection
         // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
+        services.AddScoped<HarvestCrewService>();
         services.AddScoped<HarvestLotRecordingService>();
+        services.AddScoped<HarvestLaneFinishService>();
+        services.AddScoped<HarvestLanesFinishService>();
         services.AddScoped<HarvestLotEditReader>();
         services.AddScoped<HarvestLotCorrectionService>();
         services.AddScoped<HarvestLotRemovalService>();
@@ -215,6 +269,7 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
+        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();
@@ -238,6 +293,7 @@ public static class DependencyInjection
         services.AddScoped<InputIssueAccess>();
         services.AddScoped<InputIssueCodeService>();
         services.AddScoped<InputIssueService>();
+        services.AddScoped<FarmingStockIssuer>();
         services.AddScoped<InputIssueTypeService>();
         services.AddScoped<InputMovementService>();
         services.AddScoped<FarmingInputItemDeletionService>();
@@ -258,6 +314,7 @@ public static class DependencyInjection
         services.AddScoped<SalesOrderProgress>();
         services.AddScoped<SalesOrderViews>();
         services.AddScoped<SalesOrderService>();
+        services.AddScoped<SalesOrderFromRequestService>();
         services.AddScoped<SalesOrderAdvanceService>();
         services.AddScoped<SalesOrderReadService>();
         services.AddScoped<HarvestLotProductLineService>();
@@ -287,14 +344,32 @@ public static class DependencyInjection
         services.AddScoped<QualityClaimReadService>();
         services.AddScoped<QualityClaimSubmissionService>();
         services.AddScoped<QualityClaimResponseService>();
+        services.AddScoped<QualityClaimAnswerService>();
+        // CLAIM-03 sales returns
+        services.AddScoped<SalesReturnGuard>();
+        services.AddScoped<SalesReturnLots>();
+        services.AddScoped<SalesReturnNotifications>();
+        services.AddScoped<SalesReturnViews>();
+        services.AddScoped<SalesReturnService>();
+        services.AddScoped<SalesReturnCancellationService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
         // DEBT-03 customer debts, statement and export (read only)
         services.AddScoped<CustomerDebtService>();
         services.AddScoped<CustomerDebtExportService>();
+        // REPORT-01 sales performance (read only); the filter resolver is shared with REPORT-02 and REPORT-03
+        services.AddScoped<ReportFilterResolver>();
+        services.AddScoped<SalesPerformanceService>();
+        services.AddScoped<SalesPerformanceExportService>();
+        // REPORT-02 price trends and REPORT-03 post-sale issues (read only)
+        services.AddScoped<PriceTrendsService>();
+        services.AddScoped<PriceTrendsExportService>();
+        services.AddScoped<PostSaleIssuesService>();
+        services.AddScoped<PostSaleIssuesExportService>();
         // DEBT-02 customer payments, money paid back, confirmations and cancellations
         services.AddScoped<CustomerPaymentViews>();
         services.AddScoped<CustomerPaymentStatusChanges>();
+        services.AddScoped<CustomerPaymentSettlements>();
         services.AddScoped<CustomerPaymentNotifications>();
         services.AddScoped<CustomerPaymentService>();
         services.AddScoped<CustomerPaymentCodeService>();
@@ -310,12 +385,16 @@ public static class DependencyInjection
         services.AddScoped<PendingSaleWriter>();
         services.AddScoped<PendingSaleViews>();
         services.AddScoped<PendingSaleService>();
+        services.AddScoped<PendingSaleEndOfDayService>();
         services.AddScoped<PendingSaleCompletion>();
         services.AddScoped<PendingSaleLotQuery>();
         services.AddScoped<TransferPaymentWriter>();
         services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
+        services.AddScoped<MyInvoiceService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.PortWeighingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.MyPortWeighingService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();
@@ -374,6 +453,7 @@ public static class DependencyInjection
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
         services.AddScoped<WaterZoneOverviewService>();
+        services.AddScoped<OperationsDashboardService>();
 
         return services;
     }

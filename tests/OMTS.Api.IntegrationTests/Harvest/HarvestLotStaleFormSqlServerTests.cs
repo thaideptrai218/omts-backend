@@ -58,7 +58,7 @@ public class HarvestLotStaleFormSqlServerTests
         var (host, owner, raftId) = await StartAsync();
         await using var _ = host;
         var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
-        var saved = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(2), "Wrong lane", lot.Text("rowVersion")))).ReadAsync(HttpStatusCode.OK);
+        var saved = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(2), "Wrong lane", lot.Text("rowVersion"), lot.PhotoKeysOfLot()))).ReadAsync(HttpStatusCode.OK);
         await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1).FinishedLanes(1));
         var form = HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { Cages = "9" };
 

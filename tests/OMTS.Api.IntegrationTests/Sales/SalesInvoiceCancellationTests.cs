@@ -196,6 +196,7 @@ public class SalesInvoiceCancellationTests
         var statement = await (await owner.GetAsync($"/api/customer-debts/{sale.CustomerId}/statement")).ReadAsync(HttpStatusCode.OK);
 
         var entries = statement.GetProperty("entries").EnumerateArray().ToList();
+        // The invoice entry is what it was worth when saved, and its price cut is an entry of its own beside it (the corrections list holds data-entry corrections only).
         var ofCorrected = entries.Single(e => e.Id() == corrected.Id());
         // The invoice keeps what it was saved at; the price cut is its own entry below it.
         Assert.Equal((300_000m, "PriceCutAfterClaim"), (ofCorrected.Money("debtChange"), ofCorrected.GetProperty("corrections")[0].Text("kind")));

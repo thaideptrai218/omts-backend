@@ -57,7 +57,7 @@ public sealed class QualityClaimNotifications(
         NotificationTypes.QualityClaimResponse,
         "Response to your quality claim",
         UserMessages.QualityClaimResponse(
-            cooperativeName, claim.Invoice.Code, claim.StatusId == StatusIds.QualityClaim.Accepted, claim.Offer?.ToString(), note, cooperativePhone),
+            cooperativeName, claim.Invoice.Code, claim.StatusId != StatusIds.QualityClaim.Rejected, claim.Offer?.ToString(), note, cooperativePhone, claim.OfferAmount),
         Record(claim));
 
     private static RelatedRecord Record(QualityClaim claim) => new(RelatedRecordTypes.QualityClaim, claim.Id, claim.Code);

@@ -9,7 +9,9 @@ using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
-/// <summary>The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate and no photo.</summary>
+/// <summary>
+/// The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate and no photo (the kit adds one).
+/// </summary>
 public sealed record HarvestFields
 {
     public IReadOnlyList<string> Lanes { get; init; } = ["1"];
@@ -25,9 +27,21 @@ public sealed record HarvestFields
     public HarvestFields FromPlanLine(Guid lineId) => this with { PlanLineId = lineId };
 
     /// <summary>The share of each product on the lot (product, cages, kg left empty to work it out); none keeps the old way of recording a lot.</summary>
-    public IReadOnlyList<(Guid ProductId, int Cages, decimal? Kg)> ProductLines { get; init; } = [];
+    public IReadOnlyList<(Guid ProductId, decimal Cages, decimal? Kg)> ProductLines { get; init; } = [];
 
-    public HarvestFields WithProducts(params (Guid ProductId, int Cages, decimal? Kg)[] lines) => this with { ProductLines = lines };
+    public HarvestFields WithProducts(params (Guid ProductId, decimal Cages, decimal? Kg)[] lines) => this with { ProductLines = lines };
+
+    /// <summary>The employees on the trip, one <c>crew</c> field each (decision of 12/11/2026); null sends none (a correction then keeps the crew); a single empty value clears it.</summary>
+    public IReadOnlyList<string>? Crew { get; init; }
+
+    /// <summary>Sends <c>replaceCrew=true</c>: the crew of a correction becomes exactly the <c>crew</c> fields, none clearing it.</summary>
+    public bool ReplaceCrew { get; init; }
+
+    /// <summary>Sends no photo when recording, to see it refused (the kit adds one otherwise).</summary>
+    public bool NoPhoto { get; init; }
+
+    /// <summary>The <c>lanePercents</c> field (lane number to percent, owner decision of 12/11/2026); null sends none.</summary>
+    public IReadOnlyDictionary<int, decimal>? LanePercents { get; init; }
 
     public static HarvestFields OfLanes(params int[] lanes) => new() { Lanes = lanes.Select(n => n.ToString()).ToList() };
 
@@ -60,7 +74,7 @@ public sealed record HarvestFields
         {
             var (productId, cages, kg) = ProductLines[i];
             form.Add(new StringContent(productId.ToString()), $"productLines[{i}].productId");
-            form.Add(new StringContent(cages.ToString()), $"productLines[{i}].cageCount");
+            form.Add(new StringContent(cages.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].cageCount");
             if (kg is { } typed)
             {
                 form.Add(new StringContent(typed.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].kg");
@@ -70,6 +84,21 @@ public sealed record HarvestFields
         if (PlanLineId is { } planLine)
         {
             form.Add(new StringContent(planLine.ToString()), "harvestPlanLineId");
+        }
+
+        if (LanePercents is not null)
+        {
+            form.Add(new StringContent(JsonSerializer.Serialize(LanePercents)), "lanePercents");
+        }
+
+        if (ReplaceCrew)
+        {
+            form.Add(new StringContent("true"), "replaceCrew");
+        }
+
+        foreach (var employee in Crew ?? [])
+        {
+            form.Add(new StringContent(employee), "crew");
         }
 
         foreach (var photo in Photos)
@@ -87,8 +116,17 @@ public sealed record SeededRaft(Actor Owner, Guid ZoneId, Guid RaftId, Guid Cycl
 /// <summary>HARVEST-01 and HARVEST-03 calls and what they should have left behind.</summary>
 public static class HarvestTestKit
 {
-    public static Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
-        client.PostAsync($"/api/rafts/{raftId}/harvest-lots", (fields ?? new HarvestFields()).ToForm());
+    public static async Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null)
+    {
+        fields ??= new HarvestFields();
+        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): a test that sends none gets one, unless it asks to see the refusal (<see cref="HarvestFields.NoPhoto"/>).
+        if (fields.Photos.Count == 0 && !fields.NoPhoto)
+        {
+            fields = fields with { Photos = [FarmingTestKit.Jpeg] };
+        }
+
+        return await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
+    }
 
     /// <summary>Records a harvest and returns the whole answer.</summary>
     public static async Task<JsonElement> RecordHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
@@ -138,6 +176,16 @@ public static class HarvestTestKit
 
     public static Task<List<Notification>> NoticesAsync(this AuthApiFactory factory, string type, Guid recordId) =>
         factory.QueryAsync(db => db.Notifications.Where(n => n.Type == type && n.RelatedRecordId == recordId).ToListAsync());
+
+    /// <summary>
+    /// Every stored file of the category belongs to a photo row and every row has its file: a refused or failed save leaves no file behind. The lots a test recorded keep their own photo (the kit sends one
+    /// when a test names none, as a new lot needs 1 to 3), so "nothing stored" reads "nothing but the photos of the lots".
+    /// </summary>
+    public static async Task AssertNoOrphanLotPhotosAsync(this AuthApiFactory factory, string category)
+    {
+        var rows = (await factory.QueryAsync(db => db.HarvestLotPhotos.Select(p => p.FileKey).ToListAsync())).Order().ToList();
+        Assert.Equal(rows, FarmingUploadedFileTests.StoredKeys(factory, category).Select(k => k!).Order().ToList());
+    }
 
     public static Task<int> LotCountAsync(this AuthApiFactory factory, Guid raftId) =>
         factory.QueryAsync(db => db.HarvestLots.CountAsync(l => l.RaftId == raftId));

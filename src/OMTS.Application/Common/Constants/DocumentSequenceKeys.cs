@@ -86,5 +86,11 @@ public static class DocumentSequenceKeys
 
     /// <summary>Harvest plans, KHT000123 (not the "KH" of the customers).</summary>
     public const string HarvestPlan = "KHT";
+
+    /// <summary>Nursery batches (ươm giống), NU000123.</summary>
+    public const string NurseryBatch = "NU";
+
+    /// <summary>Sales returns, TL000123 (CLAIM-03 gives no prefix: PM default; TH is the purchase return's).</summary>
+    public const string SalesReturn = "TL";
 }
 

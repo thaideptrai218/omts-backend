@@ -115,7 +115,13 @@ public class CustomerPaymentRulesTests
         var single = new NotificationContent(type.Code, "t", UserMessages.CustomerTransaction("Kế toán Hà", "Payment", "PT000010", 1_000_000m, "Bà Lan", 2_000_000m),
             new RelatedRecord(RelatedRecordTypes.CustomerPayment, Guid.NewGuid(), "PT000010"));
         Assert.Equal("Customer payment transaction PT000010: 1,000,000 VND.", NotificationSmsText.Render(type, type.Sms!, single));
-        Assert.Equal("Customer payment transaction: 5,300,000 VND.", NotificationSmsText.Render(type, type.Sms!, new NotificationContent(type.Code, "t", batch)));
+        // The SMS of a list shows the total confirmed and the total cancelled apart (PM answer 12/11/2026, OMTS-224 [1.4]), a part of 0 left out; the "amount" of the push and the list stays their sum.
+        Assert.Equal("Customer payment transaction: thu 5,000,000 VND, huy 300,000 VND.", NotificationSmsText.Render(type, type.Sms!, new NotificationContent(type.Code, "t", batch)));
+        var onlyConfirmed = UserMessages.CustomerPaymentsBatch("Kế toán Hà", [("PT000001", 4_000_000m)], [], []);
+        var onlyCancelled = UserMessages.CustomerPaymentsBatch("Kế toán Hà", [], [("PT000003", 300_000m)], [("Bà Lan", 800_000m)]);
+        Assert.Equal("Customer payment transaction PT000001: thu 4,000,000 VND.", NotificationSmsText.Render(type, type.Sms!, new NotificationContent(type.Code, "t", onlyConfirmed, new RelatedRecord(RelatedRecordTypes.CustomerPayment, Guid.NewGuid(), "PT000001"))));
+        Assert.Equal("Customer payment transaction: huy 300,000 VND.", NotificationSmsText.Render(type, type.Sms!, new NotificationContent(type.Code, "t", onlyCancelled)));
+        Assert.Equal(5_300_000m, batch.Parameters!["amount"]);
     }
 
     // A long list names the first 10 codes of each part and the first 5 debts, and counts the rest, in the text and in the parameters (the row holds 2000 characters).

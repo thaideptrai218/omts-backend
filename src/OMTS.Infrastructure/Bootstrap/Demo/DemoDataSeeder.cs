@@ -36,13 +36,18 @@ internal static class DemoDataSeeder
         new DemoSupplierStep(),
         new DemoExtraSupplierStep(),
         new DemoInputItemStep(),
-        new DemoMaterialUsageStep(),
         new DemoPurchaseReceiptStep(),
+        new DemoMaterialUsageStep(),
         new DemoSeedingStep(),
         new DemoHarvestLotStep(),
+        new DemoNurseryStep(),
         new DemoSalesInvoiceStep(),
+        new DemoOpenHarvestRequestStep(),
+        new DemoCycleProductStep(),
         new DemoWaterMeasurementStep(),
         new DemoPayrollStep(),
+        // Last, so that no step above takes these empty rafts into its data.
+        new DemoReadyRaftStep(),
     ];
 
     public static async Task<IReadOnlyList<string>> SeedAsync(

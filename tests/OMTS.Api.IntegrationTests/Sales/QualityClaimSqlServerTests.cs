@@ -139,7 +139,7 @@ public class QualityClaimSqlServerTests
             await AssertAnswersAsync(answers.Where(a => a.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
             Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             var status = (await w.Host.Api.DbAsync(db => db.QualityClaims.AsNoTracking().SingleAsync(c => c.Id == claim.Id()))).StatusId;
-            Assert.Equal(answers[0].StatusCode == HttpStatusCode.OK ? StatusIds.QualityClaim.Accepted : StatusIds.QualityClaim.Rejected, status);
+            Assert.Equal(answers[0].StatusCode == HttpStatusCode.OK ? StatusIds.QualityClaim.OfferMade : StatusIds.QualityClaim.Rejected, status);
             var rows = await w.Host.Api.NotificationRowsAsync(claim.Id());
             Assert.Single(rows.InList().OfType(NotificationTypes.QualityClaimResponse));
             var sending = Assert.Single(rows.Sendings());

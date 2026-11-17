@@ -30,6 +30,10 @@ public static class UserMessages
     /// <param name="action">What is done, in the words of the SRS, e.g. "correct traceability data".</param>
     public static UserMessage ConfirmAction(string action) => new(Gen04, $"Are you sure you want to {action}? This action is recorded in the audit log.", Legacy.Msg09);
 
+    /// <summary>MSG-GEN-04 for a seeding session that takes the cycle above 110 % of its planned seed: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
+    public static UserMessage SeedingOverPlanQuestion(decimal totalQuantity, decimal plannedQuantity) => ConfirmAction(
+        $"record this seeding, which takes the cycle to {Quantity(totalQuantity)} seed, above its planned seed of {Quantity(plannedQuantity)}");
+
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 
@@ -40,6 +44,22 @@ public static class UserMessages
     /// <summary>MSG-GEN-08 (GFR-02): the role or zone access does not allow the function; nothing is changed.</summary>
     public static readonly UserMessage NoPermission = new(
         Gen08, "You do not have permission to perform this action. Nothing has been changed.", Legacy.Msg02);
+    /// <summary>MSG-GEN-09 in Vietnamese for a lane put out of service that cannot be restored while an Open cycle still holds seed on it (owner decision of 12/11/2026).</summary>
+    public static UserMessage LaneStillHoldsSeed(int laneNumber) => new(
+        Gen09, $"Làn {laneNumber} chưa thể đưa vào hoạt động lại: chu kỳ đang mở vẫn còn giống trên làn này. Hãy đóng hoặc kết thúc chu kỳ trước.", Legacy.Msg61);
+
+
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for the nursery (ươm giống, decision of 12/11/2026): the generic code stands in until the SRS gives MSG-NURSERY-xx a number of its own. The caller adds a
+    /// <c>reasonCode</c> to the details so a client can tell the refusals apart.
+    /// </summary>
+    public static UserMessage NurseryRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for finishing a harvest (QA of 13/11/2026: the English detail of the refusals shown to the Owner on the live demo): the same code and legacy code as
+    /// <see cref="WrongStatus"/>, with a text the screen can show as it is.
+    /// </summary>
+    public static UserMessage HarvestRefused(string text) => new(Gen09, text, Legacy.Msg61);
 
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>
@@ -51,6 +71,13 @@ public static class UserMessages
     /// <param name="filterDescription">e.g. "period and filters".</param>
     public static UserMessage NoDataForFilters(string filterDescription) => new(
         Gen10, $"There is no data for the {filterDescription} you chose. Please choose again.", Legacy.Msg08);
+
+    /// <summary>
+    /// MSG-GEN-01 for a list export that selects more rows than the file may hold (PM answer 12/11/2026, OMTS-224 [5.7]): the caller names the field <c>Filters</c> and nothing is written.
+    /// </summary>
+    /// <param name="item">What is exported, plural, e.g. "sales invoices".</param>
+    public static UserMessage ExportTooLarge(string item, int limit) => new(
+        Gen01, $"The selection has more than {limit.ToString("N0", CultureInfo.InvariantCulture)} {item}, too many for one file. Narrow the period or the filters and export again.", Legacy.Msg01);
 
     // ---- MSG-FARM ----
 
@@ -151,16 +178,19 @@ public static class UserMessages
     public const int BatchDebtsNamed = 5;
 
     /// <summary>
-    /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed and cancelled. Confirmations change no debt
-    /// (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment. A list may hold up to 200 payments (CustomerPaymentRules.MaxBatchSize),
-    /// so the notice names the first <see cref="BatchCodesNamed"/> codes of each part and the first <see cref="BatchDebtsNamed"/> debts and counts the rest: its text and
-    /// parameters always fit the Notification row (2000 characters each), which would otherwise cut the text and drop the parameters.
+    /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed, cancelled and settled (BR-DEBT-06). Confirmations
+    /// change no debt (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment and each attachment to a profile. A list may hold up to 200
+    /// payments (CustomerPaymentRules.MaxBatchSize), so the notice names the first <see cref="BatchCodesNamed"/> codes of each part and the first <see cref="BatchDebtsNamed"/>
+    /// debts and counts the rest: its text and parameters always fit the Notification row (2000 characters each), which would otherwise cut the text and drop the parameters.
     /// </summary>
-    /// <param name="debts">The debt after the save of each profile a cancelled payment belonged to.</param>
+    /// <param name="debts">The debt after the save of each profile a cancelled or attached payment belonged to.</param>
+    /// <param name="settled">The payments settled from the list (DEBT-02.6).</param>
     public static UserMessage CustomerPaymentsBatch(
         string userName, IReadOnlyList<(string Code, decimal Amount)> confirmed, IReadOnlyList<(string Code, decimal Amount)> cancelled,
-        IReadOnlyList<(string CustomerName, decimal Debt)> debts)
+        IReadOnlyList<(string CustomerName, decimal Debt)> debts, IReadOnlyList<(string Code, decimal Amount)>? settled = null)
     {
+        settled ??= [];
+
         static string Codes(IReadOnlyList<(string Code, decimal Amount)> payments) =>
             string.Join(", ", payments.Take(BatchCodesNamed).Select(p => p.Code)) + (payments.Count > BatchCodesNamed ? $" and {payments.Count - BatchCodesNamed} more" : "");
 
@@ -180,9 +210,14 @@ public static class UserMessages
             parts.Add(Part("cancelled", cancelled));
         }
 
+        if (settled.Count > 0)
+        {
+            parts.Add(Part("settled", settled));
+        }
+
         var namedDebts = debts.Take(BatchDebtsNamed).ToList();
         var moreDebts = More(debts.Count, BatchDebtsNamed);
-        var debtText = cancelled.Count == 0
+        var debtText = cancelled.Count == 0 && debts.Count == 0
             ? "The customer debts have not changed."
             : string.Join(' ', namedDebts.Select(d => CustomerDebtAfterText(d.CustomerName, d.Debt)))
                 + (moreDebts == 0 ? "" : moreDebts == 1 ? " The debt of 1 more customer has changed." : $" The debts of {moreDebts} more customers have changed.");
@@ -200,7 +235,11 @@ public static class UserMessages
                 ["cancelled_count"] = cancelled.Count,
                 ["cancelled_more_count"] = More(cancelled.Count, BatchCodesNamed),
                 ["cancelled_amount"] = cancelled.Sum(p => p.Amount),
-                ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount),
+                ["settled_codes"] = settled.Take(BatchCodesNamed).Select(p => p.Code).ToList(),
+                ["settled_count"] = settled.Count,
+                ["settled_more_count"] = More(settled.Count, BatchCodesNamed),
+                ["settled_amount"] = settled.Sum(p => p.Amount),
+                ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount) + settled.Sum(p => p.Amount),
                 ["debts"] = namedDebts.Select(d => new Dictionary<string, object?> { ["customer_name"] = d.CustomerName, ["debt_amount"] = d.Debt }).ToList(),
                 ["debts_more_count"] = moreDebts,
             },
@@ -305,6 +344,13 @@ public static class UserMessages
         };
     }
 
+    /// <summary>MSG-CYCLE-01 when no lane has seed yet: finishing the seeding of an empty raft needs <c>confirmEmpty</c> (PM decision 11/11/2026).</summary>
+    public static UserMessage FinishEmptySeedingQuestion(string raftCode) => new(
+        Cycle01, $"No lane of raft {raftCode} has seed yet. Finish the seeding anyway? The Cooperative Owner will be asked to review the seeding.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["count"] = 0 },
+    };
+
     /// <summary>MSG-CYCLE-02 (CYCLE-02.1): notification to the Cooperative Owner when the seeding of a raft is marked complete.</summary>
     public static UserMessage SeedingFinished(string raftCode, int seededCount, int laneCount) => new(
         Cycle02, $"Raft {raftCode}: seeding is finished; {seededCount} of {laneCount} lanes have seed. Please review the seeding sessions.")
@@ -381,14 +427,14 @@ public static class UserMessages
 
     /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
     /// <param name="planCode">The harvest plan (KHT) the lot was recorded from, named in the text and sent as <c>plan_code</c>; null for a lot outside a plan.</param>
-    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg, string? planCode = null)
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, decimal cageCount, decimal estimatedKg, string? planCode = null)
     {
         var parameters = new Dictionary<string, object?>
         {
             ["raft_code"] = raftCode,
             ["harvest_date"] = harvestDate,
             ["lot_code"] = lotCode,
-            ["cage_count"] = cageCount,
+            ["cage_count"] = decimal.Parse(Quantity(cageCount), CultureInfo.InvariantCulture),
             ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
         };
         if (planCode is not null)
@@ -777,6 +823,50 @@ public static class UserMessages
         };
     }
 
+    /// <summary>
+    /// MSG-LABOR-08 (LABOR-03 steps 3 and 4): the login code, shown to whoever issued it and kept in their notification list; never sent to the employee.
+    /// This is the one place that holds the code in clear, for its 5 minutes (it is what the SRS asks the notification to say).
+    /// </summary>
+    public static UserMessage LoginCodeIssued(string employeeName, string code, DateTimeOffset expiresAt, string phoneNumber) => new(
+        Labor08,
+        $"Login code for {employeeName}: {code}. It works once and expires at {BusinessClock.Format(expiresAt)}. Give it to {employeeName} in person or by calling {phoneNumber}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["employee_name"] = employeeName, ["code"] = code, ["expiry_time"] = expiresAt.ToOffset(BusinessClock.UtcOffset), ["phone_number"] = phoneNumber,
+        },
+    };
+
+    /// <summary>MSG-LABOR-09 (LABOR-03.0.E1): no login code can be issued; <paramref name="reason"/> is the English reason as the SRS words it.</summary>
+    public static UserMessage LoginCodeNotIssued(string employeeName, string reason) => new(
+        Labor09, $"No login code can be issued for {employeeName}: {reason}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = reason },
+    };
+
+    /// <summary>
+    /// What the issuer is told when the 5th wrong entry cancelled the code. The SRS has no message for it, so it goes out under MSG-LABOR-19
+    /// (the code could not be used) with its own text and parameters; it holds no code. A PM decision may give it a code of its own.
+    /// </summary>
+    public static UserMessage LoginCodeCancelledByWrongEntries(string employeeName) => new(
+        Labor19,
+        $"The login code for {employeeName} was cancelled after 5 wrong entries. If it was not {employeeName} who entered them, someone else may know their phone number: issue a new code and give it in person.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = "TooManyWrongEntries" },
+    };
+
+    /// <summary>MSG-LABOR-17 (LABOR-06 step 4): this device is not linked to the employee yet.</summary>
+    public static readonly UserMessage DeviceNotLinked = new(
+        Labor17, "This phone is not linked to you yet. Ask your Zone Manager for a login code, then enter it here.");
+
+    /// <summary>MSG-LABOR-18 (LABOR-06.0.E1): no Employed employee has the phone number.</summary>
+    public static readonly UserMessage EmployeePhoneNotRegistered = new(
+        Labor18, "This phone number cannot log in to the employee app. Please contact your Zone Manager.");
+
+    /// <summary>MSG-LABOR-19 (LABOR-06.0.E2): the login code is wrong, expired or cancelled.</summary>
+    public static readonly UserMessage LoginCodeRejected = new(
+        Labor19, "This login code is wrong or can no longer be used. Check it, or ask your Zone Manager for a new code.");
+
     /// <summary>MSG-LABOR-36 (LABOR-16 step 3): asked before saving the payroll settings.</summary>
     /// <param name="period1">The next pay period as shown to the user.</param>
     /// <param name="automatic">Automatic payroll is on: the note about it is added.</param>
@@ -795,14 +885,14 @@ public static class UserMessages
     public static readonly UserMessage NothingToShowYet = new(Gen11, "There is nothing to show yet.");
 
     /// <summary>MSG-SALE-01 (BR-SALE-03): a new purchase request, to the Cooperative Owner; a mandatory type.</summary>
-    public static UserMessage PurchaseRequestNew(string customerName, decimal requestedKg, string productName, DateOnly pickupDate, string? note) => new(
+    public static UserMessage PurchaseRequestNew(string customerName, int requestedCages, string productName, DateOnly pickupDate, string? note) => new(
         Sale01,
-        $"{customerName} asks to buy about {Kg(requestedKg)} kg of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
+        $"{customerName} asks to buy {requestedCages} cages of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["customer_name"] = customerName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["pickup_date"] = pickupDate,
             ["note"] = note,
@@ -811,15 +901,15 @@ public static class UserMessages
 
     /// <summary>MSG-SALE-02 (BR-SALE-03): a trader cancelled a purchase request, to the Cooperative Owner.</summary>
     /// <param name="requestDate">The business day the request was sent.</param>
-    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, decimal requestedKg, string productName, string? reason) => new(
+    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, int requestedCages, string productName, string? reason) => new(
         Sale02,
-        $"{customerName} cancelled the purchase request of {Date(requestDate)} for about {Kg(requestedKg)} kg of {productName}.{(reason is null ? "" : " " + reason)}")
+        $"{customerName} cancelled the purchase request of {Date(requestDate)} for {requestedCages} cages of {productName}.{(reason is null ? "" : " " + reason)}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["customer_name"] = customerName,
             ["request_date"] = requestDate,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["reason"] = reason,
         },
@@ -827,17 +917,17 @@ public static class UserMessages
 
     /// <summary>MSG-SALE-03 (BR-SALE-03): the response "accepted", to the trader account and the phone number of the profile.</summary>
     public static UserMessage PurchaseRequestAccepted(
-        string cooperativeShortName, decimal requestedKg, string productName, decimal acceptedKg, DateOnly pickupDate, bool payLater, string? note) => new(
+        string cooperativeShortName, int requestedCages, string productName, int acceptedCages, DateOnly pickupDate, bool payLater, string? note) => new(
         Sale03,
-        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is accepted for {Kg(acceptedKg)} kg, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
+        $"{cooperativeShortName}: your request for {requestedCages} cages of {productName} is accepted for {acceptedCages} cages, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["cooperative_short_name"] = cooperativeShortName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["accepted"] = true,
-            ["accepted_kg"] = KgValue(acceptedKg),
+            ["accepted_cages"] = acceptedCages,
             ["pickup_date"] = pickupDate,
             ["pay_later"] = payLater,
             ["note"] = note,
@@ -845,14 +935,14 @@ public static class UserMessages
     };
 
     /// <summary>MSG-SALE-03 (BR-SALE-03): the response "declined", with the note that gives the reason.</summary>
-    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, decimal requestedKg, string productName, string note) => new(
+    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, int requestedCages, string productName, string note) => new(
         Sale03,
-        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is declined. {note}")
+        $"{cooperativeShortName}: your request for {requestedCages} cages of {productName} is declined. {note}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["cooperative_short_name"] = cooperativeShortName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["accepted"] = false,
             ["note"] = note,
@@ -1083,38 +1173,6 @@ public static class UserMessages
         };
     }
 
-    // ---- MSG-CLAIM ----
-
-    /// <summary>MSG-CLAIM-01 (CLAIM-01, BR-CLAIM-01): a new quality claim, to the Cooperative Owner.</summary>
-    public static UserMessage QualityClaimNew(string customerName, string invoiceCode, string descriptionStart) => new(
-        Claim01,
-        $"{customerName} reported a quality problem with invoice {invoiceCode}: {descriptionStart}. Please ask the Zone Manager to check it, then respond.")
-    {
-        Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["invoice_code"] = invoiceCode, ["description_start"] = descriptionStart },
-    };
-
-    /// <summary>MSG-CLAIM-02 (CLAIM-02, BR-CLAIM-02): the response, to the trader account and the phone number of the profile. <paramref name="note"/> is the Owner's note, cut for SMS by the caller.</summary>
-    /// <param name="offer">The offer when accepted: <c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>; null when rejected.</param>
-    public static UserMessage QualityClaimResponse(string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone)
-    {
-        var result = !accepted
-            ? "not accepted"
-            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : "accepted: the cooperative offers a price cut of the whole invoice";
-        var callText = $"Please call {cooperativePhone ?? "the cooperative"}.";
-        return new UserMessage(Claim02, $"{cooperativeShortName}: your quality claim on invoice {invoiceCode} is {result}.{(note is null ? "" : " " + note)} {callText}")
-        {
-            Parameters = new Dictionary<string, object?>
-            {
-                ["cooperative_short_name"] = cooperativeShortName,
-                ["invoice_code"] = invoiceCode,
-                ["result"] = accepted ? "Accepted" : "Rejected",
-                ["offer"] = offer,
-                ["note"] = note,
-                ["cooperative_phone"] = cooperativePhone,
-            },
-        };
-    }
-
     /// <summary>What the Not sent row of a corrected invoice keeps when MSG-SALE-15 could not be queued after the commit (SALE-07 POST-5). Never sent or shown: the row is in no list.</summary>
     public static UserMessage InvoiceNotQueued(string invoiceCode) => new(Sale15, $"Corrected invoice {invoiceCode} could not be prepared for sending.");
 
@@ -1181,20 +1239,54 @@ public static class UserMessages
         };
     }
 
-    /// <summary>MSG-CLAIM-03 (CLAIM-02.0.E2): the invoice was cancelled or has a sales return, so the claim cannot be accepted; it can still be rejected.</summary>
-    /// <param name="cause">"was cancelled" or "has a sales return".</param>
-    public static UserMessage QualityClaimCannotBeAccepted(string invoiceCode, string cause) => new(
-        Claim03, $"Invoice {invoiceCode} {cause}, so the claim cannot be accepted. You can still reject it with a note.")
-    {
-        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["cause"] = cause },
-    };
-
     /// <summary>MSG-SALE-23 (SALE-08.3): a cash payment Awaiting confirmation; {customer_name} is "the buyer" for a walk-in customer.</summary>
     public static UserMessage CashGivenBackQuestion(decimal amount, DateOnly paymentDate, string customerName) => new(
         Sale23,
         $"Did the Zone Manager give the {Vnd(amount)} VND paid in cash on {Date(paymentDate)} back to {customerName}? Choose Yes to cancel this payment with the invoice, or No to keep it.")
     {
         Parameters = new Dictionary<string, object?> { ["amount"] = amount, ["payment_date"] = paymentDate, ["customer_name"] = customerName },
+    };
+    // ---- MSG-CLAIM ----
+
+    /// <summary>MSG-CLAIM-01 (CLAIM-01, BR-CLAIM-01): a new quality claim, to the Cooperative Owner.</summary>
+    public static UserMessage QualityClaimNew(string customerName, string invoiceCode, string descriptionStart) => new(
+        Claim01,
+        $"{customerName} reported a quality problem with invoice {invoiceCode}: {descriptionStart}. Please ask the Zone Manager to check it, then respond.")
+    {
+        Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["invoice_code"] = invoiceCode, ["description_start"] = descriptionStart },
+    };
+
+    /// <summary>MSG-CLAIM-02 (CLAIM-02, BR-CLAIM-02): the response, to the trader account and the phone number of the profile. <paramref name="note"/> is the Owner's note, cut for SMS by the caller.</summary>
+    /// <param name="offer">The offer when accepted: <c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>; null when rejected.</param>
+    public static UserMessage QualityClaimResponse(
+        string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone, decimal? offerAmount = null)
+    {
+        var result = !accepted
+            ? "not accepted"
+            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : offerAmount is { } cut ? $"accepted: the cooperative offers a price cut of {Vnd(cut)} VND on the whole invoice"
+            : "accepted: the cooperative offers a price cut of the whole invoice";
+        var callText = $"Please call {cooperativePhone ?? "the cooperative"}.";
+        return new UserMessage(Claim02, $"{cooperativeShortName}: your quality claim on invoice {invoiceCode} is {result}.{(note is null ? "" : " " + note)} {callText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["cooperative_short_name"] = cooperativeShortName,
+                ["invoice_code"] = invoiceCode,
+                ["result"] = accepted ? "Accepted" : "Rejected",
+                ["offer"] = offer,
+                ["offer_amount"] = offerAmount,
+                ["note"] = note,
+                ["cooperative_phone"] = cooperativePhone,
+            },
+        };
+    }
+
+    /// <summary>MSG-CLAIM-03 (CLAIM-02.0.E2): the invoice was cancelled or has a sales return, so the claim cannot be accepted; it can still be rejected.</summary>
+    /// <param name="cause">"was cancelled" or "has a sales return".</param>
+    public static UserMessage QualityClaimCannotBeAccepted(string invoiceCode, string cause) => new(
+        Claim03, $"Invoice {invoiceCode} {cause}, so the claim cannot be accepted. You can still reject it with a note.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["cause"] = cause },
     };
 
     // ---- MSG-CASH ----
@@ -1340,6 +1432,60 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["reason"] = reason },
     };
 
+    /// <summary>MSG-CLAIM-04 (CLAIM-03 step 4): a Zone Manager confirms the Owner agreed to the return and decided which oysters go back for sale.</summary>
+    public static UserMessage SalesReturnOwnerAgreed(string invoiceCode, decimal returnValue) => new(
+        Claim04, $"Has the Cooperative Owner agreed to take back all the goods of invoice {invoiceCode} ({Vnd(returnValue)} VND) and decided which oysters go back for sale?")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["return_value"] = returnValue },
+    };
+
+    /// <summary>MSG-CLAIM-05 (CLAIM-03 step 9): to the Owners and, when the debt is now below zero, the Accountants, who are also asked to pay the money back (BR-CLAIM-03).</summary>
+    /// <param name="debtAfter">The customer debt after the return: below zero it is money owed back.</param>
+    /// <param name="forAccountant">Adds the request to pay the money back.</param>
+    public static UserMessage SalesReturnRecorded(
+        string userName, string returnCode, string invoiceCode, string customerName, decimal returnValue, decimal backForSaleKg, decimal discardedKg, decimal debtAfter, bool forAccountant)
+    {
+        var debtText = CustomerDebtAfterText(customerName, debtAfter) + (forAccountant && debtAfter < 0m ? " Please pay the money back (DEBT-02)." : string.Empty);
+        return new UserMessage(
+            Claim05,
+            $"{userName} recorded sales return {returnCode} of invoice {invoiceCode} ({customerName}, {Vnd(returnValue)} VND): {Kg(backForSaleKg)} kg back for sale, {Kg(discardedKg)} kg thrown away. {debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["return_code"] = returnCode,
+                ["invoice_code"] = invoiceCode,
+                ["customer_name"] = customerName,
+                ["return_value"] = returnValue,
+                ["back_for_sale_kg"] = KgValue(backForSaleKg),
+                ["discarded_kg"] = KgValue(discardedKg),
+                ["debt_amount"] = debtAfter,
+            },
+        };
+    }
+
+    /// <summary>MSG-CLAIM-06 (CLAIM-03.3): taking the kg back out of a lot brings its remaining kg below zero.</summary>
+    /// <param name="lotText">The lots with the remaining kg after the cancellation, e.g. "L-001 (-20 kg)".</param>
+    public static UserMessage SalesReturnNegativeRemaining(string returnCode, string lotText) => new(
+        Claim06, $"Oysters that sales return {returnCode} put back for sale have been sold since. After the cancellation, the remaining kg will be below zero: {lotText}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["return_code"] = returnCode, ["lot_text"] = lotText },
+    };
+
+    /// <summary>MSG-GEN-08 for a Zone Manager who ticked the close of a lot of another zone on a sales return (PM answer 12/11/2026, 8.5): the whole return is refused and the text says what to do.</summary>
+    public static UserMessage SalesReturnLotCloseNotPermitted(string lotCode) => new(
+        Gen08, $"You do not have permission to close lot {lotCode} from this sales return. Untick the close of lot {lotCode}, or ask the Cooperative Owner to record the return. Nothing has been changed.", Legacy.Msg02)
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
+    /// <summary>MSG-HARVEST-02 (HARVEST-02.1): the returned oysters of a lot still for sale are thrown away.</summary>
+    public static UserMessage ThrownAwayLotStillForSale(string lotCode) => new(
+        Harvest02, $"The returned oysters of lot {lotCode} will be thrown away. Is lot {lotCode} still for sale? Choose Yes to keep selling it, or No to close it now.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>
@@ -1378,7 +1524,11 @@ public static class UserMessages
         Legacy.PasswordChangeRequired, "Please change your temporary password before using other functions.");
 
     /// <summary>Not in the SRS list: a notice of the Zalo Mini App flows, whose text is built by the module.</summary>
-    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text);
+    /// <remarks>The text is also its only parameter, so that every notification carries its parameters as the others do.</remarks>
+    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text)
+    {
+        Parameters = new Dictionary<string, object?> { ["text"] = text },
+    };
 
     public static UserMessage ServiceNotResponding(string service) => new(
         Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");

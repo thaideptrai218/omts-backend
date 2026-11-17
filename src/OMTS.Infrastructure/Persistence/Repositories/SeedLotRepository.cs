@@ -45,20 +45,43 @@ internal sealed class SeedLotRepository(OmtsDbContext db) : ISeedLotRepository, 
             .Where(l => l.Returned < l.Received)
             .ToListAsync(cancellationToken);
 
+        var consumed = await SeededAsync(rows.Select(r => r.Id).ToList(), cancellationToken);
         return rows
             .OrderByDescending(l => l.RaftId == raftId).ThenByDescending(l => l.ReceiptDate).ThenByDescending(l => l.Code, StringComparer.Ordinal).ThenBy(l => l.LineNumber)
             .Select(l => new SeedLotRow(
-                l.Id, l.LineNumber, l.ReceiptId, l.Code, l.ReceiptDate, l.ItemId, l.ItemCode, l.ItemName, l.Unit, l.SupplierId, l.SupplierName, l.RaftId, l.Received, l.Seeded))
+                l.Id, l.LineNumber, l.ReceiptId, l.Code, l.ReceiptDate, l.ItemId, l.ItemCode, l.ItemName, l.Unit, l.SupplierId, l.SupplierName, l.RaftId, l.Received, l.Seeded,
+                l.Returned, consumed.GetValueOrDefault(l.Id)))
             .ToList();
     }
 
+    /// <summary>
+    /// What each seed lot has really consumed (PM decision 11/11/2026): the net quantity of its use and disposal issues on the ledger (a seeding session posts one, so it counts once), plus the
+    /// sessions recorded before stock was checked, which have no issue. Lots with nothing consumed are left out.
+    /// </summary>
     public async Task<IReadOnlyDictionary<Guid, decimal>> SeededAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
     {
-        var rows = await db.SeedingRecords.AsNoTracking()
-            .Where(r => lineIds.Contains(r.SeedLotLineId))
+        var legacy = await db.SeedingRecords.AsNoTracking()
+            // A session from a nursery batch has no issue either, but its seed left the stock when the nursery started (the batch's issue counts it): never twice.
+            .Where(r => lineIds.Contains(r.SeedLotLineId) && r.IssueId == null && r.NurseryBatchId == null)
             .Select(r => new { r.SeedLotLineId, r.Quantity })
             .ToListAsync(cancellationToken);
-        return rows.GroupBy(r => r.SeedLotLineId).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
+        var issued = await db.InputStockMovements.AsNoTracking()
+            .Where(m => m.SeedLotLineId != null && lineIds.Contains(m.SeedLotLineId.Value) && db.InputIssues.Any(i => i.Id == m.DocumentId))
+            .Select(m => new { LineId = m.SeedLotLineId!.Value, m.Quantity })
+            .ToListAsync(cancellationToken);
+        var total = new Dictionary<Guid, decimal>();
+        foreach (var row in legacy)
+        {
+            total[row.SeedLotLineId] = total.GetValueOrDefault(row.SeedLotLineId) + row.Quantity;
+        }
+
+        foreach (var row in issued)
+        {
+            // Issue rows are negative; a reversal of one is positive, so the sum is what is still out of the stock.
+            total[row.LineId] = total.GetValueOrDefault(row.LineId) - row.Quantity;
+        }
+
+        return total.Where(t => t.Value > 0m).ToDictionary(t => t.Key, t => t.Value);
     }
 
     public async Task<DateOnly?> FirstSeedingDateAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken) =>

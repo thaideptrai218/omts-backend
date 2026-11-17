@@ -136,7 +136,8 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
         for (var round = 0; round < Rounds; round++)
         {
             var lot = await owner.SeedLotAsync(quantity: 100m);
-            var record = await owner.SeedingRecordAsync(cycle.Id(), lot.Session([(round % 5) + 1], quantity: 40m));
+            // Each round hangs a lane of the cycle again: a lane never holds more than 100 %, so a session takes 10 % of it (owner decision of 12/11/2026).
+            var record = await owner.SeedingRecordAsync(cycle.Id(), lot.Session([(round % 5) + 1], quantity: 40m).Percents(10, (round % 5) + 1));
 
             var answers = await InParallelAsync(2, i => i == 0
                 ? owner.PutSeedingAsync(record.Id(), record.AsCorrection() with { Quantity = 70m })
@@ -313,8 +314,9 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
         var (host, owner, zoneId, raftId, cycle) = await StartAsync();
         await using var _host = host;
         var (first, second) = (await owner.SeedLotAsync(quantity: 10.5m, raftId: raftId), await owner.SeedLotAsync());
-        await owner.RecordSeedingAsync(cycle.Id(), first.Session([1, 2], Today.AddDays(-5), 2.5m));
-        var record = await owner.SeedingRecordAsync(cycle.Id(), second.Session([2], Today.AddDays(-3), 1m));
+        // Lane 2 is hung twice: each session takes half of it (a lane never holds more than 100 %).
+        await owner.RecordSeedingAsync(cycle.Id(), first.Session([1, 2], Today.AddDays(-5), 2.5m).Percents(50, 1, 2));
+        var record = await owner.SeedingRecordAsync(cycle.Id(), second.Session([2], Today.AddDays(-3), 1m).Percents(50, 2));
         var manager = await host.StaffInZoneAsync(zoneId);
 
         foreach (var client in new[] { owner, manager.Client })
@@ -386,7 +388,7 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
         for (var round = 0; round < 4; round++)
         {
             var cycle = await NewCycleAsync(owner, zoneId);
-            await AssertAnsweredAsync($"round {round}", await InParallelAsync(4, _ => manager.Client.PostSeedingCompleteAsync(cycle.Id(), cycle.Text("rowVersion"))));
+            await AssertAnsweredAsync($"round {round}", await InParallelAsync(4, _ => manager.Client.PostSeedingCompleteAsync(cycle.Id(), cycle.Text("rowVersion"), confirmEmpty: true)));
             Assert.Equal(before + round + 1, inbox.List(host.Owner.Account.Id.ToString()).Count);
         }
     }

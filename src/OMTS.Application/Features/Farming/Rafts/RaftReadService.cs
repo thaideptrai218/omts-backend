@@ -17,6 +17,7 @@ public sealed class RaftReadService(
     RaftViews views,
     FarmingLookupAccess lookupAccess,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
@@ -34,7 +35,10 @@ public sealed class RaftReadService(
 
         var found = await rafts.ListByZoneAsync(zoneId, statusId, cancellationToken);
         return found.Select(r => new RaftListItem(
-            r.Id, r.ZoneId, r.Code, r.Latitude, r.Longitude, r.Size, RaftLaneChange.InUseCount(r.Lanes), r.StatusId, statusCatalog.DisplayNameOf(r.StatusId))).ToList();
+            r.Id, r.ZoneId, r.Code, r.Latitude, r.Longitude, r.Size, RaftLaneChange.InUseCount(r.Lanes), r.StatusId, statusCatalog.DisplayNameOf(r.StatusId),
+            r.LengthM, r.WidthM, r.AreaM2,
+            r.Lanes.Count(l => l.StatusId == OMTS.Domain.Constants.StatusIds.Lane.InUse && l.IsDamaged),
+            r.Lanes.Count(l => l.StatusId == OMTS.Domain.Constants.StatusIds.Lane.InUse && l.IsOutOfService))).ToList();
     }
 
     public async Task<Result<RaftView>> GetAsync(Guid raftId, CancellationToken cancellationToken)
@@ -73,6 +77,6 @@ public sealed class RaftReadService(
 
         var today = timeProvider.Today();
         var day = await laneStates.ReadAsync(raft, today, cancellationToken);
-        return new RaftLanesToday(raft.Id, raft.Code, today, views.LanesOn(raft, day.States));
+        return new RaftLanesToday(raft.Id, raft.Code, today, views.LanesOn(raft, day.States, await laneProgress.InfoAsync(day, cancellationToken)));
     }
 }

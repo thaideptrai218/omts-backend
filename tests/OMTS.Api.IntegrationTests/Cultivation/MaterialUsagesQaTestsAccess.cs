@@ -234,7 +234,8 @@ public class MaterialUsagesQaTestsAccess(AuthApiFactory factory) : IClassFixture
         var one = await manager.Client.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{item}");
         foreach (var view in listed.EnumerateArray().Append(one))
         {
-            Assert.DoesNotContain(view.EnumerateObject(), p =>
+            // No money in them: the price and cost fields of the item are there since the units and the cost (OMTS-218) but stay null for this reader.
+            Assert.DoesNotContain(view.EnumerateObject().Where(p => p.Value.ValueKind != JsonValueKind.Null), p =>
                 p.Name.Contains("price", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("cost", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("amount", StringComparison.OrdinalIgnoreCase));
         }
 

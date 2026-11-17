@@ -38,10 +38,11 @@ public class MaterialUsagesMigrationTests
         var oldSchema = await SchemaAsync(db);
         Assert.DoesNotContain("table MaterialUsages", oldSchema);
 
-        var raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" };
-        var item = new FarmingInputItem { Code = "MAT", Name = "Buoy", Group = MaterialUsage.ItemGroup, Unit = "piece" };
+        // The raft and the item are rows of the old schema: the entities have columns that later migrations add.
+        var raftId = await OldSchemaRows.RaftAsync(db, await OldSchemaRows.ZoneAsync(db, await OldSchemaRows.CooperativeAsync(db)), "B01");
+        var itemId = await OldSchemaRows.InputItemAsync(db, "MAT", "Buoy", MaterialUsage.ItemGroup.ToString(), "piece");
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        db.AddRange(raft, item, account);
+        db.Add(account);
         await db.SaveChangesAsync();
 
         await migrator.MigrateAsync();
@@ -57,7 +58,7 @@ public class MaterialUsagesMigrationTests
 
         db.MaterialUsages.Add(new MaterialUsage
         {
-            RaftId = raft.Id, ItemId = item.Id, UsageDate = new DateOnly(2026, 2, 1), RepairReason = "broken buoy", Quantity = 1.125m, RecordedByAccountId = account.Id,
+            RaftId = raftId, ItemId = itemId, UsageDate = new DateOnly(2026, 2, 1), RepairReason = "broken buoy", Quantity = 1.125m, RecordedByAccountId = account.Id,
         });
         await db.SaveChangesAsync();
 

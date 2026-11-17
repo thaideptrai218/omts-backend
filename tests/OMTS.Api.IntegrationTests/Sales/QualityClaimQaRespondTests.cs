@@ -35,7 +35,7 @@ public class QualityClaimQaRespondTests
 
     [Theory]
     [InlineData("ReturnAllGoods", "accepted: the cooperative offers a return of all the goods")]
-    [InlineData("PriceCutWholeInvoice", "accepted: the cooperative offers a price cut of the whole invoice")]
+    [InlineData("PriceCutWholeInvoice", "accepted: the cooperative offers a price cut of 30,000 VND on the whole invoice")]
     public async Task Each_offer_reads_as_msg_claim_02_with_the_parameters_on_push_and_sms(string offer, string result)
     {
         using var api = new QualityClaimApiFactory();
@@ -44,7 +44,7 @@ public class QualityClaimQaRespondTests
 
         var answer = await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion, offer, "Sorry")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(StatusIds.QualityClaim.Accepted, answer.GetProperty("statusId").GetInt32());
+        Assert.Equal(StatusIds.QualityClaim.OfferMade, answer.GetProperty("statusId").GetInt32());
         var name = await api.QueryAsync(db => db.Cooperatives.Select(x => x.ShortName ?? x.FullName).SingleAsync());
         var expected = $"{name}: your quality claim on invoice {CodeOf(c)} is {result}. Sorry Please call {CooperativePhone}.";
         var row = await ListRowAsync(api, c, NotificationTypes.QualityClaimResponse);
@@ -213,7 +213,7 @@ public class QualityClaimQaRespondTests
         var none = await c.Owner.PostAsJsonRawAsync($"/api/quality-claims/{c.Id}/accept", $$$"""{"offer":null,"rowVersion":"{{{c.RowVersion}}}"}""");
         Assert.Equal(["Offer"], await none.InvalidFieldsAsync());
 
-        var lowercase = await (await c.Owner.PostAsJsonRawAsync($"/api/quality-claims/{c.Id}/accept", $$$"""{"offer":"pricecutwholeinvoice","rowVersion":"{{{c.RowVersion}}}"}""")).ReadAsync(HttpStatusCode.OK);
+        var lowercase = await (await c.Owner.PostAsJsonRawAsync($"/api/quality-claims/{c.Id}/accept", $$$"""{"offer":"pricecutwholeinvoice","priceCutAmount":30000,"rowVersion":"{{{c.RowVersion}}}"}""")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(QualityClaimOffer.PriceCutWholeInvoice, lowercase.ReadOffer());
     }
 
@@ -255,7 +255,7 @@ public class QualityClaimQaRespondTests
     }
 
     [Fact]
-    public async Task Answering_twice_is_refused_sends_nothing_more_and_a_new_claim_is_open_after_acceptance_too()
+    public async Task Answering_twice_is_refused_sends_nothing_more_and_a_new_claim_is_open_only_once_the_trader_has_answered()
     {
         using var api = new QualityClaimApiFactory();
         var c = await api.QaClaimedAsync();
@@ -267,8 +267,11 @@ public class QualityClaimQaRespondTests
         await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         Assert.Equal(count, sms.List(c.World.Trader.Profile.PhoneNumber!).Count);
-        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == c.Id && e.Action == "QualityClaim.Accepted")));
+        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == c.Id && e.Action == "QualityClaim.OfferMade")));
 
+        // An offer waiting for the trader keeps the claim open (PM answer 12/11): a second claim is refused until the trader answers.
+        await (await c.World.Trader.Client.PostClaimAsync(c.World.InvoiceId)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        await (await c.World.Trader.Client.DeclineOfferAsync(c.Id)).ReadAsync(HttpStatusCode.OK);
         var second = await c.World.Trader.Client.SubmitClaimAsync(c.World.InvoiceId);
         Assert.NotEqual(c.Claim.Text("code"), second.Text("code"));
         Assert.Equal(StatusIds.QualityClaim.AwaitingResponse, second.GetProperty("statusId").GetInt32());

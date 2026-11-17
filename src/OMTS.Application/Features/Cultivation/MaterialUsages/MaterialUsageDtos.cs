@@ -12,6 +12,9 @@ public sealed record RecordMaterialUsageRequest(DateOnly? UsageDate, string? Rep
 public sealed record EditMaterialUsageRequest(
     Guid? RaftId, DateOnly? UsageDate, Guid? ItemId, decimal? Quantity, string? RepairReason, string? Reason, string? RowVersion);
 
+/// <summary>CYCLE-03.2: removes a record, with the reason kept in the audit log and the version read (NFR-09).</summary>
+public sealed record RemoveMaterialUsageRequest(string? Reason, string? RowVersion);
+
 /// <summary>A usage record (BR-CYCLE-03). It has no price (BR-FARM-05).</summary>
 /// <param name="CycleId">The cycle of the raft open on the date, worked out on read; null when there was none.</param>
 /// <param name="CanEdit">The caller may edit it now: the raft and its zone are In Use and no closed cycle locks it (CYCLE-03.1).</param>
@@ -31,7 +34,9 @@ public sealed record MaterialUsageView(
     string? RecordedByName,
     DateTimeOffset RecordedAt,
     bool CanEdit,
-    string RowVersion);
+    string RowVersion,
+    Guid? IssueId = null,
+    string? IssueCode = null);
 
 /// <summary>One repair on the screen: the records with the same date and reason (SCR-CYCLE-03).</summary>
 public sealed record MaterialUsageRepair(DateOnly UsageDate, string RepairReason, IReadOnlyList<MaterialUsageView> Records);

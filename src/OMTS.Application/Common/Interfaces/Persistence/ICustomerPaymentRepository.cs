@@ -10,6 +10,9 @@ public interface ICustomerPaymentRepository
     /// <summary>Deletes a part of a payment (a short transfer cuts its allocation).</summary>
     void RemoveAllocation(CustomerPaymentAllocation allocation);
 
+    /// <summary>Adds a part to a payment that is already saved (a transfer attached to a customer profile sets its money against the invoices); a new payment brings its own parts.</summary>
+    void AddAllocation(CustomerPaymentAllocation allocation);
+
     /// <summary>The id of the payment with this code regardless of letter case, other than <paramref name="exceptPaymentId"/>; cancelled ones included.</summary>
     Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken);
 
@@ -37,11 +40,14 @@ public interface ICustomerPaymentRepository
     Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken);
 
     /// <summary>
-    /// For each invoice code: Σ of the transfers recorded with it and no invoice (GFR-08) that are not cancelled, i.e. transfers short of the sale awaiting them; one query for
-    /// every code. A code with none is left out.
+    /// For each invoice code: Σ of the transfers recorded with it and no invoice (GFR-08) that are still Awaiting confirmation (not cancelled, not settled by the Accountant,
+    /// DEBT-02.6), i.e. transfers short of the sale awaiting them; one query for every code. A code with none is left out.
     /// </summary>
     Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken);
 
     /// <summary>The payments Awaiting confirmation, oldest first (payment date, then code), and their number and sum.</summary>
     Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>True when money paid back that is not cancelled stands for this payment (it settled the payment, DEBT-02.6).</summary>
+    Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken);
 }

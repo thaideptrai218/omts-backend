@@ -42,17 +42,13 @@ public class SeedingRecordsMigrationTests
         Assert.Equal(0, await ScalarAsync(db, Tables));
         Assert.Contains("table SeedingEvents", oldSchema);
 
-        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
-        var lane = new Lane { LaneNumber = 1 };
-        var cycle = new CultivationCycle { Raft = new Raft { Zone = zone, Code = "B01", Size = "1", Lanes = [lane] }, StartDate = new DateOnly(2026, 1, 1) };
+        // The zone, raft, lane and cycle are rows of the old schema: the entities have columns that later migrations add.
+        var (_, raftId, cycleId) = await OldSchemaRows.OpenCycleRowsAsync(db, await OldSchemaRows.CooperativeAsync(db));
+        var laneId = await OldSchemaRows.LaneAsync(db, raftId, 1);
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        var receipt = new PurchaseReceipt { Code = "PN000001", SupplierId = await OldSchemaRows.SupplierAsync(db), ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
-        db.AddRange(cycle, account, item, receipt);
-        receipt.RecordedByAccountId = account.Id;
-        var line = new PurchaseReceiptLine { Receipt = receipt, LineNumber = 1, Item = item, Unit = "con", Quantity = 10, UnitPrice = 1 };
-        db.Add(line);
+        db.Add(account);
         await db.SaveChangesAsync();
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, await OldSchemaRows.InputItemAsync(db, "VT001", "Seed", "Seed", "con"), "con");
 
         await migrator.MigrateAsync();
 
@@ -71,8 +67,8 @@ public class SeedingRecordsMigrationTests
 
         var record = new SeedingRecord
         {
-            CycleId = cycle.Id, SeedingDate = new DateOnly(2026, 1, 2), SeedLotLineId = line.Id, Quantity = 5, RecordedByAccountId = account.Id,
-            Lanes = [new SeedingRecordLane { LaneId = lane.Id }],
+            CycleId = cycleId, SeedingDate = new DateOnly(2026, 1, 2), SeedLotLineId = lineId, Quantity = 5, RecordedByAccountId = account.Id,
+            Lanes = [new SeedingRecordLane { LaneId = laneId }],
         };
         db.SeedingRecords.Add(record);
         await db.SaveChangesAsync();

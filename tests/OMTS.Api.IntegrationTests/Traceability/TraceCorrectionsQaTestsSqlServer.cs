@@ -104,8 +104,8 @@ public class TraceCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         {
             // Lane 1 is hung twice (re-hanging, BR-CYCLE-02), then harvested; the cycle is closed.
             var (raftId, cycleId, seedLot) = await CycleAsync(owner, zoneId);
-            var a = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2], Today.AddDays(-2)));
-            var b = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 3], Today.AddDays(-1)));
+            var a = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2], Today.AddDays(-2)).Percents(50m, 1));
+            var b = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 3], Today.AddDays(-1)).Percents(50m, 1));
             await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
             await owner.CloseCycleAsync(cycleId);
             var (currentA, currentB) = (await owner.GetSeedingAsync(a.Id()), await owner.GetSeedingAsync(b.Id()));

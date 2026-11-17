@@ -149,7 +149,7 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Equal(("Raft saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
         Assert.Equal("Two floats replaced", saved.GetProperty("raft").Text("conditionNotes"));
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == raft.Id() && e.Action == "Raft.Updated"));
-        Assert.Equal(["ConditionNotes", "Size"], JsonNode.Parse(audit.After!)!.AsObject().Select(p => p.Key).Order());
+        Assert.Equal(["ConditionNotes", "LengthM", "Size"], JsonNode.Parse(audit.After!)!.AsObject().Select(p => p.Key).Order());
         Assert.Equal("40 m x 20 m", JsonNode.Parse(audit.Before!)!["Size"]!.GetValue<string>());
         Assert.Equal(0, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == raft.Id() && e.Action == "Raft.LanesChanged")));
     }

@@ -13,11 +13,17 @@ internal enum DemoLoginKind
 
     /// <summary>Phone not verified yet: the phone verification step comes first.</summary>
     PhoneUnverified,
+
+    /// <summary>
+    /// No zone–role pair: only the employee's own area (shifts, own work). Such an employee may log in only once their Zalo is linked (LABOR-06),
+    /// so the demo marks a made-up link: the password login of the browser build then lands like a linked employee.
+    /// </summary>
+    EmployeeArea,
 }
 
 /// <param name="Phone">Null for an employee who is checked in manually (BR-LABOR-01); matched by name on a rerun.</param>
 /// <param name="Username">Null for an employee without a login account.</param>
-/// <param name="Role">Fixed role of the zone–role pair (BR-FARM-07).</param>
+/// <param name="Role">Fixed role of the zone–role pair (BR-FARM-07); unused by <see cref="DemoLoginKind.EmployeeArea"/>, which has no pair.</param>
 /// <param name="GrantZone">Zone code of the zone–role pair; null = All zones.</param>
 /// <param name="RevokeReason">Set: the pair is revoked right after the grant with this reason, so the account has no
 /// Effective pair and its login is refused (MSG-ACCOUNT-07).</param>
@@ -42,7 +48,7 @@ internal sealed record DemoEmployeePlan(
 }
 
 /// <summary>
-/// The nine demo employees (LABOR-01): phones come from the fake range 0900 000 0xx. An employee's number is digits only,
+/// The eleven demo employees (LABOR-01): phones come from the fake range 0900 000 0xx. An employee's number is digits only,
 /// so only a pattern can show that it is fictional: bank numbers come from 9999 0000 00xx. The seasonal workers have job
 /// types on their profiles (see <see cref="DemoLaborSettingsStep"/>).
 /// </summary>
@@ -80,5 +86,12 @@ internal static class DemoEmployeePlans
         new("Đinh Văn Nam", null, null, ZoneManagerRole, null, null,
             ZoneTwo, new(1998, 4, 3), "Xã Minh Châu", "Vietcombank", "999900000019",
             JobTypes: [DemoLaborSettingsStep.CleaningLines]),
+        // The two employees of the browser build: they answer purchase shifts and see their own work.
+        new("Nguyễn Văn Bình", "0900000020", "nhanvien1", ZoneManagerRole, null, null,
+            [.. ZoneOne, .. ZoneTwo], new(1994, 6, 12), "Xã Ngọc Vừng", "Vietcombank", "999900000020", DemoLoginKind.EmployeeArea,
+            JobTypes: [DemoLaborSettingsStep.Harvesting]),
+        new("Trần Văn Khoa", "0900000030", "nhanvien2", ZoneManagerRole, null, null,
+            [.. ZoneOne, .. ZoneTwo], new(1997, 2, 8), "Thị trấn Cái Rồng", "Agribank", "999900000021", DemoLoginKind.EmployeeArea,
+            JobTypes: [DemoLaborSettingsStep.Harvesting]),
     ];
 }

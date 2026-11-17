@@ -1,25 +1,30 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Sales.Requests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.PurchaseRequests;
 
 /// <summary>
-/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response (BR-SALE-02). The
-/// response is saved first; the trader is told afterwards, and a message that is not accepted undoes nothing (GFR-06).
+/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response or Awaiting staff
+/// (BR-SALE-02). Accepting needs the staffing plan agreed by enough staff (decision of 31/10/2026). The response is saved first; the
+/// trader is told afterwards, and a message that is not accepted undoes nothing (GFR-06).
 /// </summary>
 public sealed class PurchaseRequestResponseService(
     IPurchaseRequestRepository requests,
     PurchaseRequestNotifications notifications,
     PurchaseRequestViews views,
     IPurchaseRequestFulfilment fulfilment,
+    PurchaseStaffingService staffing,
+    INotificationDispatcher dispatcher,
     TraderMessageService traderMessages,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
@@ -28,7 +33,10 @@ public sealed class PurchaseRequestResponseService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>SALE-03.0: the accepted kg is the requested kg or fewer, and any date not before today, also an unchanged one.</summary>
+    /// <summary>
+    /// SALE-03.0: the accepted cages are the requested cages or fewer, and any date not before today, also an unchanged one. They are the
+    /// cages and the pickup date of the staffing plan; the shifts the staff agreed to become their work assignments.
+    /// </summary>
     public async Task<Result<PurchaseRequestView>> AcceptAsync(Guid requestId, AcceptPurchaseRequest entry, CancellationToken cancellationToken)
     {
         var (request, refused) = await LoadAwaitingAsync(requestId, entry.RowVersion, cancellationToken);
@@ -39,9 +47,9 @@ public sealed class PurchaseRequestResponseService(
 
         var note = PurchaseRequestRules.CleanText(entry.Note);
         var invalid = new List<string>();
-        if (!PurchaseRequestRules.IsKg(entry.AcceptedKg) || entry.AcceptedKg > request!.RequestedKg)
+        if (!PurchaseRequestRules.IsCages(entry.AcceptedCages) || entry.AcceptedCages > request!.RequestedCages)
         {
-            invalid.Add("Accepted kg");
+            invalid.Add("Accepted cages");
         }
 
         if (entry.PickupDate is not { } pickupDate || pickupDate < timeProvider.Today())
@@ -64,13 +72,23 @@ public sealed class PurchaseRequestResponseService(
             return AppError.InvalidFields(invalid);
         }
 
-        request!.AcceptedKg = entry.AcceptedKg;
+        if (await staffing.ValidateAcceptanceAsync(request!, entry.AcceptedCages, entry.PickupDate, cancellationToken) is { } notStaffed)
+        {
+            return notStaffed;
+        }
+
+        request!.AcceptedCages = entry.AcceptedCages;
         request.AgreedPickupDate = entry.PickupDate;
         request.PayLaterAgreed = entry.PayLaterAgreed;
+        await staffing.ActivateAssignmentsAsync(request, cancellationToken);
+        var staff = request.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
+        await dispatcher.NotifyAsync(staff, "PURCHASE_SHIFT_CONFIRMED", "HTX đã nhận đơn",
+            $"{request.Code}: HTX đã nhận đơn. Xem trạng thái ca ngày {request.WorkDate:dd/MM/yyyy} trong Công việc của tôi.",
+            nameof(PurchaseRequest), request.Code, false, cancellationToken, request.Id);
         return await SaveResponseAsync(request, StatusIds.PurchaseRequest.Accepted, note, "PurchaseRequest.Accepted", cancellationToken);
     }
 
-    /// <summary>SALE-03.1: only the note is checked.</summary>
+    /// <summary>SALE-03.1: only the note is checked. The shifts the staff agreed to are let go.</summary>
     public async Task<Result<PurchaseRequestView>> DeclineAsync(Guid requestId, DeclinePurchaseRequest entry, CancellationToken cancellationToken)
     {
         var (request, refused) = await LoadAwaitingAsync(requestId, entry.RowVersion, cancellationToken);
@@ -85,13 +103,14 @@ public sealed class PurchaseRequestResponseService(
             return AppError.Invalid("Note");
         }
 
+        await staffing.ReleaseAsync(request!, cancellationToken);
         return await SaveResponseAsync(request!, StatusIds.PurchaseRequest.Declined, note, "PurchaseRequest.Declined", cancellationToken);
     }
 
     // SALE-03.0.E1 comes first: a request the trader cancelled answers its status, not a stale form.
     private async Task<(PurchaseRequest? Request, AppError? Refused)> LoadAwaitingAsync(Guid requestId, string? rowVersion, CancellationToken cancellationToken)
     {
-        var request = await requests.GetForEditAsync(requestId, cancellationToken);
+        var request = await requests.GetAsync(requestId, cancellationToken);
         if (request is null)
         {
             return (null, AppError.NotFound);
@@ -121,8 +140,9 @@ public sealed class PurchaseRequestResponseService(
         audit.Record(new AuditEntry(auditAction, PurchaseRequestRules.RecordType)
         {
             RecordId = request.Id,
+            RecordCode = request.Code,
             Before = new { Status = statusCatalog.CodeOf(before) },
-            After = new { Status = statusCatalog.CodeOf(newStatusId), request.AcceptedKg, request.AgreedPickupDate, request.PayLaterAgreed, Note = note },
+            After = new { Status = statusCatalog.CodeOf(newStatusId), request.AcceptedCages, request.AgreedPickupDate, request.PayLaterAgreed, Note = note },
         });
         var sending = await notifications.ResponseAsync(request, cancellationToken);
         if (await PurchaseRequestRules.SaveAsync(unitOfWork, request, PurchaseRequestRules.AllowsResponse, r => StatusNameAsync(r, cancellationToken), cancellationToken) is { } lost)

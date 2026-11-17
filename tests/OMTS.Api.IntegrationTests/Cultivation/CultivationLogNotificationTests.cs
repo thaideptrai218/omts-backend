@@ -84,7 +84,7 @@ public class CultivationLogNotificationTests(AuthApiFactory factory) : IClassFix
         await factory.UpdateAsync<Account>(setup.Owner.Account.Id, a => a.StatusId = StatusIds.Account.Locked);
         var total = await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == Type));
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await manager.Client.PostLogAsync(setup.CycleId, new LogFields { Photos = [] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.Client.PostLogAsync(setup.CycleId, new LogFields { Photos = [FarmingTestKit.Pdf] })).StatusCode);
         Assert.Equal(total, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == Type)));
 
         var log = await manager.Client.RecordLogAsync(setup.CycleId);

@@ -64,13 +64,14 @@ public class AccountRulesQaTestsSqlServer
         await using var database = await MigratedAsync();
         await using var api = new SqlServerApiFactory(database);
         var client = api.CreateClient();
-        var email = $"race-{NewCode()}@example.com";
+        // A phone number in several spellings: an email no longer registers.
+        var racePhone = NewPhone();
+        var spellings = new[] { racePhone, "+84" + racePhone[1..], $" {racePhone} ", racePhone, "84" + racePhone[1..], racePhone };
 
-        var starts = await Task.WhenAll(new[] { email, email.ToUpperInvariant(), $" {email} ", email, email.ToUpperInvariant(), email }.Select(s => client.StartRegistrationAsync("Email", s)));
+        var starts = await Task.WhenAll(spellings.Select(s => client.StartRegistrationAsync("Sms", s)));
 
         Assert.All(starts, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
-        var inbox = api.Services.GetRequiredService<FakeEmailSender>().Inbox;
-        Assert.InRange(inbox.List(email).Count, 0, 1);
+        Assert.InRange(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(racePhone).Count, 0, 1);
 
         var phone = NewPhone();
         var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));

@@ -43,21 +43,20 @@ public class CyclesQaTestsMigrationAndDemo
         // Seed only columns of this historical schema; later migrations add fields to the current Cooperative model.
         var cooperativeId = Guid.NewGuid();
         await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperativeId}, N'HTX', SYSDATETIMEOFFSET())");
-        var zone = new FarmingZone { CooperativeId = cooperativeId, Code = "KV01", Name = "A" };
-        var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
-        var seed = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        db.AddRange(raft, raftTwo, seed);
-        await db.SaveChangesAsync();
+        // The zone, the rafts and the seed item are rows of the old schema: the entities have columns that later migrations add.
+        var zoneId = await OldSchemaRows.ZoneAsync(db, cooperativeId);
+        var (raftId, raftTwoId) = (await OldSchemaRows.RaftAsync(db, zoneId, "B01"), await OldSchemaRows.RaftAsync(db, zoneId, "B02"));
+        var seedId = await OldSchemaRows.InputItemAsync(db, "VT001", "Seed", "Seed", "con");
 
         var (edge, offset, open, restartClosed, restartOpen) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO CultivationCycles (Id, RaftId, OpenedAt, ClosedAt, PlannedSeedTypeId, StatusId, CreatedAt)
             VALUES
-                ({edge}, {raft.Id}, '2026-01-01T16:59:59.9999999+00:00', '2026-01-31T17:00:00+00:00', {seed.Id}, 602, SYSDATETIMEOFFSET()),
-                ({offset}, {raft.Id}, '2026-03-01T23:59:59-05:00', '2026-03-31T23:30:00+07:00', NULL, 602, SYSDATETIMEOFFSET()),
-                ({open}, {raft.Id}, '2026-04-01T17:00:00+00:00', NULL, {seed.Id}, 601, SYSDATETIMEOFFSET()),
-                ({restartClosed}, {raftTwo.Id}, '2026-05-01T00:00:00+07:00', '2026-05-10T10:00:00+07:00', NULL, 602, SYSDATETIMEOFFSET()),
-                ({restartOpen}, {raftTwo.Id}, '2026-05-10T11:00:00+07:00', NULL, NULL, 601, SYSDATETIMEOFFSET());
+                ({edge}, {raftId}, '2026-01-01T16:59:59.9999999+00:00', '2026-01-31T17:00:00+00:00', {seedId}, 602, SYSDATETIMEOFFSET()),
+                ({offset}, {raftId}, '2026-03-01T23:59:59-05:00', '2026-03-31T23:30:00+07:00', NULL, 602, SYSDATETIMEOFFSET()),
+                ({open}, {raftId}, '2026-04-01T17:00:00+00:00', NULL, {seedId}, 601, SYSDATETIMEOFFSET()),
+                ({restartClosed}, {raftTwoId}, '2026-05-01T00:00:00+07:00', '2026-05-10T10:00:00+07:00', NULL, 602, SYSDATETIMEOFFSET()),
+                ({restartOpen}, {raftTwoId}, '2026-05-10T11:00:00+07:00', NULL, NULL, 601, SYSDATETIMEOFFSET());
             """);
 
         await migrator.MigrateAsync();
@@ -91,7 +90,12 @@ public class CyclesQaTestsMigrationAndDemo
 
         var gone = await UseDbAsync(host.App, async db =>
         {
-            var cycle = await db.CultivationCycles.OrderBy(c => c.StartDate).FirstAsync();
+            // A cycle with no lot (the demo has seeding sessions, with photos, on every cycle): its sessions go first.
+            var cycle = await db.CultivationCycles.Where(c => !db.HarvestLots.Any(l => l.CycleId == c.Id)).OrderBy(c => c.StartDate).FirstAsync();
+            await db.SeedingRecordPhotos.Where(p => p.SeedingRecord.CycleId == cycle.Id).ExecuteDeleteAsync();
+            await db.SeedingRecordLanes.Where(l => l.SeedingRecord.CycleId == cycle.Id).ExecuteDeleteAsync();
+            await db.SeedingRecords.Where(r => r.CycleId == cycle.Id).ExecuteDeleteAsync();
+            await db.CyclePlanPhotos.Where(p => p.CycleId == cycle.Id).ExecuteDeleteAsync();
             db.CultivationCycles.Remove(cycle);
             await db.SaveChangesAsync();
             return cycle.Id;
@@ -123,9 +127,14 @@ public class CyclesQaTestsMigrationAndDemo
             await db.CustomerPayments.ExecuteDeleteAsync();
             await db.SalesInvoiceLines.ExecuteDeleteAsync();
             await db.SalesInvoices.ExecuteDeleteAsync();
+            // Current demo sales also have port weighings; the simulated older database had neither.
+            await db.Set<OMTS.Domain.Entities.Sales.PortWeighingCage>().ExecuteDeleteAsync();
+            await db.Set<OMTS.Domain.Entities.Sales.PortWeighing>().ExecuteDeleteAsync();
             await db.HarvestLots.ExecuteDeleteAsync();
+            await db.SeedingRecordPhotos.ExecuteDeleteAsync();
             await db.SeedingRecordLanes.ExecuteDeleteAsync();
             await db.SeedingRecords.ExecuteDeleteAsync();
+            await db.CyclePlanPhotos.ExecuteDeleteAsync();
             await db.CultivationCycles.ExecuteDeleteAsync();
             await db.AuditEvents.Where(e => e.Action == "CultivationCycle.Started").ExecuteDeleteAsync();
             var raft = await db.Rafts.Where(r => r.Code == "B1-03").SingleAsync();

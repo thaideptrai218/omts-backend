@@ -146,7 +146,15 @@ public class DemoDataSeedTests
         Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
         Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
         Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
-        Assert.Equal(20, await db.Rafts.CountAsync());
+        // Twenty rafts of FARM-04 and the five empty ones of the nursery demo (B1-11 to B1-15, with a pin and no cycle).
+        Assert.Equal(25, await db.Rafts.CountAsync());
+        // NURSERY (v2, 13/11/2026): two batches "đã ươm xong" with 9 500 and 6 000 survivors from different seed lots and nothing seeded yet, and one still Nursing; no cycle starts from them.
+        var nurseries = await db.NurseryBatches.AsNoTracking().OrderBy(b => b.Code).ToListAsync();
+        Assert.Equal([StatusIds.NurseryBatch.Completed, StatusIds.NurseryBatch.Completed, StatusIds.NurseryBatch.Nursing], nurseries.Select(b => b.StatusId).ToList());
+        Assert.Equal([9500m, 6000m], nurseries.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed).Select(b => b.Survivors!.Value).ToList());
+        Assert.Equal(2, nurseries.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed).Select(b => b.SeedLotLineId).Distinct().Count());
+        Assert.Equal(0, await db.SeedingRecords.CountAsync(r => r.NurseryBatchId != null));
+        Assert.Equal(0, await db.CultivationCycles.CountAsync(c => c.NurseryBatchId != null));
         // First raft of each In Use zone: two photos and a Removed lane; second: one photo; third: no map pin (FARM-04).
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));
@@ -157,10 +165,11 @@ public class DemoDataSeedTests
         Assert.All(cycles, c => Assert.Equal(StatusIds.CultivationCycle.Open, c.StatusId));
         Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
         Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
-        Assert.Equal(6, cycles.Count(c => c.ExpectedHarvestDate is not null));
-        Assert.Equal(9, await db.Employees.CountAsync());
+        // The plan has no expected harvest date any more (owner decision of 12/11/2026): the demo sets none.
+        Assert.Equal(0, cycles.Count(c => c.ExpectedHarvestDate is not null));
+        Assert.Equal(11, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
-        Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
+        Assert.Equal(11, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
         Assert.Equal(3, await db.EmployeeTypePeriods.CountAsync(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker));
         Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == null));
         Assert.True(await db.Employees.Where(e => e.BankAccount != null).AllAsync(e => e.BankAccount!.AccountNumber.StartsWith("9999")));
@@ -190,8 +199,9 @@ public class DemoDataSeedTests
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
         Assert.Equal(1, await db.SupplierPayments.CountAsync(p => p.StatusId == StatusIds.SupplierPayment.Cancelled));
         Assert.True(await db.SupplierPayments.AllAsync(p => p.Code.StartsWith("TT")));
-        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment.
-        var payments = await db.SupplierPayments.CountAsync();
+        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment. The money paid back
+        // with a return is saved by the return and sends no MSG-PURCHASE-04 of its own.
+        var payments = await db.SupplierPayments.CountAsync(p => p.PurchaseReturnId == null);
         Assert.Equal(payments + 1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.SupplierTransaction));
         // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
@@ -219,9 +229,10 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.JobTypes.CountAsync(j => j.StatusId == StatusIds.Usage.Discontinued));
         Assert.True(await db.JobTypes.AllAsync(j => j.Rates.Any()));
         Assert.Equal(6, await db.PayRates.CountAsync());
-        Assert.Equal(4, await db.EmployeeJobTypes.CountAsync());
+        Assert.Equal(6, await db.EmployeeJobTypes.CountAsync());
         var seasonal = await db.EmployeeTypePeriods.Where(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker).Select(p => p.EmployeeId).ToListAsync();
-        Assert.True(await db.EmployeeJobTypes.AllAsync(j => seasonal.Contains(j.EmployeeId)));
+        // The demo also gives job types to the employees of the employee app (OMTS-227), so not only the seasonal workers have them.
+        Assert.True(await db.EmployeeJobTypes.AnyAsync(j => seasonal.Contains(j.EmployeeId)));
         Assert.Equal(2, await db.AttendanceSettingsVersions.CountAsync());
 
         var cooperative = await db.Cooperatives.SingleAsync();

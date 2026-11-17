@@ -23,7 +23,8 @@ internal sealed class UnconfiguredPushSender(ILogger<UnconfiguredPushSender> log
 {
     public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default)
     {
-        logger.LogDebug("Push {Type} to account {AccountId} not sent: no push provider is configured", message.Type, message.RecipientAccountId);
+        logger.LogDebug(
+            "Push {Type} to {RecipientId} not sent: no push provider is configured", message.Type, message.RecipientAccountId ?? message.RecipientEmployeeId);
         return Task.FromResult(DeliveryResult.Failed(UnconfiguredSenders.NotConfigured));
     }
 }

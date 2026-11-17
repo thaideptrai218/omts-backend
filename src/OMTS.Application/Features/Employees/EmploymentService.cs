@@ -7,6 +7,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -22,6 +23,7 @@ public sealed class EmploymentService(
     IEmployeeRepository employees,
     IEmployeeWorkRecords workRecords,
     IAccountRepository accounts,
+    EmployeeAppAccess employeeApp,
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
     EmployeeQueryService queries,
@@ -82,7 +84,9 @@ public sealed class EmploymentService(
         {
             employee.StatusId = StatusIds.Employee.Left;
             audit.RecordStatusChange(nameof(Employee), employee.Id, null, StatusIds.Employee.Working, StatusIds.Employee.Left, $"Last working day {lastDay:yyyy-MM-dd}");
-            // LABOR-03 and LABOR-06 (L3): Left logs the employee out and unlinks the device (BR-LABOR-02), here and in EmploymentEndService.
+            // Left logs the employee out of the employee app and unlinks the device (BR-LABOR-02), in this save; for a last working day of
+            // today, EmploymentEndService does the same on the next day.
+            await employeeApp.RevokeAsync(employee.Id, EmployeeDeviceUnlinkReason.EmploymentEnded, cancellationToken);
         }
 
         // One reminder for one end of employment (LABOR-01.3 step 5): moving the day sends no second one, and a notification

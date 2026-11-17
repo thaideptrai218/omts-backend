@@ -10,6 +10,7 @@ using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Interfaces.Identity;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Persistence;

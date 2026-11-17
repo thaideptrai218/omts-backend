@@ -73,7 +73,7 @@ public class HarvestLotAcceptanceTests
         api.Clock.At = InVietnam(10, 26);
 
         var worked = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
-        Assert.Equal((8, 50m, 400m), (worked.GetProperty("cageCount").GetInt32(), worked.Kg("kgPerCage"), worked.Kg("estimatedKg")));
+        Assert.Equal((8, 50m, 400m), (worked.GetProperty("cageCount").GetDecimal(), worked.Kg("kgPerCage"), worked.Kg("estimatedKg")));
 
         var changed = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1) with { EstimatedKg = "385.5" });
         Assert.Equal((50m, 385.5m), (changed.Kg("kgPerCage"), changed.Kg("estimatedKg")));
@@ -147,7 +147,7 @@ public class HarvestLotAcceptanceTests
         using var api = new CyclesQaClockApiFactory();
         var (owner, _, raftId, _) = await KV01Async(api, "KV01-B01");
         api.Clock.At = InVietnam(10, 26);
-        var form = new HarvestFields().ToForm();
+        var form = new HarvestFields { Photos = [Jpeg] }.ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T08:00:00+07:00"), "harvestedAt");
 

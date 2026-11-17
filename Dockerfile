@@ -1,5 +1,6 @@
 # OMTS API image: the .NET 8 SDK publishes OMTS.Api, the ASP.NET runtime image runs it as a non-root user on
-# plain HTTP port 8080. Used by docker-compose.yml (local environment) and built by CI without being pushed.
+# plain HTTP port 8080. Used by docker-compose.yml (local environment), built by CI without being pushed, and built
+# and pushed to GHCR by the "CD staging" workflow for the staging server.
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 

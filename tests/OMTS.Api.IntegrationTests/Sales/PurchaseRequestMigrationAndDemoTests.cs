@@ -32,8 +32,8 @@ public class PurchaseRequestMigrationAndDemoTests
         await db.Database.MigrateAsync();
         await ExecuteAsync(database, "INSERT INTO Products (Id, Name, UnitPrice, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000001', N'Hàu', 60000, 101, SYSDATETIMEOFFSET());");
         await ExecuteAsync(database, $"INSERT INTO Customers (Id, CooperativeId, Name, PhoneCheckedByStaff, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000002', '{cooperative}', N'A', 0, SYSDATETIMEOFFSET());");
-        await ExecuteAsync(database, "INSERT INTO PurchaseRequests (Id, CustomerId, ProductId, RequestedKg, PickupDate, SentAt, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1.5, '2026-11-05', SYSDATETIMEOFFSET(), 3201, SYSDATETIMEOFFSET());");
-        Assert.Equal(4, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
+        await ExecuteAsync(database, "INSERT INTO PurchaseRequests (Id, CustomerId, ProductId, RequestedCages, PickupDate, SentAt, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1.5, '2026-11-05', SYSDATETIMEOFFSET(), 3201, SYSDATETIMEOFFSET());");
+        Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
         Assert.Equal(4, await db.StatusTransitions.CountAsync(t => t.Id >= 180 && t.Id <= 183));
 
         await migrator.MigrateAsync(MigrationBefore);
@@ -44,7 +44,7 @@ public class PurchaseRequestMigrationAndDemoTests
         await db.Database.MigrateAsync();
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.Equal(0, await db.PurchaseRequests.AsNoTracking().CountAsync());
-        Assert.Equal(4, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
+        Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
     }
 
     [SqlServerFact]
@@ -69,9 +69,12 @@ public class PurchaseRequestMigrationAndDemoTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
                 var statuses = await db.PurchaseRequests.AsNoTracking().Select(r => r.StatusId).OrderBy(s => s).ToListAsync();
+                // The trader's four requests, one in each state, and the Accepted ones that the open harvest request step adds for the Owner to harvest for.
                 Assert.Equal(
                     [StatusIds.PurchaseRequest.AwaitingResponse, StatusIds.PurchaseRequest.Accepted, StatusIds.PurchaseRequest.Declined, StatusIds.PurchaseRequest.Cancelled],
-                    statuses);
+                    statuses.Distinct());
+                Assert.Equal((1, 1, 1), (statuses.Count(s => s == StatusIds.PurchaseRequest.AwaitingResponse), statuses.Count(s => s == StatusIds.PurchaseRequest.Declined), statuses.Count(s => s == StatusIds.PurchaseRequest.Cancelled)));
+                Assert.True(statuses.Count(s => s == StatusIds.PurchaseRequest.Accepted) > 1);
                 // The answers to the requests; the demo cash sale also sends its invoice (MSG-SALE-15, PR T1a).
                 var sendings = await db.Notifications.AsNoTracking()
                     .CountAsync(n => n.Channel == NotificationChannel.Sms && n.Type != OMTS.Application.Features.Sales.Invoices.SalesInvoiceMessages.MessageType);

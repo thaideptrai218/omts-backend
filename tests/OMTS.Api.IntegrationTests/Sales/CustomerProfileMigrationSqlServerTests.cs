@@ -40,8 +40,8 @@ public class CustomerProfileMigrationSqlServerTests
         var customers = await db.Database.SqlQueryRaw<string>("SELECT CONCAT(Code, ' ', Name, ' ', StatusId, ' ', CustomerType) AS [Value] FROM Customers ORDER BY Code").ToListAsync();
         Assert.Equal([$"KH000001 First {StatusIds.Usage.InUse} Individual", $"KH000002 Second {StatusIds.Usage.InUse} Individual", $"KH000003 Third {StatusIds.Usage.InUse} Individual"], customers);
         Assert.Equal(3, await db.Database.SqlQueryRaw<long>("SELECT LastValue AS [Value] FROM DocumentSequences WHERE [Key] = 'KH'").SingleAsync());
-        var paidAt = await db.Database.SqlQueryRaw<string>("SELECT CONVERT(varchar(40), PaidAt, 127) AS [Value] FROM CustomerPayments").SingleAsync();
-        Assert.Equal("2026-11-07T00:00:00+07:00", paidAt);
+        // The start of the day in Vietnam, compared as an instant: the text of a datetimeoffset depends on the style and the server version.
+        Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM CustomerPayments WHERE PaidAt = '2026-11-07T00:00:00+07:00'").SingleAsync());
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM Statuses WHERE Id = 3604 AND Code = 'PENDING_TRANSFER'").SingleAsync());
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM CashVoucherTypes WHERE Id = '5d6c1a10-0000-4c3a-9a10-000000000008'").SingleAsync());
         Assert.False(db.Database.HasPendingModelChanges());
@@ -50,6 +50,8 @@ public class CustomerProfileMigrationSqlServerTests
         Assert.Equal(3, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM Customers").SingleAsync());
         await migrator.MigrateAsync();
         Assert.Equal("KH000001", await db.Database.SqlQueryRaw<string>("SELECT Code AS [Value] FROM Customers WHERE Name = 'First'").SingleAsync());
-        Assert.False(db.Database.HasPendingModelChanges());
+        // A second check on the same context throws on the read-only runtime model (EF 8), so the last one asks a fresh context.
+        await using var fresh = database.CreateContext();
+        Assert.False(fresh.Database.HasPendingModelChanges());
     }
 }

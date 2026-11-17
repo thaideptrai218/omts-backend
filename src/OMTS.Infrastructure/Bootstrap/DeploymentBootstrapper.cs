@@ -154,7 +154,8 @@ public sealed class DeploymentBootstrapper(
     private Cooperative CreateCooperativeAndOwner(BootstrapSettings settings)
     {
         var now = timeProvider.GetUtcNow();
-        var cooperative = new Cooperative { FullName = settings.CooperativeFullName!.Trim() };
+        // A new cooperative may not issue more than it has on hand (decision of 11/11/2026); the Owner can allow a negative stock in the input settings. Existing cooperatives keep their value.
+        var cooperative = new Cooperative { FullName = settings.CooperativeFullName!.Trim(), AllowNegativeInputQuantity = false };
         var owner = new Account
         {
             SubjectType = SubjectType.CooperativeOwner,

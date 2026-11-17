@@ -6,7 +6,7 @@ using OMTS.Domain.Entities.Harvest;
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>A lane in a lot of a cycle, with the lot and its time.</summary>
-public sealed record LotLaneFact(Guid LotId, Guid LaneId, DateOnly Date, DateTimeOffset HarvestedAt, bool IsFinished);
+public sealed record LotLaneFact(Guid LotId, Guid LaneId, DateOnly Date, DateTimeOffset HarvestedAt, bool IsFinished, decimal? Percent = null);
 
 /// <summary>
 /// The lanes as one lot sees them, for its correction or removal (HARVEST-01.1 in an Open cycle, read today; TRACE-03.2 in a Closed one, read on the close date; BR-FARM-03): the states are worked out without the lot's own part, as
@@ -59,7 +59,7 @@ internal sealed class HarvestLotLaneFacts(
     public bool CorrectionTakesALaneOutOfHarvested(HarvestLotFields fields) => TakesALaneOutOfHarvested(Corrected(fields));
 
     private List<LotLaneFact> Corrected(HarvestLotFields fields) =>
-        [.. others, .. fields.Lanes.Select(l => new LotLaneFact(lot.Id, l.Id, lot.HarvestDate, lot.HarvestedAt, fields.FinishedLaneIds.Contains(l.Id)))];
+        [.. others, .. fields.Lanes.Select(l => new LotLaneFact(lot.Id, l.Id, lot.HarvestDate, lot.HarvestedAt, fields.FinishedLaneIds.Contains(l.Id), fields.Shares is null ? lot.Lanes.FirstOrDefault(r => r.LaneId == l.Id)?.HarvestedPercent : fields.Shares.GetValueOrDefault(l.Id)))];
 
     private bool EveryHarvested(IReadOnlyCollection<LotLaneFact> lots)
     {
@@ -76,5 +76,5 @@ internal sealed class HarvestLotLaneFacts(
     private IEnumerable<Lane> LanesInUse() => raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse);
 
     private IReadOnlyDictionary<Guid, LaneState> States(IReadOnlyCollection<LotLaneFact> lots) => LaneStateRules.StatesOn(
-        today, cycle, raft.Lanes.Select(l => l.Id), seedings, lots.Select(f => new LaneHarvest(cycle.Id, f.LaneId, f.Date, f.IsFinished)).ToList());
+        today, cycle, raft.Lanes.Select(l => l.Id), seedings, lots.Select(f => new LaneHarvest(cycle.Id, f.LaneId, f.Date, f.IsFinished, f.Percent, f.HarvestedAt, f.LotId)).ToList());
 }

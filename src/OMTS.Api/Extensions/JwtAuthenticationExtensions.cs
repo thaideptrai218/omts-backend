@@ -13,7 +13,13 @@ public static class JwtAuthenticationExtensions
 {
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services)
     {
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        // The default scheme is the staff one: every endpoint with a plain [Authorize] uses it. The employee app scheme is only for the
+        // endpoints that name it, and each scheme refuses the other's tokens (see EmployeeAppAuthentication).
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer()
+            .AddJwtBearer(EmployeeAppAuthentication.Scheme, _ => { });
+        services.AddOptions<JwtBearerOptions>(EmployeeAppAuthentication.Scheme)
+            .Configure<IOptions<JwtOptions>>((bearer, jwtOptions) => EmployeeAppAuthentication.Configure(bearer, jwtOptions.Value));
 
         // Configured from JwtOptions lazily, so the app (and /health) starts without a signing key;
         // tokens are simply rejected until one is set.

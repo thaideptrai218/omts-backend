@@ -52,7 +52,7 @@ public class HarvestLotCorrectionFieldTests
         Assert.Equal((40m, 480m), (moreCages.Kg("kgPerCage"), moreCages.Kg("estimatedKg")));
 
         var byHand = (await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Cages = "15", EstimatedKg = "500.5" })).GetProperty("lot");
-        Assert.Equal((15, 40m, 500.5m), (byHand.GetProperty("cageCount").GetInt32(), byHand.Kg("kgPerCage"), byHand.Kg("estimatedKg")));
+        Assert.Equal((15m, 40m, 500.5m), (byHand.GetProperty("cageCount").GetDecimal(), byHand.Kg("kgPerCage"), byHand.Kg("estimatedKg")));
     }
 
     [Fact]
@@ -67,7 +67,6 @@ public class HarvestLotCorrectionFieldTests
         {
             (new HarvestFields { Cages = "0" }, "Number of cages"),
             (new HarvestFields { Cages = null }, "Number of cages"),
-            (new HarvestFields { Cages = "8.5" }, "Number of cages"),
             (new HarvestFields { EstimatedKg = "0" }, "Estimated kg"),
             (new HarvestFields { EstimatedKg = "400,5" }, "Estimated kg"),
             (new HarvestFields { EstimatedKg = "1.234" }, "Estimated kg"),
@@ -92,7 +91,7 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
 
         api.Clock.At = InVietnam(10, 28);
-        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()));
+        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
         var form = correction.ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T00:00:00+07:00"), "harvestedAt");
@@ -104,7 +103,7 @@ public class HarvestLotCorrectionFieldTests
         Assert.Equal(new DateOnly(2026, 10, 26), saved.Date("harvestDate"));
         Assert.Equal(InVietnam(10, 26), saved.GetProperty("harvestedAt").GetDateTimeOffset());
         Assert.Equal(50m, saved.Kg("kgPerCage"));
-        Assert.Equal(9, saved.GetProperty("cageCount").GetInt32());
+        Assert.Equal(9, saved.GetProperty("cageCount").GetDecimal());
     }
 
     [Fact]
@@ -184,7 +183,7 @@ public class HarvestLotCorrectionFieldTests
         await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(5));
 
         var cages = await api.CorrectLotAsync(owner, first.Id(), HarvestFields.OfLanes(4, 5) with { Cages = "9" });
-        Assert.Equal(9, cages.GetProperty("lot").GetProperty("cageCount").GetInt32());
+        Assert.Equal(9, cages.GetProperty("lot").GetProperty("cageCount").GetDecimal());
 
         var refused = await (await api.SendCorrectionAsync(owner, first.Id(), HarvestFields.OfLanes(4, 5).FinishedLanes(5))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("Finished lanes", "Lanes 5 are in a later harvest lot and cannot be marked finished in this one."), (refused.Text("field"), refused.Text("hint")));
@@ -199,13 +198,13 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raft.RaftId);
         var current = await api.LotVersionAsync(lot.Id());
 
-        var stale = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, RowVersion: AcsTestKit.StaleRowVersion))).ReadAsync(HttpStatusCode.Conflict);
+        var stale = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, RowVersion: AcsTestKit.StaleRowVersion, Keep: lot.PhotoKeysOfLot()))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG06", current), (stale.Text("code"), stale.GetProperty("currentRowVersion").GetString()));
-        var missing = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }))).ReadAsync(HttpStatusCode.BadRequest);
+        var missing = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, Keep: lot.PhotoKeysOfLot()))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("MSG-GEN-01", "RowVersion"), (missing.Text("code"), missing.Text("field")));
         Assert.Equal("MSG06", await (await owner.PostRemoveLotAsync(lot.Id(), "mistake", AcsTestKit.StaleRowVersion)).ErrorCodeAsync());
         Assert.Equal("RowVersion", (await (await owner.PostRemoveLotAsync(lot.Id(), "mistake", null)).ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
-        Assert.Equal(8, (await owner.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetInt32());
+        Assert.Equal(8, (await owner.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetDecimal());
     }
 
     // GBR-02 and HARVEST-01.1 step 4: the reason and the changed values are kept; the Owner is not told again; a correction that changes nothing writes nothing.

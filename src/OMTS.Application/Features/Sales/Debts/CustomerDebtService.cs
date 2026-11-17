@@ -43,9 +43,8 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
     /// </summary>
     public async Task<CustomerDebtRows> RowsAsync(string? search, CancellationToken cancellationToken)
     {
-        var debtOf = (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
-        var totalReceivables = debtOf.Values.Sum(CustomerDebtMath.Receivable);
-        var totalOwedBack = debtOf.Values.Sum(CustomerDebtMath.OwedBack);
+        var debtOf = await DebtOfEveryProfileAsync(cancellationToken);
+        var (totalReceivables, totalOwedBack) = Totals(debtOf);
         var nonZero = debtOf.Where(d => d.Value != 0).Select(d => d.Key).ToList();
         if (nonZero.Count == 0)
         {
@@ -71,6 +70,16 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         return new CustomerDebtRows(rows, totalReceivables, totalOwedBack);
     }
 
+    /// <summary>The cooperative's totals alone (BR-FARM-10, BR-DEBT-02): the debts above zero, and the money owed back to customers shown apart. The operations dashboard (FARM-06) reads them here.</summary>
+    public async Task<(decimal Receivables, decimal OwedBack)> TotalsAsync(CancellationToken cancellationToken) =>
+        Totals(await DebtOfEveryProfileAsync(cancellationToken));
+
+    private async Task<Dictionary<Guid, decimal>> DebtOfEveryProfileAsync(CancellationToken cancellationToken) =>
+        (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
+
+    private static (decimal Receivables, decimal OwedBack) Totals(Dictionary<Guid, decimal> debtOf) =>
+        (debtOf.Values.Sum(CustomerDebtMath.Receivable), debtOf.Values.Sum(CustomerDebtMath.OwedBack));
+
     /// <summary>Step 3: the debt at the start of the period, what happened in it, the debt at its end, and the invoices unpaid today. The period defaults to the current month.</summary>
     public async Task<Result<CustomerDebtStatement>> StatementAsync(Guid customerId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {
@@ -89,9 +98,10 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         var (start, end) = period.Value;
         // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04).
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        // BR-DEBT-04: under each invoice, every correction, also one made after the period.
+        // BR-DEBT-04: under each invoice, its corrections, also one made after the period (the price cuts are entries of their own).
         var lines = CustomerStatementLedger.Build(
-            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
+            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken),
+            await queries.ReturnsOfAsync(customerId, cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
         return new CustomerDebtStatement(
             View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices, now.ReservedAdvances);
@@ -115,8 +125,7 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(
-            ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
+        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments, returns: await queries.ReturnsOfAsync(customerId, cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, timeProvider.Today(), ledger.Adjustments);
         var entries = lines.Entries.AsEnumerable().Reverse();
         if (query.From is { } from)

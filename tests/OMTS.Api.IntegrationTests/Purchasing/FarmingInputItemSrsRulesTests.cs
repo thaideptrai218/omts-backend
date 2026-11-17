@@ -32,9 +32,9 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
         var sameCode = await owner.PostAsJsonAsync(Items, new { code = code.ToUpperInvariant(), name = $"Another {code}", group = "Other", unit = "kg" });
         var codeProblem = await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal((first, "Code"), (codeProblem.GetProperty("existingId").GetGuid(), codeProblem.GetProperty("field").GetString()));
-        // Both clash with the same item: the code is named.
+        // Both clash with the same item: the name is checked first and is the one named.
         var both = await owner.PostAsJsonAsync(Items, new { code, name, group = "Material", unit = "cái" });
-        Assert.Equal("Code", (await both.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
+        Assert.Equal("Name", (await both.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
 
         // Editing another item to the same name is refused the same way.
         var second = await owner.CreateItemAsync("Other");
@@ -103,7 +103,7 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
         var clash = await owner.PostAsJsonAsync(Items, new { code = "phao-01", name = "Khác", group = "Other", unit = "kg" });
         Assert.Equal("Code", (await clash.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
         var unitCode = await owner.PostAsJsonAsync(Items, new { code = "VT000001-C", name = "Dây", group = "Material", unit = "cuộn" });
-        Assert.Equal("Code", (await unitCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
+        Assert.Equal("Unit code", (await unitCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
 
         // The proposal belongs to the Add item form of the Owner.
         var (zone, _) = await api.ZoneWithRaftAsync();

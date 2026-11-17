@@ -31,15 +31,18 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
         var start = Today.AddDays(-5);
         var cycle = await owner.StartCycleAsync(raft.Id(), new CycleBody(start, 100m, null, 900m));
 
-        var answer = await (await owner.PutCycleAsync(cycle.Id(), new CycleBody(start, 100m, Today.AddDays(30), null, cycle.Text("rowVersion")))).ReadAsync(HttpStatusCode.OK);
+        var answer = await (await owner.PutCycleAsync(cycle.Id(), new CycleBody(start, 120m, Today.AddDays(30), null, cycle.Text("rowVersion")))).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Cultivation cycle saved.", "MSG-GEN-05"), (answer.Text("message"), answer.Text("messageCode")));
         var saved = answer.GetProperty("cycle");
-        Assert.Equal(Today.AddDays(30), saved.Date("expectedHarvestDate"));
+        Assert.Equal(120m, saved.GetProperty("expectedSeedQuantity").GetDecimal());
+        // The expected harvest date sent along is ignored: the plan has none any more (owner decision of 12/11/2026).
+        Assert.False(saved.TryGetProperty("expectedHarvestDate", out _));
         Assert.True(saved.IsNull("targetYieldKg")); // a plan estimate sent empty is cleared
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == cycle.Id() && e.Action == "CultivationCycle.Updated"));
-        Assert.Contains("expectedHarvestDate", audit.After!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("expectedSeedQuantity", audit.After!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("expectedHarvestDate", audit.After!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("targetYieldKg", audit.Before!, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("startDate", audit.After!, StringComparison.OrdinalIgnoreCase);
     }
@@ -76,18 +79,6 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
         // On the first seeding day, and the day after the previous close.
         Assert.Equal(Today.AddDays(-5), (await owner.EditCycleAsync(cycle.Id(), new CycleBody(Today.AddDays(-5), RowVersion: version))).Date("startDate"));
         Assert.Equal(Today.AddDays(-19), (await owner.EditCycleAsync(cycle.Id(), new CycleBody(Today.AddDays(-19), RowVersion: version))).Date("startDate"));
-    }
-
-    // A new start date moves the rule of the expected harvest date with it.
-    [Fact]
-    public async Task The_expected_harvest_date_must_be_after_the_new_start_date()
-    {
-        var (owner, raft) = await OwnerWithRaftAsync();
-        var cycle = await owner.StartCycleAsync(raft.Id(), new CycleBody(Today.AddDays(-5), null, Today.AddDays(-3)));
-
-        var moved = await owner.PutCycleAsync(cycle.Id(), new CycleBody(Today.AddDays(-3), null, Today.AddDays(-3), RowVersion: cycle.Text("rowVersion")));
-
-        Assert.Equal(["Expected harvest date"], await moved.InvalidFieldsAsync());
     }
 
     // BR-CYCLE-04: a Closed cycle is locked and never reopened.

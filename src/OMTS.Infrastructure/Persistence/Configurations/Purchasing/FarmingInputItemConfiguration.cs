@@ -23,6 +23,8 @@ internal sealed class FarmingInputItemConfiguration : IEntityTypeConfiguration<F
         builder.Property(x => x.LastPurchasePrice).HasPrecision(18, 4);
         builder.HasOne(x => x.ItemGroup).WithMany().HasForeignKey(x => x.ItemGroupId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.ItemGroupId);
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.ProductId);
         builder.HasIndex(x => x.IsHidden);
     }
 }

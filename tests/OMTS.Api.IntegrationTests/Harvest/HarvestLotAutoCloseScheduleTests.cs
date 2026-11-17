@@ -49,6 +49,7 @@ public class HarvestLotAutoCloseScheduleTests
         var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId);
         var clock = new FixedClock(new DateTimeOffset(FarmingTestKit.Today.AddDays(4).ToDateTime(new TimeOnly(8, 0)), BusinessClock.UtcOffset));
         var hosted = new HarvestLotAutoCloseHostedService(
+            api.Services.GetRequiredService<PendingSaleEndOfDayStopJob>(),
             api.Services.GetRequiredService<HarvestLotAutoCloseJob>(),
             Options.Create(new HarvestLotAutoCloseOptions { CatchUpOnStart = true }),
             clock,

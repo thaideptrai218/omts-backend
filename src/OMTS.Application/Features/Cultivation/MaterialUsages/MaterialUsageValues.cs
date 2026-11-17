@@ -13,6 +13,7 @@ internal static class MaterialUsageValues
     public const string RecordType = nameof(MaterialUsage);
     public const string Created = "MaterialUsage.Created";
     public const string Updated = "MaterialUsage.Updated";
+    public const string Removed = "MaterialUsage.Removed";
 
     public const string DateField = "Repair date";
     public const string RepairReasonField = "Repair reason";

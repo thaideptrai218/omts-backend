@@ -1,6 +1,7 @@
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
@@ -20,7 +21,8 @@ public sealed record SeedingFigures(int LaneCount, int SeededCount, IReadOnlyLis
 public sealed class SeedingViews(
     IAccountRepository accounts,
     PermissionService permissions,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IFileStorage storage)
 {
     /// <summary>BR-CYCLE-02: the Cooperative Owner corrects any session, a Zone Manager of the zone only one they recorded. Whether the cycle still allows it is asked apart.</summary>
     public static bool MayCorrect(AccountAccess? access, SeedingRecord record, Guid zoneId) =>
@@ -30,7 +32,8 @@ public sealed class SeedingViews(
 
     public static SeedingFigures Figures(Raft raft, IReadOnlyDictionary<Guid, LaneState> states)
     {
-        var inUse = raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse).OrderBy(l => l.LaneNumber).ToList();
+        // A lane put out of service is no longer one of the lanes to seed (decision of 12/11/2026).
+        var inUse = raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && !l.IsOutOfService).OrderBy(l => l.LaneNumber).ToList();
         var notSeeded = inUse.Where(l => states[l.Id] == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList();
         return new SeedingFigures(inUse.Count, inUse.Count - notSeeded.Count, notSeeded);
     }
@@ -46,7 +49,7 @@ public sealed class SeedingViews(
     public async Task<SeedingRecordView> ViewAsync(SeedingRecord record, IReadOnlyDictionary<Guid, LaneState> states, CancellationToken cancellationToken)
     {
         var names = await accounts.GetDisplayNamesAsync([record.RecordedByAccountId], cancellationToken);
-        return View(record, record.Cycle, names.GetValueOrDefault(record.RecordedByAccountId), await AccessAsync(cancellationToken), states);
+        return await ViewOneAsync(record, record.Cycle, names.GetValueOrDefault(record.RecordedByAccountId), await AccessAsync(cancellationToken), states, cancellationToken);
     }
 
     /// <summary>The sessions of the cycle, which comes with its raft and zone, as they were read.</summary>
@@ -55,14 +58,26 @@ public sealed class SeedingViews(
     {
         var names = await accounts.GetDisplayNamesAsync(records.Select(r => r.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         var access = await AccessAsync(cancellationToken);
-        return records.Select(r => View(r, cycle, names.GetValueOrDefault(r.RecordedByAccountId), access, states)).ToList();
+        var views = new List<SeedingRecordView>(records.Count);
+        foreach (var record in records)
+        {
+            views.Add(await ViewOneAsync(record, cycle, names.GetValueOrDefault(record.RecordedByAccountId), access, states, cancellationToken));
+        }
+
+        return views;
     }
 
-    private static SeedingRecordView View(
-        SeedingRecord record, CultivationCycle cycle, string? recordedBy, AccountAccess? access, IReadOnlyDictionary<Guid, LaneState> states)
+    private async Task<SeedingRecordView> ViewOneAsync(
+        SeedingRecord record, CultivationCycle cycle, string? recordedBy, AccountAccess? access, IReadOnlyDictionary<Guid, LaneState> states, CancellationToken cancellationToken)
     {
         var raft = cycle.Raft;
         var inALot = record.Lanes.Any(l => states.TryGetValue(l.LaneId, out var state) && SeedingLaneRules.IsInAHarvestLot(state));
+        var photos = new List<SeedingPhotoView>(record.Photos.Count);
+        foreach (var photo in record.Photos.OrderBy(p => p.SortOrder))
+        {
+            photos.Add(new SeedingPhotoView(photo.Id, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken)));
+        }
+
         return new SeedingRecordView(
             record.Id,
             cycle.Id,
@@ -76,7 +91,12 @@ public sealed class SeedingViews(
             recordedBy,
             record.CreatedAt,
             CultivationCycleViews.CanEdit(cycle, raft, raft.Zone.StatusId == StatusIds.Usage.InUse) && !inALot && MayCorrect(access, record, raft.ZoneId),
-            RowVersionGuard.Encode(record.RowVersion));
+            RowVersionGuard.Encode(record.RowVersion),
+            record.IssueId,
+            record.Issue?.Code,
+            record.OverPlanReason,
+            photos,
+            record.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new SeedingLanePercentView(l.Lane.LaneNumber, l.SeededPercent)).ToList());
     }
 
     /// <summary>MSG-GEN-05 "Seeding session saved.", and the offer to mark the seeding complete when no lane is left Not seeded (CYCLE-02.0 step 7).</summary>

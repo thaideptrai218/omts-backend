@@ -63,7 +63,8 @@ public class ProvenancePageWhitelistTests
         var published = page.LotsByCode()[(await api.LotRowAsync(sale.LotId)).LotCode].GetProperty("origin");
         Assert.Equal(("Raft", 21.0512m, 107.4321m), (published.GetProperty("map").Text("source"), published.GetProperty("map").GetProperty("latitude").GetDecimal(),
             published.GetProperty("map").GetProperty("longitude").GetDecimal()));
-        Assert.Equal((1, 1), (published.GetProperty("harvestPhotoUrls").GetArrayLength(), published.GetProperty("raftPhotoUrls").GetArrayLength()));
+        // One photo the test adds and one the lot was recorded with (a new lot needs a photo since 12/11/2026).
+        Assert.Equal((2, 1), (published.GetProperty("harvestPhotoUrls").GetArrayLength(), published.GetProperty("raftPhotoUrls").GetArrayLength()));
         Assert.Equal([profile.CertificationName], page.GetProperty("cooperative").GetProperty("certifications").EnumerateArray().Select(c => c.Text("name")));
     }
 

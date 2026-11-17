@@ -67,7 +67,7 @@ public class CustomerDebtStatementTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 50m);
+        var request = await trader.Client.PlaceAsync(sale.ProductId, 50);
         var client = sale.Manager.Client;
         var keptOld = (await client.SellAsync(PayLater(trader.Profile.Id, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(keptOld.Id(), 9);

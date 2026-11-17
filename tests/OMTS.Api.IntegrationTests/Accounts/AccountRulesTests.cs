@@ -20,7 +20,8 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     // Generated per run, so no password-like literal is committed (secret scanners).
     private static readonly string NewAccountPassword = NewPassword();
 
-    // BR-ACCOUNT-02: "the same email, verified or not". Registration answers MSG-ACCOUNT-03, the others MSG-ACCOUNT-09.
+    // BR-ACCOUNT-02: "the same email, verified or not": MSG-ACCOUNT-09 wherever an email is entered. Registration takes
+    // no email at all any more (phone number only).
     [Fact]
     public async Task An_unverified_email_of_another_account_cannot_be_used_anywhere()
     {
@@ -31,12 +32,10 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var editedId = (await CreateStaffAsync(owner, null)).GetProperty("account").GetProperty("id").GetGuid();
         var rowVersion = (await owner.GetFromJsonAsync<JsonElement>($"/api/accounts/{editedId}")).GetProperty("rowVersion").GetString();
 
-        var registration = await factory.CreateClient().PostAsJsonAsync("/api/verifications", new { channel = "Email", target = email });
         var contactChange = await owner.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Email", target = email, currentPassword = Password });
         var create = await owner.PostAsJsonAsync("/api/accounts", StaffBody(email: email.ToUpperInvariant()));
         var edit = await owner.PutAsJsonAsync($"/api/accounts/{editedId}", new { displayName = "B", username = $"s{NewCode()}", phoneNumber = NewPhone(), email, rowVersion });
 
-        Assert.Equal("MSG-ACCOUNT-03", await registration.ErrorCodeAsync());
         Assert.Equal("MSG-ACCOUNT-09", await contactChange.ErrorCodeAsync());
         foreach (var refused in new[] { create, edit })
         {
@@ -49,9 +48,9 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         }
     }
 
-    // An unverified email is not a login and receives no code, and the account itself may verify it.
+    // The account itself may verify its email as a contact. An email is never a login, before or after (phone is the login identifier).
     [Fact]
-    public async Task The_holder_of_an_unverified_email_can_verify_it_and_it_logs_in_only_then()
+    public async Task The_holder_of_an_unverified_email_can_verify_it_and_it_is_still_no_login()
     {
         var email = $"own-{NewCode()}@example.com";
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.Email = email);
@@ -65,7 +64,7 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         Assert.Equal(HttpStatusCode.Unauthorized, before.StatusCode);
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = email, password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = email, password = Password })).StatusCode);
     }
 
     // BR-ACCOUNT-03, ACCOUNT-02.1: the Owner verifies the phone number like every account. The login says so, every other
@@ -111,7 +110,6 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.True(tokens.GetProperty("phoneVerificationRequired").GetBoolean());
         Assert.Equal("MSG-ACCOUNT-04", await (await client.GetAsync("/api/me/permissions")).ErrorCodeAsync());
         Assert.Equal("MSG-ACCOUNT-04", await (await client.PostAsJsonAsync("/api/me/password", new { newPassword = NewAccountPassword, passwordConfirmation = NewAccountPassword })).ErrorCodeAsync());
-        Assert.Equal("MSG-ACCOUNT-04", await (await client.PostAsync("/api/me/password/code", null)).ErrorCodeAsync());
         Assert.Equal(phone, (await client.GetFromJsonAsync<JsonElement>("/api/me/profile")).GetProperty("phoneNumber").GetString());
 
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/phone-verification", new { }));
@@ -158,6 +156,8 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     [Fact]
     public async Task A_staff_account_is_created_without_a_pair_and_logs_in_after_the_grant()
     {
+        // The grant names a fixed role; seeded here so the test does not rely on another test of the class running first.
+        await factory.EnsureFixedRolesAsync();
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
         var zone = await factory.AddZoneAsync(NewCode());
         var username = $"s{NewCode()}";
@@ -184,7 +184,7 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal("MSG-ACCOUNT-07", await refused.ErrorCodeAsync());
 
         var granted = await owner.PostAsJsonAsync($"/api/accounts/{id}/grants", new { zoneId = zone.Id, role = FixedRoles.AccountantCode });
-        Assert.Equal(HttpStatusCode.Created, granted.StatusCode);
+        Assert.True(granted.StatusCode == HttpStatusCode.Created, await granted.Content.ReadAsStringAsync());
 
         var detail = await owner.GetFromJsonAsync<JsonElement>($"/api/accounts/{id}");
         var list = await owner.GetFromJsonAsync<JsonElement>($"/api/accounts?search={username}");

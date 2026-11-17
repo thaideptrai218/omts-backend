@@ -51,7 +51,7 @@ public sealed class HarvestLotViews(
         var photos = new List<HarvestLotPhotoView>(lot.Photos.Count);
         foreach (var photo in lot.Photos.OrderBy(p => p.SortOrder))
         {
-            photos.Add(new HarvestLotPhotoView(photo.FileKey, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken)));
+            photos.Add(new HarvestLotPhotoView(photo.FileKey, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken), photo.Id));
         }
 
         return new HarvestLotView(
@@ -89,7 +89,12 @@ public sealed class HarvestLotViews(
             MayClose(access, lot, raft.ZoneId),
             RowVersionGuard.Encode(lot.RowVersion),
             ProductLines(lot, await ProductsOfAsync([lot], cancellationToken)),
-            (await PlansOfAsync([lot.Id], cancellationToken)).GetValueOrDefault(lot.Id));
+            (await PlansOfAsync([lot.Id], cancellationToken)).GetValueOrDefault(lot.Id),
+            lot.OverPlanReason,
+            lot.PurchaseRequestId,
+            lot.PurchaseRequest?.Code,
+            HarvestCrewService.ViewOf(lot),
+            lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
     }
 
     /// <summary>The harvest plan (KHT) each lot was recorded from; a lot outside a plan is absent.</summary>
@@ -133,7 +138,8 @@ public sealed class HarvestLotViews(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
-                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id));
+                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id),
+                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, HarvestCrewService.ViewOf(lot));
             })
             .ToList();
     }

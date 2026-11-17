@@ -53,6 +53,10 @@ public class CustomerPaymentSqlServerTests
 
         public void RemoveAllocation(CustomerPaymentAllocation allocation) => inner.RemoveAllocation(allocation);
 
+        public void AddAllocation(CustomerPaymentAllocation allocation) => inner.AddAllocation(allocation);
+
+        public Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken) => inner.HasMoneyPaidBackAsync(paymentId, cancellationToken);
+
         public Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken) => inner.FindIdByCodeAsync(code, exceptPaymentId, cancellationToken);
 
         public Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) => inner.GetPendingTransfersAsync(cancellationToken);
@@ -87,9 +91,10 @@ public class CustomerPaymentSqlServerTests
         }
     }
 
-    private sealed record World(FarmingSqlServerHost Host, HttpClient Owner, HttpClient Manager, HttpClient Accountant, Guid ProductId, Guid LotId, Guid CustomerId);
+    // Internal: the races of DEBT-02.6 (CustomerPaymentSettlementSqlServerTests) use the same world and the same held reads.
+    internal sealed record World(FarmingSqlServerHost Host, HttpClient Owner, HttpClient Manager, HttpClient Accountant, Guid ProductId, Guid LotId, Guid CustomerId);
 
-    private static async Task<World> WorldAsync(FarmingSqlServerHost host)
+    internal static async Task<World> WorldAsync(FarmingSqlServerHost host)
     {
         var owner = host.Owner.Client;
         var zoneId = (await owner.CreateZoneAsync()).Id();
@@ -109,7 +114,7 @@ public class CustomerPaymentSqlServerTests
         return await w.Host.QueryAsync(db => db.CustomerPayments.Where(p => p.InvoiceId == invoice.Id()).Select(p => p.Id).SingleAsync());
     }
 
-    private static (WebApplicationFactory<Program> Api, HttpClient Accountant) Held(World w)
+    internal static (WebApplicationFactory<Program> Api, HttpClient Accountant) Held(World w)
     {
         var barrier = new Barrier(2);
         var api = w.Host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
@@ -124,14 +129,14 @@ public class CustomerPaymentSqlServerTests
         return (api, client);
     }
 
-    private static Task<int> NoticesAsync(World w) =>
+    internal static Task<int> NoticesAsync(World w) =>
         w.Host.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == NotificationTypes.CustomerPaymentTransaction && n.RecipientAccountId == w.Host.Owner.Account.Id));
 
-    private static Task<int> StatusOfAsync(World w, Guid paymentId) =>
+    internal static Task<int> StatusOfAsync(World w, Guid paymentId) =>
         w.Host.QueryAsync(db => db.CustomerPayments.Where(p => p.Id == paymentId).Select(p => p.StatusId).SingleAsync());
 
     /// <summary>One answer is the success, the other 409 MSG-GEN-09 naming the payment; never a 500 or MSG06.</summary>
-    private static async Task<int> OneWinsAsync(HttpResponseMessage[] answers)
+    internal static async Task<int> OneWinsAsync(HttpResponseMessage[] answers)
     {
         var codes = new[] { await SqlKit.CodeOrStatusAsync(answers[0]), await SqlKit.CodeOrStatusAsync(answers[1]) };
         var winner = Array.FindIndex(answers, a => a.StatusCode == HttpStatusCode.OK);
@@ -178,6 +183,8 @@ public class CustomerPaymentSqlServerTests
         Assert.Equal(300_000m, await w.Owner.CustomerDebtAsync(w.CustomerId));
         Assert.Equal(successes, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == cash && (e.Action == "CustomerPayment.Confirmed" || e.Action == "CustomerPayment.Cancelled"))));
         Assert.Equal(successes, await NoticesAsync(w));
+        // PM answer 12/11/2026 (OMTS-224 [1.6]): a cancellation that read the payment Confirmed (the confirmation won, no rowVersion sent) says so in an audit row; one that won writes none.
+        Assert.Equal(codes[0] == "200" ? 1 : 0, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == cash && e.Action == "CustomerPayment.CancelledAfterConfirm")));
     }
 
     // Both read one debt; the loser on the customer profile reads it again, so each notice and answer tells the debt its save left.

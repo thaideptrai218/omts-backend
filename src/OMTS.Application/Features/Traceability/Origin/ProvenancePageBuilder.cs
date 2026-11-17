@@ -18,7 +18,7 @@ public static class ProvenancePageBuilder
 
     /// <summary>
     /// The lots of the invoice that are Published or Withdrawn, in line order, each with the products sold from it on this invoice; Not published lots are left out
-    /// (BR-ORIGIN-05). None: MSG-ORIGIN-02. The lot whose returned oysters were thrown away (CLAIM-03) will be left out here as well, once sales returns exist.
+    /// (BR-ORIGIN-05). None: MSG-ORIGIN-02. The lines of a lot whose returned oysters were thrown away (CLAIM-03) are not among <paramref name="invoice"/>'s lines, so it is not listed.
     /// </summary>
     /// <param name="seedings">The sessions of the Published lots.</param>
     /// <param name="photoUrls">The signed read URL of each photo key of the Published lots.</param>

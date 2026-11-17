@@ -41,6 +41,14 @@ internal static class DemoFiles
     public static IncomingFile HarvestLotPhoto(int number) => Png($"harvest-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
         y > CoverHeight / 2 && (x + number * 3) % 20 < 12 ? ((byte)0x8C, (byte)0x7A, (byte)0x5B) : ((byte)0x1B, (byte)0x6A, (byte)(0x60 + y)));
 
+    /// <summary>A 240×80 PNG: sea above, a hanging line of seed below, standing in for an on-site photo of a seeding session.</summary>
+    public static IncomingFile SeedingPhoto(int number) => Png($"seeding-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
+        y > CoverHeight / 3 && (x + number * 9) % 18 < 4 ? ((byte)0xC8, (byte)0xD6, (byte)0xA0) : ((byte)0x1B, (byte)0x58, (byte)(0x66 + y)));
+
+    /// <summary>A 240×80 PNG: sea above, a stretch of raft below, standing in for a photo of the plan of a cycle.</summary>
+    public static IncomingFile CyclePlanPhoto(int number) => Png($"cycle-plan-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
+        y > CoverHeight / 2 && (x + number * 11) % 30 < 20 ? ((byte)0x7A, (byte)0x62, (byte)0x45) : ((byte)0x1B, (byte)0x50, (byte)(0x70 + y)));
+
     /// <summary>A tiny PDF that passes the document check; the facts of the license or certification live in its record.</summary>
     public static IncomingFile LicenseDocument(string number)
     {

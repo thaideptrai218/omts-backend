@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -204,6 +204,12 @@ FROM PurchaseReturns r JOIN PurchaseReceipts pr ON pr.Id = r.ReceiptId;
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // The older schema has no drafts and no return without a receipt, so Down refuses to run while such returns exist: they are
+            // a live feature of the purchase returns, not garbage (PM 12/11). Finish or remove them first; nothing is deleted here.
+            migrationBuilder.Sql(@"
+IF EXISTS (SELECT 1 FROM PurchaseReturns WHERE StatusId = 1903 OR ReceiptId IS NULL OR EXISTS (SELECT 1 FROM PurchaseReturnLines l WHERE l.ReturnId = PurchaseReturns.Id AND l.ReceiptLineId IS NULL))
+    THROW 51000, 'Down refused: draft purchase returns or returns without a receipt exist. Finish or remove them first.', 1;");
+
             migrationBuilder.DropForeignKey(
                 name: "FK_PurchaseReceipts_FarmingZones_ZoneId",
                 table: "PurchaseReceipts");

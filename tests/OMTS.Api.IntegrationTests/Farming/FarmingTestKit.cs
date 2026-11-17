@@ -22,7 +22,11 @@ public sealed record ZoneBody(
     string? Code, string? Name, string? Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? RowVersion = null);
 
 public sealed record RaftBody(
-    string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes, int? LaneCount, string? RowVersion = null);
+    string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes, int? LaneCount, string? RowVersion = null,
+    decimal? LengthM = null, decimal? WidthM = null, IReadOnlyList<LaneLengthBody>? LaneLengths = null);
+
+/// <summary>The line length of one lane in a raft body (12/11/2026); a null length puts the lane back to the length of the raft.</summary>
+public sealed record LaneLengthBody(int LaneNumber, decimal? LineLengthM);
 
 /// <summary>
 /// FARM-03 multipart form fields; <see cref="File"/> null sends no file. The expiry date is required since PR 0.8: it

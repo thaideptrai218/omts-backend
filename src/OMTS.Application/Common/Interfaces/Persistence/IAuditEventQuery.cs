@@ -34,6 +34,9 @@ public sealed record AuditEventRow(
 /// <summary>One event with its stored before/after values (JSON).</summary>
 public sealed record AuditEventValues(AuditEventRow Event, string? Before, string? After);
 
+/// <summary>One event of the history of a record, with the role of who acted at that time: <c>CooperativeOwner</c>, the code of an Effective zone-role pair (ZONE_MANAGER, ACCOUNTANT), <c>Staff</c>, <c>Trader</c> or null.</summary>
+public sealed record AuditHistoryRow(AuditEventValues Values, string? ActorRole);
+
 /// <summary>An account or an employee that acted in at least one event.</summary>
 public sealed record AuditActorRow(Guid? AccountId, Guid? EmployeeId, string Name, string? Username);
 
@@ -48,6 +51,9 @@ public interface IAuditEventQuery
         AuditEventFilter filter, int page, int pageSize, CancellationToken cancellationToken);
 
     Task<AuditEventValues?> GetAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Every event of one record (its type and id), oldest first, with the role of who acted.</summary>
+    Task<IReadOnlyList<AuditHistoryRow>> HistoryOfRecordAsync(string recordType, Guid recordId, CancellationToken cancellationToken);
 
     /// <summary>The actions, record types and people of the whole log.</summary>
     Task<AuditFacetRows> FacetsAsync(CancellationToken cancellationToken);

@@ -16,6 +16,9 @@ public interface ILotTraceQuery
     /// <summary>The forward trace (BR-TRACE-03): every line of the lot on an invoice that is not cancelled, the oldest invoice first, then by line. One query whatever the number of invoices.</summary>
     Task<IReadOnlyList<LotSaleLine>> SaleLinesAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>The sales returns that stand on the lines of the lot, per return and outcome (BR-TRACE-03). One query.</summary>
+    Task<IReadOnlyList<LotSaleReturn>> SaleReturnsAsync(Guid lotId, CancellationToken cancellationToken);
+
     /// <summary>The TRACE-03 corrections of these seeding sessions and harvest lots, oldest first.</summary>
     Task<IReadOnlyList<TraceCorrectionRow>> CorrectionsAsync(IReadOnlyCollection<Guid> recordIds, CancellationToken cancellationToken);
 }

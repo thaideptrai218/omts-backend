@@ -66,7 +66,9 @@ public sealed class MaterialUsageViews(
                 u.Id, raft.Id, raft.Code, cycle?.Id, u.UsageDate, u.RepairReason, u.ItemId, u.Item.Code, u.Item.Name, u.Item.Unit, u.Quantity,
                 u.RecordedByAccountId, names.GetValueOrDefault(u.RecordedByAccountId), u.CreatedAt,
                 mayEdit && cycle?.CloseDate is null,
-                RowVersionGuard.Encode(u.RowVersion));
+                RowVersionGuard.Encode(u.RowVersion),
+                u.IssueId,
+                u.Issue?.Code);
         }).ToList();
     }
 

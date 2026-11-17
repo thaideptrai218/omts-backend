@@ -24,6 +24,8 @@ namespace OMTS.Application.Features.Harvest;
 /// uploaded nothing is saved and nobody is told (GFR-01). Everything the save decides is read again after the uploads, which can take minutes at sea: the Open cycle, the lane states, the
 /// average kg per cage it copies (BR-HARVEST-02), the harvest time and the lot code. The cycle row is part of the save, so of two parallel saves that change the lane states of a cycle
 /// one answers MSG06 and saves nothing, and a new send is checked against the new states. Two lots that take one code without sharing a cycle lose nothing: the loser takes the next code, with its photos.
+/// A lot may be recorded from a line of a harvest plan (read again with the rest and moved on in the same save, so two lots of one line never both pass) and may be split into product lines; its cages
+/// against the cages the line expects only warn.
 /// </summary>
 public sealed class HarvestLotRecordingService(
     IRaftRepository rafts,
@@ -33,12 +35,14 @@ public sealed class HarvestLotRecordingService(
     ICooperativeRepository cooperatives,
     RaftViews raftViews,
     LaneStateReader laneStates,
+    LanePercentGuard percents,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
     HarvestLotProductLineService productLines,
     HarvestPlanProgress planProgress,
     HarvestLotViews views,
+    HarvestCrewService crews,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -49,7 +53,7 @@ public sealed class HarvestLotRecordingService(
 
     private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage);
 
-    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested);
+    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, decimal? PlanCagesExpected, IReadOnlyList<Farming.FarmingWarning> Warnings);
 
     public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
     {
@@ -78,16 +82,32 @@ public sealed class HarvestLotRecordingService(
         }
 
         request = WithPlannedLanes(request, planned.Value);
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
-        var (_, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
+        // A new lot needs 1 to 3 on-site photos; a lot recorded before the photos stays valid without.
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
+        var (resolvedLines, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
         if (lineError is not null)
         {
             return lineError;
         }
 
-        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, photoHint, out _) is { } invalid)
+        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, photoHint, out var firstFields) is { } invalid)
         {
             return invalid;
+        }
+
+        if ((await SharesAsync(request, firstFields!, open.Cycle.Id, cancellationToken)).Error is { } wrongPercent)
+        {
+            return wrongPercent;
+        }
+
+        if (HarvestProductMatch.Refusal(open.Cycle, resolvedLines) is { } wrongProduct)
+        {
+            return wrongProduct;
+        }
+
+        if ((await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken)).Error is { } wrongCrew)
+        {
+            return wrongCrew;
         }
 
         var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
@@ -134,7 +154,11 @@ public sealed class HarvestLotRecordingService(
                 done.EverySeededLaneHarvested,
                 Common.Concurrency.RowVersionGuard.Encode(done.Cycle.RowVersion),
                 saved.Text,
-                saved.Code);
+                saved.Code,
+                [.. HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg), .. done.Warnings],
+                done.PlanCagesExpected,
+                done.PlanCagesExpected is null ? null : done.Lot.CageCount,
+                HarvestPlanCages.Reached(done.PlanCagesExpected, done.Lot.CageCount));
         }
     }
 
@@ -172,6 +196,23 @@ public sealed class HarvestLotRecordingService(
             return invalid;
         }
 
+        var shares = await SharesAsync(request, fields!, open.Cycle.Id, cancellationToken);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
+        if (HarvestProductMatch.Refusal(open.Cycle, resolved) is { } wrongProduct)
+        {
+            return wrongProduct;
+        }
+
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         var cycle = open.Cycle;
         var baseCode = HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
         var lot = new HarvestLot
@@ -187,13 +228,21 @@ public sealed class HarvestLotRecordingService(
             KgPerCage = open.KgPerCage,
             EstimatedKg = fields.EstimatedKg,
             RecordedByAccountId = recorder,
-            Lanes = fields.Lanes.Select(l => new HarvestLotLane { LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id) }).ToList(),
+            Lanes = fields.Lanes.Select(l => new HarvestLotLane
+            {
+                LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id), HarvestedPercent = shares.Value![l.Id],
+            }).ToList(),
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
         if (resolved is not null)
         {
             productLines.Add(lot, raft.Code, resolved);
+        }
+
+        if (crew is not null)
+        {
+            crews.Apply(lot, crew);
         }
 
         // The lot carries the link to its line of the plan, and the plan moves on in the same save (Harvesting, then Completed when every line is done).
@@ -216,7 +265,7 @@ public sealed class HarvestLotRecordingService(
             await notifier.CloseReminderAsync(cycle, raft, recorder, cancellationToken);
         }
 
-        return new PreparedLot(lot, cycle, raft, everyHarvested);
+        return new PreparedLot(lot, cycle, raft, everyHarvested, planned.Value?.Line.ExpectedCageCount, HarvestPlanCages.Warnings(planned.Value?.Line, fields.CageCount));
     }
 
     /// <summary>The line of the plan the lot is recorded from (none when the form names none); the plan is read again on every attempt, so a line recorded or a lane left out meanwhile is told.</summary>
@@ -259,6 +308,12 @@ public sealed class HarvestLotRecordingService(
         var (cages, kg) = HarvestLotProductLineService.Totals(resolved);
         return (resolved, request with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false }, null);
     }
+
+    /// <summary>The share each lane of the new lot takes (<see cref="LanePercentGuard.ForHarvest"/>), checked against what the other lots and the manual changes of the cycle already hold.</summary>
+    private async Task<Result<IReadOnlyDictionary<Guid, decimal?>>> SharesAsync(RecordHarvestRequest request, HarvestLotFields fields, Guid cycleId, CancellationToken cancellationToken) =>
+        percents.ForHarvest(
+            await percents.ReadAsync(cycleId, cancellationToken), fields.Lanes, fields.FinishedLaneIds, request.LanePercents, request.LanePercentsUnreadable,
+            new Dictionary<Guid, decimal?>(), null);
 
     private static AppError NoOpenCycle(Raft raft) => AppError.Conflict(UserMessages.WrongStatus($"Raft {raft.Code}", "without an Open cycle"));
 

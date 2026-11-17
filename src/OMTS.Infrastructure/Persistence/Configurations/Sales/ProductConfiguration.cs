@@ -10,7 +10,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
     public void Configure(EntityTypeBuilder<Product> builder)
     {
         builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
-        builder.HasIndex(x => x.Code).IsUnique();
+        builder.HasIndex(x => x.Code).IsUnique().HasFilter("[Code] <> N''");
         builder.Property(x => x.Name).HasMaxLength(Lengths.Name);
         builder.HasIndex(x => x.Name).IsUnique();
         // Whole VND; sales money is not limited to multiples of 1,000 (BR-SALE-06).
@@ -22,7 +22,8 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.CategoryId);
         builder.HasIndex(x => x.IsHidden);
-        builder.ToTable(t => t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0"));
+        // Existing cage catalogue entries have no quoted kg price; 0 means that no kg price has been entered.
+        builder.ToTable(t => t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0 OR ([Code] <> N'' AND [UnitPrice] = 0)"));
     }
 }
 
@@ -107,6 +108,7 @@ internal sealed class HarvestLotProductLineConfiguration : IEntityTypeConfigurat
     {
         builder.HasOne(x => x.Lot).WithMany(l => l.ProductLines).HasForeignKey(x => x.LotId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.CageCount).HasPrecision(9, 2);
         builder.Property(x => x.Kg).HasPrecision(18, 3);
         builder.HasIndex(x => new { x.LotId, x.LineNumber }).IsUnique();
         builder.HasIndex(x => x.ProductId);

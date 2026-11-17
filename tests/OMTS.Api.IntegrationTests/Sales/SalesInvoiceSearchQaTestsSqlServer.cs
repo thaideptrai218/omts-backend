@@ -163,6 +163,33 @@ public class SalesInvoiceSearchQaTestsSqlServer(ITestOutputHelper output)
         Assert.Equal((20, Count), (list.Rows().Count, list.GetProperty("page").GetProperty("total").GetInt32()));
     }
 
+    // PM answer 12/11/2026 (OMTS-224 [5.7]): the file holds at most 5,000 invoices; one more is 400 MSG-GEN-01 on Filters, on the real TOP and ORDER BY, and the screen still lists them.
+    [SqlServerFact]
+    public async Task A_selection_of_five_thousand_and_one_invoices_is_not_exported_and_five_thousand_are()
+    {
+        await using var host = await FarmingSqlServerHost.StartAsync();
+        var s = await SetupAsync(host);
+        var invoices = Enumerable.Range(0, SalesInvoiceSearchService.MaxExportRows).Select(_ => NewInvoice(s)).ToList();
+        await host.UseDbAsync(db => db.SalesInvoices.AddRange(invoices));
+
+        var atTheLimit = await s.Manager.Client.ExportInvoicesAsync();
+        Assert.True(atTheLimit.StatusCode == HttpStatusCode.OK, await atTheLimit.Content.ReadAsStringAsync());
+        using (var workbook = new XLWorkbook(await atTheLimit.Content.ReadAsStreamAsync()))
+        {
+            Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 2, workbook.Worksheet(SalesInvoiceExportSheets.ListSheet).LastRowUsed()!.RowNumber());
+        }
+
+        var one = NewInvoice(s);
+        await host.UseDbAsync(db => db.SalesInvoices.Add(one));
+
+        var refused = await s.Manager.Client.ExportInvoicesAsync();
+        var problem = await refused.ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "Filters"), (problem.Text("code"), problem.Text("field")));
+        var list = await s.Manager.Client.InvoiceListAsync("?pageSize=20");
+        Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 1, list.GetProperty("page").GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await s.Manager.Client.ExportInvoicesAsync(Query(("code", one.Code)))).StatusCode);
+    }
+
     // Every filter at once, the characters of LIKE as text that a code really holds, and the extreme dates, on the real translation.
     [SqlServerFact]
     public async Task Every_filter_at_once_translates_and_wildcards_match_only_codes_that_hold_them()
@@ -181,7 +208,7 @@ public class SalesInvoiceSearchQaTestsSqlServer(ITestOutputHelper output)
 
         var all = await s.Owner.GetInvoicesAsync(Query(
             ("from", Today), ("to", Today), ("zoneId", s.ZoneId), ("customerId", customer), ("harvestLotId", s.LotId), ("raftId", s.RaftId), ("statusId", StatusIds.SalesInvoice.Completed),
-            ("paid", false), ("code", "HD"), ("cashCollectedByMe", true), ("pageSize", 100)));
+            ("paid", false), ("code", "HD"), ("orderCode", "DH"), ("cashCollectedByMe", true), ("pageSize", 100)));
         Assert.Equal(HttpStatusCode.OK, all.StatusCode);
 
         foreach (var query in new[] { "?from=0001-01-01&to=0001-01-02", "?from=9999-12-31&to=9999-12-31", "?from=9995-01-01&to=9999-12-31" })

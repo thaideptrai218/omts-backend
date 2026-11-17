@@ -19,10 +19,17 @@ if (EnvironmentVariablesConflict.Refusal(
 var builder = WebApplication.CreateBuilder(BootstrapCommand.HostArguments(args));
 
 builder.Services.AddApplication();
+builder.Services.Configure<OMTS.Application.Features.Testing.Options.TestRoleOptions>(
+    builder.Configuration.GetSection("Development:TestRoles"));
+builder.Services.PostConfigure<OMTS.Application.Features.Testing.Options.TestRoleOptions>(options =>
+{
+    if (!builder.Environment.IsDevelopment()) options.Enabled = false;
+});
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ICurrentEmployee, CurrentEmployee>();
 
 builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
 builder.Services.AddOmtsBffClientHeaders(builder.Configuration);
@@ -59,20 +66,19 @@ app.UseForwardedHeaders();
 app.UseOmtsBffClientApply();
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
 // Redirects only when an HTTPS port is known (an HTTPS endpoint, or ASPNETCORE_HTTPS_PORTS / https_port); the
 // Docker image listens on plain HTTP 8080 only, so its requests are served as they are.
 app.UseHttpsRedirection();
 
-// Before the rate limiter and authentication, so browser preflight requests are answered without a token.
+// Open in Development; elsewhere off, or behind its own Basic login with Swagger:Enabled (see SwaggerPipeline). After
+// the HTTPS redirect, so that login is never accepted over plain HTTP where HTTPS exists.
+app.UseOmtsSwagger();
+
+// Before authentication, so browser preflight requests are answered without a token.
 app.UseOmtsCors();
-app.UseRateLimiter();
+// The rate limiter follows authentication: the employee login code limit is per signed-in account (see RateLimitingExtensions).
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

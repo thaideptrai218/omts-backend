@@ -1,0 +1,640 @@
+# Backend behaviour reference
+
+Detailed rules of the API modules: authentication and sessions, roles, notifications, public provenance, sales invoices, quality claims, workforce, audit log, VietQR sales and background jobs. Moved verbatim from the README on 11/11/2026; the README keeps setup and how-to only. Change notes against SRS v8 are in the Web repository `docs/SRS_DEVIATIONS.md`.
+
+### Authentication
+
+`POST /api/auth/login` (a phone number or a username, and the password) returns a 15-minute access token and a
+refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
+revokes the session. Every `AuthTokens` response (login, refresh, `zalo/login`; also the `tokens` object of a password
+change) has the field `refreshTokenRotated`. Normally it is `true`: `refreshToken` is a new token, and after a refresh
+the old one stops working. If the client sends the token that its previous refresh just
+replaced (the response was lost, or two requests carried the same token), it gets, for 30 seconds (`Jwt:RefreshGracePeriod`),
+a new access token and the token it sent, echoed back with the session's current `refreshTokenExpiresAt`, and
+`refreshTokenRotated` is `false`: no new refresh token is issued, the session is not rotated again, and the client keeps
+the token it already holds (a web server must not write cookies for such a response). The session, the account status and
+the effective grants are checked as for a rotation. Any other old token, or the replaced one after the grace period, is
+replay and revokes the session. A refresh response that never arrives is not repaired: the client that kept the old token
+ends the session when it uses it after the grace period and must sign in again. An access token never outlives its
+session: its `exp` is the earlier of the 15-minute lifetime and the session's absolute expiry. Token validation accepts
+30 seconds of clock skew, so a token can be accepted up to 30 seconds after its `exp`, and the session's absolute expiry
+can be overrun by up to 30 seconds. Locking an account
+revokes all its sessions in the same save, and a login that races the lock revokes the session it just stored.
+
+**Login identifier.** A phone number or a username; an email address is never an identifier, so logging in with one fails
+like any unknown identifier. A phone number logs in whether or not it is verified (the password proves who the person is);
+an unverified phone then meets the phone-verification gate (`AccountStateGateFilter`, MSG-ACCOUNT-04): every business call
+is refused until the phone is verified. Email is not an identifier for sign-in, password recovery or registration. See the Web repository `docs/SRS_DEVIATIONS.md` (section Đăng nhập và tài khoản).
+
+**Devices and sessions.** `POST /api/auth/login`, `zalo/login` and `zalo/link` accept an optional `deviceId`: a random id
+the browser or app install keeps, base64url, at most 128 characters; missing, empty or `unknown` means no device. The server stores only
+a keyed hash of it (`DeviceKey`, derived from the signing key), never the id, and never uses it to authenticate. Sessions
+without a device are never grouped. A session also records how it was opened (`AuthMethod`: `Password` or `ZaloMiniApp`) and why it
+ended (`RevokeCause`: `Revoked` or `TokenReuse`). Under `/api/me`, for the caller's own account only (another account's session answers 404):
+
+| Request | Answer |
+|---|---|
+| `GET sessions` | Open sessions, newest first: `id, clientType, authMethod, deviceKey, deviceName, userAgent, maskedIpAddress` (`203.0.*.*`), `signedInAt, lastActiveAt, expiresAt, isCurrent` |
+| `DELETE sessions/{id}` | 204, also when the session had already ended; the current session may be ended (the next request is 401) |
+| `POST sessions/revoke-others` | 200 `{ "count": n }`: every open session except the current one |
+| `GET devices` | Open sessions grouped by `deviceKey` (`deviceKey, clientType, authMethod, deviceName, userAgent, maskedIpAddress, firstSignedInAt, lastActiveAt, isCurrent, sessionIds`); a session without a device is its own entry with a null `deviceKey` |
+| `DELETE devices/{deviceKey}` | 204 always (idempotent): ends the caller's sessions on that device. `deviceKey` is 43 base64url characters; the route shares its prefix with `DELETE devices/{token}` (push token), which keeps any other shape |
+
+Revoking goes through the same path as logout, so the next request of an ended session is 401 (through Redis when configured). A
+password change keeps the device and sign-in method of the session it replaces. `DELETE /api/me/zalo-link` ends every `ZaloMiniApp`
+session of the account, on every device, and the current session.
+
+**Refusing a refresh.** A refused `POST /api/auth/refresh` keeps its status and problem shape (401 MSG19; 403 when the account may no
+longer log in) and adds the problem extension `reason`: `expired` (the lifetime ended, or the session no longer exists),
+`reuse` (a replaced token was presented again, so the session is revoked) or `revoked` (a user or an administrator ended it: logout
+elsewhere, a session or device revoked, a lock, a password change). A Mini App signs in again by itself after `expired` or `reuse` only.
+`POST /api/auth/zalo/login` with a `deviceId` whose newest session of that account was revoked by a user or an administrator answers
+403 `ZALO_DEVICE_REVOKED`; only `POST /api/auth/zalo/link`, which creates a newer session, lets the device in again.
+A session revoked for reuse does not block silent login. Sessions are deleted 30 days after they expired or were revoked
+(`Jobs:LoginSessionCleanup`), and from then on a device that was signed out is no longer remembered as such.
+
+`GET /api/me` and `GET /api/me/permissions` return the caller and their effective
+zone-scoped permissions. `GET /api/me` also carries `mustChangePassword` and `phoneVerificationRequired`, the same
+account state the gate behind the 403 `PASSWORD_CHANGE_REQUIRED` / MSG-ACCOUNT-04 answers uses, and stays reachable while
+either is true, so the web can route onboarding without waiting for a 403. Both can be true at once; the phone step
+comes first. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
+the SRS 27/10/2026 catalogue (`MSG-GEN-01`, `MSG-ACCOUNT-05`…) and whose `detail` is the SRS English text.   Success responses that carry a text carry its code next to it (`messageCode`,
+`noticeCode`).
+
+Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
+is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
+carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
+#### Session revocation store (Redis)
+
+Every authenticated request checks that its session is not revoked. With Redis configured, this is a lookup of
+`omts:auth:rev:s:{sessionId}` instead of a database query. The database stays the source of truth:
+- A saved revocation (logout, password change or reset, lock, refresh token reuse) is written to Redis right after the
+  commit, with a time to live of the access token lifetime plus one minute (about 16 minutes). Keys hold session ids only.
+- Every instance also copies the sessions revoked in that window from the database every 10 seconds
+  (`Revocation:SweepInterval`) and then renews the marker `omts:auth:ready` (60 seconds). A write that failed after the
+  commit is repaired by the next sweep, which is started at once; a revocation can therefore reach Redis up to about 10
+  seconds late when Redis was unreachable at that moment.
+- A request is answered from Redis only while the marker exists. When Redis is unreachable, slow (`Revocation:CommandTimeout`,
+  250 ms; three failures within 5 seconds stop all Redis calls for 10 seconds), empty after a restart or flush, or the
+  marker has expired, the request is checked against the database as before: a revoked session is still refused, a valid
+  one still accepted. `/health/ready` lists `session-revocation` as Degraded (still 200) in that state; it is not part of
+  `/health` or `/health/db`.
+- **A lock performed outside the application** (a trader account locked by a direct database change, any other script)
+  **must also set `RevokedAt` on that account's `LoginSessions`**. The Redis path no longer reads the account status, so
+  without it the account keeps working for up to 15 minutes (until the access token expires; a refresh is refused at
+  once). Locking in the application does both in one save.
+- Revocations must be saved through EF Core entities. A bulk `ExecuteUpdate` on `LoginSessions` bypasses the write after
+  commit and would be seen only by the next sweep.
+
+Configuration: `ConnectionStrings:Redis` (a secret, e.g. `redis:6379,password=...`; empty by default), `Revocation:Mode`
+(`Auto`, the default: Redis when the connection string is set, otherwise the database; `Redis`: the host does not
+start without the connection string; `Sql`: the database always), `Revocation:CommandTimeout`, `Revocation:SweepInterval`
+(1 to 30 seconds). Without a connection string nothing changes compared with before. Run Redis without persistence and
+without eviction (`maxmemory-policy noeviction`): evicting a key would silently drop a revocation until the next sweep
+notices, and a restart is harmless because the sweep refills it. `docker-compose.yml` does this.
+
+### Employee app login (LABOR-03, LABOR-06)
+
+An employee has no account. The employee app is a second kind of caller with tables of its own (`EmployeeLoginCodes`,
+`EmployeeDevices`, `EmployeeSessions`), a token of its own and an authentication scheme of its own, `EmployeeApp`.
+
+**Login code (LABOR-03).** `POST /api/employees/{id}/login-codes` (no body): the Cooperative Owner, or a Zone Manager who maintains the
+employee (a working zone among the zones of their pairs; `LABOR_WORKERS` Create). Another caller is 403 MSG-GEN-08, an unknown employee 404.
+201 `{ code, expiresAt, phoneNumber, employeeName, message, messageCode }` (MSG-LABOR-08); a Left employee, or one without a phone number, is
+409 MSG-LABOR-09 with `reason` `Left` or `NoPhone`. A code has 6 digits, works once, expires after 5 minutes and is cancelled by the 5th
+wrong entry; a new code cancels the earlier one (a filtered unique index keeps one open code per employee, also under parallel issuers).
+Only a keyed hash of it is stored (`IVerificationCodeHasher`, keyed by the row id with a key derived from `Jwt:SigningKey`), and it is never
+written to the audit log (`Employee.LoginCodeIssued` holds the expiry only) or to the logs. It is shown in this answer and sent to the
+issuer's own account as the notification `EMPLOYEE_LOGIN_CODE` (kept in their list, pushed unless they turn it off; its text holds the code,
+as MSG-LABOR-08 asks and for those 5 minutes); it is never sent to the employee. The answer is `Cache-Control: no-store` (and `Pragma: no-cache`),
+like the login and refresh answers that carry tokens. Rate limited per signed-in account, not per IP and apart from the anonymous code endpoints:
+`RateLimits:EmployeeLoginCodesPerMinute` (default 60, so a Zone Manager can issue a code for a whole crew; 429 `TOO_MANY_REQUESTS`). The limiter
+runs after authentication for this reason; a caller without an accepted token falls back to a per-IP bucket (and gets 401 anyway).
+When the 5th wrong entry cancels the open code, one audit row `Employee.LoginCodeCancelled` is written (the expiry and the number of tries, no
+code) and the account that issued the code gets a notification of type `EMPLOYEE_LOGIN_CODE` (message code MSG-LABOR-19, as the SRS has no
+message of its own for it; the text names the employee and holds no code). A phone number change or an end of employment also cancels the open
+codes. A per-employee limit on wrong entries across codes is not applied: a gap between wrong entries would have to skip the check of the code
+to stop a guess and would also lock out a real employee typing right after an attacker's wrong entry; the audit row and the notice are the
+countermeasure, and 5 tries over 10^6 codes keeps guessing hopeless.
+
+**Login (LABOR-06).** `POST /api/employee-app/login`, anonymous, `RateLimits:EmployeeAppLoginsPerMinute` per client IP (default 30, a policy of its
+own, not shared with the staff and Zalo logins; 429 `TOO_MANY_REQUESTS`); the answer is `Cache-Control: no-store`.
+Body `{ phoneNumber, deviceId?, deviceSecret?, loginCode?, platform?, deviceName? }`; the phone number is normalised like every other one.
+1. No employee who is Employed today has the number: 401 MSG-LABOR-18 (an unparsable number is 400 MSG-GEN-01).
+2. `deviceId` and `deviceSecret` of the employee's linked device: logged in with no code (LABOR-06.1). The secret is **rotated at every such
+   login**: the answer carries the new `deviceSecret`, which the app must store in place of the old one. Only one session per device stays open
+   (the login ends the earlier ones). The secret the last login replaced is kept as a hash; if it comes back (an app copied to another phone, or a
+   login whose answer was lost and then repeated), the device is unlinked with all its sessions, `Employee.DeviceUnlinked` is audited with the
+   reason "copied", and the answer is 401 MSG-LABOR-17: a new login code is the way back. A secret older than that is just wrong (also 401 MSG-LABOR-17).
+3. No `loginCode`: 401 MSG-LABOR-17 with `loginCodeRequired: true`.
+4. A code that is wrong, expired, spent or cancelled: 401 MSG-LABOR-19 (all the same answer; a wrong entry counts one of the 5 tries, an
+   expired code counts none). `platform` (`ios` or `android`) is checked first, 400, so a request that cannot link a device uses no try; so is
+   the format: an entry that is not exactly 6 digits is 400 MSG-GEN-01 and counts no try.
+5. A correct code is spent, the device linked before (if any) is unlinked with all its sessions, and this device becomes the linked one.
+
+Answer: `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, refreshTokenRotated, employee { id, fullName, type },
+deviceId, deviceSecret, qrKey, qrStepSeconds, serverTime }`. `deviceSecret` (256 random bits, stored only as a SHA-256 hash) is in the answer
+that linked the device and in the answer of each code-less login (which replaces it), nowhere else: the app keeps the latest with `deviceId` to log in again without a code. A refresh does not rotate it. `qrKey` is derived from the
+signing key and the device id, the same at every login of that device; the app signs its attendance QR code with it (LABOR-07, `qrStepSeconds`
+60), and `serverTime` lets it keep its clock in step offline. Linking audits `Employee.DeviceLinked` with the employee as the person (GBR-02).
+
+**Session.** The access token lasts 15 minutes. The refresh token (`POST /api/employee-app/refresh`, anonymous) lasts 30 days, sliding, 90 days
+at most (`Jwt:EmployeeRefreshTokenLifetime`, `Jwt:EmployeeSessionMaxLifetime`) and follows the rules of a staff refresh token: rotated on every
+refresh, the one it replaced is answered for `Jwt:RefreshGracePeriod` with `refreshTokenRotated: false`, any other old token is replay and ends
+the session; a refusal is 401 MSG19 with `reason` `expired`, `reuse` or `revoked`. `POST /api/employee-app/logout` ends the current session and
+keeps the device linked, so the next login on it needs no code. `PUT /api/employee-app/device/push-token` `{ pushToken, pushPermissionGranted }`
+sets the push token of the caller's device (empty clears it; at most 500 characters). Every request of the employee app asks the database
+whether the session is open, its device is still linked and the employee is Employed today (the day after the last working day, before the daily
+job has run, already counts as Left); employee sessions are not in the Redis revocation store.
+
+| Event | Sessions | Device |
+|---|---|---|
+| Logout | the current one | kept |
+| A code-less login on the linked device | the earlier ones (one session per device) | kept; secret rotated |
+| The replaced device secret presented again (a copy of the app) | all | unlinked (`CloneSuspected`) |
+| A code entered on another device | all | unlinked (`NewDevice`) |
+| The phone number of the profile changed or cleared (`PUT /api/employees/{id}`) | all; open login codes cancelled | unlinked (`PhoneChanged`) |
+| End of employment: a last working day before today, or the day after it (`EmploymentEndJob`) | all; open login codes cancelled | unlinked (`EmploymentEnded`) |
+| Resume | none (already unlinked) | a new code is needed |
+
+Each unlink is one audit row `Employee.DeviceUnlinked` (the person is the caller, the employee, or the system for the job).
+
+**Token isolation (BR-LABOR-02).** An employee token has the audience `Jwt:EmployeeAudience` (`omts-employee-app`, never equal to `Jwt:Audience`:
+the host does not start otherwise), is signed with a key derived from `Jwt:SigningKey` with a label of its own, and carries `employee_id`,
+`employee_session_id`, `employee_device_id` and `subject_type = Employee` but no `sub` and no `sid`. The default scheme (every plain
+`[Authorize]`, so every staff endpoint) refuses it, and only the endpoints that name the scheme
+(`[Authorize(AuthenticationSchemes = EmployeeAppAuthentication.Scheme)]`, today the `EmployeeAppController`) accept it and refuse a staff token. `ICurrentUser.AccountId`
+is null for an employee request, `ICurrentEmployee` (employee, session, device) is null for every other one. Tests sweep every endpoint in both directions.
+
+**Push to employees (BR-LABOR-04).** `IEmployeeNotifier` queues a push for the employee's linked device while one of its sessions is open and
+the device allows notifications; it keeps nothing (no account, no list). The development inbox lists it with `GET /api/dev/push?employeeId=`.
+
+### Roles and zone access
+
+OMTS has three fixed roles (BR-FARM-07): Cooperative Owner, Zone Manager and Accountant. They are not created, edited or
+discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZONE_MANAGER`, `ACCOUNTANT`) and their
+permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
+(`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
+until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
+its pairs; records with no zone (suppliers, purchase receipts and returns, supplier payments and debts, customers,
+payroll…) follow the role only, so an Accountant pair for one zone opens them (BR-FARM-08). The rafts a Zone Manager names on
+a purchase receipt line are still those of the zones of their Zone Manager pairs. A staff account without an Effective pair
+cannot log in.
+
+### Farming zones and licenses
+
+- Zones (FARM-02): `GET /api/zones/next-code` (Owner) proposes the next code `KV01`, `KV02`… (GBR-03: the highest `KVnn` in
+  use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
+  edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` .
+  The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
+- Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
+  the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
+  whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
+
+### Notifications
+
+Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
+it could not be pushed (BR-ACCOUNT-12). Each type of `NotificationTypes.All` has a push policy and the roles it is sent
+to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
+
+| Type | Content | Push | Roles |
+|---|---|---|---|
+| `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | always (mandatory) | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Zone Manager; Owner when the zone has none |
+| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
+| `EMPLOYEE_LOGIN_CODE` | MSG-LABOR-08, the login code of the employee app (LABOR-03), only to the account that issued it | unless turned off | Owner, Zone Manager |
+| `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | unless turned off | Owner |
+| `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
+| `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
+| `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
+| `LANE_DAMAGED` | a lane of a raft is reported damaged (12/11/2026), not to the Owner who reported it; message code `MINI_APP_NOTIFICATION` (no SRS message exists); opens the raft | unless turned off | Owner |
+| `LANE_OUT_OF_SERVICE` | a lane is put out of service (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
+| `LANE_PROGRESS_CHANGED` | the seeded or harvested percentage of a lane is changed by hand, `PUT /api/rafts/{raftId}/lanes/{n}/progress` (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
+| `NURSERY_RECORDED` | a nursery batch (ươm giống) is started, edited, cancelled, completed or its survivors or shares corrected (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the batch | unless turned off | Owner |
+| `HARVEST_LOT_AUTO_CLOSE_WARNING` | MSG-HARVEST-05, from the daily close check (GFR-05), once for each close date of a lot still for sale that the next check closes: to the Zone Managers of the zone (All zones too), or to the Owners when it has none | unless turned off | Owner, Zone Manager |
+| `CYCLE_CLOSE_REMINDER` | MSG-CYCLE-08, once per cycle, when a harvest makes every seeded lane Harvested: to the Zone Managers of the zone (All zones too), or to the Owners when it has none, not to the Owner who recorded it | always (mandatory) | Owner, Zone Manager |
+| `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
+| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
+| `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
+| `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it. A cancellation of a payment found Confirmed, with no `rowVersion` sent (it may have lost a race with a confirmation), is allowed and writes a second audit row `CustomerPayment.CancelledAfterConfirm` (payment code, reason, who confirmed it and when) beside `CustomerPayment.Cancelled` | always (mandatory) | Owner |
+| `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
+| `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
+| `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
+| `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | unless turned off | Owner |
+| `SALES_RETURN_RECORDED` | MSG-CLAIM-05, a new sales return (CLAIM-03); to the Accountants, only when money is owed back, the same message goes as `CUSTOMER_MONEY_OWED_BACK` | unless turned off | Owner |
+| `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | unless turned off | Trader |
+
+- Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
+  holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
+  turned off; list-only types are not offered. `pushAllowedOnDevice` is false when no device registered by a logged-in
+  session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
+- List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
+  list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
+  `title`/`body` and the `messageCode` with `messageParams`, a JSON object of atomic values (never an English phrase) from
+  which the apps build the text in Vietnamese or English; a push carries the same code and parameters. Dates are ISO
+  dates, times ISO 8601 with the Vietnam offset:
+
+  | Code | `messageParams` |
+  |---|---|
+  | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
+  | MSG-WATER-06 | `zone_name`, `last_date` |
+  | MSG-FARM-01 / MSG-FARM-02 (`ZONE_LICENSE_EXPIRY`) | `document_type` (license type code, null when none), `document_number`, `zone_codes` (list holding the license's one zone), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-CYCLE-02 | `raft_code`, `seeded_count`, `lane_count` (lanes In Use) |
+  | MSG-CYCLE-04 | `raft_code`, `visit_date` |
+  | MSG-HARVEST-05 | `lot_code`, `raft_code`, `close_date` (the day of the check that closes the lot, at its start) |
+  | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (whole VND: the sum of the lines, each rounded half up to the dong) |
+  | MSG-PURCHASE-04 | `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `supplier_name`, `debt_amount` (the debt after it; below zero: paid in advance) |
+  | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
+  | MSG-DEBT-03 | one transaction: `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `customer_name` (null: no customer profile), `debt_amount` (the debt after it; below zero: money owed back; null without a profile); a list of confirmations: `user_name`, `transaction_kind` = `Confirmations`, `confirmed_codes` (the first 10), `confirmed_count`, `confirmed_more_count`, `confirmed_amount`, `cancelled_codes` (the first 10), `cancelled_count`, `cancelled_more_count`, `cancelled_amount`, `amount` (both together), `debts`: `[{ customer_name, debt_amount }]` after the cancellations (the first 5), `debts_more_count`; the text names the same ("PT000001, …, PT000010 and 189 more"), so a list of 200 fits the notification row |
+  | MSG-TRACE-05 | `cooperative_short_name`, `lot_code`, `invoice_codes` (list), `cooperative_phone` (null: none set up yet, the text says "the cooperative") |
+- `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
+  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
+  notification id.
+- The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
+  sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
+  them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
+  are approved. The sales invoice (SALE-06, MSG-SALE-15) uses them too: `POST /api/sales-invoices/{id}/finish`
+  (`{ wantsQrCode }`, once, after the save: with a Yes, TRACE-01 first publishes the lots that are Not published and have all
+  their origin information, `GET /api/sales-invoices/{id}/publish-check` shows them beforehand; the QR code only when a lot is
+  Published; called again it answers the current
+  result and sends nothing) and `POST /api/sales-invoices/{id}/resend` (only after `finish`, not while the latest sending
+  is Sending; a Sending row older than 2 minutes reads Not sent); a profile without a trader account gets a row with no
+  recipient, and a walk-in customer or a profile without a phone gets a Not sent row with no phone (error code
+  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). The withdrawal of a lot's origin information (TRACE-04, Owner
+  only: `GET /api/harvest-lots/{id}/withdraw-preview`, `POST /api/harvest-lots/{id}/withdraw` with `{ reason }`) uses them
+  too: one MSG-TRACE-05 per trader of the current invoices of the lot, listing their invoices, kept with the lot as its
+  record; a profile without a phone gets a Not sent row (`NO_PHONE_NUMBER`), a walk-in invoice nothing. The notices are
+  sent at the same time after the save (the answer waits about one send). The answer lists each notice with its delivery
+  status; a failed send undoes nothing and is marked `toCall`; `GET /api/harvest-lots/{id}/withdrawal-notices` reads the
+  notices of the latest withdrawal again. There is no resend. Texts and parameters longer than their columns (2000) are
+  cut / left out, as for list rows.
+- Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
+  water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
+  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
+  commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
+  recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
+  at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
+  never a bank account number. The SMS of a list of confirmations and cancellations (`CUSTOMER_PAYMENT_TRANSACTION`,
+  `MoneyToOwnerSplit`, PM answer of 12/11/2026) shows the two totals apart, "Customer payment transaction: thu 5,000,000 VND,
+  huy 300,000 VND." (a part of 0 is left out); the `amount` of the push and the list stays their sum. Operational texts read as their fields do, digits included. At 160 the values, allowed
+  ranges, time, expiry date and, for a new purchase request, kg and pickup date stay; in order the free text gives way to
+  a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
+  closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
+  and the account id only, never what a provider answered.
+
+### Public provenance page
+
+`GET /api/public/provenance/{qrToken}?lang=vi|en` (ORIGIN-01, SCR-ORIGIN-01) is what the web page `/origin/{qrToken}` of the
+invoice QR code loads. It needs no login and a logged-in user gets the same answer (BR-ORIGIN-01); it is limited per client IP
+(`RateLimits:ProvenancePagesPerMinute`, 429 `TOO_MANY_REQUESTS`) and sent with `Cache-Control: no-store`, so each opening shows the
+current data (BR-TRACE-05: a TRACE-03 correction or a new publish shows at once). The token is the 128-bit random base64url code
+SALE-05 gave the invoice (22 characters); only the exact code opens the page.
+
+- `lang`: `vi` by default (BR-ORIGIN-02, anything but `en` is Vietnamese). The messages (`message`) and the cooperative
+  introduction follow it (the Vietnamese introduction when the English one is empty); every message also carries `messageCode` and
+  `messageParams` (atomic values: `cooperative_short_name`, `lot_code`, `withdrawal_date`, `cooperative_phone`). 
+- 200 `{ language, status, message, messageCode, messageParams, invoice: { code, date } | null, cooperative, lots[] }`:
+  - `status` `Ok`: `lots` holds the lots of the invoice that are Published or Withdrawn, in line order, each `{ lotCode, products
+    (names sold from the lot on this invoice), originState, withdrawalDate, message, messageCode, messageParams, origin }`. A
+    Published lot has `origin { harvestDate, raftCode, zoneName, map { latitude, longitude, source: Raft | Zone } | null,
+    seedings[{ seedingDate, seedItemName }], daysOfFarming, harvestPhotoUrls[], raftPhotoUrls[] }` (signed URLs, 1 hour); a
+    Withdrawn lot has `withdrawalDate` and MSG-ORIGIN-01, never the reason, and `origin: null`. Not published lots are not listed.
+  - `NoLots`: no lot is Published or Withdrawn, MSG-ORIGIN-02. `Cancelled`: the cooperative block only (`invoice: null`), MSG-ORIGIN-04.
+  - `cooperative` is the FARM-01 public block (BR-FARM-09): `fullName, shortName, yearEstablished, officeAddress, phoneNumber, email,
+    website, socialLink, logoUrl, coverPhotoUrl, introduction, certifications[{ name, number, issuer, expiryDate, state, fileUrl }]`
+    (not Expired).
+- 404 MSG-ORIGIN-03 (in `lang`) for a code no invoice has, also for a link that is no code at all.
+- Never in the answer (BR-ORIGIN-04, NFR-03; a test fixes the exact set of properties): the customer, prices, amounts, payments,
+  debts, any kg, returns, claims, suppliers, seed lot or receipt codes, the tax code, the bank account, the withdrawal reason or any
+  internal id. 
+
+### Sales invoices
+
+SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, the Zone Manager of the zone and the Accountant view; the three also print and export (the Accountant holds Export on `SALES_INVOICES` since the PM answer of 12/11/2026, OMTS-224 [5.1]). Any other zone answers 403 MSG-GEN-08.
+
+- `GET /api/sales-invoices`: newest first, paged (`page`, `pageSize` up to 100). Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to today, at most 5 years, else MSG-GEN-01), `zoneId`, `customerId`, `harvestLotId`, `raftId` (a line of a lot of the raft), `statusId`, `code` (part of the code, `%`, `_`, `[` are plain text), `orderCode` (part of the code DH of the purchase request the invoice fulfils, read like `code`; a sale without a request never matches; each row has `orderCode`, null without a request), `paid` (true/false; a Cancelled invoice matches neither) and `cashCollectedByMe=true` (cash this caller collected that is Awaiting confirmation; each row then has `cashAwaitingConfirmation`). No match: 200 with an empty page and MSG-GEN-10 in `message`. A row has `code`, `invoicedAt`, `zone`, `customer` (null for a walk-in), `total`, `status`, `paymentTerm`, `isPaid` (null for a Cancelled invoice), `unpaidAmount` and `deliveryStatus`. `completedTotal` is the total of every Completed match, not of the page; `isPaid` comes from the debt allocation (BR-DEBT-05), a walk-in invoice from its own payments.
+- `GET /api/sales-invoices/{id}`: the invoice with `lines`, `payments`, `sendings`, `priceCuts`, `debtEffect` (`isPaid`, `covered`, `unpaid`, `countsInCustomerDebt`, `customerDebt`) and `allowedActions` (SALE-09.1 step 3). The same fields are in the answers of `POST` create, `finish` and `resend`.
+- `GET /api/sales-invoices/export` (the filters above, every page) and `GET /api/sales-invoices/{id}/print`: an `.xlsx` file for download and print, Export right in the zone of the invoice (403 MSG-GEN-08 elsewhere). Text is never a formula. An empty list is a header and a zero total. The list file holds at most 5,000 invoices (the list sheet has an `Order` column): a larger selection is 400 MSG-GEN-01 naming the field `Filters` (narrow the period or the filters) and nothing is written; at most 5,001 matches are read. The limit counts the matches before the `paid` filter narrows them.
+
+`allowedActions`, on the rules of the SRS:
+
+| Value | Offered to | When | Endpoint today |
+|---|---|---|---|
+| `Resend` | Zone Manager of the zone, Owner | not Cancelled, the sale is finished, the latest sending is not Sending | `POST /api/sales-invoices/{id}/resend` |
+| `CreateReturn` | Zone Manager of the zone, Owner | not Cancelled, no sales return that is not cancelled | `POST /api/sales-invoices/{id}/sales-return` |
+| `CancelReturn` | Owner | a sales return that is not cancelled | `POST /api/sales-returns/{id}/cancel` |
+| `Edit` | `SALES_INVOICES` Edit in the zone (the Owner; no other role has it until it is given) | Completed, no sales return that is not cancelled | `PUT /api/sales-invoices/{id}` |
+| `Correct` | `SALES_INVOICES` Edit in the zone (the Owner) | Completed, no sales return that is not cancelled | `PUT /api/sales-invoices/{id}/correction` (a price cut only) |
+| `Cancel` | `SALES_INVOICES` Delete in the zone (the Owner) | Completed, no sales return that is not cancelled | `POST /api/sales-invoices/{id}/cancel` |
+| `Print` | Whoever has Export in the zone | always | `GET /api/sales-invoices/{id}/print` |
+
+The endpoints refuse exactly what this table does not offer (`SalesInvoiceAllowedActions.ChangeRefusal`): 403 MSG-GEN-08, 409 MSG-GEN-09 for a Cancelled invoice, 409 MSG-SALE-20 with a sales return. The detail also has `corrections` (kind, date, reason, total before and after, from the audit log) and `lastCorrectionKind`, `lastCorrectedAt`, `lastCorrectionReason`; a Cancelled invoice has `cancelledAt` and `cancelReason`. The statement of a customer shows the corrections, price cuts and cancellation under each invoice (BR-DEBT-04).
+
+Every sales invoice is made from an order (DH, see Sales orders below). Who may change one is a permission of the zone of the invoice, not a role: `SALES_INVOICES` Edit for an edit and a price cut, `SALES_INVOICES` Delete for a cancellation. Only the Owner holds them (the Zone Manager has View, Create and Export) until the cooperative gives them to another role.
+
+- `GET /api/sales-orders/{id}/invoice-draft` ("Xử lý đặt hàng", `SALES_INVOICES` Create in some zone, 409 MSG-ORDER-05 when the order is not Draft or Delivering): the invoice the order proposes; `zone` is the zone of the first lot it proposes, null without one. `lines[]` are the order lines with `orderedQuantity`, `deliveredQuantity`, `quantity` (what is still to deliver, never below 0; a line already delivered in full stays with 0 so it can be added to), the price and unit of the order line, and `suggestedLotId` (a lot recorded from a harvest plan that serves the order first, then another open lot of any zone the caller may invoice in with the product; `GET /api/harvest-lots/for-sale?salesOrderId=` lists the lots with the same order). Also `subtotal`, `orderDiscount`, `discountShare` (the order discount in proportion to the goods of this invoice, rounded half up, never more than the earlier invoices left of it), `advanceLeft`, `advanceUse` and `nextCode`. Nothing is saved.
+- `POST /api/sales-invoices`: `salesOrderId` is required (400 field `Sales order`; the old request link is refused for a new invoice). The customer is the order's: `customerId` and `walkInCustomer` may be sent but must match (400 MSG-ORDER-06). The order has no zone: the invoice takes the zone of its first lot and a `zoneId` sent is ignored. A line names `harvestLotId`, `kg` (always weighed: the stock ledger counts kg), `salesOrderLineId?`, `unitId?` (the kg unit of the product when left out) and `quantity` (required for a unit other than kg; for kg it is the kg). The price is that of the order line (the unit sale price for a line outside the order); a Zone Manager who enters another price is asked MSG-SALE-10, the Owner is not. The money of a line is `quantity × unitPrice` in its unit, rounded half up; the kg ledger takes the kg and, for a unit other than kg, the amount over the kg as its price. `code?` (1–30 of `A-Za-z0-9._-`, unique regardless of case, at most 25 with VietQR), `note?`. The discount is entered (the draft proposes the share of the order discount): a Zone Manager is not asked about a discount that is within that share. The advance the customer paid on the order pays first (parts set against the invoice in the same save), then the cash, Pay later and VietQR rules apply to what is left. 201 adds `order` (`id`, `code`, `statusId`, `status`, `canFinish`) and `orderCanFinish`: the order is open with lines not fully delivered, so the web asks "Kết thúc đơn đặt hàng?" and calls `POST /api/sales-orders/{id}/finish`. The first invoice moves a Draft order to Delivering; the order is Completed by itself when every line is delivered in full. A VietQR sale carries the order in its snapshot; when the transfer arrives it is saved whatever the order's status has become (the audit log notes an order that was ended meanwhile).
+- `PUT /api/sales-invoices/{id}` (Edit; the `rowVersion` read is required, a stale one answers 409 MSG06): changes a Completed invoice like a purchase receipt: `code?`, `lines` (all of them, same fields as above), `notSoldWholeLotIds`, `discount`, `otherCharges`, `note` (left out, kept). The customer and the zone stay. The debt moves by the difference of the totals (it is never stored). A line that changed is posted again on the product ledger (the old rows reversed), an unchanged line writes nothing; a lot's "sold the whole lot" tick closes or reopens it only when the tick changed. The invoice cannot hold more of the advance of its order than it now needs: its newest parts are cut, the earlier advance is kept. The order's delivered quantities are read again (it completes when everything is delivered; it never reopens because an invoice got smaller). A total under what was paid leaves a debt below zero: 409 MSG-SALE-17 until `confirmOwedBack` is sent (the advance returned to its open order is held, not owed back). The code cannot change once a VietQR transfer paid the invoice (400 `Code`); a taken code answers 409 MSG-GEN-02. Audit: one `SalesInvoice.Corrected` event with the values before and after; the invoice is sent again (`(corrected)`).
+- `GET /api/sales-invoices/next-code` offers the next code; `GET /api/sales-invoices/open-purchase-requests` is deprecated and answers `[]`. The list takes `salesOrderId`; a row and the detail have `salesOrder` `{id, code}` (null for an invoice saved before invoices came from orders); a line has `unit` `{id, code, name, factor}`, `quantity` and `salesOrderLineId`; the detail has `note`.
+
+SALE-07 `PUT /api/sales-invoices/{id}/correction` and SALE-08 `POST /api/sales-invoices/{id}/cancel` (`reason` and the `rowVersion` read are required; a stale version answers 409 MSG06, so two parallel changes apply once). Questions are answered by sending again the field named in `confirmationField`.
+
+- Correction `kind` `PriceCutAfterClaim` only: `priceCutAmount` above 0 and at most the total; the lines stay, and price cuts add up (AC-08). A walk-in invoice given money back needs `customerId` (MSG-SALE-19); a price cut takes `customerId` only then, otherwise MSG-GEN-01. `kind` `DataEntryError` answers 400 with a hint: use `PUT /api/sales-invoices/{id}`.
+- A walk-in invoice cannot have its total raised (MSG-SALE-21), also when the same correction attaches a profile. A debt below zero after the change answers MSG-SALE-17 until `confirmOwedBack` is sent, then notifies the Owners and the Accountants (MSG-SALE-18, type `CUSTOMER_MONEY_OWED_BACK`).
+- The correction is sent again after its commit (`(corrected)`); before the end of the sale nothing is sent, the end of the sale does.
+- Cancel (also taking the advance back): the Sale rows of the product ledger are reversed, the parts of the order's advance set against the invoice are removed (the advance is the order's again and is never cancelled with the invoice), a Completed order is Delivering again, and the other statuses stay. Each cash payment Awaiting confirmation is asked (MSG-SALE-23, `cashGivenBack: [{paymentId, givenBack}]`); only a Yes cancels it. A walk-in invoice with payments kept needs `customerId` (MSG-SALE-19). Only the lots this invoice closed reopen; a request it took in full is no longer Fulfilled, and every figure ignores it from its status. The trader gets MSG-SALE-22 (type `SALES_INVOICE_CANCELLED_MESSAGE`, not a sending of the invoice message) when the profile has a phone; failing to send never undoes the save (GFR-06).
+
+Migration `20261109053538_SalesInvoiceCorrectionAndCancellation` only adds nullable columns.
+
+- Weighing at the port (decision of 09/11/2026): after the harvest each cage is weighed, the trader confirms the figures, and the invoice is made from that weighing. `POST /api/port-weighings` (`purchaseRequestId`, `lots: [{ harvestLotId, cageKgs }]`; SALES_INVOICES Create in the zones of the lots) for an Accepted request that is not Fulfilled, one weighing waiting for the trader at a time; `PUT /api/port-weighings/{id}` (`lots`, `rowVersion`) corrects it until it is confirmed; `GET /api/port-weighings?purchaseRequestId=` and `GET /api/port-weighings/{id}` read it. The trader: `GET /api/me/port-weighings`, `GET /api/me/port-weighings/{id}` and `POST /api/me/port-weighings/{id}/confirm` (`rowVersion`: figures corrected since they were read answer 409). A weighing has `customerId`, `lots` with `cageKgs`, `cageCount`, `totalKg`, `confirmedAt`, `invoiceId` and `invoiceCode`.
+- Public provenance page (BR-ORIGIN-01, BR-ORIGIN-05): `GET /api/origin/{qrToken}`, anonymous, the token at the end of the QR link of an invoice. It lists the Published lots of the invoice with their origin (products, zone and raft, seed lots and suppliers, seeding dates, cultivation logs, the average water of the zone while the lot grew, harvest, the kg sold and the cages weighed) and a Withdrawn lot only with its withdrawal time; never the customer, the staff or a price (decided 10/11/2026). An unknown token, a cancelled invoice or one with no published lot answers 404.
+- Port weighing is on hold (decision of 17/11/2026): an invoice is made from an order (DH), not from a weighing, and a harvest lot no longer names a purchase request (it is tied to a line of a harvest plan). `POST /api/sales-invoices` takes no `portWeighingId` and takes `kg` itself; the weighing endpoints stay as they are until the weighing is redesigned to give the kg of the order lines and keep the trader's confirmation. `lines[].cageKgs` and `portWeighingId` remain on invoices saved before this decision.
+- `GET /api/me/invoices` (`page`, `pageSize` up to 100, newest first; MSG-GEN-11 in `message` when empty) and `GET /api/me/invoices/{id}`: the logged-in trader's own invoices with `cageKgs`, the money, the payments and `qrUrl`, without the staff data. Staff get 403 MSG-GEN-08; an invoice of another profile is 404.
+
+
+
+### Sales orders (Đặt hàng, DH)
+
+An order of goods (`DH000001`, the code can be typed, unique regardless of case) is what every sales invoice is made from. Statuses: Phiếu tạm (`Draft` 4401) → Đang giao (`Delivering` 4402) → Hoàn thành (`Completed` 4403) or Đã hủy (`Cancelled` 4404). An order has no zone (`SalesOrders.ZoneId` is null for a new order; old orders keep theirs, unused): the harvest plan decides which zones harvest for it, and `SALES_ORDERS` is cooperative-wide. The Owner saves any order; a Zone Manager (`SALES_ORDERS` View/Create/Edit) takes the buyers at the port (`source` `AtPort`) and changes and finishes every order, but never cancels one (Delete is the Owner's); the Accountant has View/Export and may add an advance (`CUSTOMER_PAYMENTS` Create).
+
+- `GET /api/sales-orders`: paged (`page`, `pageSize` up to 100), newest code first. Filters: `search` (order code, customer code, name or phone), `statusIds` (repeat), `from`/`to` (order day), `pickupFrom`/`pickupTo`, `customerId`, `source`, `createdById`, `receivedById`; `sortBy` `code`|`orderedAt`|`pickupAt`|`total`, `sortDir`. `summary` adds up `total`, `invoiced` and `customerPaid` of the matches that are not cancelled. `GET /api/sales-orders/export` (same filters, Export right) is an `.xlsx`; `GET /api/sales-orders/{id}/print` one order as `.xlsx`.
+- `GET /api/sales-orders/{id}` and `GET /api/sales-orders/by-code/{code}`: the order with `lines` (unit, quantity, price, `listPrice`, `deliveredQuantity`), `progress` per unit, `advances`, `invoices` (code, time, total, status, creator; cancelled ones too), `invoicedTotal`, `customerPaid`, `purchaseRequest`, `allowedActions` (`Edit`, `Finish`, `Cancel`, `AddAdvance`, `Process`, `PlanHarvest`, `Print`) and `rowVersion`. `GET /api/sales-orders/next-code` offers the next code without spending it.
+- `POST /api/sales-orders` (201): `customerId` or `walkInCustomer: true`, `source` (`App`|`Phone`|`AtPort`), `lines[{productId, unitId, quantity, unitPrice?, priceDecidedByOwner, note?}]` (the unit is one of the units of the product; the price defaults to the list price of the unit), `discount`, `pickupAt`, `receivedById`, `note`, `code?`, `advance?`, `deduplicationKey`. A price other than the list price, or a discount, asked by a Zone Manager answers the 409 question MSG-SALE-10 (send the flag named in `confirmationField` with the same request). A repeated `deduplicationKey` returns the first order. A taken code answers 409 MSG-GEN-02 with `field` `Code`.
+- `advance` `{amount, method: Cash|OtherTransfer|VietQr, cashAccountId?, bankReference?, collectedById?, paidAt?, note?}` is saved with the order and is a customer payment that names it: cash is Awaiting confirmation until the Accountant confirms it, a transfer needs its bank reference, VietQr makes a code that waits for the transfer (`advanceQr`). The total of the advances stays at most the total of the order, and a walk-in buyer pays none (400 field `Advance`). `POST /api/sales-orders/{id}/advances` adds one later (same body, 201 with the order, the advance and `qr`); `PUT /api/sales-orders/{id}` takes the same block as a new advance in the same save. The view lists every advance payment under `advances`, whatever its status.
+- An advance is reserved for its order while the order is Draft or Delivering: it lowers the customer debt (the customer has paid) but no oldest-first or other allocation uses it for another invoice, and the debt screens list it apart as `reservedAdvances` ("Tiền ứng của DH…"). When the order is Completed or Cancelled what is left is general credit and the normal allocation applies. Money paid back and the limit of a payment above the debt read the debt apart from the reserved advances.
+- `POST /api/sales-orders` with `purchaseRequestId` (Owner only, the profile of the request, `source` `App`): the request becomes Ordered (3206) in the same save and its trader is told (MSG-ORDER-04, the channel of the response to a request). `GET /api/sales-orders/request-draft/{requestId}` prefills the form. A request that has its order answers 409 MSG-ORDER-02 with `existingId`; a Declined, Cancelled or Fulfilled one answers 409 MSG-GEN-09; a request accepted before orders existed (not Fulfilled) can be ordered. A request placed by a trader in the Mini App (`POST /api/me/purchase-requests`) makes its own Draft order at once (customer of the request, `source` `App`, one line in the Lồng unit of the product, or in kg at the average kg per cage when it has none, priced at the sale price of the unit, "Người nhận đặt" the first active Owner) and is Ordered in the same save, so the Owner does not enter it again; the answer keeps its shape and adds `salesOrderCode`, and the trader cannot cancel an Ordered request. A product with no unit leaves the request as it was.
+- `PUT /api/sales-orders/{id}`: replaces the header and the lines of a Draft or Delivering order (`rowVersion` required; lines of the same product and unit keep their id; an `advance` block adds a new advance in the same save; the answer is the saved order with `advanceQr`, as for a new order). `POST /api/sales-orders/{id}/finish` (Delivering → Completed) and `POST /api/sales-orders/{id}/cancel` (`reason` required, Owner) answer the order and `creditLeft`. Cancelling an order that has an invoice that is not cancelled answers 409 MSG-ORDER-01 (finish it instead).
+
+### Harvest plans (KHT)
+
+The Owner plans a harvest of the rafts of any zones (`KHT000001`, a code the user types is kept; taken in any letter case answers 409 MSG-GEN-02 with `field` `Code`). A plan has a planned time (date and time), lines (`raftId`, `laneNumbers`, `expectedCageCount?`, `note?`; the zone of a line is the zone of its raft, its product that of the raft's cultivation cycle) and may serve any open orders (one plan many orders, one order many plans). A plan has no zone of its own: the view lists `zones` and each line its `zone`. Statuses: Draft 4201, Assigned 4202 ("Giao QLV", the Zone Managers of every zone of the plan are told, MSG-PLAN-05), Harvesting 4203 (the first lot or the first lane left out), Completed 4204 (every line has its lot or every lane left out, or the Owner finishes it), Cancelled 4205. A Zone Manager sees only the plans handed over that have a line in its zones, and only those lines, and harvests from them; it never makes or changes one (`HARVEST_PLANS` View only).
+
+- `GET /api/harvest-plans` (filters `search` = plan, raft or order code, `statusIds`, `from`/`to`, `zoneId`, `salesOrderId`, paging), `GET /api/harvest-plans/{id}`, `/by-code/{code}`, `/next-code`, `/assigned` (Assigned and Harvesting plans with a line in the zones the caller harvests), `/eligible-rafts?zoneId=` (Owner: the rafts In Use with an Open cycle and a harvestable lane, with zone, product and lanes `Free`, `InAnotherPlan` or `Harvested`), `/order-draft/{orderId}` (Owner: pickup time and products of an order, with the cages worked out from a Lồng unit).
+- `POST /api/harvest-plans`, `PUT /api/harvest-plans/{id}` (`rowVersion`, lines carry their `id`), `POST .../assign`, `.../finish`, `.../cancel` (`reason`). A lane may wait in one open plan only (409 MSG-PLAN-02); after the hand-over a line with its lot or a lane left out must come back unchanged (409 MSG-PLAN-03); a plan that has started cannot be cancelled (409 MSG-PLAN-04).
+- `POST /api/harvest-plans/{id}/lines/{lineId}/skip-lanes` (`laneNumbers`, `reason`; "Không thu", the Owners are told, MSG-PLAN-06) and `.../unskip-lanes` while the line has no lot.
+- `POST /api/rafts/{raftId}/harvest-lots` takes the form field `harvestPlanLineId`: the lanes are then those of the line without the lanes left out (`laneNumbers` is ignored), the lot carries `harvestPlan {id, code}` and the plan moves on; one line makes one lot (409 MSG-PLAN-03). Removing the lot opens the line again (and a plan that finished by itself becomes Harvesting). A correction keeps to the lanes of the line (409 MSG-PLAN-01). `GET /api/harvest-lots/for-sale?salesOrderId=` lists the lots of the plans that serve the order first (`suggested`), each with `harvestPlanCode`. The order view lists its plans under `harvestPlans`.
+
+### Quality claims (CLAIM-01, CLAIM-02)
+
+A trader reports a quality problem on one of their invoices with photos; the Cooperative Owner responds, and when the response is an offer the trader accepts or declines it (PM answer 12/11: the Owner proposes, the trader chooses). A claim changes neither the invoice nor the customer debt (BR-CLAIM-01/02).
+
+- `POST /api/me/sales-invoices/{id}/quality-claims` (trader, multipart: `description` up to 2000 characters, one `photos` part per photo, 1 to 10 JPEG or PNG of at most 10 MB; 201 with the claim, code `KN000123`, and MSG-GEN-05). Only an invoice of the trader's own profile (a profile merged into theirs counts; else 404) that is not cancelled, has no sales return (sales returns come with CLAIM-03: the check is the seam `IInvoiceSalesReturnCheck`) and has no other open claim, Awaiting response or with an offer the trader has not answered (409 MSG-GEN-09, one filtered unique index per invoice). A photo that cannot be uploaded answers 502 MSG-GEN-03 and saves nothing. The Owner gets MSG-CLAIM-01 (not a mandatory type). A finished claim (rejected, accepted or declined) does not stop a new one and OMTS sets no time limit.
+- `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer, `offerAmount`, the response note and the `answer` of the trader (note, time). The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
+- `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
+- `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", priceCutAmount?, note?, rowVersion }`; the claim becomes **Offer made**, 3704; `priceCutAmount` is its own field, required for a price cut, above 0, at most the invoice total, whole dong, and refused for a return: 400 MSG-GEN-01 `Price cut amount`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader accepts. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
+- POST /api/me/quality-claims/{id}/accept-offer and /decline-offer (trader, { note? } up to 1000 characters): the trader of the claim answers an offer once, while it is Offer made; the claim becomes Accepted (3703) or Offer declined (3705), with nswer on the claim and an audit row (QualityClaim.OfferAccepted / OfferDeclined). 200 with the claim and MSG-GEN-05; 404 for another trader's claim; 409 MSG-GEN-09 when the claim is not waiting for an answer (a second answer sees the status that won). The Owner is not notified of the answer (no message of the SRS for it, see the PM question); migration ClaimOfferMadeAndAnswer moved the claims accepted before to Offer made.
+
+
+### Sales returns (CLAIM-03)
+
+A sales return takes back all the goods of one invoice (BR-CLAIM-03); there is no partial return. The Zone Manager of the invoice's zone and the Owner record it (`SALES_RETURNS` Create; an Accountant has no access); it is made with or without a claim, and a claim is not linked to it (BR-CLAIM-02). Code `TL000123` (PM answer 12/11: `TH` is the purchase return's).
+
+- `GET /api/sales-invoices/{id}/sales-return/preview` (`?customerId=` the profile chosen for a walk-in invoice): the lines with their lots and statuses, `value` (the invoice total at its latest values), the debt before and after (`debtAfter`), the claims of the invoice, `requiresCustomer`, `ownerMustAgree` and `rowVersion`.
+- `POST /api/sales-invoices/{id}/sales-return` `{ reason, rowVersion, lines: [{ invoiceLineId, outcome: "BackForSale" | "ThrownAway" }], customerId?, ownerAgreed?, thrownAwayLots? }` answers 201 `{ return, debtAfter, owedBack, message, messageCode }`. A Zone Manager is asked MSG-CLAIM-04 (409, `confirmationField: ownerAgreed`). A walk-in invoice needs `customerId` (MSG-GEN-01): the invoice and its payments move to that profile first. A lot whose oysters are thrown away and that is still for sale is asked MSG-HARVEST-02 (`thrownAwayLots: [{ harvestLotId, stillForSale, leftoverKg?, closeReason? }]`); a lot that also takes oysters back for sale on the same return is not asked. A Zone Manager who ticks the close of a lot of another zone gets 403 MSG-GEN-08 with the lot named: the whole return is refused and the text says to untick the close or ask the Owner (PM answer 12/11).
+- The value takes the invoice out of the customer debt (BR-DEBT-02, shown in the statement of the customer on the return date), the return covers the invoice in the allocation (BR-DEBT-05), and the invoice is locked (SALE-07, SALE-08: 409 MSG-SALE-20). When the debt is now below zero the Owners see it in MSG-CLAIM-05 (type `SALES_RETURN_RECORDED`) and the Accountants get MSG-CLAIM-05 too (type `CUSTOMER_MONEY_OWED_BACK`) with the request to pay the money back (DEBT-02).
+- `GET /api/sales-returns/{id}`: the return with its lines and, for lots back for sale, `remainingKg` and `remainingAfterCancelKg` (SALES_RETURNS View in the zone). The invoice detail has `salesReturns` (cancelled ones included).
+- `POST /api/sales-returns/{id}/cancel` (Owner only, `{ reason, rowVersion, confirmNegativeRemaining? }`): the return counts nowhere and the invoice can again be corrected or cancelled. MSG-CLAIM-06 is the warning first when the kg that went back for sale were sold since (the remaining kg goes below zero). A return can be cancelled after the customer was paid back: nothing blocks it, the money paid back stays as it is and the debt goes up again (PM answer 12/11). Each lot keeps its status, whatever happened since; nothing reopens or closes. A cancellation sends no notification.
+- Lot figures (BR-HARVEST-07): returned, back-for-sale and discarded kg of returns that stand go into `IHarvestLotSalesQuery`, so HARVEST-04 and the remaining kg follow. TRACE-02 lists the returns under each invoice; a lot whose returned oysters were thrown away is left out of its invoice's provenance page; a TRACE-04 notice leaves out invoices taken back by a return (BR-TRACE-07).
+- Concurrency: a parallel correction, cancellation, payment or second return touches the same invoice or profile row, so one fails with 409 MSG06 (or MSG-GEN-09 with a filtered unique index on the invoice when the winner is a return); nothing is applied twice. The notification goes out after the commit.
+
+Migration `SalesReturns` is additive: two new tables, the `SALES_RETURN` statuses (4101, 4102) and transition 240.
+
+### Sales reports (REPORT-01 to REPORT-03)
+
+Analyze sales performance: revenue, price cuts, sales returns, net revenue and kg by customer, product, zone or period. `SALES_REPORTS` View (and Export for the file): the Cooperative Owner and the Accountant (§I.4.4); any other caller gets 403 MSG-GEN-08, no token 401. Worked out each time, nothing stored, no migration (BR-REPORT-01, as BR-FARM-10).
+
+- `GET /api/reports/sales-performance?from=&to=&groupBy=&zoneIds=&customerIds=&productIds=` (the three id lists are repeated parameters). Period: the current month by default, at most 5 years; `groupBy` is `customer` (default), `product`, `zone`, `day`, `week` or `month`. Answer: `{ computedAt, from, to, groupBy, filters { zones, customers, products }, groups[], totals, message, messageCode }`; a group has `key`, `label`, `invoiceCount`, `invoicedKg`, `revenue`, `priceCuts`, `salesReturns`, `netRevenue`, `soldKg`, and for the customer grouping `netMoneyReceived`, `receivable`, `owedBack` and `netDebt` (null for the walk-in row and for the other groupings). No invoice in the selection: 200 with empty `groups`, zero `totals` and MSG-GEN-10 in `message`. A start after the end, a longer period, an unknown grouping, zone, customer or product id: 400 MSG-GEN-01 naming every field (`Grouping`, `From date`, `To date`, `Zone`, `Customer`, `Product`). A zone outside the caller's pairs: 403 MSG-GEN-08 (as SALE-09); without `zoneIds` only the zones of the caller's pairs count.
+- `GET /api/reports/sales-performance/invoices?...&groupKey=` (the same query and the `key` of a group): `{ from, to, groupBy, groupKey, invoices[{ id, code, date, customer, zone, total, returnValue, net }], message, messageCode }`, newest first; `net` is the total minus the value of the sales return that stands. A key with no invoice: MSG-GEN-10; no key: 400 `Group key`.
+- `GET /api/reports/sales-performance/export?...`: `sales-performance-{groupBy}-{from}-{to}.xlsx`, Export right. Sheet `Sales performance` holds the groups and a `Total` row, sheet `Choices` the period, the grouping and the zones, customers and products chosen. An empty selection gives the headers and a zero total row.
+
+Definitions: an invoice is in the period by its invoice date (business date, UTC+7), Cancelled ones never count and a corrected invoice counts at its latest values, in the zones of the caller's pairs by the zone of the invoice. Revenue is the invoice total (already lower by the price cuts, as the daily revenue of FARM-06); price cuts are shown apart from discounts; sales returns are the values of returns that stand (not cancelled), counted in the period of their invoice whatever the date of the cut or the return; net revenue is revenue minus sales returns; invoiced kg and sold kg follow BR-HARVEST-07 (sold = invoiced minus returned). By product, the rows are the line amounts plus rows `discounts`, `other-charges` and `price-cuts` (each with the same part of the sales return of its invoice), so the rows add up to the revenue and the net revenue; a product filter keeps the invoices that have the product on a line. Weeks are ISO weeks (Monday start) and every period `key` is the first day of the bucket (`yyyy-MM-dd`). By customer, walk-in invoices are one row (`walk-in`); `netMoneyReceived` is the Completed payments minus money paid back dated in the period; the customer debt (`CustomerDebtMath`, with discounts and adjustments) of everything dated up to the end of the period, payments Awaiting confirmation included, is split as DEBT-03 does: `receivable` is the debt above 0, `owedBack` what the cooperative owes the customer (a positive amount) and `netDebt` the signed debt, and the totals add each of them (PM answer 12/11: the money owed back is not hidden in the receivable). Money received and paid back with no customer (the payments of walk-in sales, transfers completed with no customer) is one more row, key `unassigned`, so `netMoneyReceived` of the total matches the payments of the period; it is left out when customers are chosen. None of the money figures follows the zone filter, and the customer rows only list customers with an invoice in the selection. REPORT-02 and REPORT-03 reuse `ReportFilterResolver` (right, zones, period, ids), `ReportPeriodBuckets` and `ReportExportFile` under `Features/Reports`.
+
+#### Price trends (REPORT-02)
+
+Same right, zones, period and answers as REPORT-01 (no data: 200 with MSG-GEN-10 in `message`; zone not accessible 403 MSG-GEN-08; unknown ids and wrong period or unit 400 MSG-GEN-01 naming `From date`, `To date`, `Time unit`, `Zone`, `Product`). Read only, no migration (BR-REPORT-02).
+
+- `GET /api/reports/price-trends?from=&to=&unit=&productIds=&zoneIds=` (id lists repeated; `unit` is `day` (default), `week` or `month`; all products by default; the current month by default). Answer: `{ computedAt, from, to, unit, filters { zones, products }, series[{ productId, productName, periods[{ key, label, soldKg, averagePrice, lowestPrice, highestPrice }] }], message, messageCode }`. Series are in product name order, periods in time order; a period with no counted line is not listed. `key` is the first day of the bucket (`yyyy-MM-dd`), `label` the day, the ISO week (`2026-W45`) or the month.
+- `GET /api/reports/price-trends/lines?...&productId=&periodKey=` (the same selection, the product and the `key` of a period; any day of the period also names it): `{ from, to, unit, productId, periodKey, lines[{ invoiceId, invoiceCode, date, customer, kg, unitPrice, amount }], message, messageCode }`, newest first; `customer` is null for a walk-in customer. A missing or unknown `productId` is 400 `Product`, a missing or non-date `periodKey` 400 `Period key`; a period without a line is MSG-GEN-10.
+- `GET /api/reports/price-trends/export?...`: `price-trends-{unit}-{from}-{to}.xlsx`, Export right. Sheet `Price trends` has one row per product and period (`Product`, `Period`, `Sold kg`, `Average unit price`, `Lowest unit price`, `Highest unit price`), sheet `Choices` the period, the time unit and the zones and products chosen. An empty selection gives the headers only.
+
+Definitions: the lines of the invoices dated in the period (business date UTC+7), in the zone of the invoice, at their latest values (a corrected unit price counts as corrected), without Cancelled invoices and without invoices that have a sales return that stands; an invoice whose return was cancelled counts again (BR-CLAIM-03: "has a sales return" means one that is not cancelled). Because such an invoice is left out whole, the sold kg is simply the line kg. `averagePrice` is the total of the line amounts divided by the total kg (not the mean of the unit prices); `lowestPrice` and `highestPrice` are unit prices of the lines. Prices are VND per kg and are not rounded (an average may have decimals). Discounts, other charges and price cuts are not spread over the lines, so a price cut leaves the figures as they were.
+
+#### Post-sale issues (REPORT-03)
+
+Same right, zones, period and answers as REPORT-01 (400 MSG-GEN-01 fields: `From date`, `To date`, `Grouping`, `Group key`, `Zone`, `Customer`). Read only, no migration (BR-REPORT-03). Unlike REPORT-01, each event is counted by its own date, so an invoice of last month with a price cut, a return or a cancellation this month counts this month.
+
+- `GET /api/reports/post-sale-issues?from=&to=&groupBy=&zoneIds=&customerIds=` (`groupBy` is `customer` (default), `zone` or `lot`). Answer: `{ computedAt, from, to, groupBy, filters { zones, customers }, groups[], totals, message, messageCode }`; a group has `key`, `label`, `claimsSent`, `claimsAwaiting`, `claimsRejected`, `claimsAccepted`, `returnsCount`, `returnedKg`, `discardedKg`, `returnsValue`, `priceCutsCount`, `priceCutsAmount`, `cancelledCount`, `cancelledTotal`. `key` is the customer id (`walk-in` for invoices without a profile), the zone id or the lot id. `totals` has the same figures (key `total`) and counts every event once, whatever the grouping, so by lot it is not the sum of the rows.
+- `GET /api/reports/post-sale-issues/items?...&groupKey=` (the same selection and the `key` of a group): `{ from, to, groupBy, groupKey, items[{ type, date, invoiceId, invoiceCode, customer, noteOrReason, amount, status }], message, messageCode }`, newest first. `type` is `claim` (note = the description the trader wrote, `status` awaitingResponse, rejected or accepted, no amount), `return` (reason, value), `priceCut` (reason, amount) or `cancellation` (cancel reason, invoice total). A key with no event: MSG-GEN-10; no key: 400 `Group key`.
+- `GET /api/reports/post-sale-issues/export?...`: `post-sale-issues-{groupBy}-{from}-{to}.xlsx`, Export right. Sheet `Post-sale issues` holds the groups and a `Total` row (a figure that is null in the screen is an empty cell), sheet `Choices` the period, the grouping and the zones and customers chosen. An empty selection gives the headers and a zero total row.
+
+Definitions: claims by the day they were sent (business date), with their status (only claims made in the app exist); sales returns that stand (a cancelled return counts nowhere) by return date, with value, returned kg and discarded kg (return lines of outcome thrown away); price cuts by their own date and amount (the `SalesInvoicePriceCut` rows of SALE-07; a correction of a data-entry error is never one, and none is listed: correcting an invoice is an ordinary action with its audit); cancelled invoices by their cancel date, with their total. The zone and the customer are those of the invoice. A claim of an invoice that was later cancelled still counts, but its price cuts do not: a price cut is undone with its invoice (PM answer 12/11). By lot, only the returns are counted, once for each lot they take back, with the returned and discarded kg of the return lines of that lot; the number of claims, price cuts and cancelled invoices of the invoices that sell the lot are shown, while the amounts and the value of a return apply to a whole invoice that may sell several lots, so they are not split and are `null` on lot rows. The events of a lot (`items`) are those of the invoices that sell the lot.
+
+### Operations dashboard (FARM-06)
+
+Only the Cooperative Owner opens it; every other caller gets 403 MSG-GEN-08. Read only: every figure is worked out from the
+records at the moment of the call and nothing is stored (BR-FARM-10); `computedAt` is when the computation started.
+
+- `GET /api/dashboard?from=&to=&zoneId=`: 200 `{ computedAt, zoneId, dailyRevenue { from, to, total, invoiceCount }, receivables
+  { receivables, owedBack }, openHarvestLots { count }, waterAlerts { count, zones[{ zoneId, code, name, measuredAt }] },
+  pendingTasks { total, groups[{ kind, count, oldest[{ id, code, label, since }] }] } }`.
+- Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to
+  today, at most 5 years) apply to the daily revenue only. `zoneId` applies to the daily revenue (by the zone of the invoice), the
+  open harvest lots and the water alerts. Receivables and pending tasks are always of the whole cooperative. A period that cannot
+  be read (`from` after `to`, a start in the future, over 5 years, not a date) or a `zoneId` that is not a zone is 400 MSG-GEN-01
+  naming the field.
+- Definitions (the same as the screens they link to): `dailyRevenue.total` is the total of the invoices of the period that are not
+  Cancelled, at their latest values (SALE-09); `receivables` is the total of the customer debts above zero and `owedBack` the money
+  owed back to customers, as a positive amount (BR-DEBT-02, DEBT-03); `openHarvestLots.count` is the lots Open or Reopened now
+  (BR-HARVEST-04; list them with `GET /api/harvest-lots/for-sale?zoneId=`); `waterAlerts` are the zones In Use whose latest Active
+  measurement is outside its thresholds, one entry per zone however many values are outside (BR-WATER-04, WATER-03).
+- Pending tasks, one group per `kind`: `PurchaseRequest` Awaiting response (SALE-03), `QualityClaim` Awaiting response (CLAIM-02),
+  `Payroll` Awaiting finalization (LABOR-13), `EmployeeRequest` Awaiting review (LABOR-05: leave, missed check-in or check-out; no zone). `count` is every record; `oldest` is the 5 that wait longest (`id` opens the record,
+  `code` is null for a record with no code, `since` is when it began to wait). `label` names the record without opening it:
+  `{customer} – {cages} cages {product}, pickup dd/MM/yyyy` for a purchase request, `{customer} – invoice {code}` for a quality claim,
+  `Payroll dd/MM/yyyy–dd/MM/yyyy` for a payroll, `{employee} – leave dd/MM/yyyy[–dd/MM/yyyy]` or `{employee} – missed check-in|check-out dd/MM/yyyy` for an employee request.
+
+### Work assignment, attendance and employee requests (LABOR-02, LABOR-04, LABOR-05, LABOR-10)
+
+`WorkAssignment` holds one job period of an employee and day (the first one has no start time, each change of job adds one),
+`Attendance` the check-in and check-out of one employee and day with their recording method, `EmployeeRequest` a leave or a missed
+check-in or check-out. Hours are worked out when shown (`WorkHoursCalculator`, BR-LABOR-05) from the attendance settings in force
+on the day; nothing is recorded in a pay period whose payroll is Awaiting finalization or Finalized (`MSG-LABOR-04`, BR-LABOR-13).
+Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
+
+- `GET /api/workforce/assignments?day=`, `GET /api/workforce/lookups?day=`; `POST /api/workforce/assignments` (409 `MSG-LABOR-06`
+  asks to move an employee, resend with `moveExisting`), `PUT`/`DELETE /api/workforce/assignments/{id}` until the employee is
+  checked in (`MSG-LABOR-07`), `POST /api/workforce/crew-job` (Change job for crew, 204).
+- `POST /api/workforce/assignments/{id}/check-in` and `/check-out` with `qrCode` (the code of `GET /api/me/attendance-qr`, valid
+  60 seconds, else `MSG-LABOR-13`) or null to mark by hand; `POST /api/workforce/crew-start`; Staff employees:
+  `GET /api/workforce/staff-attendance`, `POST /api/workforce/staff/{employeeId}/check-in|check-out`.
+- Owner: `GET`/`PUT /api/workforce/attendance/{employeeId}/{day}` corrects times and job periods with a reason;
+  `POST /api/workforce/leave-requests/{id}/review` approves or rejects (a rejection needs a note); `GET /api/workforce/leave-requests`
+  is also read by the Zone Manager.
+- The employee linked to the caller's account (`Employee.AccountId`): `GET /api/me/workforce?from=&to=` (at most 62 days),
+  `GET /api/me/attendance-qr`, `POST /api/me/leave-requests` (leave, or `type` MissedCheckIn / MissedCheckOut with `day` and
+  `requestedTime`), `DELETE /api/me/leave-requests/{id}` (cancel while Awaiting review).
+
+
+
+### Audit log
+
+Every create, edit and status change writes one `AuditEvent` in the same save as the change (GBR-02, NFR-02): who acted
+(an account, an employee of the employee app, or the system when neither is set), when, the action
+(`FarmingZone.Updated`, `Account.StatusChanged`…), the record (type, id, code), the zone, the reason and the values
+before and after. Fields that may hold a password, a code or a token are removed when the row is written and again
+when it is shown. Events are never edited or deleted and no job cleans them up (kept at least 5 years).
+
+Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other caller gets 403 MSG-GEN-08:
+- `GET /api/audit-events`: newest first, paged (`page`, `pageSize` up to 100). `from`/`to` are Vietnam dates, both
+  included: the last 30 days by default, at most 5 years, else MSG-GEN-01. Filters: one person (`actorAccountId`,
+  `actorEmployeeId` or `system=true`), `action` and `recordType` (exact values), `recordCode` (codes starting with it),
+  `zoneId`. No match: 200 with an empty page and MSG-GEN-10 in `message`.
+- `GET /api/audit-events/facets`: the actions, record types and people to offer in the filters.
+- `GET /api/audit-events/{id}`: the event with `before` and `after` (JSON).
+- `GET /api/audit-events/{id}/record`: the record of the event as it is now, or 404 MSG-ACCOUNT-22 when it no longer
+  exists (its events stay in the log).
+
+### VietQR sale and bank notifications (SALE-05 steps 7-8, GFR-08, API-13)
+
+- `POST /api/sales-invoices` with `payment.rest = "VietQr"` (all of the total, or the rest after `cashAmount`; a walk-in customer
+  too) answers **202** with the sale awaiting its transfer: `{ code, status: "Awaiting", zone, customer, walkInCustomer, total,
+  cashAmount, toPayAmount, receivedAmount, vietQr: { payload, bankBin, bankName, accountNumber, accountHolderName, amount,
+  content }, createdAt, createdBy, invoiceId, invoice, endedAt }`. The code (HD…) is given now and kept (BR-SALE-08); nothing is
+  saved yet: no invoice, payment, debt or lot close. `payload` is the EMVCo text the client draws as the QR image, made again on
+  every read for the receiving bank account set at that time. Without a receiving bank account: 409 MSG-SALE-13. The questions
+  (MSG-SALE-10/11/12) and `deduplicationKey` work as for any sale (the same key answers the same 202, or the 201 once saved).
+- `GET /api/sales-invoices/pending/{code}` is the poll of the port (every 2–3 s): `Awaiting`, then `Completed` with `invoice`
+  (the saved invoice and MSG-SALE-06, e.g. "Invoice HD000123 is completed: 8,000,000 VND received by VietQR; 4,000,000 VND
+  collected in cash."); the end of the sale then goes on with `POST /api/sales-invoices/{id}/finish`. `GET
+  /api/sales-invoices/pending` lists the sales still Awaiting in the caller's zones (an app that was closed finds its sale again).
+- `POST /api/sales-invoices/pending/{code}/change-payment` `{ payment }` (Cash, part in cash with Pay later, or Pay later; not
+  VietQR) saves the invoice under the same code as a new sale at the port (201, same questions); status `PaymentChanged`.
+- `POST /api/sales-invoices/pending/{code}/stop` `{ confirmed }`: without `confirmed: true`, 409 MSG-SALE-14 (`confirmationField`
+  = `confirmed`); with it, status `Stopped`, nothing saved but the audit row `SalesInvoice.SaleStopped` (record code = the code,
+  reason "Stop sale").
+- These need SALES_INVOICES Create in the zone of the sale (the Zone Managers of the zone and the Owner; others 403). A sale that
+  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale lasts until the end of its business day: the daily job stops it
+  automatically (PM answer of 12/11/2026, see Background jobs). Its harvest lots cannot be
+  removed meanwhile (HARVEST-01.1: 409 MSG-GEN-09 "… is on a sale awaiting its transfer"), and the daily close (GFR-05) leaves its kg out of
+  the leftover kg it records, because the transfer invoices them on the closed lot; a sale of an earlier day is already stopped when the close runs.
+- `POST /api/integrations/payment-notifications` (API-13) is anonymous and rate limited (`RateLimits:PaymentNotificationsPerMinute`,
+  256 KB): a notification the adapter does not find authentic answers 401. The fake adapter's format is
+  `{ "transactions": [ { "bankReference", "accountNumber", "amount", "content", "occurredAt", "direction": "In" | "Out" } ] }`,
+  signed as `X-Omts-Signature: sha256=<hex of HMAC-SHA256(raw body, Payments:Fake:WebhookSecret)>`. 200 lists for each transfer
+  `{ bankReference, outcome, paymentCode, invoiceCode, reason }`; 400 for a body it cannot read; 5xx when the save failed, so the
+  service retries. Each transfer is recorded once per bank reference (unique index on the reference of VietQR payments, so also
+  when the service reports it twice at once), and not at all when the Accountant already recorded a payment with that reference
+  that is not cancelled (the reference trimmed, as MSG-DEBT-05 compares it): `AlreadyRecorded` names the payment already recorded.
+  A transfer time before 2000 or more than a day ahead is `Invalid`. A sale that can no longer be saved when its transfer arrives
+  (a record it names is gone) never fails the notification: it is stopped by the system (audit `SalesInvoice.SaleStopped`, the
+  reason says why) and the transfer is kept `WithoutCustomer`.
+- What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Awaiting confirmation,
+  recorded by the system (audit actor: the system), with the amount, bank reference and time reported:
+  - `Ignored` (nothing recorded): `Outgoing`, `NotTheReceivingAccount` (another account, or the account before a change,
+    BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 to 12 digits in the content, not glued to letters before it; case and a separator after HD are tolerated),
+    `Invalid`.
+  - `PaidInvoice`: a saved invoice has the code (a later payment of a Pay later invoice, a sale whose payment method was changed,
+    a cancelled invoice): a payment of its customer (none for a walk-in invoice) that covers it first.
+  - `CompletedSale`: the sale awaiting it, when the amount is at least `toPayAmount`, is saved Completed, Pay now, at the prices
+    shown, with the transfer (its whole amount) and the cash part as its two payments, the lots closed (one closed meanwhile stays
+    as it is) and MSG-SALE-08 to the Owners; the invoice and its cash are the Zone Manager's (creator, collector, audit actor).
+  - `WithoutCustomer`: no saved invoice has the code (Stop sale, an unknown code, or less than the sale awaits, which then keeps
+    waiting and shows it in `receivedAmount`): no customer and no invoice, the code kept in `transferInvoiceCode` of the
+    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it back) is available, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
+    `needsSettlement: true`), so it stays in the list; it can be cancelled.
+
+### Settling a payment without a customer (DEBT-02.6)
+
+A transfer held `WithoutCustomer` (no customer, no saved invoice) is marked `needsSettlement: true` in the rows of
+`GET /api/customer-payments/awaiting-confirmation` (and `GET /api/customer-payments/{id}`) while it is Awaiting confirmation. The
+Accountant or the Owner (`CUSTOMER_PAYMENTS` Edit; Zone Manager and trader 403, anonymous 401) settles it in the same list save as
+the confirmations and cancellations, `POST /api/customer-payments/confirmations`, which now also takes `settle`: one entry per
+payment, each with exactly one choice (400 MSG-GEN-01 `Settlement` otherwise, with `paymentId`):
+
+- `{ id, customerId, allocations? }` attaches the payment to a customer profile. It is allocated like every other payment:
+  `allocations` `[{ invoiceId, amount }]` names the unpaid invoices of the profile it pays (at most what each has left, together at
+  most the amount), left out it covers the oldest unpaid invoices first, `[]` only takes it off the debt. It becomes **Completed**
+  (confirmed by the caller), counts in the debt of the profile and, with the bank account it arrived in (`cashAccount`), is a line of
+  the Bank fund of the cash book. A merged profile is 409 MSG-GEN-09, an unknown one 400 `Customer`; two payments of one list on one
+  profile cannot pay the same invoice twice (400 `Allocation n`, naming the payment).
+- `{ id, payBack: { paymentDate, method, bankReference?, note?, confirmDuplicateBankReference?, cashAccountId? } }` pays all of it
+  back: the payment becomes **Completed** with no customer and a money paid back of the same amount is recorded (Completed, no
+  customer, `paidBackForPaymentId` = the payment, collected by the caller). `method` is `Cash` (the Cash fund) or `OtherTransfer`
+  (needs `bankReference`, MSG-DEBT-05 when a payment that is not cancelled has it, also an earlier pay back of the same list; leaves
+  the Bank account `cashAccountId`, by default the one the transfer arrived in). `paymentDate` is not after today and **not before the
+  date of the transfer**; invalid fields are named (`Payment date`, `Method`, `Bank reference`, `Cash account`, `Note`). Both lines are in
+  the cash book and no customer debt moves.
+
+200 answers the list as before plus `settled: [{ payment, paidBack, debtAfter }]` (`debtAfter` null when paid back; it is the profile's debt after the whole list, so two payments of one profile show the same number). Only payments
+still Awaiting confirmation can be named: a settlement sent again, or lost to a parallel save (row version, unique index on the money
+paid back), is 409 MSG-GEN-09 naming the payment and applies nothing twice. A payment that is not marked (already on a profile, cash at
+the port) is 409 MSG-GEN-09 too. One MSG-DEBT-03 goes to the Owners for the whole list (BR-DEBT-06): `settled_codes`, `settled_count`,
+`settled_more_count`, `settled_amount` join the confirmed and cancelled ones, `amount` covers all three, and `debts` also lists the
+profiles a payment was attached to. Audit: `CustomerPayment.Settled` (settlement kind, profile, bank account, parts, money paid back),
+`CustomerPayment.Recorded` on the money paid back. Money paid back is cancelled with `POST /api/customer-payments/{id}/cancel`: the
+payment it settled goes back to Awaiting confirmation, out of the cash book, marked again (audit `CustomerPayment.SettlementUndone`);
+while money paid back stands, cancelling the payment itself is 409 MSG-GEN-09 `hasMoneyPaidBack: true`. A transfer short of a sale
+still awaiting it counts in `receivedAmount` of that sale only while it is Awaiting confirmation.
+
+### Background jobs
+
+Every daily job runs on one base (`DailyJobHostedService`): a run time in business time (UTC+7), an optional catch-up run
+when the host starts after it, and a failed run logged without stopping the next day's.
+
+
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh), GFR-04: each In Use zone with a raft that has an
+Open cycle counts from the later of its latest Active water measurement and its earliest Open cycle start. More than one
+calendar month after that date it gets MSG-WATER-06, sent to the Zone Managers of the zone, or to the Owners when it has
+none, and sent again a month after the last reminder while no new measurement moves the date. A void moves the date back;
+the repeat still counts from the last reminder. Like the expiry reminder (07:00), a host started after the run time
+runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
+on the same day sends nothing. Each zone is saved on its own: a zone saved during the run, or one with nobody to notify,
+is simply checked again the next day, and the other zones are not affected.
+
+`PendingSaleEndOfDayStopJob` (the end of the business day, council of 03/11, PM answer of 12/11/2026) runs first in the same run as
+the daily close check below, so before it, also in the catch-up run: every sale still awaiting its VietQR transfer that was created
+before the business day of the run began (UTC+7) is stopped by the system, the Stop of the port (BR-SALE-08): status `Stopped`,
+nothing saved on the invoice side, the audit row `SalesInvoice.SaleStopped` with no actor and the reason "Stop sale: the transfer
+did not arrive by the end of the business day". A transfer that comes later is kept as a payment without a customer
+(`WithoutCustomer`). A sale a transfer, a change of payment or a stop by hand ended meanwhile is left as it ended: each sale is
+saved on its own and a transfer arriving at that moment (the same row version) makes the stop read the sale again and find it
+ended; a second run, or a second app instance, stops nothing more. Its kg are then leftover when their lot closes in the same run.
+
+`HarvestLotAutoCloseJob` runs every day at 00:05 (Asia/Ho_Chi_Minh), GFR-05: a harvest lot still for sale (Open or Reopened)
+counts its days before automatic close (harvest settings) from its harvest date, or from the day it was last reopened. When
+that day plus the days is before today, the lot is Closed with today as the close date, the reason `TimeLimitReached` and its
+remaining kg as the leftover kg, and the audit row has the system as the actor: with 3 days, a lot harvested on 26/10 is
+closed by the check of 30/10. The check of the day before (29/10) sends MSG-HARVEST-05 once, and the lot keeps the close date
+it announced (`AutoCloseWarnedFor`), so a second run, the catch-up at start or a second app instance sends nothing more; a
+reopen or new days give a new close date, warned once in its turn. A host down across the checks closes the overdue lots at
+its next run (catch-up at start, like the other reminders), with that day as the close date. Each lot is saved on its own: a
+lot saved meanwhile (a sale, a close by hand, the other instance) is read and checked once more at once.
+
+The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
+It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
+MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02); a record found already Expired gets the Expired notice only.
+Every license of an In Use zone that is not Replaced is reminded on its own state, not only the newest one: a Replaced
+license and the licenses of a Discontinued zone are not. After a resume, each of these licenses gets the notice of its
+current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
+notices.
+
+A replaced raft photo, license file, cooperative cover photo, certificate file, cultivation log photo or harvest lot photo is removed right after the save (a removed
+certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
+03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`), cultivation log photos (`cultivation-log-photos/`), harvest lot photos
+(`harvest-lot-photos/`), quality claim photos (`claim-photos/`, a claim whose save failed after its uploads) and water meter photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
+written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+
+**Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
+(`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a raft photo or
+license folder in which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted
+there and a warning is logged. Cover photos and certificate files may all be unreferenced in a real database (cover
+removed, last certification removed), so their folders are skipped only when the database holds no cooperative. Every
+cultivation log may be removed too, so its folder is skipped when the database holds no cooperative or has no
+`CultivationLog` audit row: it never held a log, while those rows stay after the last log is removed. Harvest lot photos follow the same rule, with the `HarvestLot` audit row.

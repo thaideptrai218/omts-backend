@@ -30,7 +30,10 @@ public sealed class QualityClaimsController(QualityClaimReadService reads, Quali
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await reads.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Accepts with <c>offer</c> (<c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>), an optional <c>note</c> and <c>rowVersion</c>. Changes nothing on the invoice or the debt; push and SMS to the trader.</summary>
+    /// <summary>
+    /// Proposes an <c>offer</c> (<c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c> with its <c>priceCutAmount</c>, above 0 and at most the invoice total), an optional <c>note</c> and <c>rowVersion</c>; the claim is then
+    /// Offer made and the trader accepts or declines it. Changes nothing on the invoice or the debt; push and SMS to the trader.
+    /// </summary>
     [HttpPost("{id:guid}/accept")]
     [RequireCooperativeOwner]
     [ProducesResponseType<QualityClaimView>(StatusCodes.Status200OK)]

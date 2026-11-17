@@ -9,13 +9,15 @@ using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.QualityClaims;
 
 /// <summary>
-/// CLAIM-02 – only the Cooperative Owner responds (API filter), once, while the claim is Awaiting response (BR-CLAIM-02). The response changes neither the invoice nor the customer debt: a return is
-/// CLAIM-03 and a price cut SALE-07, which the Owner runs once the trader has chosen; the offer here only records what was proposed. The response is saved first; the trader is told afterwards, and
-/// a message that is not accepted undoes nothing (GFR-06).
+/// CLAIM-02 – only the Cooperative Owner responds (API filter), once, while the claim is Awaiting response (BR-CLAIM-02): a rejection, or an offer (a return, or a price cut with its own amount) that the
+/// trader then accepts or declines (<see cref="QualityClaimAnswerService"/>, PM answer 12/11). The response changes neither the invoice nor the customer debt: a return is CLAIM-03 and a price cut
+/// SALE-07, which the Owner runs once the trader has accepted; the offer here only records what was proposed. The response is saved first; the trader is told afterwards, and a message that is not
+/// accepted undoes nothing (GFR-06).
 /// </summary>
 public sealed class QualityClaimResponseService(
     IQualityClaimRepository claims,
@@ -53,6 +55,14 @@ public sealed class QualityClaimResponseService(
             invalid.Add("Note");
         }
 
+        // The amount of a price cut is its own field: required for a price cut, above 0 and at most the invoice total, whole dong; none for a return.
+        var amount = entry.PriceCutAmount;
+        var needsAmount = entry.Offer == QualityClaimOffer.PriceCutWholeInvoice;
+        if (needsAmount ? amount is not > 0m || amount > claim!.Invoice.Total || decimal.Round(amount.Value) != amount : amount is not null)
+        {
+            invalid.Add("Price cut amount");
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -68,7 +78,8 @@ public sealed class QualityClaimResponseService(
         }
 
         claim.Offer = entry.Offer;
-        return await SaveResponseAsync(claim, StatusIds.QualityClaim.Accepted, note, "QualityClaim.Accepted", cancellationToken);
+        claim.OfferAmount = needsAmount ? amount : null;
+        return await SaveResponseAsync(claim, StatusIds.QualityClaim.OfferMade, note, "QualityClaim.OfferMade", cancellationToken);
     }
 
     /// <summary>CLAIM-02.1: only the note is checked; a cancelled or returned invoice does not stop a rejection.</summary>
@@ -119,7 +130,7 @@ public sealed class QualityClaimResponseService(
             RecordCode = claim.Code,
             ZoneId = claim.Invoice.ZoneId,
             Before = new { Status = statusCatalog.CodeOf(before) },
-            After = new { Status = statusCatalog.CodeOf(newStatusId), claim.Offer, Note = note, claim.InvoiceId },
+            After = new { Status = statusCatalog.CodeOf(newStatusId), claim.Offer, claim.OfferAmount, Note = note, claim.InvoiceId },
         });
         var sending = await notifications.ResponseAsync(claim, cancellationToken);
         if (await QualityClaimRules.SaveAsync(unitOfWork, claim, c => statusCatalog.DisplayNameOf(c.StatusId), cancellationToken) is { } lost)

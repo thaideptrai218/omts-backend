@@ -3,7 +3,7 @@ using OMTS.Application.Features.Purchasing;
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>One line as read: the raft, the lanes to harvest by number, the cages expected, and the line of the stored plan it stands for (none: a new line).</summary>
-internal sealed record HarvestPlanLineEntries(int LineNumber, Guid? Id, Guid RaftId, IReadOnlyList<int> LaneNumbers, int? ExpectedCageCount, string? Note);
+internal sealed record HarvestPlanLineEntries(int LineNumber, Guid? Id, Guid RaftId, IReadOnlyList<int> LaneNumbers, decimal? ExpectedCageCount, string? Note);
 
 /// <summary>The fields of a plan once their shapes are right; what they name is checked against the database after.</summary>
 internal sealed record HarvestPlanEntries(
@@ -60,7 +60,7 @@ internal static class HarvestPlanEntryReader
                 invalid.Add($"{field} lanes");
             }
 
-            if (line.ExpectedCageCount is <= 0)
+            if (line.ExpectedCageCount is { } expected && !HarvestQuantityRules.CagesAreValid(expected))
             {
                 invalid.Add($"{field} cages");
             }

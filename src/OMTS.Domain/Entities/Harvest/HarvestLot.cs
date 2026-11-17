@@ -3,6 +3,7 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Harvest;
@@ -10,6 +11,7 @@ namespace OMTS.Domain.Entities.Harvest;
 /// <summary>
 /// The oysters of one harvest trip to one raft (BR-HARVEST-03), with the whole lanes harvested and the estimated kg. Its code and harvest time never change.
 /// It is for sale while Open or Reopened (BR-HARVEST-04). The estimated kg is for following the harvest and limits no sale (BR-HARVEST-02).
+/// A lot may be recorded from a line of a harvest plan and may be split into the products it holds.
 /// </summary>
 public class HarvestLot : AuditableEntity, IHasStatus
 {
@@ -32,7 +34,8 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The business date (UTC+7) of <see cref="HarvestedAt"/>.</summary>
     public DateOnly HarvestDate { get; set; }
 
-    public int CageCount { get; set; }
+    /// <summary>Cages harvested on the trip, in steps of 0.01 (half a cage is 0.5): the Owner or Zone Manager counts them, so a part of a cage is allowed.</summary>
+    public decimal CageCount { get; set; }
 
     /// <summary>A copy of the average kg per cage at record time; later settings do not change it (BR-HARVEST-02).</summary>
     public decimal KgPerCage { get; set; }
@@ -40,8 +43,17 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>Cages times <see cref="KgPerCage"/> unless the Zone Manager changed it (BR-HARVEST-02).</summary>
     public decimal EstimatedKg { get; set; }
 
+    /// <summary>Why the cycle harvested kg went above its target yield, when the Zone Manager confirmed it (over 110 % of the target); null otherwise.</summary>
+    public string? OverPlanReason { get; set; }
+
     /// <summary>Who recorded it: a Zone Manager corrects or removes only the lots they recorded (BR-HARVEST-05).</summary>
     public Guid RecordedByAccountId { get; set; }
+
+    /// <summary>
+    /// Kept for the lots that already carry a purchase request. A new lot does not set it and nothing requires it: the lot is tied to the harvest plan line it was recorded from.
+    /// </summary>
+    public Guid? PurchaseRequestId { get; set; }
+    public PurchaseRequest? PurchaseRequest { get; set; }
 
     public int StatusId { get; set; } = StatusIds.HarvestLot.Open;
     public Status Status { get; set; } = null!;
@@ -77,6 +89,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
 
     /// <summary>The products the lot is split into; empty for a lot recorded before products. <see cref="CageCount"/> and <see cref="EstimatedKg"/> are the sums of the lines when there are any.</summary>
     public ICollection<HarvestLotProductLine> ProductLines { get; set; } = [];
+
+    /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
+    public ICollection<HarvestLotCrewMember> Crew { get; set; } = [];
 
     /// <summary>Open and Reopened lots can be chosen on a sales invoice (BR-HARVEST-04).</summary>
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;

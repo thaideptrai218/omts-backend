@@ -11,7 +11,12 @@ namespace OMTS.Domain.Entities.Sales;
 /// </summary>
 public class Product : AuditableEntity, IHasStatus
 {
+    /// <summary>Public code (SP000001, typed or generated); empty only on catalogue entries that were made before products carried a code.</summary>
     public string Code { get; set; } = string.Empty;
+
+    /// <summary>Optional validity window of the catalogue entry: outside it the product is not offered to traders.</summary>
+    public DateOnly? ValidFrom { get; set; }
+    public DateOnly? ValidTo { get; set; }
     public string Name { get; set; } = string.Empty;
 
     /// <summary>List price per kg, in whole VND, above 0. Past prices are kept in <see cref="ProductPriceChange"/> and the audit log (BR-SALE-05).</summary>

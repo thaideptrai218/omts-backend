@@ -45,6 +45,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
         var itemId = await factory.ItemAsync();
+        await factory.AddBaseUnitAsync(itemId);
         await owner.RecordUsageAsync(setup.RaftId, itemId, quantity: 4m);
         var item = await ReadItemAsync(owner, itemId);
 
@@ -86,6 +87,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
     {
         var owner = (await factory.OwnerAsync()).Client;
         var itemId = await factory.ItemAsync();
+        await factory.AddBaseUnitAsync(itemId);
         var item = await ReadItemAsync(owner, itemId);
 
         var saved = await (await owner.PutAsJsonAsync($"/api/farming-input-items/{itemId}", ItemBody(item, group: "Other", unit: "kg"))).ReadAsync(HttpStatusCode.OK);
@@ -178,7 +180,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         Assert.Equal(["message", "messageCode", "records"], created.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         var record = created.GetProperty("records")[0];
         Assert.Equal(
-            ["canEdit", "cycleId", "id", "itemCode", "itemId", "itemName", "quantity", "raftCode", "raftId", "recordedAt", "recordedByAccountId", "recordedByName", "repairReason", "rowVersion", "unit", "usageDate"],
+            ["canEdit", "cycleId", "id", "issueCode", "issueId", "itemCode", "itemId", "itemName", "quantity", "raftCode", "raftId", "recordedAt", "recordedByAccountId", "recordedByName", "repairReason", "rowVersion", "unit", "usageDate"],
             record.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(Today.ToString("yyyy-MM-dd"), record.Text("usageDate"));
 
@@ -187,7 +189,10 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
 
         var group = (await owner.UsageListAsync(setup.RaftId)).GetProperty("groups")[0];
         Assert.Equal(["cycle", "locked", "repairs"], group.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(["closeDate", "closedEarly", "id", "rowVersion", "startDate", "status", "statusId"], group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        // The cycle view of the usage list grew with the nursery and the seed of the cycle (OMTS-132): the fields this screen needs are there, and no price.
+        var cycleFields = group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).ToList();
+        Assert.All(new[] { "closeDate", "closedEarly", "id", "rowVersion", "startDate", "status", "statusId" }, name => Assert.Contains(name, cycleFields));
+        Assert.DoesNotContain(cycleFields, name => name.Contains("price", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(["records", "repairReason", "usageDate"], group.GetProperty("repairs")[0].EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
 
         // The audit values of §3: codes, with these names only.
@@ -199,15 +204,15 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         Assert.Equal(setup.Owner.Account.Id, row.ActorAccountId);
     }
 
-    // CYCLE-03 has no remove, as the client list says. With a quantity above 0 required, a wrong repair can only be moved or edited: see the report, P4.
+    // Decision of 12/11/2026: a wrong repair is removed with a reason (POST .../remove, see FarmingRemovalAndHistoryTests); there is still no DELETE.
     [Fact]
-    public async Task P4_there_is_no_way_to_remove_a_record()
+    public async Task P4_a_record_has_no_delete_and_its_remove_needs_the_version_and_a_reason()
     {
         var setup = await factory.CycleAsync();
         var record = await setup.Owner.Client.RecordUsageAsync(setup.RaftId, await factory.ItemAsync());
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await setup.Owner.Client.DeleteAsync($"/api/material-usages/{record.Id()}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await setup.Owner.Client.PostAsJsonAsync($"/api/material-usages/{record.Id()}/remove", new { reason = "wrong" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await setup.Owner.Client.PostAsJsonAsync($"/api/material-usages/{record.Id()}/remove", new { reason = "wrong" })).StatusCode);
     }
 
     // ---- Quantity and text limits. ----

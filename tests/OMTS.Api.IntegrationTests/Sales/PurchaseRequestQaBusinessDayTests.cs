@@ -46,13 +46,13 @@ public class PurchaseRequestQaBusinessDayTests
         using var scope = api.Services.CreateScope();
         var traders = scope.ServiceProvider.GetRequiredService<TraderPurchaseRequestService>();
 
-        Assert.True((await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, sixth, null), CancellationToken.None)).IsSuccess);
-        Assert.Equal("MSG-GEN-01", (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, sixth.AddDays(-1), null), CancellationToken.None)).Error!.Message.Code);
+        Assert.True((await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, sixth, null), CancellationToken.None)).IsSuccess);
+        Assert.Equal("MSG-GEN-01", (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, sixth.AddDays(-1), null), CancellationToken.None)).Error!.Message.Code);
 
         api.Clock.Now = new DateTimeOffset(2026, 11, 6, 17, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal("MSG-GEN-01", (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, sixth, null), CancellationToken.None)).Error!.Message.Code);
-        Assert.True((await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, sixth.AddDays(1), null), CancellationToken.None)).IsSuccess);
+        Assert.Equal("MSG-GEN-01", (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, sixth, null), CancellationToken.None)).Error!.Message.Code);
+        Assert.True((await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, sixth.AddDays(1), null), CancellationToken.None)).IsSuccess);
     }
 
     // {request_date} in the text, with an Owner to read it.
@@ -67,12 +67,12 @@ public class PurchaseRequestQaBusinessDayTests
         using var scope = api.Services.CreateScope();
         var traders = scope.ServiceProvider.GetRequiredService<TraderPurchaseRequestService>();
 
-        var placed = (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 200m, new DateOnly(2026, 11, 8), null), CancellationToken.None)).Value!.Request;
+        var placed = (await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 200, new DateOnly(2026, 11, 8), null), CancellationToken.None)).Value!.Request;
         api.Clock.Now = new DateTimeOffset(2026, 11, 9, 2, 0, 0, TimeSpan.Zero);
         Assert.True((await traders.CancelAsync(trader.Id, placed.Id, new CancelPurchaseRequest("Đổi lịch", placed.RowVersion), CancellationToken.None)).IsSuccess);
 
         var row = (await api.NotificationRowsAsync(placed.Id)).OfType(NotificationTypes.PurchaseRequestCancelled).Single();
-        Assert.Equal("Chị Hoa cancelled the purchase request of 08/11/2026 for about 200 kg of Hàu sữa. Đổi lịch", row.Body);
+        Assert.Equal("Chị Hoa cancelled the purchase request of 08/11/2026 for 200 cages of Hàu sữa. Đổi lịch", row.Body);
         Assert.Contains("\"request_date\":\"2026-11-08\"", row.MessageParams);
     }
 }

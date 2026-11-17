@@ -33,10 +33,12 @@ public sealed class MePurchasesController(
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await reads.GetMineAsync(AccountId, id, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>201 for a new request; 200 when a retry with the same <c>clientOperationId</c> answers the request already saved.</summary>
     [HttpPost("purchase-requests")]
     [ProducesResponseType<PurchaseRequestSaved>(StatusCodes.Status201Created)]
+    [ProducesResponseType<PurchaseRequestSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Place(PlacePurchaseRequest request, CancellationToken cancellationToken) =>
-        (await requests.PlaceAsync(AccountId, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+        (await requests.PlaceAsync(AccountId, request, cancellationToken)).ToActionResult(r => r.Replayed ? Ok(r) : StatusCode(StatusCodes.Status201Created, r));
 
     [HttpPost("purchase-requests/{id:guid}/cancel")]
     [ProducesResponseType<TraderPurchaseRequestView>(StatusCodes.Status200OK)]

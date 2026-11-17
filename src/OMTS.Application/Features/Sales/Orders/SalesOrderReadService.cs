@@ -19,6 +19,7 @@ public sealed class SalesOrderReadService(
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
     IProductRepository products,
+    ICooperativeRepository cooperatives,
     SalesOrderAccess access,
     SalesOrderCodeService codes,
     SalesOrderViews views,
@@ -82,7 +83,7 @@ public sealed class SalesOrderReadService(
         await access.MayAsync(PermissionAction.Create, cancellationToken) ? new SalesOrderNextCode(await codes.PeekAsync(cancellationToken)) : AppError.Forbidden;
 
     /// <summary>
-    /// The form of a new order made from a purchase request, for the Owner: the customer, the product in kg with the quantity the Owner accepted (the quantity asked when it was not answered yet), the pickup time
+    /// The form of a new order made from a purchase request, for the Owner: the customer, the product with the cages the Owner accepted (the cages asked when it was not answered yet), in its Lồng unit or in kg, the pickup time
     /// (the agreed date, else the date asked, at 00:00) and the source App. 409 MSG-ORDER-02 when the request has an order; 409 MSG-GEN-09 when it cannot be ordered.
     /// </summary>
     public async Task<Result<SalesOrderRequestDraft>> RequestDraftAsync(Guid requestId, CancellationToken cancellationToken)
@@ -110,20 +111,20 @@ public sealed class SalesOrderReadService(
         }
 
         var product = (await products.GetByIdsAsync([request.ProductId], cancellationToken)).FirstOrDefault();
-        var baseUnit = product?.Units.FirstOrDefault(u => u.IsBase);
-        if (product is null || baseUnit is null)
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("An order needs the cooperative created at deployment.");
+        var line = product is null ? null : SalesOrderRequestLine.Of(product, request.AcceptedCages ?? request.RequestedCages, cooperative.AverageKgPerCage);
+        if (line is null)
         {
             return AppError.Invalid("Product");
         }
 
-        var quantity = request.AcceptedKg ?? request.RequestedKg;
         var pickup = BusinessClock.FromLocal((request.AgreedPickupDate ?? request.PickupDate).ToDateTime(TimeOnly.MinValue));
         return new SalesOrderRequestDraft(
             request.Id,
             new SalesOrderCustomerView(request.Customer.Id, request.Customer.Code, request.Customer.Name, request.Customer.PhoneNumber),
             request.SentAt,
             request.StatusId,
-            [new SalesOrderDraftLine(product.Id, product.Code, product.Name, baseUnit.UnitId, baseUnit.Code, baseUnit.Unit.Name, quantity, baseUnit.SalePrice)],
+            [line],
             pickup,
             Domain.Enums.SalesOrderSource.App,
             request.Note);

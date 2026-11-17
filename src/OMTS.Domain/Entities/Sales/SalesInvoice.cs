@@ -39,6 +39,10 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     /// <summary>A free note of the seller, at most 1000 characters.</summary>
     public string? Note { get; set; }
 
+    /// <summary>Kept for invoices already linked to a port weighing; a new invoice is made from an order and does not set it.</summary>
+    public Guid? PortWeighingId { get; set; }
+    public PortWeighing? PortWeighing { get; set; }
+
     /// <summary>The request is Fulfilled while a Completed invoice linked to it keeps this mark (BR-SALE-01).</summary>
     public bool TakesRequestInFull { get; set; }
 
@@ -92,6 +96,9 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     public ICollection<SalesInvoiceLine> Lines { get; set; } = [];
     public ICollection<SalesInvoicePriceCut> PriceCuts { get; set; } = [];
     public ICollection<CustomerPayment> Payments { get; set; } = [];
+
+    /// <summary>The sales returns (CLAIM-03), cancelled ones included; at most one is not cancelled (BR-CLAIM-03).</summary>
+    public ICollection<SalesReturn> Returns { get; set; } = [];
 }
 
 /// <summary>One product sold from one harvest lot, with the kg weighed at the port (BR-SALE-06). It links the sale to the lot for the yield figures and the forward trace.</summary>

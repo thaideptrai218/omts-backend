@@ -12,6 +12,8 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
 
     public void RemoveAllocation(CustomerPaymentAllocation allocation) => db.CustomerPaymentAllocations.Remove(allocation);
 
+    public void AddAllocation(CustomerPaymentAllocation allocation) => db.CustomerPaymentAllocations.Add(allocation);
+
     public async Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken)
     {
         var upper = code.ToUpperInvariant();
@@ -68,7 +70,7 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
         }
 
         return await db.CustomerPayments.AsNoTracking()
-            .Where(p => p.TransferInvoiceCode != null && codes.Contains(p.TransferInvoiceCode) && p.InvoiceId == null && p.StatusId != StatusIds.CustomerPayment.Cancelled)
+            .Where(p => p.TransferInvoiceCode != null && codes.Contains(p.TransferInvoiceCode) && p.InvoiceId == null && p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation)
             .GroupBy(p => p.TransferInvoiceCode!)
             .Select(g => new { Code = g.Key, Amount = g.Sum(p => p.Amount) })
             .ToDictionaryAsync(g => g.Code, g => g.Amount, StringComparer.OrdinalIgnoreCase, cancellationToken);
@@ -86,4 +88,7 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
             .ToListAsync(cancellationToken);
         return (items, total, amount);
     }
+
+    public Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken) =>
+        db.CustomerPayments.AsNoTracking().AnyAsync(p => p.PaidBackForPaymentId == paymentId && p.StatusId != StatusIds.CustomerPayment.Cancelled, cancellationToken);
 }

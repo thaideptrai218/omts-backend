@@ -37,7 +37,7 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
     {
         yield return client.GetAsync("/api/me/purchases");
         yield return client.GetAsync($"/api/me/purchase-requests/{request.Id()}");
-        yield return client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedKg = 1, pickupDate = "2030-01-01" });
+        yield return client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 1, pickupDate = "2030-01-01" });
         yield return client.CancelAsync(request);
     }
 
@@ -197,6 +197,6 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, offeredToOwner.Keys);
         // BR-ACCOUNT-11: the trader's types are the response to a request, the withdrawal of a provenance record (TRACE-04), the approval of a Zalo access request and the response to a quality claim (CLAIM-02), none mandatory.
         var offeredToTrader = traderTypes.GetProperty("types").EnumerateArray().Select(t => (t.Text("type"), t.GetProperty("mandatory").GetBoolean())).ToList();
-        Assert.Equal([(NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], offeredToTrader);
+        Assert.Equal([("PURCHASE_REQUEST_RESPONDED", false), (NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], offeredToTrader);
     }
 }

@@ -9,10 +9,10 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>A line of the harvest form: the product, its cages and its kg. Without kg the system works it out: cages times the kg of a lồng of the product, or the kg per cage of the lot when the product has no lồng unit.</summary>
-public sealed record HarvestProductLineInput(Guid? ProductId, int? CageCount, decimal? Kg);
+public sealed record HarvestProductLineInput(Guid? ProductId, decimal? CageCount, decimal? Kg);
 
 /// <summary>A line of the lot as it will be saved.</summary>
-internal sealed record ResolvedProductLine(Product Product, int Cages, decimal Kg);
+internal sealed record ResolvedProductLine(Product Product, decimal Cages, decimal Kg);
 
 /// <summary>
 /// The share of each product on a harvest lot. The lines are checked against the catalogue (a product In Use, or already on the lot, once per lot; cages and kg above 0); the cages and kg of the lot are then
@@ -60,20 +60,20 @@ public sealed class HarvestLotProductLineService(
                 continue;
             }
 
-            if (input.CageCount is not > 0)
+            if (input.CageCount is not { } cages || !HarvestQuantityRules.CagesAreValid(cages))
             {
                 invalid.Add($"{field} cages");
                 continue;
             }
 
-            var kg = input.Kg ?? decimal.Round(input.CageCount.Value * CageKg(product, kgPerCage), 2);
+            var kg = input.Kg ?? HarvestQuantityRules.KgOf(cages, CageKg(product, kgPerCage));
             if (kg <= 0 || kg > PurchaseReceiptValidator.MaxQuantity || !PurchaseReceiptValidator.HasAllowedDecimals(kg))
             {
                 invalid.Add($"{field} kg");
                 continue;
             }
 
-            lines.Add(new ResolvedProductLine(product, input.CageCount.Value, kg));
+            lines.Add(new ResolvedProductLine(product, cages, kg));
         }
 
         return invalid.Count > 0 ? (null, AppError.InvalidFields(invalid)) : (lines, null);
@@ -97,7 +97,7 @@ public sealed class HarvestLotProductLineService(
     }
 
     /// <summary>The lot's totals are the sums of its lines.</summary>
-    internal static (int CageCount, decimal EstimatedKg) Totals(IReadOnlyList<ResolvedProductLine> lines) => (lines.Sum(l => l.Cages), lines.Sum(l => l.Kg));
+    internal static (decimal CageCount, decimal EstimatedKg) Totals(IReadOnlyList<ResolvedProductLine> lines) => (lines.Sum(l => l.Cages), lines.Sum(l => l.Kg));
 
     /// <summary>The lines of a lot that is being saved for the first time: the rows, and the Harvest rows of the ledger.</summary>
     internal void Add(HarvestLot lot, string raftCode, IReadOnlyList<ResolvedProductLine> lines)
@@ -118,8 +118,8 @@ public sealed class HarvestLotProductLineService(
     internal async Task<bool> ReplaceAsync(HarvestLot lot, string raftCode, IReadOnlyList<ResolvedProductLine> lines, CancellationToken cancellationToken)
     {
         // Kg compare by value: a stored 100.000 and a typed 100 are the same line.
-        string Key(IEnumerable<(Guid ProductId, int Cages, decimal Kg)> rows) =>
-            string.Join(";", rows.Select(r => $"{r.ProductId}|{r.Cages}|{r.Kg.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}"));
+        string Key(IEnumerable<(Guid ProductId, decimal Cages, decimal Kg)> rows) =>
+            string.Join(";", rows.Select(r => $"{r.ProductId}|{r.Cages.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}|{r.Kg.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}"));
         var before = Key(lot.ProductLines.OrderBy(l => l.LineNumber).Select(l => (l.ProductId, l.CageCount, l.Kg)));
         var after = Key(lines.Select(l => (l.Product.Id, l.Cages, l.Kg)));
         if (before == after)

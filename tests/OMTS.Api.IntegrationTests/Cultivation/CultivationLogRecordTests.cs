@@ -67,8 +67,8 @@ public class CultivationLogRecordTests(AuthApiFactory factory) : IClassFixture<A
         // Two days ahead: this list is built when the tests are discovered, and a run may cross midnight in UTC+7.
         { "Visit date", new LogFields { VisitDate = Today.AddDays(2) } },
         { "Notes", new LogFields { Notes = new string('x', 2001) } },
-        { "Photos", new LogFields { Photos = [] } },
-        { "Photos", new LogFields { Photos = Enumerable.Repeat(Jpeg, 11).ToList() } },
+        // The photos of a care log are optional, at most three (owner decision of 12/11/2026).
+        { "Photos", new LogFields { Photos = Enumerable.Repeat(Jpeg, 4).ToList() } },
         { "Photos", new LogFields { Photos = [Jpeg, TextPretendingToBeAFile] } },
         { "Photos", new LogFields { Photos = [Pdf] } },
         { "Photos", new LogFields { Photos = [Array.Empty<byte>()] } },
@@ -91,15 +91,17 @@ public class CultivationLogRecordTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task Ten_photos_are_allowed_and_every_invalid_field_is_listed_at_once()
+    public async Task Three_photos_or_none_are_allowed_and_every_invalid_field_is_listed_at_once()
     {
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
 
-        var ten = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = Enumerable.Repeat(Png, 10).ToList() });
-        Assert.Equal(Enumerable.Range(1, 10), ten.PhotoSlots());
+        var three = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = Enumerable.Repeat(Png, 3).ToList() });
+        Assert.Equal(Enumerable.Range(1, 3), three.PhotoSlots());
+        var none = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = [] });
+        Assert.Empty(none.PhotoSlots());
 
-        var several = await owner.PostLogAsync(setup.CycleId, new LogFields { VisitDate = Today.AddDays(1), Notes = new string('x', 2001), Photos = [] });
+        var several = await owner.PostLogAsync(setup.CycleId, new LogFields { VisitDate = Today.AddDays(1), Notes = new string('x', 2001), Photos = [Pdf] });
         Assert.Equal(["Visit date", "Notes", "Photos"], await several.InvalidFieldsAsync());
     }
 

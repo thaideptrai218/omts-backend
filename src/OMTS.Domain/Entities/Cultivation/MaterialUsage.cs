@@ -33,4 +33,8 @@ public class MaterialUsage : AuditableEntity
     public decimal Quantity { get; set; }
 
     public Guid RecordedByAccountId { get; set; }
+
+    /// <summary>The stock issue (Xuất dùng) this record posted; null on a record made before stock was checked (legacy: it never left the stock).</summary>
+    public Guid? IssueId { get; set; }
+    public InputIssue? Issue { get; set; }
 }

@@ -64,7 +64,7 @@ public class HarvestPlanLine : Entity
     public Guid? ExpectedProductId { get; set; }
     public Product? ExpectedProduct { get; set; }
 
-    public int? ExpectedCageCount { get; set; }
+    public decimal? ExpectedCageCount { get; set; }
 
     public string? Note { get; set; }
 

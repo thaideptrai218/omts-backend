@@ -11,7 +11,7 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class MaterialUsagesController(MaterialUsageReadService reads, MaterialUsageService usages, MaterialUsageEditService edits) : ControllerBase
+public sealed class MaterialUsagesController(MaterialUsageReadService reads, MaterialUsageService usages, MaterialUsageEditService edits, MaterialUsageRemoveService removals) : ControllerBase
 {
     /// <summary>The usage of the raft by cycle and by repair, with the dates when the raft had no cycle in a separate group.</summary>
     [HttpGet("api/rafts/{raftId:guid}/material-usages")]
@@ -35,4 +35,10 @@ public sealed class MaterialUsagesController(MaterialUsageReadService reads, Mat
     [ProducesResponseType<MaterialUsageSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Edit(Guid usageId, EditMaterialUsageRequest request, CancellationToken cancellationToken) =>
         (await edits.EditAsync(usageId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Removes a record that no closed cycle locks, with a reason: its issue (Xuat dung) is cancelled and the quantity returns to the stock. 204; the audit log keeps it.</summary>
+    [HttpPost("api/material-usages/{usageId:guid}/remove")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Remove(Guid usageId, RemoveMaterialUsageRequest request, CancellationToken cancellationToken) =>
+        (await removals.RemoveAsync(usageId, request, cancellationToken)).ToActionResult(_ => NoContent());
 }

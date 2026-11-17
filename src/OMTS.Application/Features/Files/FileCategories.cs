@@ -34,4 +34,19 @@ public static class FileCategories
 
     /// <summary>CLAIM-01 photos of a quality claim, <c>QualityClaimPhoto.FileKey</c>. Private: only their sender and the staff read them, never the provenance page (BR-CLAIM-01).</summary>
     public const string QualityClaimPhotos = "claim-photos";
+
+    /// <summary>Optional photos of a lane incident (damage or out of service), <c>LaneIncidentPhoto.FileKey</c>. Staff only.</summary>
+    public const string LaneIncidentPhotos = "lane-incident-photos";
+
+    /// <summary>Photos of the start of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Start (1 to 3, mandatory). Staff only.</summary>
+    public const string NurseryStartPhotos = "nursery-start-photos";
+
+    /// <summary>On-site photos of a seeding session, <c>SeedingRecordPhoto.FileKey</c> (1 to 3, mandatory on a new session). Staff only.</summary>
+    public const string SeedingPhotos = "seeding-photos";
+
+    /// <summary>Photos of the plan of a cycle started without a nursery batch, <c>CyclePlanPhoto.FileKey</c> (1 to 3, mandatory on a new cycle). Staff only.</summary>
+    public const string CyclePlanPhotos = "cycle-plan-photos";
+
+    /// <summary>Photos of the completion of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Completion (1 to 3, mandatory). Staff only.</summary>
+    public const string NurseryCompletionPhotos = "nursery-completion-photos";
 }

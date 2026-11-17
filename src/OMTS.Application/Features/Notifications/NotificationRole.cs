@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Enums;
@@ -11,6 +12,7 @@ public enum NotificationRole
     ZoneManager,
     Accountant,
     Trader,
+    Employee,
 }
 
 /// <summary>The notification roles an account holds.</summary>

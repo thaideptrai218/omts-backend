@@ -30,6 +30,7 @@ public static class MessageCodes
     public const string Cycle08 = "MSG-CYCLE-08";
 
     public const string Harvest01 = "MSG-HARVEST-01";
+    public const string Harvest02 = "MSG-HARVEST-02";
     public const string Harvest03 = "MSG-HARVEST-03";
     public const string Harvest04 = "MSG-HARVEST-04";
     public const string Harvest05 = "MSG-HARVEST-05";
@@ -93,10 +94,15 @@ public static class MessageCodes
     public const string Labor04 = "MSG-LABOR-04";
     public const string Labor06 = "MSG-LABOR-06";
     public const string Labor07 = "MSG-LABOR-07";
+    public const string Labor08 = "MSG-LABOR-08";
+    public const string Labor09 = "MSG-LABOR-09";
     public const string Labor12 = "MSG-LABOR-12";
     public const string Labor13 = "MSG-LABOR-13";
     public const string Labor14 = "MSG-LABOR-14";
     public const string Labor16 = "MSG-LABOR-16";
+    public const string Labor17 = "MSG-LABOR-17";
+    public const string Labor18 = "MSG-LABOR-18";
+    public const string Labor19 = "MSG-LABOR-19";
     public const string Labor22 = "MSG-LABOR-22";
     public const string Labor23 = "MSG-LABOR-23";
     public const string Labor25 = "MSG-LABOR-25";
@@ -139,6 +145,9 @@ public static class MessageCodes
     public const string Claim01 = "MSG-CLAIM-01";
     public const string Claim02 = "MSG-CLAIM-02";
     public const string Claim03 = "MSG-CLAIM-03";
+    public const string Claim04 = "MSG-CLAIM-04";
+    public const string Claim05 = "MSG-CLAIM-05";
+    public const string Claim06 = "MSG-CLAIM-06";
 
     public const string Cash01 = "MSG-CASH-01";
     public const string Cash02 = "MSG-CASH-02";
@@ -170,7 +179,7 @@ public static class MessageCodes
     /// the transaction notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the
     /// Owner's approval of a return (OMTS-218 P4); MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the
     /// reminder to lock a staff account, MSG-LABOR-04 and MSG-LABOR-36, the pay period lock and the question before saving
-    /// the payroll settings (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
+    /// the payroll settings (OMTS-227); MSG-LABOR-08/09/17/18/19, the login code of the employee app and the refusals around it (LABOR-03, LABOR-06); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
     /// new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and
     /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
     /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
@@ -192,11 +201,12 @@ public static class MessageCodes
     /// MSG-CUSTOMER-01, an invoice that leaves a debt for a customer over the debt limit while the settings do not allow more debt;
     /// MSG-ORDER-01/02/03/04/05/06, the order of goods (DH): an order with an invoice cannot be cancelled, a purchase request already made into an order, a quantity below what was delivered, the notice to the trader that the request became an order, an order that cannot be invoiced any more, and an invoice whose customer or zone is not the order's;
     /// MSG-PLAN-01/02/03/04/05/06, the harvest plan (KHT): a lane outside the plan, a lane already in another open plan, a line that already has its lot, a plan that cannot be cancelled, and the notices that a plan was handed over and that lanes will not be harvested.
+    /// MSG-CLAIM-04/05/06 and MSG-HARVEST-02, the Owner's agreement to a sales return, its notice, the warning before cancelling one, and the question on the lot of oysters thrown away (CLAIM-03).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02, Input01, Input02, Customer01, Order01, Order02, Order03, Order04, Order05, Order06, Plan01, Plan02, Plan03, Plan04, Plan05, Plan06,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest02, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Labor08, Labor09, Labor17, Labor18, Labor19, Order01, Order02, Order03, Order04, Order05, Order06, Plan01, Plan02, Plan03, Plan04, Plan05, Plan06,
     };
 
     /// <summary>
@@ -205,6 +215,19 @@ public static class MessageCodes
     /// </summary>
     public static class Legacy
     {
+        // Existing Mini App linking and work messages have no equivalent in the SRS catalogue.
+        public const string ZaloTokenInvalid = "ZALO_TOKEN_INVALID";
+        public const string ZaloPhoneTokenInvalid = "ZALO_PHONE_TOKEN_INVALID";
+        public const string ZaloPhoneNotFound = "ZALO_PHONE_NOT_FOUND";
+        public const string ZaloApprovalPending = "ZALO_APPROVAL_PENDING";
+        public const string ZaloRequestRejected = "ZALO_REQUEST_REJECTED";
+        public const string ZaloAccountExists = "ZALO_ACCOUNT_EXISTS";
+        public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
+        public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
+        public const string ZaloNotLinked = "ZALO_NOT_LINKED";
+        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
+        public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
+
         public const string Msg01 = "MSG01";
         public const string Msg02 = "MSG02";
         public const string Msg03 = "MSG03";
@@ -243,18 +266,6 @@ public static class MessageCodes
         public const string NoVerifiedEmail = "NO_VERIFIED_EMAIL";
         public const string UnexpectedError = "UNEXPECTED_ERROR";
         public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
-        // The Zalo Mini App linking messages have no equivalent in the SRS catalogue.
-        public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
-        public const string ZaloTokenInvalid = "ZALO_TOKEN_INVALID";
-        public const string ZaloPhoneTokenInvalid = "ZALO_PHONE_TOKEN_INVALID";
-        public const string ZaloPhoneNotFound = "ZALO_PHONE_NOT_FOUND";
-        public const string ZaloApprovalPending = "ZALO_APPROVAL_PENDING";
-        public const string ZaloRequestRejected = "ZALO_REQUEST_REJECTED";
-        public const string ZaloAccountExists = "ZALO_ACCOUNT_EXISTS";
-        public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
-        public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
-        public const string ZaloNotLinked = "ZALO_NOT_LINKED";
-        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>

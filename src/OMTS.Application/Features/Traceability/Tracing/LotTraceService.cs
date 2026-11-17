@@ -94,7 +94,8 @@ public sealed class LotTraceService(
         var corrections = await traces.CorrectionsAsync([lot.Id, .. sessions.Select(s => s.Id)], cancellationToken);
         var actors = corrections.Where(c => c.ActorAccountId is not null).Select(c => c.ActorAccountId!.Value).Distinct().ToList();
         var names = await accounts.GetDisplayNamesAsync(actors, cancellationToken);
-        return LotTraceBuilder.Build(new LotTraceSource(lot, sessions, lines, corrections, names), access, statusCatalog);
+        var returns = await traces.SaleReturnsAsync(lot.Id, cancellationToken);
+        return LotTraceBuilder.Build(new LotTraceSource(lot, sessions, lines, corrections, names, returns), access, statusCatalog);
     }
 
     private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

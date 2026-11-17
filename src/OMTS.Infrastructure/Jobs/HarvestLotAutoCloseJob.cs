@@ -95,8 +95,13 @@ public sealed class HarvestLotAutoCloseJob(IServiceScopeFactory scopes, ILogger<
     }
 }
 
-/// <summary>Runs <see cref="HarvestLotAutoCloseJob"/> once a day at <see cref="HarvestLotAutoCloseOptions.RunAt"/> (see <see cref="DailyJobHostedService"/>).</summary>
+/// <summary>
+/// Runs once a day at <see cref="HarvestLotAutoCloseOptions.RunAt"/> (see <see cref="DailyJobHostedService"/>) first the end-of-day stop of the sales awaiting their VietQR transfer
+/// (<see cref="PendingSaleEndOfDayStopJob"/>), then <see cref="HarvestLotAutoCloseJob"/>. One service runs both in that order, so the stop is always done before the close check,
+/// also in the catch-up run of a host started late; a failed stop is logged and does not keep the lots from being checked.
+/// </summary>
 internal sealed class HarvestLotAutoCloseHostedService(
+    PendingSaleEndOfDayStopJob pendingSaleStop,
     HarvestLotAutoCloseJob job,
     IOptions<HarvestLotAutoCloseOptions> options,
     TimeProvider timeProvider,
@@ -106,6 +111,16 @@ internal sealed class HarvestLotAutoCloseHostedService(
 
     protected override async Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken)
     {
+        try
+        {
+            var stop = await pendingSaleStop.RunOnceAsync(today, cancellationToken);
+            Logger.LogInformation("Pending sale end-of-day stop stopped {Stopped} sales.", stop.Stopped);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            Logger.LogError(exception, "Pending sale end-of-day stop failed; the harvest lot daily close check goes on.");
+        }
+
         var run = await job.RunOnceAsync(today, cancellationToken);
         Logger.LogInformation("Harvest lot daily close check closed {Closed} lots and warned {Warned}.", run.Closed, run.Warned);
     }

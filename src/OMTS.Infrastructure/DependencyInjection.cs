@@ -13,6 +13,7 @@ using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
@@ -29,6 +30,8 @@ using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
 using OMTS.Infrastructure.Persistence.Repositories;
+using OMTS.Infrastructure.Persistence.Repositories.Sales;
+using OMTS.Infrastructure.Persistence.Repositories.Workforce;
 using OMTS.Infrastructure.Persistence.Seed;
 using OMTS.Infrastructure.Reports;
 using OMTS.Infrastructure.Storage;
@@ -68,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDocumentNumberAllocator, DocumentNumberAllocator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IWorkDayPlanRepository, WorkDayPlanRepository>();
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
@@ -88,7 +92,9 @@ public static class DependencyInjection
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<ISalesProductRepository, SalesProductRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
+        services.AddScoped<IEmployeeAppRepository, EmployeeAppRepository>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
@@ -102,6 +108,9 @@ public static class DependencyInjection
         services.AddScoped<IWorkEmployeeReader, WorkEmployeeReader>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
+        services.AddScoped<ILaneIncidentRepository, LaneIncidentRepository>();
+        services.AddScoped<ILaneProgressRepository, LaneProgressRepository>();
+        services.AddScoped<INurseryBatchRepository, NurseryBatchRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
         services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
         services.AddScoped<IMaterialUsageRepository, MaterialUsageRepository>();
@@ -110,12 +119,16 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
+        services.AddScoped<IPublicOriginQuery, PublicOriginQuery>();
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<IQualityClaimRepository, QualityClaimRepository>();
-        services.AddScoped<IInvoiceSalesReturnCheck, NoSalesReturnsYetCheck>();
+        services.AddScoped<IInvoiceSalesReturnCheck, InvoiceSalesReturnCheck>();
+        services.AddScoped<ISalesReturnRepository, SalesReturnRepository>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
+        services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
+        services.AddScoped<IOperationsDashboardQuery, OperationsDashboardQuery>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
@@ -124,6 +137,10 @@ public static class DependencyInjection
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
             .ValidateOnStart();
         services.AddScoped<ICustomerDebtQuery, CustomerDebtQuery>();
+        services.AddScoped<ISalesPerformanceQuery, SalesPerformanceQuery>();
+        services.AddScoped<IPriceTrendsQuery, PriceTrendsQuery>();
+        services.AddScoped<IPostSaleIssuesQuery, PostSaleIssuesQuery>();
+        services.AddScoped<IReportFilterLookup, ReportFilterLookup>();
         services.AddScoped<SeedLotRepository>();
         services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());
         services.AddScoped<ISeedLotUsageQuery>(provider => provider.GetRequiredService<SeedLotRepository>());
@@ -158,7 +175,14 @@ public static class DependencyInjection
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
-        services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
+        // The staff and the employee app schemes tell their tokens apart by audience (and signing key): one audience for both would
+        // let a token of one kind through the other's check, so the host does not start.
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .Validate(
+                o => !string.IsNullOrWhiteSpace(o.EmployeeAudience) && !string.Equals(o.EmployeeAudience.TrimEnd('/'), o.Audience.TrimEnd('/'), StringComparison.OrdinalIgnoreCase),
+                $"{JwtOptions.SectionName}:EmployeeAudience must be set and differ from {JwtOptions.SectionName}:Audience.")
+            .ValidateOnStart();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSessionRevocation(configuration);
         services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();
@@ -169,6 +193,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
+        services.AddZalo(configuration);
         services.AddPayments(configuration);
         services.AddZalo(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
@@ -195,6 +220,8 @@ public static class DependencyInjection
         // GFR-05: harvest lots still for sale after the days before automatic close, and the warning the day before
         services.AddOptions<HarvestLotAutoCloseOptions>().Bind(configuration.GetSection(HarvestLotAutoCloseOptions.SectionName));
         services.AddSingleton<HarvestLotAutoCloseJob>();
+        // Council of 03/11 (PM answer 12/11/2026): the sales awaiting a VietQR transfer are stopped at the end of the business day, by the hosted service just before the close check
+        services.AddSingleton<PendingSaleEndOfDayStopJob>();
         services.AddSingleton<OMTS.Application.Features.Harvest.IHarvestAutoCloseSchedule, HarvestAutoCloseSchedule>();
         services.AddHostedService<HarvestLotAutoCloseHostedService>();
 
@@ -378,7 +405,7 @@ public static class DependencyInjection
         });
     }
 
-    private static void AddZalo(this IServiceCollection services, IConfiguration configuration)
+    internal static void AddZalo(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<ZaloOptions>().Bind(configuration.GetSection(ZaloOptions.SectionName));
         services.AddHttpClient<GraphZaloOpenApi>((provider, http) =>
@@ -386,7 +413,11 @@ public static class DependencyInjection
             var zalo = provider.GetRequiredService<IOptions<ZaloOptions>>().Value;
             http.BaseAddress = new Uri(zalo.BaseUrl);
             http.Timeout = TimeSpan.FromSeconds(zalo.TimeoutSeconds);
-        });
+        })
+        // Zalo answers -501 to a caller outside Vietnam: Zalo:ProxyUrl sends this client (and no other) through a Vietnamese proxy.
+        // A bad URL throws here, when the Graph adapter is built at startup, like a missing App secret.
+        .ConfigurePrimaryHttpMessageHandler(provider =>
+            ZaloProxyHandlerFactory.Create(provider.GetRequiredService<IOptions<ZaloOptions>>().Value));
         services.AddSingleton<FakeZaloOpenApi>();
         services.AddSingleton<NotConfiguredZaloOpenApi>();
         // Unset fails closed (MSG04, nobody is linked) instead of trusting tokens nobody checked.

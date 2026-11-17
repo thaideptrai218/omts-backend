@@ -19,6 +19,7 @@ public sealed class CultivationProgressService(
     IRaftRepository rafts,
     ICultivationCycleRepository cycles,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
     RaftViews raftViews,
     CultivationCycleViews cycleViews,
     CultivationLogViews logViews,
@@ -72,14 +73,14 @@ public sealed class CultivationProgressService(
             .Where(l => (l.StatusId == StatusIds.Lane.InUse && WasOnRaft(l, shown, cycle)) || day.LanesWithRecords.Contains(l.Id))
             .Select(l => l.Id)
             .ToHashSet();
-        var lanes = raftViews.LanesOn(raft, day.States).Where(l => onView.Contains(l.Id)).ToList();
+        var lanes = raftViews.LanesOn(raft, day.States, await laneProgress.InfoAsync(day, cancellationToken)).Where(l => onView.Contains(l.Id)).ToList();
         return new CultivationProgressView(
             raft.Id,
             raft.Code,
             shown,
             cycle is null ? null : await cycleViews.ViewAsync(cycle, cancellationToken),
             lanes,
-            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList(),
+            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded && !l.IsOutOfService).Select(l => l.LaneNumber).ToList(),
             cycle is null ? [] : await seeding.LaneSeedLotsAsync(cycle.Id, shown, cancellationToken),
             cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken),
             cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken) : null);

@@ -6,6 +6,7 @@ namespace OMTS.Domain.Constants;
 /// </summary>
 public static class StatusIds
 {
+
     public static class Usage
     {
         public const int InUse = 101;
@@ -129,9 +130,10 @@ public static class StatusIds
         public const int Accepted = 3202;
         public const int Declined = 3203;
         public const int Cancelled = 3204;
+        public const int AwaitingStaff = 3205;
 
         /// <summary>The Owner turned the request into an order (Đặt hàng): the request is finished and the order carries on.</summary>
-        public const int Ordered = 3205;
+        public const int Ordered = 3206;
     }
 
     /// <summary>STD-QUALITY-CLAIM (BR-CLAIM-02): a response cannot be changed.</summary>
@@ -140,6 +142,8 @@ public static class StatusIds
         public const int AwaitingResponse = 3701;
         public const int Rejected = 3702;
         public const int Accepted = 3703;
+        public const int OfferMade = 3704;
+        public const int OfferDeclined = 3705;
     }
 
     /// <summary>STD-SALES-INVOICE (BR-SALE-08): saved only when paid or put on the debt, so no draft; Paid and the delivery status are worked out.</summary>
@@ -149,6 +153,13 @@ public static class StatusIds
         public const int Cancelled = 3502;
     }
 
+    /// <summary>STD-SALES-RETURN (BR-CLAIM-03): Recorded counts in the debt, the lots and the reports; a Cancelled one counts nowhere.</summary>
+    public static class SalesReturn
+    {
+        public const int Recorded = 4101;
+        public const int Cancelled = 4102;
+    }
+
     /// <summary>STD-CUSTOMER-PAYMENT (BR-DEBT-03): counts in the debt from its recording, also while Awaiting confirmation; Pending transfer counts nowhere until the transfer arrives.</summary>
     public static class CustomerPayment
     {
@@ -156,6 +167,17 @@ public static class StatusIds
         public const int Completed = 3602;
         public const int Cancelled = 3603;
         public const int PendingTransfer = 3604;
+    }
+
+    /// <summary>NURSERY_BATCH (ươm giống, 12/11/2026): a Completed batch is not cancelled; only a Nursing one is edited or cancelled.</summary>
+    public static class NurseryBatch
+    {
+        public const int Nursing = 4001;
+        public const int Completed = 4002;
+        public const int Cancelled = 4003;
+
+        /// <summary>v2 (13/11/2026): the batch was closed, the pieces left in the pool are written off as loss.</summary>
+        public const int Closed = 4004;
     }
 
     /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>
@@ -169,18 +191,18 @@ public static class StatusIds
     /// <summary>A product disposal (XHS): a Draft holds no kg and is removed; Completed writes the product ledger; Cancelled counts nowhere.</summary>
     public static class ProductDisposal
     {
-        public const int Draft = 4001;
-        public const int Completed = 4002;
-        public const int Cancelled = 4003;
+        public const int Draft = 4301;
+        public const int Completed = 4302;
+        public const int Cancelled = 4303;
     }
 
     /// <summary>An order of goods (DH): a Draft is being agreed; Delivering once an invoice was saved; Completed or Cancelled end it.</summary>
     public static class SalesOrder
     {
-        public const int Draft = 4101;
-        public const int Delivering = 4102;
-        public const int Completed = 4103;
-        public const int Cancelled = 4104;
+        public const int Draft = 4401;
+        public const int Delivering = 4402;
+        public const int Completed = 4403;
+        public const int Cancelled = 4404;
     }
 
     /// <summary>A harvest plan (KHT): a Draft is prepared by the Owner; Assigned once handed to the Zone Managers of its zone; Harvesting from the first lot or the first lane left out; Completed or Cancelled end it.</summary>

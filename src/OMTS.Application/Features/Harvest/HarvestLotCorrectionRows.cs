@@ -6,7 +6,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <summary>The lane and photo rows of a corrected lot (HARVEST-01.1): what the correction takes out goes, what it adds comes, and what it keeps stays as it is.</summary>
 internal static class HarvestLotCorrectionRows
 {
-    public static void ApplyLanes(IHarvestLotRepository lots, HarvestLot lot, HarvestLotFields fields)
+    /// <param name="shares">The share each lane of the lot takes (lane id to percent, null: not entered); none (TRACE-03.2): a lane stays as it is and a lane added has none.</param>
+    public static void ApplyLanes(IHarvestLotRepository lots, HarvestLot lot, HarvestLotFields fields, IReadOnlyDictionary<Guid, decimal?>? shares = null)
     {
         var wanted = fields.Lanes.ToDictionary(l => l.Id);
         foreach (var lane in lot.Lanes.Where(l => !wanted.ContainsKey(l.LaneId)).ToList())
@@ -18,11 +19,19 @@ internal static class HarvestLotCorrectionRows
         foreach (var lane in lot.Lanes)
         {
             lane.IsFinished = fields.FinishedLaneIds.Contains(lane.LaneId);
+            if (shares is not null && shares.TryGetValue(lane.LaneId, out var share))
+            {
+                lane.HarvestedPercent = share;
+            }
         }
 
         foreach (var lane in fields.Lanes.Where(l => lot.Lanes.All(existing => existing.LaneId != l.Id)))
         {
-            var added = new HarvestLotLane { LotId = lot.Id, LaneId = lane.Id, Lane = lane, IsFinished = fields.FinishedLaneIds.Contains(lane.Id) };
+            var added = new HarvestLotLane
+            {
+                LotId = lot.Id, LaneId = lane.Id, Lane = lane, IsFinished = fields.FinishedLaneIds.Contains(lane.Id),
+                HarvestedPercent = shares is not null && shares.TryGetValue(lane.Id, out var addedShare) ? addedShare : null,
+            };
             lot.Lanes.Add(added);
             lots.AddLane(added);
         }

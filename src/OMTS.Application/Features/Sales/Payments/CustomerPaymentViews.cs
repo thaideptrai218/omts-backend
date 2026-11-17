@@ -43,6 +43,7 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
             p.Allocations
                 .OrderBy(a => a.Invoice.InvoicedAt).ThenBy(a => a.Invoice.Code, StringComparer.Ordinal)
                 .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList(),
+            CustomerPaymentSettlementRules.NeedsSettlement(p), p.PaidBackForPaymentId,
             p.SalesOrder is { } order
                 ? new CustomerPaymentOrderRef(
                     order.Id, order.Code, order.StatusId, statusCatalog.DisplayNameOf(order.StatusId),

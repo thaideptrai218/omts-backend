@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,13 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
     /// <summary>Every log line the host wrote, to check that secrets and duplicate values stay out of the logs.</summary>
     public CapturingLoggerProvider Logs { get; } = new();
 
+    /// <summary>Lets a helper given only the client reach this host's database (<see cref="TestHosts"/>).</summary>
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestHosts.Register(client, Services);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Added last, so it wins over a developer's user-secrets.
@@ -33,6 +41,8 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             ["Jwt:SigningKey"] = _signingKey,
             ["RateLimits:CodeRequestsPerMinute"] = "100000",
             ["RateLimits:LoginsPerMinute"] = "100000",
+            ["RateLimits:EmployeeAppLoginsPerMinute"] = "100000",
+            ["RateLimits:EmployeeLoginCodesPerMinute"] = "100000",
             ["RateLimits:ProvenancePagesPerMinute"] = "100000",
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
             ["Jobs:WaterMeasurementOverdue:CatchUpOnStart"] = "false",
@@ -42,6 +52,8 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             [AuthApiFactory.PublicBaseUrlKey] = AuthApiFactory.PublicBaseUrl,
         }.Concat(settings ?? new Dictionary<string, string?>())));
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
+        // The test seams of this assembly (TestOnlyLegacyCycleController starts a cycle the old way, which the public routes no longer do since the nursery change of 12-13/11/2026), as AuthApiFactory loads them.
+        builder.ConfigureTestServices(services => services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly));
     }
 
     public async Task<Account> AddAccountAsync(string username, string password, SubjectType subjectType = SubjectType.CooperativeOwner)

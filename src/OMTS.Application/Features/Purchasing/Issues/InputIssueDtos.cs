@@ -145,7 +145,7 @@ public sealed record InputIssueReceiverView(Guid Id, string FullName);
 
 public sealed record InputIssueNextCode(string Code);
 
-/// <summary>A movement of an item, quantities in its base unit.</summary>
+/// <summary>A movement of an item, quantities in its base unit. For an issue posted by a seeding session or a material usage, <c>sourceKind</c>, <c>sourceRecordId</c>, <c>cycleId</c>, <c>raftId</c> and <c>zoneId</c> name where it went; they are null for every other movement.</summary>
 public sealed record InputMovementView(
     Guid Id,
     long Sequence,
@@ -160,7 +160,12 @@ public sealed record InputMovementView(
     string? PartyName,
     Guid? SeedLotLineId,
     string? SeedLotCode,
-    Guid? ReversesMovementId);
+    Guid? ReversesMovementId,
+    InputIssueSource? SourceKind = null,
+    Guid? SourceRecordId = null,
+    Guid? CycleId = null,
+    Guid? RaftId = null,
+    Guid? ZoneId = null);
 
 public sealed record InputMovementPage(IReadOnlyList<InputMovementView> Items, int Page, int PageSize, int Total, string Unit);
 

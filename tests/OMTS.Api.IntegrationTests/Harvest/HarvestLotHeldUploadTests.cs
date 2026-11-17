@@ -69,7 +69,7 @@ public class HarvestLotHeldUploadTests
 
         var refused = await (await pending).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("Lanes", "Lanes 1 cannot be harvested now."), (refused.Text("field"), refused.Text("hint")));
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
         Assert.Equal(1, await api.LotCountAsync(raft.RaftId));
     }
 
@@ -85,7 +85,7 @@ public class HarvestLotHeldUploadTests
         api.Hold.Release();
 
         await (await pending).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
         Assert.Equal(0, await api.LotCountAsync(raft.RaftId));
         Assert.Equal(0, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "HARVEST_LOT_RECORDED")));
     }
@@ -101,7 +101,7 @@ public class HarvestLotHeldUploadTests
         api.Hold.Release();
 
         Assert.Equal("MSG-GEN-09", await (await pending).ErrorCodeAsync());
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
     }
 
     // A failure between the uploads and the save (here the notification rows): no row will point to the files, so they do not wait for the clean-up.
@@ -116,7 +116,7 @@ public class HarvestLotHeldUploadTests
         var answer = await manager.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg, Png] });
 
         Assert.Equal(HttpStatusCode.InternalServerError, answer.StatusCode);
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
         Assert.Equal(0, await api.LotCountAsync(raft.RaftId));
     }
 }

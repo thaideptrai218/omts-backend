@@ -5,6 +5,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
@@ -26,13 +27,16 @@ public sealed class HarvestLotCorrectionService(
     RowVersionGuard rowVersions,
     HarvestLotNotifier notifier,
     HarvestLotViews views,
+    HarvestCrewService crews,
+    LanePercentGuard percents,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
     private sealed record Checked(
-        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<ResolvedProductLine>? Lines);
+        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<ResolvedProductLine>? Lines,
+        IReadOnlyList<Domain.Entities.Identity.Employee>? Crew, IReadOnlyDictionary<Guid, decimal?> Shares);
 
     private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested);
 
@@ -69,7 +73,7 @@ public sealed class HarvestLotCorrectionService(
         }
 
         var saved = UserMessages.Saved("Harvest lot");
-        return new HarvestLotSaved(await views.ViewAsync(done.Lot, done.Raft, cancellationToken), done.EveryHarvested, RowVersionGuard.Encode(done.Lot.Cycle.RowVersion), saved.Text, saved.Code);
+        return new HarvestLotSaved(await views.ViewAsync(done.Lot, done.Raft, cancellationToken), done.EveryHarvested, RowVersionGuard.Encode(done.Lot.Cycle.RowVersion), saved.Text, saved.Code, HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg));
     }
 
     /// <summary>
@@ -77,7 +81,7 @@ public sealed class HarvestLotCorrectionService(
     /// A form read before another save is told so first (NFR-09): its kept keys and lanes were never judged against that save, so they are not its mistake.
     /// </summary>
     private async Task<Result<Checked>> CheckAsync(
-        Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
+        Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken, int uploadedCount = 0)
     {
         var lot = await lots.GetForEditAsync(lotId, cancellationToken);
         if (lot is null)
@@ -98,7 +102,9 @@ public sealed class HarvestLotCorrectionService(
 
         var (raft, facts) = await edits.FactsAsync(lot, cancellationToken);
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count);
+        // A lot that has photos keeps 1 to 3 after the correction (owner decision of 12/11/2026); one recorded before the photos stays valid without.
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(
+            newPhotos, request.OtherFilePart, kept.Count + uploadedCount, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
 
         // The product lines replace the lines of the lot, and the cages and kg of the lot are their sums; a lot that has lines is never left without them.
         var (lines, lineError) = await productLines.ResolveAsync(
@@ -116,7 +122,8 @@ public sealed class HarvestLotCorrectionService(
             var (cages, kg) = HarvestLotProductLineService.Totals(lines);
             fields = fields with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false };
         }
-        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers));
+
+        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), null, lot.CageCount, lot.EstimatedKg, lot.Lanes.Select(l => l.LaneId).ToHashSet());
         if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction) is { } invalid)
         {
             return invalid;
@@ -142,37 +149,65 @@ public sealed class HarvestLotCorrectionService(
             return lineError;
         }
 
+        if (lines is not null && HarvestProductMatch.Refusal(lot.Cycle, lines) is { } wrongProduct)
+        {
+            return wrongProduct;
+        }
+
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
+        // The lot's own share is not counted against itself; a lane the correction leaves as it is keeps its share and is not judged again. A lane the lot no longer finishes loses the share the finish gave it
+        // (what was left, so the lane's total became 100): it is back to what a lot with no share and no finish has.
+        var shares = percents.ForHarvest(
+            await percents.ReadAsync(lot.CycleId, cancellationToken), read!.Lanes, read.FinishedLaneIds, request.LanePercents, request.LanePercentsUnreadable,
+            lot.Lanes.ToDictionary(l => l.LaneId, l => l.IsFinished && !read.FinishedLaneIds.Contains(l.LaneId) ? null : l.HarvestedPercent), lot.Id);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
         if (version is not null)
         {
             return version;
         }
 
-        return new Checked(lot, raft, read!, facts, kept, files, lines);
+        // The lane states the correction would give are worked out with the new shares too, not the ones the rows still hold.
+        return new Checked(lot, raft, read with { Shares = shares.Value }, facts, kept, files, lines, crew, shares.Value!);
     }
 
     /// <summary>Changes the row as it is after the uploads. The cap on photos still holds, as the kept photos can only be the same ones.</summary>
     private async Task<Result<Applied>> ApplyAsync(Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<string> newKeys, CancellationToken cancellationToken)
     {
-        var current = await CheckAsync(lotId, request, keep, [], cancellationToken);
+        // The new photos are already uploaded (newKeys): they count towards the 1 to 3 the lot ends with, as in the first look.
+        var current = await CheckAsync(lotId, request, keep, [], cancellationToken, newKeys.Count);
         if (!current.IsSuccess)
         {
             return current.Error!;
         }
 
-        var (lot, raft, fields, facts, kept, _, lines) = current.Value!;
+        var (lot, raft, fields, facts, kept, _, lines, crew, shares) = current.Value!;
         var everyBefore = facts.EveryHarvestedNow();
         var everyAfter = facts.EveryHarvestedWith(fields);
         var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
-        var before = HarvestLotAudit.Snapshot(lot);
+        var before = HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
-        HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
+        HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields, shares);
         if (lines is not null)
         {
             await productLines.ReplaceAsync(lot, raft.Code, lines, cancellationToken);
         }
 
+        if (crew is not null)
+        {
+            crews.Apply(lot, crew);
+        }
+
         var removedKeys = HarvestLotCorrectionRows.ApplyPhotos(lots, lot, kept, newKeys);
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot));
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true));
         if (changedAfter is null)
         {
             return new Applied(lot, raft, removedKeys, false, everyAfter);

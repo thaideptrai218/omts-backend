@@ -30,6 +30,7 @@ public sealed class TraceSeedingCorrectionService(
     SeedingViews views,
     LaneStateReader laneStates,
     RowVersionGuard rowVersions,
+    Cultivation.Seeding.SeedingStockSync stockSync,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -85,6 +86,11 @@ public sealed class TraceSeedingCorrectionService(
         var published = TraceCorrectionAnswers.PublishedCodes(plan.Affected);
         if (plan.ChangedAfter is not null)
         {
+            if (await stockSync.ReplaceAsync(record, plan.Fields, plan.Raft, cancellationToken) is { } stockRefused)
+            {
+                return stockRefused;
+            }
+
             SeedingRecordRows.Apply(records, record, plan.Fields);
             // Lanes are rows of their own: a change of lanes only must still give the session a new version.
             unitOfWork.MarkChanged(record);

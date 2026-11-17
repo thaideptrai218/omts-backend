@@ -12,7 +12,7 @@ public sealed class QualityClaimViews(IQualityClaimRepository claims, IFileStora
     private static readonly TimeSpan PhotoLinkLifetime = TimeSpan.FromHours(1);
 
     public QualityClaimRow Row(QualityClaim c, bool forStaff) => new(
-        c.Id, c.Code, c.SentAt, c.StatusId, statusCatalog.DisplayNameOf(c.StatusId), c.Description, c.Photos.Count, c.Offer,
+        c.Id, c.Code, c.SentAt, c.StatusId, statusCatalog.DisplayNameOf(c.StatusId), c.Description, c.Photos.Count, c.Offer, c.OfferAmount,
         new QualityClaimInvoiceRef(c.InvoiceId, c.Invoice.Code),
         forStaff ? new QualityClaimCustomerView(c.CustomerId, c.Customer.Name, c.Customer.PhoneNumber) : null);
 
@@ -21,8 +21,8 @@ public sealed class QualityClaimViews(IQualityClaimRepository claims, IFileStora
         var invoice = claim.Invoice;
         var sendings = await claims.ListSendingsAsync(claim.Id, cancellationToken);
         return new QualityClaimView(
-            claim.Id, claim.Code, claim.SentAt, claim.StatusId, statusCatalog.DisplayNameOf(claim.StatusId), claim.Description, await PhotosAsync(claim, cancellationToken), claim.Offer,
-            Response(claim),
+            claim.Id, claim.Code, claim.SentAt, claim.StatusId, statusCatalog.DisplayNameOf(claim.StatusId), claim.Description, await PhotosAsync(claim, cancellationToken), claim.Offer, claim.OfferAmount,
+            Response(claim), Answer(claim),
             new QualityClaimCustomerView(claim.CustomerId, claim.Customer.Name, claim.Customer.PhoneNumber),
             new QualityClaimInvoiceView(
                 invoice.Id, invoice.Code, invoice.InvoiceDate, invoice.ZoneId, invoice.Zone.Name, invoice.StatusId, statusCatalog.DisplayNameOf(invoice.StatusId),
@@ -35,10 +35,12 @@ public sealed class QualityClaimViews(IQualityClaimRepository claims, IFileStora
     }
 
     public async Task<TraderQualityClaimView> ForTraderAsync(QualityClaim claim, CancellationToken cancellationToken) => new(
-        claim.Id, claim.Code, claim.SentAt, claim.StatusId, statusCatalog.DisplayNameOf(claim.StatusId), claim.Description, await PhotosAsync(claim, cancellationToken), claim.Offer,
-        Response(claim), new QualityClaimInvoiceRef(claim.InvoiceId, claim.Invoice.Code), claim.Invoice.InvoiceDate, claim.Invoice.Total, Lines(claim.Invoice, withPrices: false));
+        claim.Id, claim.Code, claim.SentAt, claim.StatusId, statusCatalog.DisplayNameOf(claim.StatusId), claim.Description, await PhotosAsync(claim, cancellationToken), claim.Offer, claim.OfferAmount,
+        Response(claim), Answer(claim), new QualityClaimInvoiceRef(claim.InvoiceId, claim.Invoice.Code), claim.Invoice.InvoiceDate, claim.Invoice.Total, Lines(claim.Invoice, withPrices: false));
 
     private static QualityClaimResponseView? Response(QualityClaim c) => c.RespondedAt is { } at ? new QualityClaimResponseView(c.ResponseNote, at) : null;
+
+    private static QualityClaimAnswerView? Answer(QualityClaim c) => c.AnsweredAt is { } at ? new QualityClaimAnswerView(c.AnswerNote, at) : null;
 
     private static List<QualityClaimInvoiceLineView> Lines(SalesInvoice invoice, bool withPrices) => invoice.Lines
         .OrderBy(l => l.LineNumber)

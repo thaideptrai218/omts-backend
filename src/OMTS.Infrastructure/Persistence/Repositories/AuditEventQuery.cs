@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -54,6 +55,42 @@ internal sealed class AuditEventQuery(OmtsDbContext db) : IAuditEventQuery
 
         var values = await events.Select(e => new { e.Before, e.After }).SingleAsync(cancellationToken);
         return new AuditEventValues((await WithEmployeeNamesAsync([row], cancellationToken))[0], values.Before, values.After);
+    }
+
+    public async Task<IReadOnlyList<AuditHistoryRow>> HistoryOfRecordAsync(string recordType, Guid recordId, CancellationToken cancellationToken)
+    {
+        var events = db.AuditEvents.AsNoTracking().Where(e => e.RecordType == recordType && e.RecordId == recordId);
+        var rows = await events.OrderBy(e => e.OccurredAt).ThenBy(e => e.Id)
+            .Select(e => new
+            {
+                e.Id, e.OccurredAt, e.ActorAccountId, AccountName = e.ActorAccount != null ? e.ActorAccount.DisplayName : null,
+                Username = e.ActorAccount != null ? e.ActorAccount.Username : null, e.ActorEmployeeId, e.Action, e.RecordType, e.RecordId, e.RecordCode, e.ZoneId, e.Reason,
+                e.Before, e.After, Subject = e.ActorAccount != null ? (SubjectType?)e.ActorAccount.SubjectType : null,
+            })
+            .ToListAsync(cancellationToken);
+        var plain = rows.Select(r => new AuditEventRow(
+            r.Id, r.OccurredAt, r.ActorAccountId, r.AccountName, r.Username, r.ActorEmployeeId, null, r.Action, r.RecordType, r.RecordId, r.RecordCode, r.ZoneId, r.Reason)).ToList();
+        var named = await WithEmployeeNamesAsync(plain, cancellationToken);
+        var accountIds = rows.Where(r => r.ActorAccountId is not null).Select(r => r.ActorAccountId!.Value).Distinct().ToList();
+
+        // The pairs of the staff accounts that were Effective when the event happened, in the zone of the event or in all zones.
+        var grants = accountIds.Count == 0 ? [] : await db.AccessGrants.AsNoTracking()
+            .Where(g => accountIds.Contains(g.AccountId))
+            .Select(g => new { g.AccountId, g.ZoneId, g.CreatedAt, g.RevokedAt, RoleCode = g.Role.Code })
+            .ToListAsync(cancellationToken);
+        return rows.Select((r, i) =>
+        {
+            var role = r.Subject switch
+            {
+                SubjectType.CooperativeOwner => "CooperativeOwner",
+                SubjectType.Trader => "Trader",
+                SubjectType.Staff => grants
+                    .Where(g => g.AccountId == r.ActorAccountId && (g.ZoneId == null || g.ZoneId == r.ZoneId) && g.CreatedAt <= r.OccurredAt && (g.RevokedAt == null || g.RevokedAt > r.OccurredAt))
+                    .Select(g => g.RoleCode).Distinct().OrderBy(c => c).FirstOrDefault() ?? "Staff",
+                _ => r.ActorEmployeeId is not null ? "Employee" : null,
+            };
+            return new AuditHistoryRow(new AuditEventValues(named[i], r.Before, r.After), role);
+        }).ToList();
     }
 
     public async Task<AuditFacetRows> FacetsAsync(CancellationToken cancellationToken)

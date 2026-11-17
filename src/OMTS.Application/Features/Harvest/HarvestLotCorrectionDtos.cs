@@ -16,13 +16,19 @@ namespace OMTS.Application.Features.Harvest;
 public sealed record CorrectHarvestLotRequest(
     IReadOnlyList<int>? LaneNumbers,
     IReadOnlyList<int>? FinishedLaneNumbers,
-    int? CageCount,
+    decimal? CageCount,
     decimal? EstimatedKg,
     IReadOnlyList<string?>? KeepPhotoKeys,
     string? Reason,
     string? RowVersion,
     bool EstimatedKgIsUnreadable = false,
     bool OtherFilePart = false,
+    bool ConfirmOverPlan = false,
+    string? OverPlanReason = null,
+    IReadOnlyList<Guid>? Crew = null,
+    bool CrewUnreadable = false,
+    IReadOnlyDictionary<int, decimal>? LanePercents = null,
+    bool LanePercentsUnreadable = false,
     IReadOnlyList<HarvestProductLineInput>? ProductLines = null,
     bool ProductLinesAreUnreadable = false);
 

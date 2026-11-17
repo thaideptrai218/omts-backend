@@ -43,7 +43,7 @@ public sealed record HarvestPlanLaneView(
     Guid LaneId, int LaneNumber, HarvestPlanLaneState State, string? LotCode, DateTimeOffset? SkippedAt, AccountRef? SkippedBy, string? SkipReason);
 
 /// <summary>The lot recorded from a line.</summary>
-public sealed record HarvestPlanLotView(Guid Id, string LotCode, int CageCount, decimal EstimatedKg, DateTimeOffset HarvestedAt);
+public sealed record HarvestPlanLotView(Guid Id, string LotCode, decimal CageCount, decimal EstimatedKg, DateTimeOffset HarvestedAt);
 
 /// <summary>A line of a plan with its lanes; <paramref name="Zone"/> is the zone of its raft; <paramref name="ExpectedProduct"/> the product of the raft's cultivation cycle. <paramref name="CanHarvest"/>: a lot can be recorded from it now, and lanes left out (the caller still needs HARVESTS Create). <paramref name="Locked"/>: it has a lot or a lane left out, so the Owner cannot change it.</summary>
 public sealed record HarvestPlanLineView(
@@ -53,7 +53,7 @@ public sealed record HarvestPlanLineView(
     string RaftCode,
     HarvestPlanZoneView Zone,
     HarvestPlanProductView? ExpectedProduct,
-    int? ExpectedCageCount,
+    decimal? ExpectedCageCount,
     string? Note,
     HarvestPlanLineState State,
     HarvestPlanLotView? Lot,
@@ -124,7 +124,7 @@ public sealed record HarvestPlanNextCode(string Code);
 
 /// <summary>A line of a saved plan as sent: a raft of any zone, its lanes and the cages expected (the product is that of the raft's cultivation cycle; an <c>expectedProductId</c> sent is ignored). <paramref name="Id"/> names a line of the plan being updated; without it the line is new.</summary>
 /// <param name="LaneNumbers">The lanes to harvest, each given once; at least one.</param>
-public sealed record SaveHarvestPlanLineRequest(Guid? Id, Guid? RaftId, IReadOnlyList<int>? LaneNumbers, int? ExpectedCageCount, string? Note);
+public sealed record SaveHarvestPlanLineRequest(Guid? Id, Guid? RaftId, IReadOnlyList<int>? LaneNumbers, decimal? ExpectedCageCount, string? Note);
 
 /// <summary>Create (POST) and update (PUT) of a plan, which spans the rafts of its lines whatever their zones (a <c>zoneId</c> sent is ignored); an update replaces the header, the orders and the lines.</summary>
 /// <param name="Code">1-30 letters, digits and . _ -; empty = the next KHT on create, the stored one on update.</param>
@@ -151,7 +151,7 @@ public sealed record HarvestPlansToHarvest(IReadOnlyList<HarvestPlanView> Plans)
 
 /// <summary>A product of the order with the cages worked out for the plan: the cages of a Lồng line, or the kg of the line over the kg of one Lồng of the product (rounded up); null when the product has no Lồng unit.</summary>
 public sealed record HarvestPlanDraftProduct(
-    Guid ProductId, string ProductCode, string ProductName, Guid UnitId, string UnitCode, string UnitName, decimal Quantity, int? ExpectedCageCount);
+    Guid ProductId, string ProductCode, string ProductName, Guid UnitId, string UnitCode, string UnitName, decimal Quantity, decimal? ExpectedCageCount);
 
 /// <summary>The form of a new plan made from an order: its pickup time as the planned time, and its products. The lines (rafts and lanes, of any zone) are for the Owner to choose.</summary>
 public sealed record HarvestPlanOrderDraft(

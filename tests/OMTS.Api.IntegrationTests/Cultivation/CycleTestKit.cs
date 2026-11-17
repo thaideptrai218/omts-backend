@@ -13,32 +13,9 @@ public sealed record CycleBody(
 /// <summary>CYCLE-01 and CYCLE-05 calls.</summary>
 public static class CycleTestKit
 {
-    private static readonly ConditionalWeakTable<HttpClient, Task<Guid?>> ProductOfClient = new();
-
-    /// <summary>A product In Use for the starts of a cycle: the one named "Cycle test oyster", made once per client by the Owner; null for a client that cannot make one (its start then answers MSG-GEN-01 for the product).</summary>
-    public static Task<Guid?> CycleProductAsync(this HttpClient client) => ProductOfClient.GetValue(client, MakeCycleProductAsync);
-
-    private static async Task<Guid?> MakeCycleProductAsync(HttpClient client)
-    {
-        const string name = "Cycle test oyster";
-        var made = await client.PostAsJsonAsync("/api/products", new { name, unitPrice = 60000 });
-        if (made.StatusCode == HttpStatusCode.Created)
-        {
-            var saved = await made.Content.ReadFromJsonAsync<JsonElement>();
-            return (saved.TryGetProperty("product", out var product) ? product : saved).GetProperty("id").GetGuid();
-        }
-
-        var listed = await client.GetAsync("/api/products");
-        return listed.IsSuccessStatusCode
-            ? (await listed.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().Where(p => p.GetProperty("name").GetString() == name).Select(p => (Guid?)p.GetProperty("id").GetGuid()).FirstOrDefault()
-            : null;
-    }
-
-    public static async Task<HttpResponseMessage> PostCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null)
-    {
-        body ??= new CycleBody();
-        return await client.PostAsJsonAsync($"/api/rafts/{raftId}/cultivation-cycles", body with { ProductId = body.ProductId ?? await client.CycleProductAsync() });
-    }
+    /// <summary>Starts a cycle the OLD way (no nursery batch), through the test seam <c>TestOnlyLegacyCycleController</c>, with the multipart form of 12/11/2026, with <paramref name="photos"/> photos of the plan (one by default, as a new cycle needs).</summary>
+    public static Task<HttpResponseMessage> PostCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null, int photos = 1) =>
+        client.PostAsync($"/test-only/rafts/{raftId}/cultivation-cycles", StepFormKit.FormOf(body ?? new CycleBody(), photos));
 
     /// <summary>Starts a cycle and returns the saved cycle, the <c>cycle</c> of the answer.</summary>
     public static async Task<JsonElement> StartCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null) =>

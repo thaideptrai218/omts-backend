@@ -32,6 +32,7 @@ internal sealed class HarvestPlanLineConfiguration : IEntityTypeConfiguration<Ha
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.RaftId);
         builder.HasOne(x => x.ExpectedProduct).WithMany().HasForeignKey(x => x.ExpectedProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.ExpectedCageCount).HasPrecision(9, 2);
         builder.Property(x => x.Note).HasMaxLength(Lengths.Url);
         builder.ToTable(t => t.HasCheckConstraint("CK_HarvestPlanLine_ExpectedCageCount", "[ExpectedCageCount] IS NULL OR [ExpectedCageCount] > 0"));
 

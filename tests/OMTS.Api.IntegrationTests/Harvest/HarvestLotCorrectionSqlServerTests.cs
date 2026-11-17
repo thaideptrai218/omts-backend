@@ -75,7 +75,8 @@ public class HarvestLotCorrectionSqlServerTests
 
         // A change of the lanes alone gives the lot a new version too: a photo change the same.
         var again = corrected.GetProperty("lot");
-        var noPhotos = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(1, 2), "No photo", again.Text("rowVersion")))).ReadAsync(HttpStatusCode.OK);
+        // A lot keeps 1 to 3 photos (owner decision of 12/11/2026): the photo is replaced, not removed.
+        var noPhotos = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(1, 2) with { Photos = [Png] }, "New photo", again.Text("rowVersion")))).ReadAsync(HttpStatusCode.OK);
         Assert.NotEqual(again.Text("rowVersion"), noPhotos.GetProperty("lot").Text("rowVersion"));
         await AssertNoFileLeftBehindAsync(host);
 

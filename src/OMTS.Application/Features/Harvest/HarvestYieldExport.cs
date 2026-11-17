@@ -9,22 +9,22 @@ public static class HarvestYieldExport
     public const string LotsSheet = "Lots";
     public const string NotFinalMark = "Not final";
 
-    public static readonly IReadOnlyList<string> GroupHeaders = ["Group", "Zone", "Lots", "Estimated kg", "Sold kg", "Lost kg", "Difference kg", "Not final"];
+    public static readonly IReadOnlyList<string> GroupHeaders = ["Group", "Zone", "Lots", "Estimated kg", "Sold kg", "Lost kg", "Difference kg", "Not final", "Cages"];
 
     public static readonly IReadOnlyList<string> LotHeaders =
-        ["Group", "Lot code", "Zone", "Raft", "Harvest date", "Status", "Estimated kg", "Invoiced kg", "Returned kg", "Sold kg", "Lost kg", "Difference kg", "Not final", "In period"];
+        ["Group", "Lot code", "Zone", "Raft", "Harvest date", "Status", "Estimated kg", "Invoiced kg", "Returned kg", "Sold kg", "Lost kg", "Difference kg", "Not final", "In period", "Cages"];
 
     public static IReadOnlyList<SpreadsheetSheet> Sheets(HarvestYieldReport report)
     {
         var groups = report.Groups.Select(g => (IReadOnlyList<object?>)
-            [g.Label, g.ZoneCode, g.LotCount, g.EstimatedKg, g.SoldKg, g.LostKg, g.DifferenceKg, Mark(g.NotFinal)]).ToList();
+            [g.Label, g.ZoneCode, g.LotCount, g.EstimatedKg, g.SoldKg, g.LostKg, g.DifferenceKg, Mark(g.NotFinal), g.HarvestedCages]).ToList();
         var t = report.Totals;
-        groups.Add(["Total", null, t.LotCount, t.EstimatedKg, t.SoldKg, t.LostKg, t.DifferenceKg, Mark(t.NotFinal)]);
+        groups.Add(["Total", null, t.LotCount, t.EstimatedKg, t.SoldKg, t.LostKg, t.DifferenceKg, Mark(t.NotFinal), t.HarvestedCages]);
         var lots = report.Groups.SelectMany(g => g.Lots.Select(l => (IReadOnlyList<object?>)
         [
             // The harvest date is a business date (DateOnly: written as a date with no time). "In period" tells the other lots of a cycle apart (grouped by cycle).
             g.Label, l.LotCode, l.ZoneCode, l.RaftCode, l.HarvestDate, l.Status,
-            l.EstimatedKg, l.InvoicedKg, l.ReturnedKg, l.SoldKg, l.LostKg, l.DifferenceKg, Mark(l.NotFinal), l.InPeriod ? "Yes" : "No",
+            l.EstimatedKg, l.InvoicedKg, l.ReturnedKg, l.SoldKg, l.LostKg, l.DifferenceKg, Mark(l.NotFinal), l.InPeriod ? "Yes" : "No", l.CageCount,
         ])).ToList();
         return [new SpreadsheetSheet(GroupsSheet, GroupHeaders, groups), new SpreadsheetSheet(LotsSheet, LotHeaders, lots)];
     }

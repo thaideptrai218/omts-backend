@@ -46,7 +46,7 @@ public sealed class RaftService(
         var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await rafts.FindByCodeAsync(zone.Id, values.Code, null, cancellationToken) is { } existing)
@@ -61,10 +61,19 @@ public sealed class RaftService(
             raft.Lanes.Add(new Lane { RaftId = raft.Id, LaneNumber = number });
         }
 
+        var (lengthError, lengthChanges) = RaftLaneLengths.Apply(raft, values.LaneLengths);
+        if (lengthError is not null)
+        {
+            return lengthError;
+        }
+
         rafts.Add(raft);
         audit.Record(new AuditEntry("Raft.Created", RecordType)
         {
-            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Raft = RaftValues.Snapshot(raft), values.LaneCount },
+            RecordId = raft.Id,
+            RecordCode = raft.Code,
+            ZoneId = raft.ZoneId,
+            After = new { Raft = RaftValues.Snapshot(raft), values.LaneCount, raft.AreaM2, LaneLengths = lengthChanges.Select(c => new { c.Lane, Length = c.After }).ToList() },
         });
         return await SaveNewAsync(raft, cancellationToken) ?? (Result<RaftSaved>)await views.SavedAsync(raft, "Raft", cancellationToken);
     }
@@ -111,7 +120,7 @@ public sealed class RaftService(
         var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await rafts.FindByCodeAsync(raft.ZoneId, values.Code, raft.Id, cancellationToken) is { } existing)
@@ -136,6 +145,26 @@ public sealed class RaftService(
 
         var before = RaftValues.Snapshot(raft);
         values.ApplyTo(raft);
+        var (lengthError, lengthChanges) = RaftLaneLengths.Apply(raft, values.LaneLengths);
+        if (lengthError is not null)
+        {
+            return lengthError;
+        }
+
+        if (lengthChanges.Count > 0)
+        {
+            // Lanes are rows of their own: the raft still gets a new row version.
+            unitOfWork.MarkChanged(raft);
+            audit.Record(new AuditEntry("Raft.LaneLengthChanged", RecordType)
+            {
+                RecordId = raft.Id,
+                RecordCode = raft.Code,
+                ZoneId = raft.ZoneId,
+                Before = new { Lanes = lengthChanges.Select(c => new { c.Lane, Length = c.Before }).ToList() },
+                After = new { Lanes = lengthChanges.Select(c => new { c.Lane, Length = c.After }).ToList() },
+            });
+        }
+
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, RaftValues.Snapshot(raft));
         if (changedAfter is not null)
         {
@@ -155,6 +184,9 @@ public sealed class RaftService(
         foreach (var lane in change.Removed)
         {
             lane.StatusId = StatusIds.Lane.Removed;
+
+            // A lane taken off the end keeps no line length of its own: when it returns it has the length of the raft.
+            lane.LineLengthM = null;
         }
 
         foreach (var lane in change.Restored)

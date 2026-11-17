@@ -53,7 +53,7 @@ public static class FixedRoles
             new(HarvestPlans, [View]),
         ]);
 
-    /// <summary>Office work, usually granted at All zones; views sales invoices and lot traces, views and exports purchase receipts.</summary>
+    /// <summary>Office work, usually granted at All zones; views and exports sales invoices and purchase receipts, views lot traces.</summary>
     public static readonly FixedRole Accountant = new(
         StaffRole.Accountant,
         AccountantCode,
@@ -68,7 +68,8 @@ public static class FixedRoles
             new(ProductDisposals, [View, Export]),
             // The Accountant reads and exports the orders, whose advances it confirms as customer payments.
             new(SalesOrders, [View, Export]),
-            new(SalesInvoices, [View]),
+            // SALE-09: the Accountant also prints and exports the invoice list and one invoice (PM answer 12/11/2026, OMTS-224 [5.1]); creating, correcting and cancelling stay with the Zone Manager and the Owner.
+            new(SalesInvoices, [View, Export]),
             // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
             new(PurchaseReceipts, [View, Export]),
             // TRACE-02 is R for the Accountant: the trace result is viewed, not exported (TRACE-02.2 is the Zone Manager's).

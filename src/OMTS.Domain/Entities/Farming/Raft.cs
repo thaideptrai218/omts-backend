@@ -28,7 +28,20 @@ public class Raft : AuditableEntity, IHasStatus
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    /// <summary>
+    /// The legacy text "{length} m x {width} m". The server writes it again whenever the geometry below is saved, so older clients and reports still read it; for a raft that
+    /// has no numeric geometry yet it stays as it was typed.
+    /// </summary>
     public string? Size { get; set; }
+
+    /// <summary>Length of the raft in metres, along the lines: the longest line any lane may have. Null only for a raft whose old size text could not be read.</summary>
+    public decimal? LengthM { get; set; }
+
+    /// <summary>Width of the raft in metres, across all lanes. Null as <see cref="LengthM"/>.</summary>
+    public decimal? WidthM { get; set; }
+
+    /// <summary>Floor area in square metres, length times width rounded to 2 decimals; worked out, never stored or sent by a client. Null when a side is unknown.</summary>
+    public decimal? AreaM2 => LengthM is { } length && WidthM is { } width ? decimal.Round(length * width, 2, MidpointRounding.AwayFromZero) : null;
     public string? ConditionNotes { get; set; }
 
     public int StatusId { get; set; } = StatusIds.Usage.InUse;

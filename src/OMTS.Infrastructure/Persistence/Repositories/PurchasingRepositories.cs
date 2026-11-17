@@ -130,6 +130,7 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             .Include(i => i.Units).ThenInclude(u => u.Unit)
             .Include(i => i.Photos)
             .Include(i => i.ItemGroup)
+            .Include(i => i.Product)
             .AsSplitQuery()
             .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
@@ -182,7 +183,7 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             query = query.Where(i => i.StatusId == statusId);
         }
 
-        return await query.Include(i => i.Units).ThenInclude(u => u.Unit).Include(i => i.ItemGroup).AsSplitQuery().OrderBy(i => i.Code).ToListAsync(cancellationToken);
+        return await query.Include(i => i.Units).ThenInclude(u => u.Unit).Include(i => i.ItemGroup).Include(i => i.Product).AsSplitQuery().OrderBy(i => i.Code).ToListAsync(cancellationToken);
     }
 
     public async Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>

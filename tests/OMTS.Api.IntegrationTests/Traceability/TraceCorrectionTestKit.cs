@@ -77,8 +77,12 @@ public static class TraceCorrectionTestKit
 
     /// <summary>Sends a lot correction with a version issued now, as the in-memory database issues none.</summary>
     public static async Task<HttpResponseMessage> SendLotTraceAsync(
-        this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, bool ownerApproved = false, IReadOnlyList<string>? keep = null, string? reason = Reason) =>
-        await client.PutLotTraceAsync(lotId, new HarvestCorrection(fields, reason, await factory.LotVersionAsync(lotId), keep), ownerApproved);
+        this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, bool ownerApproved = false, IReadOnlyList<string>? keep = null, string? reason = Reason)
+    {
+        // Every lot a test records has a photo (a new lot needs 1 to 3): a correction that names none keeps what the lot has; an explicit empty list removes them all.
+        keep ??= await HarvestLotCorrectionTestKit.KeysOfAsync(client, lotId);
+        return await client.PutLotTraceAsync(lotId, new HarvestCorrection(fields, reason, await factory.LotVersionAsync(lotId), keep), ownerApproved);
+    }
 
     public static Task<JsonElement> TraceCyclesAsync(this HttpClient client, Guid raftId) =>
         client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/trace-corrections");
