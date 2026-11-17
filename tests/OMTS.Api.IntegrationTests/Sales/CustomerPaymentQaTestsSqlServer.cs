@@ -80,8 +80,11 @@ public class CustomerPaymentQaTestsSqlServer
             return found;
         }
 
-        public Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken) =>
-            inner.AwaitingConfirmationAsync(page, pageSize, cancellationToken);
+        public Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, DateTimeOffset? paidBefore, CancellationToken cancellationToken) =>
+            inner.AwaitingConfirmationAsync(page, pageSize, paidBefore, cancellationToken);
+
+        public Task<AwaitingCashSummary> AwaitingCashOfAsync(Guid collectorAccountId, DateTimeOffset overdueBefore, CancellationToken cancellationToken) =>
+            inner.AwaitingCashOfAsync(collectorAccountId, overdueBefore, cancellationToken);
 
         public Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken) =>
             inner.FindRecordedTransferAsync(bankReference, cancellationToken);
