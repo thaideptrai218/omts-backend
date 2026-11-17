@@ -715,6 +715,16 @@ public static class UserMessages
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
 
+    /// <summary>MSG-SALE-24 (PM decision of 17/11/2026): to the seller and the Owner, in the app, when the system stopped a sale at the end of the day because its VietQR transfer did not arrive.</summary>
+    public static UserMessage PendingSaleStoppedAtEndOfDay(string invoiceCode, decimal total, decimal cash)
+    {
+        var cashText = cash > 0 ? $" Cash of {Vnd(cash)} VND was recorded with it." : string.Empty;
+        return new UserMessage(Sale24, $"Sale {invoiceCode} of {Vnd(total)} VND was stopped at the end of the day: its transfer did not arrive.{cashText}")
+        {
+            Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["total_amount"] = total, ["cash_amount"] = cash },
+        };
+    }
+
     /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
     /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
     /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
