@@ -10,13 +10,14 @@ namespace OMTS.Application.Features.Labor.Work;
 /// <param name="Date">Today or later (BR-LABOR-03).</param>
 /// <param name="EmployeeIds">One to 100 Employed employees, no repeats.</param>
 /// <param name="MoveExisting">Yes to MSG-LABOR-06: an employee already assigned to another raft that day, not checked in, is moved.</param>
-public sealed record AssignWorkRequest(Guid? RaftId, Guid? JobTypeId, DateOnly? Date, IReadOnlyList<Guid>? EmployeeIds, bool MoveExisting = false);
+/// <param name="ZoneId">Instead of <paramref name="RaftId"/>: the zone of work with no raft (nursery); ignored when a raft is sent.</param>
+public sealed record AssignWorkRequest(Guid? RaftId, Guid? JobTypeId, DateOnly? Date, IReadOnlyList<Guid>? EmployeeIds, bool MoveExisting = false, Guid? ZoneId = null);
 
 /// <summary>Edit of an assignment (LABOR-02.2): its raft and job type, before the employee is checked in.</summary>
-public sealed record EditAssignmentRequest(Guid? RaftId, Guid? JobTypeId);
+public sealed record EditAssignmentRequest(Guid? RaftId, Guid? JobTypeId, Guid? ZoneId = null);
 
 /// <summary>Change job for crew (LABOR-02.1): the new job type and raft of the selected members, today.</summary>
-public sealed record CrewJobRequest(Guid? RaftId, Guid? JobTypeId, IReadOnlyList<Guid>? EmployeeIds);
+public sealed record CrewJobRequest(Guid? RaftId, Guid? JobTypeId, IReadOnlyList<Guid>? EmployeeIds, Guid? ZoneId = null);
 
 /// <summary>
 /// One employee of a day on a raft: the current job period (the latest of the day), with the check-in and the check-out. <see cref="Id"/>
@@ -74,7 +75,8 @@ public sealed record WorkLookups(IReadOnlyList<WorkJobOption> Jobs, IReadOnlyLis
 public sealed record RecordAttendanceRequest(string? QrCode);
 
 /// <param name="StartTime">Business time of today (UTC+7) the crew started, <c>HH:mm</c> or <c>HH:mm:ss</c>, not later than now.</param>
-public sealed record CrewStartRequest(Guid? RaftId, string? StartTime, string? Reason, IReadOnlyList<Guid>? EmployeeIds);
+/// <param name="ZoneId">Instead of <paramref name="RaftId"/>: the zone of a crew working in the zone with no raft (nursery).</param>
+public sealed record CrewStartRequest(Guid? RaftId, string? StartTime, string? Reason, IReadOnlyList<Guid>? EmployeeIds, Guid? ZoneId = null);
 
 /// <summary>A Staff employee on the staff list (LABOR-04.7): no raft, no job period.</summary>
 public sealed record StaffAttendanceView(Guid EmployeeId, string EmployeeName, string? EmployeeCode, DateOnly Date, DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt, bool Complete, bool OnLeave)
@@ -88,7 +90,7 @@ public sealed record StaffAttendanceView(Guid EmployeeId, string EmployeeName, s
 
 /// <summary>One job period of a day as entered in a correction (LABOR-04.4), and as shown.</summary>
 /// <param name="StartsAt">Empty for the first period of the day, which starts at the check-in.</param>
-public sealed record DayPeriodInput(Guid? JobTypeId, Guid? RaftId, DateTimeOffset? StartsAt);
+public sealed record DayPeriodInput(Guid? JobTypeId, Guid? RaftId, DateTimeOffset? StartsAt, Guid? ZoneId = null);
 
 /// <param name="CheckInAt">Null leaves the check-in missing (an incomplete day).</param>
 /// <param name="Periods">The job periods of the day after the correction, replacing the earlier ones: of a seasonal worker, each with a job type and a raft; of a Staff employee, none.</param>
@@ -97,7 +99,7 @@ public sealed record DayPeriodInput(Guid? JobTypeId, Guid? RaftId, DateTimeOffse
 public sealed record CorrectAttendanceRequest(
     DateTimeOffset? CheckInAt, DateTimeOffset? CheckOutAt, IReadOnlyList<DayPeriodInput>? Periods, string? Reason, string? RowVersion);
 
-public sealed record DayPeriodView(Guid Id, Guid JobTypeId, string Job, Guid RaftId, string RaftCode, DateTimeOffset? StartsAt);
+public sealed record DayPeriodView(Guid Id, Guid JobTypeId, string Job, Guid? RaftId, string? RaftCode, DateTimeOffset? StartsAt, Guid? ZoneId = null);
 
 public sealed record DayJobHoursView(Guid JobTypeId, string Job, decimal Hours);
 

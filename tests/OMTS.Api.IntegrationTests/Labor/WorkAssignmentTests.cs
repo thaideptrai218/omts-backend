@@ -294,4 +294,27 @@ public class WorkAssignmentTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         Assert.Equal("MSG-GEN-01", await ended.ErrorCodeAsync());
     }
+
+    [Fact]
+    public async Task Work_can_be_assigned_to_a_zone_with_no_raft_and_its_crew_started_by_the_zone()
+    {
+        var s = await SetupWorkAsync(factory);
+        var (a, b) = (await AddEmployeeAsync(s, "An"), await AddEmployeeAsync(s, "Bình"));
+
+        var created = await s.Manager.PostAsJsonAsync($"{Workforce}/assignments", new { zoneId = s.Zone.Id, jobTypeId = s.Harvest, date = Day(Today()), employeeIds = new[] { a, b } });
+        var rows = await created.BodyAsync(HttpStatusCode.Created);
+
+        var row = rows.EnumerateArray().Single(r => r.GetProperty("employeeId").GetGuid() == a);
+        Assert.Equal((JsonValueKind.Null, JsonValueKind.Null, s.Zone.Id), (row.GetProperty("raftId").ValueKind, row.GetProperty("raftCode").ValueKind, row.GetProperty("zoneId").GetGuid()));
+        var stored = await factory.QueryAsync(db => db.WorkAssignments.Where(w => w.EmployeeId == a).SingleAsync());
+        Assert.Equal((s.Zone.Id, (Guid?)null), (stored.ZoneId, stored.RaftId));
+
+        // A crew of the zone starts together; a raft or a zone is needed, and another zone is refused for a manager of this one.
+        var started = await s.Manager.PostAsJsonAsync($"{Workforce}/crew-start", new { zoneId = s.Zone.Id, startTime = "00:00", reason = "Tôi đến muộn", employeeIds = new[] { a, b } });
+        Assert.All((await started.BodyAsync(HttpStatusCode.OK)).EnumerateArray(), r => Assert.NotNull(r.Str("checkedInAt")));
+        var neither = await s.Manager.PostAsJsonAsync($"{Workforce}/assignments", new { jobTypeId = s.Harvest, date = Day(Today()), employeeIds = new[] { a } });
+        Assert.Equal("Raft", await FieldAsync(neither));
+        var otherZone = await s.Manager.PostAsJsonAsync($"{Workforce}/assignments", new { zoneId = s.OtherZone.Id, jobTypeId = s.Harvest, date = Day(Today()), employeeIds = new[] { a }, moveExisting = true });
+        Assert.Equal(HttpStatusCode.Forbidden, otherZone.StatusCode);
+    }
 }

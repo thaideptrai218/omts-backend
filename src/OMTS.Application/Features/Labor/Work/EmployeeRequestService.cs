@@ -292,7 +292,7 @@ public sealed class EmployeeRequestService(
             return AppError.Invalid("Raft");
         }
 
-        assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = day, RaftId = raft.Id, JobTypeId = jobType.Id, AssignedByAccountId = account });
+        assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = day, RaftId = raft.Id, ZoneId = raft.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account });
         return null;
     }
 
