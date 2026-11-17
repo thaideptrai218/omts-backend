@@ -133,8 +133,10 @@ public sealed record MyAwaitingCash(int Count, int OverdueCount, decimal Amount,
 public sealed record AwaitingCustomerPayments(Paged<CustomerPaymentDetails> Page, decimal TotalAmount, string? Message, string? MessageCode);
 
 /// <summary>The answer of a list of confirmations: what was confirmed, cancelled and settled, and MSG-GEN-05.</summary>
+/// <param name="Warnings">Things the Accountant should know that do not stop the save (PM decision of 17/11/2026, answer 4 on #84): the Cash fund below zero after a cash refund.</param>
 public sealed record CustomerPaymentsConfirmed(
-    IReadOnlyList<CustomerPaymentDetails> Confirmed, IReadOnlyList<CustomerPaymentDetails> Cancelled, string Message, string MessageCode, IReadOnlyList<CustomerPaymentSettled>? Settled = null);
+    IReadOnlyList<CustomerPaymentDetails> Confirmed, IReadOnlyList<CustomerPaymentDetails> Cancelled, string Message, string MessageCode, IReadOnlyList<CustomerPaymentSettled>? Settled = null,
+    IReadOnlyList<string>? Warnings = null);
 
 /// <summary>DEBT-02.6: the payment settled (Completed), the money paid back (null when it went to a profile) and the debt of the profile after the list (null without a profile).</summary>
 public sealed record CustomerPaymentSettled(CustomerPaymentDetails Payment, CustomerPaymentDetails? PaidBack, decimal? DebtAfter);

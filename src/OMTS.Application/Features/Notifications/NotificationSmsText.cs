@@ -84,10 +84,22 @@ public static partial class NotificationSmsText
 
     private static string DocumentCodeAndAmount(NotificationTypeDefinition definition, NotificationSmsRule rule, string amountParameter, NotificationContent content)
     {
-        var amount = SplitAmounts(rule, content.Message) ?? (FormatAmount(AmountOf(content.Message.Parameters?.GetValueOrDefault(amountParameter))) is { } whole ? $"{whole} VND" : null);
+        // A single customer transaction carries the type word like the list of confirmations does (PM decision of 17/11/2026, answer 12 on #85).
+        var word = content.Type == NotificationTypes.CustomerPaymentTransaction ? KindWord(content.Message) : null;
+        var amount = SplitAmounts(rule, content.Message)
+            ?? (FormatAmount(AmountOf(content.Message.Parameters?.GetValueOrDefault(amountParameter))) is { } whole ? $"{(word is null ? null : word + " ")}{whole} VND" : null);
         var code = content.Record?.Code;
         return $"{definition.Name}{(code is null ? null : " " + code)}{(amount is null ? null : $": {amount}")}.";
     }
+
+    /// <summary>"thu" for money received, "hoàn" for money paid back, "hủy" for a cancellation; null for a message that names no single kind (a list of confirmations).</summary>
+    private static string? KindWord(UserMessage message) => message.Parameters?.GetValueOrDefault("transaction_kind") switch
+    {
+        string kind when kind.EndsWith("Cancelled", StringComparison.Ordinal) => "hủy",
+        "Payment" => "thu",
+        "PaidBack" => "hoàn",
+        _ => null,
+    };
 
     /// <summary>
     /// "thu X VND, hủy Y VND" for a message that holds the total confirmed and the total cancelled (a list of confirmations, PM answer 12/11/2026, OMTS-224 [1.4]); a part of 0 is left

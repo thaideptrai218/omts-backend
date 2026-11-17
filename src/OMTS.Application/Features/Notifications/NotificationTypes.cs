@@ -102,6 +102,9 @@ public static class NotificationTypes
     /// <summary>MSG-SALE-08, a new sales invoice, to the Cooperative Owner, also for the Owner's own sale (BR-SALE-03). BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string SaleCompleted = "SALE_COMPLETED";
 
+    /// <summary>MSG-SALE-24, the system stopped a sale at the end of the day because its VietQR transfer did not arrive, to the seller and the Owner (PM decision of 17/11/2026); in the app.</summary>
+    public const string PendingSaleStopped = "PENDING_SALE_STOPPED";
+
     /// <summary>
     /// MSG-DEBT-03, a customer payment, money paid back or a cancellation saved in DEBT-02, or one list of confirmations, to the Owner, also for the Owner's own action
     /// (BR-DEBT-06); mandatory (BR-ACCOUNT-11).
@@ -204,6 +207,8 @@ public static class NotificationTypes
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
         new(SaleCompleted, "New sale", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
+        // Goes to the person who sold (a Zone Manager or the Owner) and the Owner; it opens nothing: the sale was never saved as an invoice.
+        new(PendingSaleStopped, "Sale stopped at the end of the day", Default, [CooperativeOwner, ZoneManager], NotificationOpenAccess.OwnerOnly),
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only. A list of confirmations and cancellations shows the
         // total confirmed and the total cancelled apart in the SMS (PM answer 12/11/2026), the amount of the push and the list staying their sum.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
