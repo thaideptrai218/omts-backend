@@ -16,7 +16,11 @@ x-logging: &logging
 x-api-environment: &api-environment
   ASPNETCORE_ENVIRONMENT: Staging
   DOTNET_ENVIRONMENT: Staging
+  # Off unless SWAGGER_ENABLED=true; then /swagger asks for its own Basic login (password 16+ characters, e.g.
+  # openssl rand -hex 16, in .env). On without a usable login, the API does not start.
   Swagger__Enabled: ${SWAGGER_ENABLED:-false}
+  Swagger__Username: ${SWAGGER_USERNAME:-}
+  Swagger__Password: ${SWAGGER_PASSWORD:-}
   Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-}
   Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-}
   ConnectionStrings__OmtsDb: ${OMTS_DB_CONNECTION:?Set OMTS_DB_CONNECTION in .env}

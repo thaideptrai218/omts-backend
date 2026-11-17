@@ -175,8 +175,13 @@ has already set. So:
 - A tester who sets any account's password to `Demo@1234` makes the next seed refuse the whole server. The password rule
   does not forbid that value, and the printed password then logs in to that account: start again from an empty database.
 
-**What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) and Swagger answer 404 outside Development; no
-setting opens them.
+**What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) answers 404 outside Development; no setting
+opens it. Swagger answers 404 too, unless `Swagger:Enabled=true` (staging `.env`: `SWAGGER_ENABLED=true`,
+`SWAGGER_USERNAME`, `SWAGGER_PASSWORD` of 16+ characters, e.g. `openssl rand -hex 16`): every `/swagger` address then
+asks for that HTTP Basic login first (answers `Cache-Control: no-store`), and the host refuses to start when the setting
+is on without one, so after editing `.env` check `docker compose logs api`: a missing or short password stops the API,
+and a rollback image that checks it too cannot replace it. The login opens the documentation only; the API still wants
+its bearer token (Swagger's Authorize button). Rotate the password by changing `.env` and redeploying.
 
 **SMS, email, push, OCR.** No real SMS or push provider exists yet, so a code cannot reach anyone on this server:
 - The seeded accounts need no SMS: their phones are stored as verified. The exception is `nhanvien.chuaxacthuc`, which
