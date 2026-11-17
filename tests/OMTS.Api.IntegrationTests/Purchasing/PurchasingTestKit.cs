@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -79,7 +81,34 @@ public static class PurchasingTestKit
     public static async Task<HttpClient> PurchasingOwnerAsync(this AuthApiFactory factory)
     {
         await factory.EnsureCooperativeAsync();
+        await factory.EnsureSystemIssueTypesAsync();
         return await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
+    }
+
+    /// <summary>
+    /// The system issue types the migration seeds (<c>HasData</c>). The in-memory host does not run it, so the tests that need a type to make a use issue with get the four rows here, once per host.
+    /// </summary>
+    public static async Task EnsureSystemIssueTypesAsync(this AuthApiFactory factory)
+    {
+        (Guid Id, string Name)[] system =
+        [
+            (InputIssueTypeIds.SeedRelease, "Thả giống"), (InputIssueTypeIds.RaftRepair, "Sửa chữa bè"),
+            (InputIssueTypeIds.ZoneShared, "Dùng chung cho vùng"), (InputIssueTypeIds.Nursery, "Ươm giống"),
+        ];
+        await factory.UseDbAsync(db =>
+        {
+            if (db.InputIssueTypes.Any(t => t.IsSystem))
+            {
+                return;
+            }
+
+            foreach (var (id, name) in system)
+            {
+                var type = new InputIssueType { Name = name, IsSystem = true };
+                db.InputIssueTypes.Add(type);
+                db.Entry(type).Property(t => t.Id).CurrentValue = id;
+            }
+        });
     }
 
     /// <summary>Logged-in staff with one pair of the fixed <paramref name="role"/> in <paramref name="zone"/> (All zones when null).</summary>

@@ -19,7 +19,8 @@ public class PurchaseReceiptMoneyRoundingTests(AuthApiFactory factory) : IClassF
         client.PostAsJsonAsync($"{Receipts}/{receiptId}/correct", body);
 
     private Task SetStoredQuantityAsync(Guid lineId, decimal quantity) =>
-        factory.UpdateAsync<PurchaseReceiptLine>(lineId, l => l.Quantity = quantity);
+        // A row saved before the rule holds the quantity as typed (EnteredQuantity, which the precision rule reads) and in base units (Quantity); the unit factor of these rows is 1.
+        factory.UpdateAsync<PurchaseReceiptLine>(lineId, l => (l.Quantity, l.EnteredQuantity) = (quantity, quantity));
 
     [Fact]
     public async Task A_quantity_with_three_decimals_is_refused_with_MSG_GEN_01_and_the_field_on_every_save()

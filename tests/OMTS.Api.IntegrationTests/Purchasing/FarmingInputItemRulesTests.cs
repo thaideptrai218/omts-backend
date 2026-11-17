@@ -14,17 +14,27 @@ namespace OMTS.Api.IntegrationTests.Purchasing;
 /// <summary>INP-02 rules and error bullets: Owner-only writes, readers, unique codes, fixed fields once used, pickers, audit.</summary>
 public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
+    // The code is optional since 11/11/2026 (an empty one is generated), so only the name, the type and the unit are required.
     [Theory]
-    [InlineData(null, "Name", "Seed", "kg", "Code")]
     [InlineData("C", null, "Seed", "kg", "Name")]
     [InlineData("C", "Name", null, "kg", "Group")]
     [InlineData("C", "Name", "Seed", null, "Unit")]
     [InlineData("C", "Name", "Seed", "   ", "Unit")]
-    public async Task Missing_code_name_group_or_unit_return_MSG01(string? code, string? name, string? group, string? unit, string field)
+    public async Task Missing_name_group_or_unit_return_MSG01(string? code, string? name, string? group, string? unit, string field)
     {
         var owner = await factory.PurchasingOwnerAsync();
         var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code is null ? null : $"{code}{NewCode()}", name, group, unit });
         Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("  ")]
+    public async Task A_missing_code_is_generated_from_the_sequence_of_the_type(string? code)
+    {
+        var owner = await factory.PurchasingOwnerAsync();
+        var created = await (await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"Item {NewCode()}", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
+        Assert.Matches("^GI[0-9]{6,}$", created.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -35,7 +45,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         {
             (new { code = new string('c', 51), name = "N", group = "Seed", unit = "kg" }, "Code"),
             (new { code = NewCode(), name = new string('n', 201), group = "Seed", unit = "kg" }, "Name"),
-            (new { code = NewCode(), name = "N", group = "Seed", unit = new string('u', 31) }, "Unit"),
+            (new { code = NewCode(), name = "N", group = "Seed", unit = new string('u', 31) }, "Units"),
             (new { code = NewCode(), name = "N", group = "Seed", unit = "kg", description = new string('d', 2001) }, "Description"),
         })
         {

@@ -251,7 +251,7 @@ public sealed class InputIssueTests
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
         var types = (await owner.GetFromJsonAsync<JsonElement>("/api/input-issue-types")).EnumerateArray().ToList();
-        Assert.Equal(new[] { "Dùng chung cho vùng", "Sửa chữa bè", "Thả giống" }, types.Select(t => t.GetProperty("name").GetString()!).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(new[] { "Dùng chung cho vùng", "Sửa chữa bè", "Thả giống", "Ươm giống" }, types.Select(t => t.GetProperty("name").GetString()!).Order(StringComparer.Ordinal).ToArray());
         Assert.All(types, t => Assert.True(t.GetProperty("isSystem").GetBoolean()));
 
         await (await owner.PutAsJsonAsync($"/api/input-issue-types/{types[0].Id()}", new { name = "Khác", rowVersion = types[0].GetProperty("rowVersion").GetString() })).ProblemAsync(HttpStatusCode.Conflict, "MSG-INPUT-02");

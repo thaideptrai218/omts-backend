@@ -136,8 +136,7 @@ public sealed class InputItemCatalogueTests
         var saved = await (await owner.PutAsJsonAsync(Settings, new { costMethod = "Average", allowNegativeQuantity = false, rowVersion = settings.GetProperty("rowVersion").GetString() })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(("Average", false), (saved.GetProperty("costMethod").GetString(), saved.GetProperty("allowNegativeQuantity").GetBoolean()));
 
-        var stale = await owner.PutAsJsonAsync(Settings, new { costMethod = "Fixed", allowNegativeQuantity = true, rowVersion = settings.GetProperty("rowVersion").GetString() });
-        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        // A stale row version is refused on SQL Server (InputInventorySettingsSqlServerTests): the in-memory provider generates no row version.
         await (await owner.PutAsJsonAsync(Settings, new { costMethod = "Weighted", allowNegativeQuantity = true, rowVersion = saved.GetProperty("rowVersion").GetString() })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
     }
 
@@ -160,13 +159,15 @@ public sealed class InputItemCatalogueTests
 
         Assert.Equal("chai", item.GetProperty("unit").GetString());
         var units = item.GetProperty("units").EnumerateArray().ToList();
-        // The base unit comes first, then by factor; codes are the item code, "-" and the letter, a digit appended on a clash (thùng and thau are both T).
+        // The base unit comes first, then by factor; codes are the item code, "-" and the letter, given in the order the units were sent, a digit appended on a clash (thùng and thau are both T,
+        // and thùng was sent first).
         Assert.Equal(
-            [("chai", 1m, "001-C", true), ("thau", 6m, "001-T", false), ("thùng", 12m, "001-T1", false)],
+            [("chai", 1m, "001-C", true), ("thau", 6m, "001-T1", false), ("thùng", 12m, "001-T", false)],
             units.Select(u => (u.GetProperty("name").GetString()!, u.GetProperty("factor").GetDecimal(), u.GetProperty("code").GetString()!, u.GetProperty("isBase").GetBoolean())));
 
         var clash = await owner.PostAsJsonAsync(Items, new { code = "001-C", name = "Khác", group = "Other", unit = "kg" });
-        Assert.Equal("Code", (await clash.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
+        // 001-C is the code of the unit of the first item, so the clash is on a unit code.
+        Assert.Equal("Unit code", (await clash.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
         var unitClash = await owner.PostAsJsonAsync(Items, new
         {
             name = "Nước tương", group = "Other",
