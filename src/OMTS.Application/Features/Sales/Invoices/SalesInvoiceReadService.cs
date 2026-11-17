@@ -94,11 +94,10 @@ public sealed class SalesInvoiceReadService(
         var accepted = await requests.ListAcceptedOfCustomerAsync(customerId, earliest, cancellationToken);
         var ids = accepted.Select(r => r.Id).ToList();
         var fulfilled = await fulfilment.FulfilledAmongAsync(ids, cancellationToken);
-        var delivered = await invoices.DeliveredCagesAsync(ids, cancellationToken);
         IReadOnlyList<OpenPurchaseRequestView> open = accepted
             .Where(r => !fulfilled.Contains(r.Id))
             .Select(r => new OpenPurchaseRequestView(
-                r.Id, r.ProductId, r.Product.Name, r.RequestedCages, r.AcceptedCages!.Value, r.AgreedPickupDate!.Value, r.PayLaterAgreed == true, r.ResponseNote, delivered.GetValueOrDefault(r.Id)))
+                r.Id, r.ProductId, r.Product.Name, r.RequestedCages, r.AcceptedCages!.Value, r.AgreedPickupDate!.Value, r.PayLaterAgreed == true, r.ResponseNote))
             .ToList();
         return Result<IReadOnlyList<OpenPurchaseRequestView>>.Success(open);
     }

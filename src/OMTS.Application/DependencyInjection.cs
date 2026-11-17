@@ -405,8 +405,6 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
         services.AddScoped<MyInvoiceService>();
-        services.AddScoped<OMTS.Application.Features.Sales.Weighings.PortWeighingService>();
-        services.AddScoped<OMTS.Application.Features.Sales.Weighings.MyPortWeighingService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();

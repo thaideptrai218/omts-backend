@@ -123,10 +123,6 @@ public sealed class SalesInvoiceViews(
             invoice.Note);
     }
 
-    /// <summary>The kg of each cage of the lot in the weighing of the invoice, in the order weighed; empty for a sale without a weighing.</summary>
-    public static IReadOnlyList<decimal> CageKgsOf(SalesInvoice invoice, Guid lotId) =>
-        invoice.PortWeighing is { } weighing ? weighing.Cages.Where(c => c.HarvestLotId == lotId).OrderBy(c => c.CageNumber).Select(c => c.Kg).ToList() : [];
-
     /// <summary>The paid state of the invoice (BR-DEBT-05) and the debt of its profile now (BR-DEBT-02).</summary>
     private async Task<SalesInvoiceDebtEffect> DebtEffectAsync(SalesInvoice invoice, CancellationToken cancellationToken)
     {

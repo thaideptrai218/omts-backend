@@ -128,7 +128,6 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceSalesReturnCheck, InvoiceSalesReturnCheck>();
         services.AddScoped<ISalesReturnRepository, SalesReturnRepository>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
-        services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<IOperationsDashboardQuery, OperationsDashboardQuery>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();

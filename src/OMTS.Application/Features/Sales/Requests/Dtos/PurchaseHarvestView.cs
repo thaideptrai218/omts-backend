@@ -4,7 +4,7 @@ namespace OMTS.Application.Features.Sales.Requests.Dtos;
 /// <param name="HarvestedCages">The cages of all its lots, to set beside the accepted cages: fewer or more is allowed.</param>
 /// <param name="Lots">The earliest harvest first.</param>
 /// <param name="CanMarkDone">Show "Đã thu xong": the caller is the Owner, the request is Accepted, not marked yet and has a lot.</param>
-/// <param name="CanUnmarkDone">The Owner may clear the mark: it is set and the request has no weighing yet.</param>
+/// <param name="CanUnmarkDone">The Owner may clear the mark: it is set.</param>
 public sealed record PurchaseHarvestView(
     decimal HarvestedCages,
     IReadOnlyList<PurchaseHarvestLotView> Lots,
