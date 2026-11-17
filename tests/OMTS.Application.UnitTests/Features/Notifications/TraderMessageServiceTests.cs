@@ -173,6 +173,10 @@ public class TraderMessageServiceTests
 
         public Task<int> CountUnreadAsync(Guid recipientAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
+        public Task<int> CountRecordsNotifiedSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<bool> AnyOfTypeSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<Notification?> GetAsync(Guid recipientAccountId, Guid notificationId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<Notification>> ListUnreadAsync(Guid recipientAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();

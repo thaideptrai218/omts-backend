@@ -5,6 +5,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -27,21 +28,46 @@ public sealed class CustomerPaymentStatusService(
     CustomerPaymentViews views,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
+    ICashBookQuery cashBook,
+    ICurrentUser currentUser,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork)
 {
     /// <summary>A lost race reads again once; a second loss is MSG06.</summary>
     public const int MaxAttempts = 2;
 
+    /// <summary>Cash that waits for the Accountant longer than this is overdue (the 2-day warning [1.5], in the app only).</summary>
+    public const int OverdueDays = 2;
+
+    private const int MaxFilterDays = 3660;
+
     private const int MaxPageSize = 100;
 
     /// <summary>DEBT-02.2 step 2: oldest first, those without a customer included and marked <c>needsSettlement</c>; MSG-GEN-11 when there is none (DEBT-02.2.E1).</summary>
-    public async Task<AwaitingCustomerPayments> AwaitingAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<AwaitingCustomerPayments> AwaitingAsync(int page, int pageSize, int? olderThanDays, CancellationToken cancellationToken)
     {
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
-        var (items, total, amount) = await payments.AwaitingConfirmationAsync(page, pageSize, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        // The filter "waiting more than N days" (PM decision of 17/11/2026): paid before now less N whole days.
+        DateTimeOffset? paidBefore = olderThanDays is { } days ? now.AddDays(-Math.Clamp(days, 0, MaxFilterDays)) : null;
+        var (items, total, amount) = await payments.AwaitingConfirmationAsync(page, pageSize, paidBefore, cancellationToken);
         var empty = total == 0 ? UserMessages.NothingToShowYet : null;
-        return new AwaitingCustomerPayments(
-            new Paged<CustomerPaymentDetails>(await views.ViewAsync(items, cancellationToken), page, pageSize, total), amount, empty?.Text, empty?.Code);
+        var overdueBefore = now.AddDays(-OverdueDays);
+        var rows = (await views.ViewAsync(items, cancellationToken))
+            .Select(v => v with { Overdue = v.Method == CustomerPaymentMethod.Cash && v.PaidAt < overdueBefore })
+            .ToList();
+        return new AwaitingCustomerPayments(new Paged<CustomerPaymentDetails>(rows, page, pageSize, total), amount, empty?.Text, empty?.Code);
+    }
+
+    /// <summary>
+    /// The badge of the person who collected cash at the port and still holds it: how many of their payments wait for the Accountant, how many of those for more than <see cref="OverdueDays"/> days (BR-SALE-07 (3)).
+    /// In the app only: no SMS and no push.
+    /// </summary>
+    public async Task<MyAwaitingCash> MyAwaitingCashAsync(CancellationToken cancellationToken)
+    {
+        var account = currentUser.AccountId ?? throw new InvalidOperationException("The cash of the caller needs a logged-in user.");
+        var summary = await payments.AwaitingCashOfAsync(account, timeProvider.GetUtcNow().AddDays(-OverdueDays), cancellationToken);
+        return new MyAwaitingCash(summary.Count, summary.OverdueCount, summary.Amount, summary.OldestPaidAt, OverdueDays);
     }
 
     /// <summary>DEBT-02.2 steps 3-6 and DEBT-02.6: every payment named must still be Awaiting confirmation; one notice to the Owner lists what was confirmed, cancelled and settled.</summary>
@@ -123,7 +149,7 @@ public sealed class CustomerPaymentStatusService(
                 var message = UserMessages.Saved(confirmed.Count == 0 && cancelled.Count == 0 ? "Settlement of the payments" : "Confirmation of the payments");
                 return new CustomerPaymentsConfirmed(
                     await views.ViewAsync(confirmed, cancellationToken), await views.ViewAsync(cancelled, cancellationToken), message.Text, message.Code,
-                    await SettledViewsAsync(settled, debtsAfter, cancellationToken));
+                    await SettledViewsAsync(settled, debtsAfter, cancellationToken), await CashWarningsAsync(settled, cancellationToken));
             }
             catch (Exception exception) when (exception is ConcurrencyConflictException or DuplicateRecordException && attempt < MaxAttempts)
             {
@@ -132,6 +158,22 @@ public sealed class CustomerPaymentStatusService(
                 unitOfWork.DiscardChanges();
             }
         }
+    }
+
+    /// <summary>
+    /// A cash refund of a transfer that leaves the Cash fund below zero is saved all the same and warned about (PM decision of 17/11/2026, answer 4 on #84): the money was received on the bank account, so
+    /// the cash given back may exceed what the cash book holds. Null when no refund was in cash or the fund is not below zero.
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> CashWarningsAsync(IReadOnlyList<AppliedSettlement> settled, CancellationToken cancellationToken)
+    {
+        if (!settled.Any(s => s.PaidBack is { Method: CustomerPaymentMethod.Cash }))
+        {
+            return null;
+        }
+
+        var sums = await cashBook.SumsAsync(CashFundFilter.Cash, null, null, null, cancellationToken);
+        var balance = CashBookSummary.Of(sums.ReceiptsBefore, sums.PaymentsBefore, sums.Receipts, sums.Payments).Closing;
+        return balance < 0 ? [$"The Cash fund is below zero after this refund: {balance:#,0} VND."] : null;
     }
 
     /// <summary>The payments settled and their money paid back as the staff see them, read again once saved (the parts of an attached payment come with their invoices).</summary>

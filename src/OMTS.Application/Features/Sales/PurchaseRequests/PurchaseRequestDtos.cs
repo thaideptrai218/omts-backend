@@ -43,7 +43,7 @@ public sealed record PurchaseRequestView(
     string Code = "", PurchaseStaffingView? Staffing = null, DateTimeOffset? HarvestCompletedAt = null, PurchaseHarvestView? Harvest = null);
 
 /// <summary>A request as its trader sees it (SCR-SALE-01): no other customer's data, no price, no internal field.</summary>
-/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026): the weighing at the port comes next.</param>
+/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026).</param>
 public sealed record TraderPurchaseRequestView(
     Guid Id, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion,

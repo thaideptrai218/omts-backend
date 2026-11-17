@@ -13,6 +13,7 @@ namespace OMTS.Infrastructure.Identity;
 internal sealed class HmacAttendanceQrCodes(IOptions<JwtOptions> options, TimeProvider timeProvider) : IAttendanceQrCodes
 {
     private const string Prefix = "OMTS-ATT";
+    private const long QrClockSkewSeconds = 5;
 
     public AttendanceQrCode Issue(Guid employeeId)
     {
@@ -37,7 +38,9 @@ internal sealed class HmacAttendanceQrCodes(IOptions<JwtOptions> options, TimePr
             return null;
         }
 
-        return timeProvider.GetUtcNow().ToUnixTimeSeconds() < expiresAt ? employeeId : null;
+        // Current: not past its expiry, and not issued in the future (an expiry further away than one lifetime, with a few seconds of clock skew, was not made by Issue now) (c5 of the review of 13/11/2026).
+        var now = timeProvider.GetUtcNow().ToUnixTimeSeconds();
+        return now < expiresAt && expiresAt <= now + (long)IAttendanceQrCodes.Lifetime.TotalSeconds + QrClockSkewSeconds ? employeeId : null;
     }
 
     private string Mac(string body)

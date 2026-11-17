@@ -61,8 +61,7 @@ public sealed class PublicOriginService(IPublicOriginQuery origins)
             lot.CageCount,
             lot.EstimatedKg,
             sale.InvoiceDate,
-            lines.Sum(l => l.Kg),
-            sale.WeighedCages.GetValueOrDefault(lot.Id)));
+            lines.Sum(l => l.Kg)));
     }
 
     private static decimal? Round(decimal? value, int decimals) => value is { } number ? Math.Round(number, decimals, MidpointRounding.AwayFromZero) : null;

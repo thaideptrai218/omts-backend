@@ -37,8 +37,8 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public DateTimeOffset SentAt { get; set; }
 
     /// <summary>
-    /// When the Cooperative Owner marked the harvest of the request done (decision of 11/11/2026): no harvest lot is added to it after this, and only then is it
-    /// weighed at the port. Not a status: it is cleared again while the request has no weighing.
+    /// When the Cooperative Owner marked the harvest of the request done (decision of 11/11/2026): no harvest lot is added to it after this.
+    /// Not a status: the Owner may clear it again.
     /// </summary>
     public DateTimeOffset? HarvestCompletedAt { get; set; }
     public Guid? HarvestCompletedByAccountId { get; set; }

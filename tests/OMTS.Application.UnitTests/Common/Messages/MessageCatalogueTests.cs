@@ -18,7 +18,7 @@ public sealed class MessageCatalogueTests
     [Fact]
     public void The_checked_in_catalogue_has_the_codes_of_the_srs()
     {
-        Assert.Equal(163, SrsCodes.Value.Count);
+        Assert.Equal(165, SrsCodes.Value.Count);
         Assert.All(SrsCodes.Value, code => Assert.Matches("^MSG-(GEN|FARM|CYCLE|WATER|HARVEST|TRACE|ORIGIN|ACCOUNT|PURCHASE|LABOR|SALE|DEBT|CLAIM|CASH|INPUT|CUSTOMER|ORDER|PLAN)-[0-9]{2}$", code));
     }
 

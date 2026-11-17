@@ -167,3 +167,7 @@ MSG-PLAN-03
 MSG-PLAN-04
 MSG-PLAN-05
 MSG-PLAN-06
+# A sale waiting for its VietQR transfer stopped by the system (OMTS-224, PM 17/11), added after the SRS 27/10 catalogue
+MSG-SALE-24
+# The Owner is told when the supplier payment SMS reach 80 % of the daily budget (OMTS-218, PM 17/11), added after the SRS 27/10 catalogue
+MSG-PURCHASE-11

@@ -8,8 +8,7 @@ namespace OMTS.Application.Features.Traceability.Origin.Dtos;
 /// <param name="HarvestedKg">The estimated kg of the whole harvest lot.</param>
 /// <param name="SoldOn">The invoice date.</param>
 /// <param name="SoldKg">The kg of the lot on this invoice.</param>
-/// <param name="WeighedCages">The cages of the lot weighed at the port for this invoice; 0 for a sale by the kg.</param>
 public sealed record PublicOriginLotDetail(
     IReadOnlyList<string> ProductNames, string ZoneName, string RaftCode, DateOnly CycleStartDate, IReadOnlyList<PublicOriginSeedLotView> SeedLots, DateOnly? FirstSeedingDate,
     DateOnly? LastSeedingDate, int LaneCount, int CultivationLogCount, PublicOriginWaterView Water, DateOnly HarvestDate, decimal HarvestedCages, decimal HarvestedKg, DateOnly SoldOn,
-    decimal SoldKg, int WeighedCages);
+    decimal SoldKg);

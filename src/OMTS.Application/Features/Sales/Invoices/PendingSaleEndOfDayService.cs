@@ -1,6 +1,8 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
@@ -11,7 +13,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// (<see cref="PendingSaleWriter"/>, BR-SALE-08: the code in the audit log, nothing saved on the invoice side, payments already received stay without a customer) with the system as the actor.
 /// A sale a transfer, a change of payment or a stop by hand ended meanwhile is left as it ended, so a second run changes nothing.
 /// </summary>
-public sealed class PendingSaleEndOfDayService(IPendingSaleRepository sales, PendingSaleWriter writer, IUnitOfWork unitOfWork)
+public sealed class PendingSaleEndOfDayService(
+    IPendingSaleRepository sales, PendingSaleWriter writer, IAccountRepository accounts, INotificationDispatcher notifications, IUnitOfWork unitOfWork)
 {
     /// <summary>The start of the business day <paramref name="today"/>: a sale created before it belongs to a day that has ended.</summary>
     public static DateTimeOffset StartOfDay(DateOnly today) => new(today.ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
@@ -32,6 +35,12 @@ public sealed class PendingSaleEndOfDayService(IPendingSaleRepository sales, Pen
         }
 
         writer.StopAtEndOfDay(sale);
+        // The seller and the Owner are told in the app (PM decision of 17/11/2026, answer 8 on #85), so the cash or goods that went with the sale are not forgotten. The notice is saved with the stop.
+        var recipients = (await accounts.ListActiveOwnerIdsAsync(cancellationToken)).Append(sale.CreatedByAccountId).Distinct().ToList();
+        await notifications.NotifyAsync(
+            recipients,
+            new NotificationContent(NotificationTypes.PendingSaleStopped, "Sale stopped at the end of the day", UserMessages.PendingSaleStoppedAtEndOfDay(sale.Code, sale.Total, sale.CashAmount)),
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }

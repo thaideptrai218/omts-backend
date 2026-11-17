@@ -207,6 +207,15 @@ public sealed class WorkAssignmentService(
                 new Dictionary<string, object?> { ["employeeIds"] = elsewhere.Select(x => x.Employee.Id).ToList() });
         }
 
+        // Taking a worker off a raft of another zone is changing that zone's work: the permission of the zone the worker leaves is needed as well (stricter than LABOR-02.4, PM decision of 17/11/2026).
+        foreach (var leaving in elsewhere.Select(x => x.First!.ZoneId).Where(z => z != place.ZoneId).Distinct())
+        {
+            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, leaving, cancellationToken))
+            {
+                return AppError.Forbidden;
+            }
+        }
+
         var account = currentUser.AccountId ?? throw new InvalidOperationException("Work is assigned by a logged-in user.");
         foreach (var employee in people)
         {
@@ -405,6 +414,12 @@ public sealed class WorkAssignmentService(
             else
             {
                 assignments.Add(new WorkAssignment { EmployeeId = id, Date = today, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = now, AssignedByAccountId = account });
+                // The Owner's correction of the day carries the version of the attendance record: a new job period gives the record a new version, so a correction screen read before it is refused (MSG06)
+                // instead of removing the period without a word (b3 of the review of 13/11/2026).
+                if (record is not null)
+                {
+                    unitOfWork.MarkChanged(record);
+                }
             }
 
             audit.Record(new AuditEntry("WorkAssignment.JobChanged", nameof(WorkAssignment))
