@@ -90,8 +90,8 @@ internal sealed partial record CustomerEntries(
 
         var facebook = Optional(request.Facebook, MaxFacebookLength, "Facebook", invalid);
 
-        // The company name of older clients is the invoice name.
-        var invoice = PartyInvoiceRules.Invoice(
+        // The company name of older clients is the invoice name; sent without a buyer type it makes the customer an organisation buyer, as before.
+        var invoice = (request.InvoiceBuyerType is null ? PartyInvoiceRules.LegacyCompany(request.CompanyName, request.TaxCode, invalid) : null) ?? PartyInvoiceRules.Invoice(
             new InvoiceInfoInput(
                 request.InvoiceBuyerType, PartyInvoiceRules.First(request.InvoiceName, request.CompanyName), request.TaxCode, request.PersonalTaxId, request.InvoiceAddressSameAsContact,
                 new AddressParts(request.InvoiceProvinceCode, request.InvoiceProvinceName, request.InvoiceWardCode, request.InvoiceWardName, request.InvoiceStreet),

@@ -43,6 +43,33 @@ internal static partial class PartyInvoiceRules
     public static AddressParts Contact(int? provinceCode, string? provinceName, int? wardCode, string? wardName, string? street, List<string> invalid) =>
         Address(provinceCode, provinceName, wardCode, wardName, street, "Province", "Ward", "Address", invalid);
 
+    /// <summary>
+    /// An older client sends the company name and tax code without a buyer type: they are kept as an organisation buyer with the invoice address of the contact,
+    /// and none of the newer required entries are asked for. Null without a company name.
+    /// </summary>
+    public static InvoiceInfo? LegacyCompany(string? companyName, string? taxCode, List<string> invalid)
+    {
+        var name = string.IsNullOrWhiteSpace(companyName) ? null : DisplayNames.Normalize(companyName);
+        var code = string.IsNullOrWhiteSpace(taxCode) ? null : taxCode.Trim();
+        // Only the old company name field marks such a client; a tax code alone (or the new invoice fields) does not.
+        if (name is null)
+        {
+            return null;
+        }
+
+        if (name?.Length > MaxNameLength)
+        {
+            Add(invalid, "Company name");
+        }
+
+        if (code is not null && !OrganizationTaxCode().IsMatch(code))
+        {
+            Add(invalid, "Tax code");
+        }
+
+        return new InvoiceInfo(InvoiceBuyerType.Organization, name, code, null, true, AddressParts.Empty, null);
+    }
+
     public static InvoiceInfo Invoice(InvoiceInfoInput input, AddressParts contact, InvoiceBuyerType fallback, bool allowConsumer, List<string> invalid)
     {
         var type = input.BuyerType ?? fallback;

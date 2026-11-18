@@ -685,7 +685,8 @@ public sealed partial class SupplierService(
         supplier.TaxCode = Optional(values.TaxCode, supplier.TaxCode, isNew);
         if (isNew)
         {
-            supplier.InvoiceBuyerType = supplier.TaxCode is null ? InvoiceBuyerType.Individual : InvoiceBuyerType.Organization;
+            // A company name or tax code from an older client means an organisation, as the migration counts it.
+            supplier.InvoiceBuyerType = supplier.TaxCode is null && supplier.CompanyName is null ? InvoiceBuyerType.Individual : InvoiceBuyerType.Organization;
             // The quick create (name, type and phone): the supplier is the invoice buyer, and the invoice address is its contact address, not required.
             supplier.CompanyName ??= values.Name;
         }
