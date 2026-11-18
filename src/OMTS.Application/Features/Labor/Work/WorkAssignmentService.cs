@@ -190,12 +190,15 @@ public sealed class WorkAssignmentService(
         var ids = people.Select(e => e.Id).ToList();
         var existing = (await assignments.ListOfEmployeesAsync(ids, date, cancellationToken)).ToLookup(w => w.EmployeeId);
         var attended = (await attendances.ListOfEmployeesAsync(ids, date, cancellationToken)).ToDictionary(a => a.EmployeeId);
-        if (people.FirstOrDefault(e => attended.TryGetValue(e.Id, out var a) && a.CheckInAt is not null) is { } checkedIn)
+        // Busy only while working: an employee who has checked out is free again and starts a new session (the day is reopened below).
+        bool Finished(Employee e) => attended.TryGetValue(e.Id, out var a) && a.CheckInAt is not null && a.CheckOutAt is not null;
+        if (people.FirstOrDefault(e => attended.TryGetValue(e.Id, out var a) && a.CheckInAt is not null && a.CheckOutAt is null) is { } checkedIn)
         {
             return AlreadyCheckedIn(checkedIn);
         }
 
         var elsewhere = people
+            .Where(e => !Finished(e))
             .Select(e => (Employee: e, First: existing[e.Id].FirstOrDefault(w => w.StartsAt is null)))
             .Where(x => x.First is not null && !place.Holds(x.First))
             .ToList();
@@ -219,6 +222,13 @@ public sealed class WorkAssignmentService(
         var account = currentUser.AccountId ?? throw new InvalidOperationException("Work is assigned by a logged-in user.");
         foreach (var employee in people)
         {
+            if (Finished(employee))
+            {
+                ReopenDay(employee, attended[employee.Id], existing[employee.Id].ToList(), date, place, jobType, planLineId, account);
+                AddWorkingZone(employee, place.ZoneId);
+                continue;
+            }
+
             var first = existing[employee.Id].FirstOrDefault(w => w.StartsAt is null);
             if (first is null)
             {
@@ -254,6 +264,35 @@ public sealed class WorkAssignmentService(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A new session for an employee who checked out: the check-out is cleared (the audit row keeps the old place and the old check-out) and, when the place or the job differs from the latest period,
+    /// a new job period starts now there, so the earlier session keeps its place. One open session per employee stays true: the day has one attendance record, open again.
+    /// </summary>
+    private void ReopenDay(Employee employee, Attendance record, List<WorkAssignment> periods, DateOnly date, Place place, JobType jobType, Guid? planLineId, Guid account)
+    {
+        var last = periods.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).LastOrDefault();
+        var before = new { record.CheckInAt, record.CheckOutAt, Place = last is null ? null : PlaceOf(last).Code, Job = last?.JobType.Name };
+        if (last is null)
+        {
+            assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId });
+        }
+        else if (!place.Holds(last) || last.JobTypeId != jobType.Id)
+        {
+            assignments.Add(new WorkAssignment
+            {
+                EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = WorkRules.Now(timeProvider), AssignedByAccountId = account, HarvestPlanLineId = planLineId,
+            });
+        }
+
+        (record.CheckOutAt, record.CheckOutMethod, record.CheckOutRecordedByAccountId, record.CheckOutReason) = (null, null, null, null);
+        unitOfWork.MarkChanged(record);
+        audit.Record(new AuditEntry("Attendance.Reopened", nameof(Attendance))
+        {
+            RecordId = record.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, Before = before, After = new { record.CheckInAt, CheckOutAt = (DateTimeOffset?)null, Place = place.Code, Job = jobType.Name },
+            Reason = "Employee assigned again after checking out.",
+        });
     }
 
     /// <summary>LABOR-02.2: the raft or the job type of an assignment of today or later, before the employee is checked in.</summary>

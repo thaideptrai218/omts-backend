@@ -9,7 +9,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// 11/11/2026). <see cref="DemoPurchaseRequestStep"/> only runs on a fresh trader and its Accepted request is used by the demo lots, so this step runs on its own and every request is matched by a fixed
 /// operation id, never by the customer having requests: a rerun adds nothing, also on a database seeded before this step or before a request was added to it. There are five, all agreed for the next days: 5 cages
 /// of the demo trader (<c>thuonglai1</c>), and, for the live demo of the whole farming flow, three orders of about 800, 1,500 and 2,000 kg (a cage holds about 40 kg: 20, 38 and 50 cages, as the demo weighing
-/// takes it) of the offline customers "Vựa hải sản Bà Lan", "Nhà hàng Biển Xanh" and "Anh Tùng thương lái Cẩm Phả" of <see cref="DemoCustomerStep"/>, all for "Hàu Thái Bình Dương sống", and one of 15 cages for "Hàu bản địa Vân Đồn sống" (a lot is recorded only
+/// takes it) of the offline customers "Vựa hải sản Bà Lan", "Nhà hàng Biển Xanh" and "Anh Tùng thương lái Cẩm Phả" of <see cref="DemoCustomerStep"/>, all for "Hàu Thái Bình Dương", and one of 15 cages for "Hàu bản địa Vân Đồn" (a lot is recorded only
 /// for a request of the product the cycle farms, see <see cref="DemoCycleProductStep"/>). Then ten test orders (13/11/2026), three or four for each of the three products, from different customers, with 8 to 20
 /// cages due today or tomorrow, whose note names the seed type the product is sold from, so the Owner can try recording a harvest for every product. The requests are written Accepted directly, as that step writes
 /// its own, because an accepted request through the API needs a work plan and staff the demo has none of; the rules a lot is recorded under (<c>PurchaseRequestRules.RefusesHarvestLotAsync</c>) look at the status,
@@ -19,9 +19,8 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// </summary>
 internal sealed class DemoOpenHarvestRequestStep : IDemoSeedStep
 {
-    private const string MainProductName = "Hàu Thái Bình Dương sống";
-    private const string OtherProductName = "Hàu bản địa Vân Đồn sống";
-    private const string SmallProductName = "Hàu Cổ Trai sống";
+    private const string MainProductName = "Hàu Thái Bình Dương";
+    private const string OtherProductName = "Hàu bản địa Vân Đồn";
 
     /// <param name="OperationId">What finds the request again: the same on every run. Unique per customer, as the API's retry key is.</param>
     /// <param name="TraderUsername">The trader account of the customer; null to find the customer by <paramref name="Phone"/>.</param>
@@ -34,20 +33,16 @@ internal sealed class DemoOpenHarvestRequestStep : IDemoSeedStep
         new(new("0d132a00-0000-4000-8000-000000000133"), null, "0900000041", 20, 3, "Cần khoảng 800 kg hàu béo cho vựa (khoảng 20 lồng)", "Đồng ý 20 lồng (khoảng 800 kg), lấy tại cảng Cái Rồng", MainProductName),
         new(new("0d132a00-0000-4000-8000-000000000134"), null, "0900000042", 38, 5, "Cần khoảng 1.500 kg hàu béo cho nhà hàng (khoảng 38 lồng)", "Đồng ý 38 lồng (khoảng 1.500 kg), giao theo lịch thu hoạch", MainProductName),
         new(new("0d132a00-0000-4000-8000-000000000135"), null, "0900000043", 50, 6, "Cần khoảng 2.000 kg hàu béo chở đi Cẩm Phả (khoảng 50 lồng)", "Đồng ý 50 lồng (khoảng 2.000 kg), thu hoạch trong hai ngày", MainProductName),
-        // The one request for another product (13/11/2026): it matches the rafts farming "Hàu bản địa Vân Đồn sống" and is refused on a raft farming "Hàu Thái Bình Dương sống", to show the check of a lot against the cycle's product.
-        new(new("0d132a00-0000-4000-8000-000000000136"), null, "0900000042", 15, 4, "Cần khoảng 600 kg hàu sữa cho nhà hàng (khoảng 15 lồng)", "Đồng ý 15 lồng (khoảng 600 kg), lấy tại cảng Cái Rồng", OtherProductName),
-        // Test orders of the Owner (13/11/2026), three or four per product, each naming the seed type the product is sold from (the seed item of DemoInputItemStep), from different customers, to try recording a harvest
+        // The one request for another product (13/11/2026): it matches the rafts farming "Hàu bản địa Vân Đồn" and is refused on a raft farming "Hàu Thái Bình Dương", to show the check of a lot against the cycle's product.
+        new(new("0d132a00-0000-4000-8000-000000000136"), null, "0900000042", 15, 4, "Cần khoảng 600 kg hàu bản địa cho nhà hàng (khoảng 15 lồng)", "Đồng ý 15 lồng (khoảng 600 kg), lấy tại cảng Cái Rồng", OtherProductName),
+        // Test orders of the Owner (13/11/2026), three per product, each naming the product, from different customers, to try recording a harvest
         // for every product. Pickup today or tomorrow, 10, 15, 20 and 8 cages.
-        new(new("0d132a00-0000-4000-8000-000000000140"), null, "0900000041", 10, 0, "Đơn thử thu hoạch — Hàu giống Thái Bình Dương 3 cm", "Đồng ý 10 lồng hàu béo, lấy hôm nay", MainProductName),
-        new(new("0d132a00-0000-4000-8000-000000000141"), null, "0900000042", 15, 1, "Đơn thử thu hoạch — Hàu giống Thái Bình Dương 5 cm", "Đồng ý 15 lồng hàu béo, lấy ngày mai", MainProductName),
-        new(new("0d132a00-0000-4000-8000-000000000142"), null, "0900000043", 20, 0, "Đơn thử thu hoạch — Hàu giống Thái Bình Dương 3 cm", "Đồng ý 20 lồng hàu béo, lấy hôm nay", MainProductName),
-        new(new("0d132a00-0000-4000-8000-000000000143"), null, "0900000042", 20, 0, "Đơn thử thu hoạch — Hàu giống bản địa Vân Đồn 3 cm", "Đồng ý 20 lồng hàu sữa, lấy hôm nay", OtherProductName),
-        new(new("0d132a00-0000-4000-8000-000000000144"), null, "0900000041", 10, 1, "Đơn thử thu hoạch — Hàu giống bản địa Vân Đồn 3 cm", "Đồng ý 10 lồng hàu sữa, lấy ngày mai", OtherProductName),
-        new(new("0d132a00-0000-4000-8000-000000000145"), null, "0900000043", 15, 0, "Đơn thử thu hoạch — Hàu giống bản địa Vân Đồn 3 cm", "Đồng ý 15 lồng hàu sữa, lấy hôm nay", OtherProductName),
-        new(new("0d132a00-0000-4000-8000-000000000146"), null, "0900000041", 10, 0, "Đơn thử thu hoạch — Hàu giống Cổ Trai 4 cm", "Đồng ý 10 lồng hàu Cổ Trai sống, lấy hôm nay", SmallProductName),
-        new(new("0d132a00-0000-4000-8000-000000000147"), null, "0900000042", 15, 1, "Đơn thử thu hoạch — Hàu giống Cổ Trai 4 cm", "Đồng ý 15 lồng hàu Cổ Trai sống, lấy ngày mai", SmallProductName),
-        new(new("0d132a00-0000-4000-8000-000000000148"), null, "0900000043", 20, 0, "Đơn thử thu hoạch — Hàu giống Cổ Trai 4 cm", "Đồng ý 20 lồng hàu Cổ Trai sống, lấy hôm nay", SmallProductName),
-        new(new("0d132a00-0000-4000-8000-000000000149"), "thuonglai1", null, 8, 1, "Đơn thử thu hoạch — Hàu giống Cổ Trai 4 cm", "Đồng ý 8 lồng hàu Cổ Trai sống, lấy ngày mai", SmallProductName),
+        new(new("0d132a00-0000-4000-8000-000000000140"), null, "0900000041", 10, 0, "Đơn thử thu hoạch — Hàu Thái Bình Dương", "Đồng ý 10 lồng hàu béo, lấy hôm nay", MainProductName),
+        new(new("0d132a00-0000-4000-8000-000000000141"), null, "0900000042", 15, 1, "Đơn thử thu hoạch — Hàu Thái Bình Dương", "Đồng ý 15 lồng hàu béo, lấy ngày mai", MainProductName),
+        new(new("0d132a00-0000-4000-8000-000000000142"), null, "0900000043", 20, 0, "Đơn thử thu hoạch — Hàu Thái Bình Dương", "Đồng ý 20 lồng hàu béo, lấy hôm nay", MainProductName),
+        new(new("0d132a00-0000-4000-8000-000000000143"), null, "0900000042", 20, 0, "Đơn thử thu hoạch — Hàu bản địa Vân Đồn", "Đồng ý 20 lồng hàu bản địa, lấy hôm nay", OtherProductName),
+        new(new("0d132a00-0000-4000-8000-000000000144"), null, "0900000041", 10, 1, "Đơn thử thu hoạch — Hàu bản địa Vân Đồn", "Đồng ý 10 lồng hàu bản địa, lấy ngày mai", OtherProductName),
+        new(new("0d132a00-0000-4000-8000-000000000145"), null, "0900000043", 15, 0, "Đơn thử thu hoạch — Hàu bản địa Vân Đồn", "Đồng ý 15 lồng hàu bản địa, lấy hôm nay", OtherProductName),
     ];
 
     public string Name => "open harvest request";
@@ -55,7 +50,7 @@ internal sealed class DemoOpenHarvestRequestStep : IDemoSeedStep
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var db = context.Db;
-        var products = await db.Products.Where(p => p.StatusId == StatusIds.Usage.InUse && (p.Name == MainProductName || p.Name == OtherProductName || p.Name == SmallProductName)).ToDictionaryAsync(p => p.Name, cancellationToken);
+        var products = await db.Products.Where(p => p.StatusId == StatusIds.Usage.InUse && (p.Name == MainProductName || p.Name == OtherProductName)).ToDictionaryAsync(p => p.Name, cancellationToken);
         var hasRaftToHarvest = await db.CultivationCycles.AsNoTracking()
             .AnyAsync(c => c.StatusId == StatusIds.CultivationCycle.Open && c.Raft.StatusId == StatusIds.Usage.InUse && c.Raft.Zone.StatusId == StatusIds.Usage.InUse
                 && c.Raft.Lanes.Any(l => l.StatusId == StatusIds.Lane.InUse && !l.IsDamaged && l.OutOfServiceOn == null), cancellationToken);

@@ -156,9 +156,11 @@ public sealed class NurseryBatchEditService(
             Before = new { Status = NurseryValues.StatusLabel(StatusIds.NurseryBatch.Nursing) }, After = new { Status = NurseryValues.StatusLabel(StatusIds.NurseryBatch.Cancelled) }, Reason = reason,
         });
         await notifier.CancelledAsync(batch, reason, Actor, cancellationToken);
+        // The work assignments the batch's crew got when it was saved go with it, in the same save; anyone already checked in keeps the attendance and is named in the answer.
+        var release = await crewAssignments.ReleaseAsync(batch.StartDate, batch.ZoneId, null, RecordCrewJobs.Nursery, batch.Crew.Select(c => c.Employee).ToList(), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         var saved = UserMessages.Saved("Nursery batch");
-        return new NurseryBatchSaved(await views.ViewAsync(batch, cancellationToken), saved.Text, saved.Code);
+        return new NurseryBatchSaved(await views.ViewAsync(batch, cancellationToken), saved.Text, saved.Code, null, release);
     }
 
     private Guid Actor => currentUser.AccountId ?? throw new InvalidOperationException("A nursery change needs an authenticated caller.");

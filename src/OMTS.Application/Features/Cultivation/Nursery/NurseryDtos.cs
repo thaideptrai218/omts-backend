@@ -77,7 +77,8 @@ public sealed record NurseryBatchView(
 
 /// <param name="Message">MSG-GEN-05 "Nursery batch saved.".</param>
 /// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>
-public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CrewAssignmentResult? CrewAssignment = null);
+public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CrewAssignmentResult? CrewAssignment = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CrewReleaseResult? CrewRelease = null);
 
 public sealed record NurseryListSummary(
     decimal QuantityIn, decimal NursingQuantityIn, decimal CompletedQuantityIn, decimal Survivors, decimal LossPieces, decimal? LossPercent, int NursingCount, int CompletedCount, int ClosedCount = 0);

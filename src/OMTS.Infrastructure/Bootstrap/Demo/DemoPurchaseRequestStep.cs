@@ -35,7 +35,7 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
 
         // Matched by name; a product renamed or discontinued since is simply not requested.
         var products = await context.Db.Products.Where(p => p.StatusId == StatusIds.Usage.InUse).ToDictionaryAsync(p => p.Name, cancellationToken);
-        if (!products.TryGetValue("Hàu bản địa Vân Đồn sống", out var milky) || !products.TryGetValue("Hàu Thái Bình Dương sống", out var fat) || !products.TryGetValue("Hàu Cổ Trai sống", out var small))
+        if (!products.TryGetValue("Hàu bản địa Vân Đồn", out var milky) || !products.TryGetValue("Hàu Thái Bình Dương", out var fat))
         {
             return 0;
         }
@@ -99,7 +99,7 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
             await AnswerAsync(accepted, StatusIds.PurchaseRequest.Accepted, $"Bè còn đủ {DemoHarvestOrderCages} lồng, trả sau như đã thỏa thuận");
         }
 
-        var declined = Place(small, 20, 3, "Lấy nhiều nếu có giá tốt");
+        var declined = Place(milky, 20, 3, "Lấy nhiều nếu có giá tốt");
         await notices.NewRequestAsync(declined, cancellationToken);
         if (answer)
         {

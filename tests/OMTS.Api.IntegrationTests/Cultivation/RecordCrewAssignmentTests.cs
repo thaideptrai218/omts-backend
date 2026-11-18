@@ -83,6 +83,27 @@ public sealed class RecordCrewAssignmentTests
     }
 
     [Fact]
+    public async Task An_employee_who_finished_work_at_the_same_place_is_reopened_by_a_new_record_the_same_day()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        await NurseryJobTypeAsync(api);
+        var hoa = await EmployeeAsync(api, "Hoa");
+        await StartAsync(world, new NurseryFields { Crew = [hoa.Id] });
+        var now = DateTimeOffset.UtcNow;
+        await api.UseDbAsync(db => db.Attendances.Add(new Attendance { EmployeeId = hoa.Id, Date = Today, CheckInAt = now.AddHours(-2), CheckOutAt = now.AddHours(-1) }));
+
+        var second = await StartAsync(world, new NurseryFields { Crew = [hoa.Id] });
+
+        Assert.Equal(1, second.GetProperty("crewAssignment").GetProperty("created").GetInt32());
+        Assert.Empty(second.GetProperty("crewAssignment").GetProperty("skipped").EnumerateArray());
+        var record = await api.QueryAsync(db => db.Attendances.SingleAsync(a => a.EmployeeId == hoa.Id));
+        Assert.Null(record.CheckOutAt);
+        Assert.NotNull(record.CheckInAt);
+        Assert.Equal(1, await api.QueryAsync(db => db.WorkAssignments.CountAsync(w => w.EmployeeId == hoa.Id)));
+    }
+
+    [Fact]
     public async Task A_record_of_another_day_a_missing_job_type_and_an_employee_who_left_are_skipped_with_their_reason()
     {
         using var api = new AuthApiFactory();

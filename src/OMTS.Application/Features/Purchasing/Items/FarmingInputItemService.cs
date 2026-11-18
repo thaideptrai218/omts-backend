@@ -45,6 +45,7 @@ public sealed class FarmingInputItemService(
     private const int MaxPageSize = 100;
     private const decimal MaxQuantity = 1_000_000_000m;
     private const decimal MaxCost = 1_000_000_000_000m;
+    private const int MaxMaturityDays = 3650;
     private const string PhotoCategory = "input-item-photos";
 
     /// <summary>The field MSG-GEN-01 names when a Seed item has no product, or one that is not In Use.</summary>
@@ -388,7 +389,7 @@ public sealed class FarmingInputItemService(
     }
 
     private sealed record Values(
-        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity, Product? Product);
+        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity, Product? Product, int? MaturityDays);
 
     private async Task<(Values Values, List<string> Invalid)> ValidateAsync(SaveFarmingInputItemRequest request, CancellationToken cancellationToken)
     {
@@ -445,6 +446,20 @@ public sealed class FarmingInputItemService(
             }
         }
 
+        // "Thời gian trưởng thành" of a Seed item, in days; ignored (cleared) for the other types.
+        int? maturityDays = null;
+        if (request.Group == InputItemGroup.Seed && request.MaturityDays is { } days)
+        {
+            if (days is < 1 or > MaxMaturityDays)
+            {
+                check.Add("Maturity days");
+            }
+            else
+            {
+                maturityDays = days;
+            }
+        }
+
         var minOk = Amount(request.MinQuantity, "Min quantity", MaxQuantity, 3);
         var maxOk = Amount(request.MaxQuantity, "Max quantity", MaxQuantity, 3);
         if (minOk && maxOk && request.MinQuantity > request.MaxQuantity)
@@ -456,7 +471,7 @@ public sealed class FarmingInputItemService(
         Amount(request.OpeningQuantity, "Opening quantity", MaxQuantity, 2);
         return (new Values(
             name, request.Group ?? default, description.Length == 0 ? null : description, notes.Length == 0 ? null : notes, request.ItemGroupId,
-            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity, product), check);
+            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity, product, maturityDays), check);
     }
 
     private static void Apply(FarmingInputItem item, Values values)
@@ -471,6 +486,7 @@ public sealed class FarmingInputItemService(
         item.CostPrice = values.CostPrice;
         item.ProductId = values.Product?.Id;
         item.Product = values.Product;
+        item.MaturityDays = values.MaturityDays;
     }
 
     /// <summary>One unit of the item as it will be saved: an existing row (<see cref="Row"/>) or a new one, with its catalogue unit, factor and code.</summary>
@@ -650,7 +666,7 @@ public sealed class FarmingInputItemService(
 
     private static object Snapshot(FarmingInputItem i, IReadOnlyList<UnitPlan>? plans) => new
     {
-        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.ProductId,
+        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.ProductId, i.MaturityDays,
         Units = plans is null
             ? i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new { Unit = u.Unit?.Name ?? string.Empty, u.Factor, u.Code, u.IsBase }).ToList()
             : plans.OrderByDescending(p => p.IsBase).ThenBy(p => p.Factor).Select(p => new { Unit = p.Catalogue.Name, p.Factor, p.Code, p.IsBase }).ToList(),
@@ -756,7 +772,7 @@ public sealed class FarmingInputItemService(
                 i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new ItemUnitView(u.Id, u.UnitId, u.Unit.Name, u.Factor, u.Code, u.IsBase, usedUnits.Contains(u.Id))).ToList(),
                 i.Description, i.Notes, photo, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, onHand, onHand * (i.CostPrice ?? 0m),
                 used.Contains(i.Id), i.StatusId, statusCatalog.DisplayNameOf(i.StatusId), i.CreatedAt, i.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
-                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name, i.Product is { } product ? new ItemProductRef(product.Id, product.Code, product.Name) : null));
+                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name, i.Product is { } product ? new ItemProductRef(product.Id, product.Code, product.Name) : null, i.MaturityDays));
         }
 
         return result;
