@@ -20,7 +20,7 @@ public sealed record BootstrapOutcome(int ExitCode, IReadOnlyList<string> Messag
 /// <summary>
 /// One-time deployment step (formerly UC72; no System Administrator since 22/10):
 /// <c>dotnet OMTS.Api.dll seed --bootstrap [--demo]</c> applies migrations, checks the status catalog,
-/// creates the rows of the two fixed roles (BR-FARM-07) and, when no cooperative exists, the cooperative (full name only) and its first
+/// creates the rows of the two fixed roles (BR-FARM-07), matches the old customer and supplier addresses to the administrative units list (<see cref="AddressCodeBackfill"/>) and, when no cooperative exists, the cooperative (full name only) and its first
 /// Cooperative Owner with a temporary password that expires after 24 hours. Idempotent.
 /// </summary>
 public sealed class DeploymentBootstrapper(
@@ -30,6 +30,7 @@ public sealed class DeploymentBootstrapper(
     IPasswordHasher passwordHasher,
     AuditLogService audit,
     TimeProvider timeProvider,
+    AddressCodeBackfill addressCodes,
     IServiceProvider services)
 {
     public const int Success = 0;
@@ -117,6 +118,9 @@ public sealed class DeploymentBootstrapper(
             var ownerLoginMayBeSet = environment.IsDevelopment() || demoMarkNeeded;
             messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, demoPassword, ownerLoginMayBeSet, cancellationToken));
         }
+
+        // Last, and never a reason to fail: it only needs the outside list of provinces and wards, which may be out of reach.
+        messages.Add(await addressCodes.RunAsync(cancellationToken));
 
         return new BootstrapOutcome(Success, messages);
     }

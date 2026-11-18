@@ -1586,6 +1586,18 @@ public static class UserMessages
     public static UserMessage ServiceNotResponding(string service) => new(
         Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");
 
+    /// <summary>MSG04 in Vietnamese: the outside list of provinces and wards cannot be read now (customer and supplier address forms). The Vietnamese text is shown as it is.</summary>
+    public static readonly UserMessage AdministrativeUnitsNotResponding = new(
+        Legacy.Msg04, "Không tải được danh mục tỉnh/thành phố và phường/xã lúc này. Dữ liệu trong OMTS không thay đổi; vui lòng thử lại sau ít phút.");
+
+    /// <summary>MSG04 in Vietnamese: the outside business registry cannot be read now (tax code lookup).</summary>
+    public static readonly UserMessage TaxRegistryNotResponding = new(
+        Legacy.Msg04, "Không tra cứu được mã số thuế lúc này. Dữ liệu trong OMTS không thay đổi; vui lòng thử lại sau ít phút hoặc nhập thông tin thủ công.");
+
+    /// <summary>Technical NOT_FOUND in Vietnamese: no company has the tax code (tax code lookup).</summary>
+    public static readonly UserMessage TaxCodeNotFound = new(
+        Legacy.NotFound, "Không tìm thấy doanh nghiệp nào có mã số thuế này. Vui lòng kiểm tra lại mã số thuế hoặc nhập thông tin thủ công.");
+
     public static readonly UserMessage OldDocumentsHidden = new(
         Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
 

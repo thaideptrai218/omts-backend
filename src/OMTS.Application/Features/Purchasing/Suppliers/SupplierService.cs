@@ -15,6 +15,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Parties;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -31,6 +32,7 @@ public sealed partial class SupplierService(
     IPurchaseReceiptRepository receipts,
     IAccountRepository accounts,
     ZoneAccessGuard zoneAccess,
+    PartyAddressVerifier addressVerifier,
     IFileStorage storage,
     IStatusCatalog statusCatalog,
     IDocumentNumberAllocator numbers,
@@ -44,7 +46,6 @@ public sealed partial class SupplierService(
 
     private const string RecordType = nameof(Supplier);
     private const int MaxCertificates = 10;
-    private const int MaxAddressLength = 500;
     private const int MaxBulkIds = 100;
 
     public async Task<Result<Paged<SupplierListItem>>> SearchAsync(SupplierListQuery query, CancellationToken cancellationToken)
@@ -136,7 +137,12 @@ public sealed partial class SupplierService(
         var inFile = new HashSet<string>();
         foreach (var (row, request) in rows)
         {
-            var (values, invalid) = Validate(request);
+            var (values, invalid) = Validate(request, existing: null);
+            if (invalid.Count == 0)
+            {
+                values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
+            }
+
             if (invalid.Count > 0)
             {
                 errors.Add(new SupplierImportError(row, invalid, "Missing or invalid."));
@@ -216,7 +222,12 @@ public sealed partial class SupplierService(
 
     public async Task<Result<SupplierView>> CreateAsync(SaveSupplierRequest request, CancellationToken cancellationToken)
     {
-        var (values, invalid) = Validate(request);
+        var (values, invalid) = Validate(request, existing: null);
+        if (invalid.Count == 0)
+        {
+            values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -257,7 +268,12 @@ public sealed partial class SupplierService(
             return discontinued;
         }
 
-        var (values, invalid) = Validate(request);
+        var (values, invalid) = Validate(request, supplier);
+        if (invalid.Count == 0)
+        {
+            values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -437,8 +453,11 @@ public sealed partial class SupplierService(
             supplier.StatusId, statusCatalog.DisplayNameOf(supplier.StatusId),
             history.Select(r => new SupplierReceiptRow(r.Id, r.Code, r.ReceiptDate, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.Payable)).ToList(),
             RowVersionGuard.Encode(supplier.RowVersion),
-            supplier.Code, supplier.Province, supplier.Ward, supplier.Note, supplier.CompanyName, supplier.TaxCode, supplier.IdentityNumber,
-            supplier.CreatedAt, creator);
+            supplier.Code, supplier.Province, supplier.Ward, supplier.Note, OrganizationName(supplier), supplier.TaxCode, supplier.PersonalTaxId,
+            supplier.CreatedAt, creator,
+            supplier.ProvinceCode, supplier.WardCode, supplier.Province, supplier.Ward, supplier.Address,
+            supplier.InvoiceBuyerType, supplier.CompanyName, supplier.InvoiceAddressSameAsContact, supplier.InvoiceProvinceCode, supplier.InvoiceProvinceName,
+            supplier.InvoiceWardCode, supplier.InvoiceWardName, supplier.InvoiceStreet, supplier.InvoiceEmail, NeedsAddressReview(supplier));
     }
 
     private async Task<Result<(SupplierSearchFilter Filter, SupplierFigureAccess Access)>> FilterAsync(SupplierListQuery query, CancellationToken cancellationToken)
@@ -503,10 +522,13 @@ public sealed partial class SupplierService(
         var names = creators.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(creators, cancellationToken);
         return rows.Select(r => new SupplierListItem(
             r.Supplier.Id, r.Supplier.Name, r.Supplier.SupplierType, r.Supplier.PhoneNumber, r.Supplier.StatusId, statusCatalog.DisplayNameOf(r.Supplier.StatusId),
-            r.Supplier.Code, r.Supplier.Email, r.Supplier.Address, r.Supplier.Province, r.Supplier.Ward, r.Supplier.CompanyName, r.Supplier.TaxCode, r.Supplier.Note,
+            r.Supplier.Code, r.Supplier.Email, r.Supplier.Address, r.Supplier.Province, r.Supplier.Ward, OrganizationName(r.Supplier), r.Supplier.TaxCode, r.Supplier.Note,
             r.Supplier.CreatedAt, r.Supplier.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
             access.TotalPurchased ? r.TotalPurchased : null,
-            access.CurrentDebt ? r.CurrentDebt : null)).ToList();
+            access.CurrentDebt ? r.CurrentDebt : null,
+            r.Supplier.ProvinceCode, r.Supplier.WardCode, r.Supplier.Province, r.Supplier.Ward, r.Supplier.Address,
+            r.Supplier.InvoiceBuyerType, r.Supplier.CompanyName, r.Supplier.InvoiceAddressSameAsContact, r.Supplier.InvoiceProvinceCode, r.Supplier.InvoiceProvinceName,
+            r.Supplier.InvoiceWardCode, r.Supplier.InvoiceWardName, r.Supplier.InvoiceStreet, r.Supplier.InvoiceEmail)).ToList();
     }
 
     /// <summary>The second of two parallel saves with one phone gets the same MSG-GEN-02 as the pre-check.</summary>
@@ -531,7 +553,35 @@ public sealed partial class SupplierService(
     // AuditEvent.RecordCode is shorter than a supplier name, which may have 200 characters: cut to 100.
     private static string AuditCode(Supplier supplier) => supplier.Name.Length <= 100 ? supplier.Name : supplier.Name[..100];
 
-    private static (Values Values, List<string> Invalid) Validate(SaveSupplierRequest request)
+    /// <summary>The company name for older clients: only an Organization has one (the invoice name of an Individual is a person's).</summary>
+    private static string? OrganizationName(Supplier s) => s.InvoiceBuyerType == InvoiceBuyerType.Organization ? s.CompanyName : null;
+
+    /// <summary>A province or ward name is kept as text with no code: an entry of before the administrative units list, or one the list did not match.</summary>
+    private static bool NeedsAddressReview(Supplier s) =>
+        new AddressParts(s.ProvinceCode, s.Province, s.WardCode, s.Ward, s.Address).NeedsReview
+        || (!s.InvoiceAddressSameAsContact && new AddressParts(s.InvoiceProvinceCode, s.InvoiceProvinceName, s.InvoiceWardCode, s.InvoiceWardName, s.InvoiceStreet).NeedsReview);
+
+    /// <summary>The ward belongs to the province, for the contact address when it is sent and for an invoice address of its own; the names are those of the administrative units list.</summary>
+    private async Task<Values> VerifiedAddressesAsync(Values values, List<string> invalid, CancellationToken cancellationToken)
+    {
+        if (values.ContactGiven)
+        {
+            values = values with { Contact = await addressVerifier.VerifyAsync(values.Contact, "Province", "Ward", invalid, cancellationToken) };
+        }
+
+        if (values.Invoice is { AddressSameAsContact: false } invoice)
+        {
+            values = values with
+            {
+                Invoice = invoice with { Address = await addressVerifier.VerifyAsync(invoice.Address, "Invoice province", "Invoice ward", invalid, cancellationToken) },
+            };
+        }
+
+        return values;
+    }
+
+    /// <param name="existing">The supplier an update changes: its province and ward stand in for the ones the request leaves out, when the invoice address is the contact address.</param>
+    private static (Values Values, List<string> Invalid) Validate(SaveSupplierRequest request, Supplier? existing)
     {
         var invalid = new List<string>();
         var name = request.Name?.Trim() ?? string.Empty;
@@ -551,34 +601,44 @@ public sealed partial class SupplierService(
             invalid.Add("Phone number");
         }
 
-        var address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
-        if (address?.Length > MaxAddressLength)
-        {
-            invalid.Add("Address");
-        }
-
         string? email = null;
         if (!string.IsNullOrWhiteSpace(request.Email) && (email = EmailAddresses.Normalize(request.Email)) is null)
         {
             invalid.Add("Email");
         }
 
-        CheckLength(request.Province, 100, "Province", invalid);
-        CheckLength(request.Ward, 100, "Ward", invalid);
+        // The province and ward are replaced together, when any entry of them is sent; the street always is.
+        var contactGiven = request.Province is not null || request.ProvinceName is not null || request.ProvinceCode is not null
+            || request.Ward is not null || request.WardName is not null || request.WardCode is not null;
+        var contact = PartyInvoiceRules.Contact(
+            request.ProvinceCode, PartyInvoiceRules.First(request.Province, request.ProvinceName), request.WardCode, PartyInvoiceRules.First(request.Ward, request.WardName),
+            PartyInvoiceRules.First(request.Address, request.Street), invalid);
+        var checkedContact = contactGiven || existing is null
+            ? contact
+            : new AddressParts(existing.ProvinceCode, existing.Province, existing.WardCode, existing.Ward, contact.Street);
+
         CheckLength(request.Note, 2000, "Note", invalid);
-        CheckLength(request.CompanyName, 200, "Company name", invalid);
-        if (!string.IsNullOrWhiteSpace(request.TaxCode) && !TaxCodeFormat().IsMatch(request.TaxCode.Trim()))
+        InvoiceInfo? invoice = null;
+        if (request.InvoiceBuyerType is not null)
         {
-            invalid.Add("Tax code");
+            invoice = PartyInvoiceRules.Invoice(
+                new InvoiceInfoInput(
+                    request.InvoiceBuyerType, PartyInvoiceRules.First(request.InvoiceName, request.CompanyName), request.TaxCode, request.PersonalTaxId, request.InvoiceAddressSameAsContact,
+                    new AddressParts(request.InvoiceProvinceCode, request.InvoiceProvinceName, request.InvoiceWardCode, request.InvoiceWardName, request.InvoiceStreet),
+                    request.InvoiceEmail),
+                checkedContact, InvoiceBuyerType.Individual, allowConsumer: false, invalid);
+        }
+        else
+        {
+            // An older client: the company name and the tax code alone, as before.
+            CheckLength(request.CompanyName, 200, "Company name", invalid);
+            if (!string.IsNullOrWhiteSpace(request.TaxCode) && !LegacyTaxCodeFormat().IsMatch(request.TaxCode.Trim()))
+            {
+                invalid.Add("Tax code");
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(request.IdentityNumber) && !IdentityNumberFormat().IsMatch(request.IdentityNumber.Trim()))
-        {
-            invalid.Add("Identity number");
-        }
-
-        return (new Values(name, request.SupplierType ?? default, phone ?? string.Empty, address, email,
-            request.Province, request.Ward, request.Note, request.CompanyName, request.TaxCode, request.IdentityNumber), invalid);
+        return (new Values(name, request.SupplierType ?? default, phone ?? string.Empty, email, contactGiven, contact, request.Note, request.CompanyName, request.TaxCode, invoice), invalid);
     }
 
     private static void CheckLength(string? value, int max, string field, List<string> invalid)
@@ -594,36 +654,63 @@ public sealed partial class SupplierService(
         supplier.Name = values.Name;
         supplier.SupplierType = values.SupplierType;
         supplier.PhoneNumber = values.PhoneNumber;
-        supplier.Address = values.Address;
+        supplier.Address = values.Contact.Street;
         supplier.Email = values.Email;
-        supplier.Province = Optional(values.Province, supplier.Province, isNew);
-        supplier.Ward = Optional(values.Ward, supplier.Ward, isNew);
+        if (values.ContactGiven || isNew)
+        {
+            supplier.Province = values.Contact.ProvinceName;
+            supplier.ProvinceCode = values.Contact.ProvinceCode;
+            supplier.Ward = values.Contact.WardName;
+            supplier.WardCode = values.Contact.WardCode;
+        }
+
         supplier.Note = Optional(values.Note, supplier.Note, isNew);
+        if (values.Invoice is { } invoice)
+        {
+            supplier.InvoiceBuyerType = invoice.BuyerType;
+            supplier.CompanyName = invoice.Name;
+            supplier.TaxCode = invoice.TaxCode;
+            supplier.PersonalTaxId = invoice.PersonalTaxId;
+            supplier.InvoiceAddressSameAsContact = invoice.AddressSameAsContact;
+            supplier.InvoiceProvinceName = invoice.Address.ProvinceName;
+            supplier.InvoiceProvinceCode = invoice.Address.ProvinceCode;
+            supplier.InvoiceWardName = invoice.Address.WardName;
+            supplier.InvoiceWardCode = invoice.Address.WardCode;
+            supplier.InvoiceStreet = invoice.Address.Street;
+            supplier.InvoiceEmail = invoice.Email;
+            return;
+        }
+
         supplier.CompanyName = Optional(values.CompanyName, supplier.CompanyName, isNew);
         supplier.TaxCode = Optional(values.TaxCode, supplier.TaxCode, isNew);
-        supplier.IdentityNumber = Optional(values.IdentityNumber, supplier.IdentityNumber, isNew);
+        if (isNew)
+        {
+            // A company name or tax code from an older client means an organisation, as the migration counts it.
+            supplier.InvoiceBuyerType = supplier.TaxCode is null && supplier.CompanyName is null ? InvoiceBuyerType.Individual : InvoiceBuyerType.Organization;
+            // The quick create (name, type and phone): the supplier is the invoice buyer, and the invoice address is its contact address, not required.
+            supplier.CompanyName ??= values.Name;
+        }
     }
 
     /// <summary>On an update, null keeps the value (a client that does not know the field) and an empty text clears it.</summary>
     private static string? Optional(string? entered, string? current, bool isNew) =>
         entered is null ? (isNew ? null : current) : string.IsNullOrWhiteSpace(entered) ? null : entered.Trim();
 
-    // The identity number is personal data: the audit log only says whether one is held.
+    // The personal tax number is personal data: the audit log only says whether one is held.
     private static object Snapshot(Supplier s) => new
     {
-        s.Code, s.Name, s.SupplierType, s.PhoneNumber, s.Address, s.Email, s.Province, s.Ward, s.Note, s.CompanyName, s.TaxCode,
-        HasIdentityNumber = s.IdentityNumber is not null,
+        s.Code, s.Name, s.SupplierType, s.PhoneNumber, s.Address, s.Email, s.Province, s.ProvinceCode, s.Ward, s.WardCode, s.Note,
+        s.InvoiceBuyerType, s.CompanyName, s.TaxCode, HasPersonalTaxId = s.PersonalTaxId is not null, s.InvoiceAddressSameAsContact,
+        s.InvoiceProvinceName, s.InvoiceProvinceCode, s.InvoiceWardName, s.InvoiceWardCode, s.InvoiceStreet, s.InvoiceEmail,
     };
 
+    /// <summary>What an older client may send as a tax code: 10 digits with an optional -3 digits branch part, or 12 digits.</summary>
     [GeneratedRegex(@"^(\d{10}(-\d{3})?|\d{12})$")]
-    private static partial Regex TaxCodeFormat();
-
-    [GeneratedRegex(@"^\d{12}$")]
-    private static partial Regex IdentityNumberFormat();
+    private static partial Regex LegacyTaxCodeFormat();
 
     private sealed record Values(
-        string Name, SupplierType SupplierType, string PhoneNumber, string? Address, string? Email,
-        string? Province, string? Ward, string? Note, string? CompanyName, string? TaxCode, string? IdentityNumber);
+        string Name, SupplierType SupplierType, string PhoneNumber, string? Email,
+        bool ContactGiven, AddressParts Contact, string? Note, string? CompanyName, string? TaxCode, InvoiceInfo? Invoice);
 }
 
 /// <summary>Which money figures of the supplier list the caller may read.</summary>

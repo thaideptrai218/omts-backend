@@ -14,9 +14,20 @@ namespace OMTS.Application.Features.Sales.Customers;
 /// <param name="CustomerType">Individual when left out.</param>
 /// <param name="BirthDate">Not in the future.</param>
 /// <param name="Email">A valid address when entered; staff may edit it also on a profile linked to a trader account.</param>
-/// <param name="TaxCode">10 digits with an optional -3 digits branch part, or 12 digits.</param>
-/// <param name="IdentityNumber">CCCD, 12 digits. Personal data: never in a list, an export or the audit log.</param>
+/// <param name="Address">The street of the contact address (house number and street name); <paramref name="Street"/> is the same entry under the name of the address picker.</param>
+/// <param name="Province">The name of the contact province; with <paramref name="ProvinceCode"/>, a province of the administrative units list. <paramref name="ProvinceName"/> is the same entry.</param>
+/// <param name="Ward">The name of the contact ward; with <paramref name="WardCode"/>, a ward of that province. <paramref name="WardName"/> is the same entry.</param>
+/// <param name="CompanyName">The same entry as <paramref name="InvoiceName"/>, for older clients.</param>
+/// <param name="TaxCode">Organization only: 10 digits with an optional -3 digits branch part.</param>
 /// <param name="BankBin">A bank of the bank list; with <paramref name="BankAccountNumber"/>, the account the customer is paid back to.</param>
+/// <param name="InvoiceBuyerType">
+/// Organization, Individual or Consumer; Consumer when left out. Organization needs the invoice name, tax code, email and address; Individual the name and address;
+/// Consumer nothing (what is sent for the invoice is dropped).
+/// </param>
+/// <param name="InvoiceName">The company name of an Organization, the person's name of an Individual.</param>
+/// <param name="PersonalTaxId">Individual only: the personal tax number (10 digits) or ID number (12 digits), optional. Personal data: never in a list, an export or the audit log.</param>
+/// <param name="InvoiceAddressSameAsContact">True (the default) when the invoice address is the contact address, which must then be complete.</param>
+/// <param name="InvoiceEmail">Required for an Organization, optional for an Individual.</param>
 public sealed record SaveCustomerRequest(
     string? Name,
     string? PhoneNumber,
@@ -34,9 +45,23 @@ public sealed record SaveCustomerRequest(
     string? Ward = null,
     string? CompanyName = null,
     string? TaxCode = null,
-    string? IdentityNumber = null,
     string? BankBin = null,
-    string? BankAccountNumber = null);
+    string? BankAccountNumber = null,
+    int? ProvinceCode = null,
+    int? WardCode = null,
+    InvoiceBuyerType? InvoiceBuyerType = null,
+    string? InvoiceName = null,
+    string? PersonalTaxId = null,
+    bool? InvoiceAddressSameAsContact = null,
+    int? InvoiceProvinceCode = null,
+    string? InvoiceProvinceName = null,
+    int? InvoiceWardCode = null,
+    string? InvoiceWardName = null,
+    string? InvoiceStreet = null,
+    string? InvoiceEmail = null,
+    string? ProvinceName = null,
+    string? WardName = null,
+    string? Street = null);
 
 /// <summary>The customer list and export query. The figures (debt, sales) are null, and their sort and filter parameters refused, without CUSTOMER_DEBTS View.</summary>
 /// <param name="Search">Text in the name, code or phone number.</param>
@@ -90,6 +115,9 @@ public enum CustomerStatusFilter
 /// <param name="OverDebtAmount">The debt is above the amount limit.</param>
 /// <param name="OverDebtDays">The debt has stood longer than the days limit.</param>
 /// <param name="DebtDays">Days since the oldest unpaid debt invoice; null without a debt, and without CUSTOMER_DEBTS View.</param>
+/// <param name="CompanyName">The company name of an Organization; null for the other buyer types (<paramref name="InvoiceName"/> holds the name of any).</param>
+/// <param name="Street">The same as <paramref name="Address"/>, as the address picker names it; <paramref name="ProvinceName"/> and <paramref name="WardName"/> likewise repeat <paramref name="Province"/> and <paramref name="Ward"/>.</param>
+/// <param name="InvoiceAddressSameAsContact">When true the invoice address fields are empty and the contact address is the invoice address.</param>
 public sealed record CustomerListItem(
     Guid Id,
     string Code,
@@ -121,7 +149,21 @@ public sealed record CustomerListItem(
     bool OverDebtLimit,
     bool OverDebtAmount,
     bool OverDebtDays,
-    int? DebtDays);
+    int? DebtDays,
+    int? ProvinceCode,
+    int? WardCode,
+    string? ProvinceName,
+    string? WardName,
+    string? Street,
+    InvoiceBuyerType InvoiceBuyerType,
+    string? InvoiceName,
+    bool InvoiceAddressSameAsContact,
+    int? InvoiceProvinceCode,
+    string? InvoiceProvinceName,
+    int? InvoiceWardCode,
+    string? InvoiceWardName,
+    string? InvoiceStreet,
+    string? InvoiceEmail);
 
 /// <summary>The sums over every customer that matches the filters, not only the page. Null without CUSTOMER_DEBTS View.</summary>
 /// <param name="TotalSales">Σ the sales before the price cuts.</param>
@@ -137,7 +179,11 @@ public sealed record LinkedTraderAccount(Guid AccountId, string? Username, strin
 /// <param name="MergedIntoCustomerId">Set on a merged profile: it is read-only and no longer offered.</param>
 /// <param name="CurrentDebt">BR-DEBT-02, below 0 money owed back. Unlike the list, the detail gives it to every caller: the invoice screen of the Zone Manager shows it.</param>
 /// <param name="IsUsed">An invoice, payment, debt adjustment or purchase request names it, or it has an account: it cannot be deleted, only discontinued.</param>
-/// <param name="IdentityNumber">Personal data: on this detail only.</param>
+/// <param name="PersonalTaxId">Personal data: on this detail only.</param>
+/// <param name="CompanyName">The company name of an Organization; null for the other buyer types (<paramref name="InvoiceName"/> holds the name of any).</param>
+/// <param name="Street">The same as <paramref name="Address"/>, as the address picker names it; <paramref name="ProvinceName"/> and <paramref name="WardName"/> likewise repeat <paramref name="Province"/> and <paramref name="Ward"/>.</param>
+/// <param name="InvoiceAddressSameAsContact">When true the invoice address fields are empty and the contact address is the invoice address.</param>
+/// <param name="AddressNeedsReview">An address name (contact, or the invoice address when it differs) is kept as text without a code of the administrative units list: pick it again.</param>
 /// <param name="PhotoUrl">A temporary address of the photo; null without one.</param>
 public sealed record CustomerView(
     Guid Id,
@@ -163,14 +209,29 @@ public sealed record CustomerView(
     string? Ward,
     string? CompanyName,
     string? TaxCode,
-    string? IdentityNumber,
+    string? PersonalTaxId,
     string? BankBin,
     string? BankName,
     string? BankAccountNumber,
     string? PhotoUrl,
     DateTimeOffset CreatedAt,
     string? CreatedBy,
-    bool IsUsed);
+    bool IsUsed,
+    int? ProvinceCode,
+    int? WardCode,
+    string? ProvinceName,
+    string? WardName,
+    string? Street,
+    InvoiceBuyerType InvoiceBuyerType,
+    string? InvoiceName,
+    bool InvoiceAddressSameAsContact,
+    int? InvoiceProvinceCode,
+    string? InvoiceProvinceName,
+    int? InvoiceWardCode,
+    string? InvoiceWardName,
+    string? InvoiceStreet,
+    string? InvoiceEmail,
+    bool AddressNeedsReview);
 
 /// <summary>A saved profile with MSG-GEN-05 (SALE-04 step 7).</summary>
 public sealed record CustomerSaved(CustomerView Customer, string Message, string MessageCode);

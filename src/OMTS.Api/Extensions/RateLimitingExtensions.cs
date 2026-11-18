@@ -28,6 +28,9 @@ public sealed class RateLimitOptions
     /// </summary>
     public int EmployeeLoginCodesPerMinute { get; set; } = 60;
 
+    /// <summary>The tax code lookup of the customer and supplier forms, per signed-in account: each press of "Lấy thông tin" asks the outside registry once.</summary>
+    public int TaxLookupsPerMinute { get; set; } = 30;
+
     /// <summary>The bank notification webhook (API-13): the service's own servers, so a high limit that still stops a flood of unsigned requests.</summary>
     public int PaymentNotificationsPerMinute { get; set; } = 600;
 
@@ -47,6 +50,7 @@ public static class RateLimitingExtensions
     public const string Logins = "logins";
     public const string EmployeeAppLogins = "employee-app-logins";
     public const string EmployeeLoginCodes = "employee-login-codes";
+    public const string TaxLookups = "tax-lookups";
     public const string PaymentNotifications = "payment-notifications";
     public const string ProvenancePages = "provenance-pages";
 
@@ -70,7 +74,8 @@ public static class RateLimitingExtensions
             options.AddPolicy(Logins, context => PerClient(context, o => o.LoginsPerMinute));
             options.AddPolicy(EmployeeAppLogins, context => PerClient(context, o => o.EmployeeAppLoginsPerMinute));
             options.AddPolicy(EmployeeLoginCodes, context => PerAccount(context, o => o.EmployeeLoginCodesPerMinute));
-            options.AddPolicy(PaymentNotifications, context => PerClient(context, o => o.PaymentNotificationsPerMinute));
+            options.AddPolicy(TaxLookups, context => PerAccount(context, o => o.TaxLookupsPerMinute));
+            options.AddPolicy(PaymentNotifications,context => PerClient(context, o => o.PaymentNotificationsPerMinute));
             options.AddPolicy(ProvenancePages, context => PerClient(context, o => o.ProvenancePagesPerMinute));
         });
         return services;

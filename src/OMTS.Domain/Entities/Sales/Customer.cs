@@ -33,15 +33,33 @@ public class Customer : AuditableEntity, IHasStatus
     /// <summary>Storage key of the photo (JPEG or PNG, at most 2 MB).</summary>
     public string? PhotoUrl { get; set; }
 
+    /// <summary>The contact address: the names of the province and ward (also what an old free-text entry holds) and their codes of the administrative units list; a code is null for an entry not yet matched. <see cref="Address"/> is the street.</summary>
     public string? Province { get; set; }
+    public int? ProvinceCode { get; set; }
     public string? Ward { get; set; }
+    public int? WardCode { get; set; }
 
-    /// <summary>Invoice data: the company and its tax code.</summary>
+    /// <summary>Whom the e-invoice is made out to; the other invoice fields follow it.</summary>
+    public InvoiceBuyerType InvoiceBuyerType { get; set; } = InvoiceBuyerType.Consumer;
+
+    /// <summary>The invoice name: the company name of an Organization, the person's name of an Individual.</summary>
     public string? CompanyName { get; set; }
+
+    /// <summary>The tax code of an Organization.</summary>
     public string? TaxCode { get; set; }
 
-    /// <summary>Personal data (CCCD): shown on the detail only, never in a list, an export or the audit log.</summary>
-    public string? IdentityNumber { get; set; }
+    /// <summary>Personal data: the personal tax number or ID number (10 or 12 digits) of an Individual; shown on the detail only, never in a list, an export or the audit log.</summary>
+    public string? PersonalTaxId { get; set; }
+
+    /// <summary>The invoice address is the contact address; the invoice address fields are then empty.</summary>
+    public bool InvoiceAddressSameAsContact { get; set; } = true;
+
+    public string? InvoiceProvinceName { get; set; }
+    public int? InvoiceProvinceCode { get; set; }
+    public string? InvoiceWardName { get; set; }
+    public int? InvoiceWardCode { get; set; }
+    public string? InvoiceStreet { get; set; }
+    public string? InvoiceEmail { get; set; }
 
     /// <summary>The bank account the customer is paid back to: the bank of the bank list and the number.</summary>
     public string? BankBin { get; set; }

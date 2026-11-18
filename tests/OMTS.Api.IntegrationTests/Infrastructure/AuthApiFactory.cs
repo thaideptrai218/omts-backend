@@ -71,6 +71,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
                 .UseInMemoryDatabase(_databaseName, DatabaseRoot)
                 .AddOmtsInterceptors(provider));
 
+            services.UseStubAddressServices();
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
         });
     }

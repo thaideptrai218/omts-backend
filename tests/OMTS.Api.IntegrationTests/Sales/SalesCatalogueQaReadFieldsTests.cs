@@ -16,6 +16,15 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
 
     private static string[] Keys(JsonElement element) => element.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
 
+    /// <summary>The address picker and e-invoice entries of a customer, beside the older province, ward and address names they repeat.</summary>
+    private static readonly string[] AddressAndInvoiceFields =
+    [
+        "provinceCode", "wardCode", "provinceName", "wardName", "street", "invoiceBuyerType", "invoiceName", "invoiceAddressSameAsContact", "invoiceProvinceCode", "invoiceProvinceName",
+        "invoiceWardCode", "invoiceWardName", "invoiceStreet", "invoiceEmail",
+    ];
+
+    private static string[] Sorted(string[] fields, string[] more) => fields.Concat(more).Order(StringComparer.Ordinal).ToArray();
+
     // What each read shows: exactly these fields, a trader never a price, also by id and on a Discontinued product.
     [Fact]
     public async Task Each_role_reads_exactly_its_fields_and_a_trader_never_a_price()
@@ -62,18 +71,22 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         var list = await (await owner.GetAsync($"/api/customers?search={Uri.EscapeDataString(linked.Name)}")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(
-            [
-                "address", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "debtDays", "email", "facebook", "gender", "hasTraderAccount", "id",
-                "lastTransactionAt", "name", "netSales", "note", "overDebtAmount", "overDebtDays", "overDebtLimit", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion", "status", "statusId", "taxCode", "totalSales", "ward",
-            ],
+            Sorted(
+                [
+                    "address", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "debtDays", "email", "facebook", "gender", "hasTraderAccount", "id",
+                    "lastTransactionAt", "name", "netSales", "note", "overDebtAmount", "overDebtDays", "overDebtLimit", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion", "status", "statusId", "taxCode", "totalSales", "ward",
+                ],
+                AddressAndInvoiceFields),
             Keys(Assert.Single(list.GetProperty("items").EnumerateArray())));
         var view = await owner.CustomerAsync(linked.Id);
         Assert.Equal(
-            [
-                "address", "bankAccountNumber", "bankBin", "bankName", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook",
-                "gender", "id", "identityNumber", "isUsed", "mergedIntoCustomerId", "name", "note", "phoneLocked", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion",
-                "status", "statusId", "taxCode", "traderAccount", "ward",
-            ],
+            Sorted(
+                [
+                    "address", "addressNeedsReview", "bankAccountNumber", "bankBin", "bankName", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook",
+                    "gender", "id", "isUsed", "mergedIntoCustomerId", "name", "note", "personalTaxId", "phoneLocked", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion",
+                    "status", "statusId", "taxCode", "traderAccount", "ward",
+                ],
+                AddressAndInvoiceFields),
             Keys(view));
         Assert.Equal(["accountId", "displayName", "username"], Keys(view.GetProperty("traderAccount")));
     }
