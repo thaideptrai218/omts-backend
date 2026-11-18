@@ -68,7 +68,7 @@ public sealed record RaftLookupItem(Guid Id, string Code, string ZoneCode, Guid 
 /// <param name="Photos">At most three, in slot order.</param>
 /// <param name="LaneCount">The number of lanes In Use.</param>
 /// <param name="Lanes">Every lane of the raft in number order, the Removed ones included.</param>
-/// <param name="MaterialCost">VND of every material used on the raft at the latest purchase price of each item (BR-FARM-05); 0 when none was used.</param>
+/// <param name="MaterialCost">VND of every material used on the raft at the cost price of each item, as its Xuất dùng document booked it (BR-FARM-05); 0 when none was used.</param>
 /// <param name="LengthM">Metres along the lines; null for a raft whose old size text could not be read.</param>
 /// <param name="WidthM">Metres across the lanes; null as <paramref name="LengthM"/>.</param>
 /// <param name="AreaM2">Length times width rounded to 2 decimals; null when a side is unknown.</param>

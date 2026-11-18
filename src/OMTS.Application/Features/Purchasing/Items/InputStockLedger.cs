@@ -16,6 +16,8 @@ public sealed record StockPosting(Guid ItemId, Guid? SeedLotLineId, decimal Quan
 /// changed: a document that is edited or cancelled has its rows undone by reversal rows (same time, opposite quantity), and an edit then writes the new rows.
 /// The cost follows the cooperative setting: Fixed sets the cost of an item that has none from the price of its first receipt; Average keeps a moving average over receipts and returns
 /// (a reversal acts as the opposite document at the same price) with the quantity on hand floored at 0.
+/// Whenever the cost of an item really changes, a <see cref="InputStockMovementKind.CostAdjustment"/> row (quantity 0) follows the row that changed it, with the same document and time; a cost
+/// changed by hand writes one too (<see cref="RecordManualCostChange"/>). A cost that stays the same writes nothing.
 /// </summary>
 public sealed class InputStockLedger(
     IInputStockRepository stock,
@@ -142,14 +144,17 @@ public sealed class InputStockLedger(
         {
             var item = refs[row.ItemId];
             var delta = -row.Quantity;
+            var previous = item.CostPrice;
             var cost = AdjustedCost(item, method, InputStockMovementKind.Reversal, delta, row.TransactionPrice);
             item.CostPrice = cost;
-            Write(new InputStockMovement
+            var reversal = new InputStockMovement
             {
                 ItemId = row.ItemId, SeedLotLineId = row.SeedLotLineId, Kind = InputStockMovementKind.Reversal, DocumentId = row.DocumentId, DocumentCode = row.DocumentCode,
                 OccurredAt = row.OccurredAt, Quantity = delta, UnitCost = cost, TransactionPrice = row.TransactionPrice, PartyName = row.PartyName, ReversesMovementId = row.Id,
-            });
+            };
+            Write(reversal);
             onHand[row.ItemId] += delta;
+            WriteCostAdjustmentIfChanged(item, reversal, previous);
         }
 
         if (afterReceiptRemoved)
@@ -174,20 +179,52 @@ public sealed class InputStockLedger(
         foreach (var posting in postings)
         {
             var item = refs[posting.ItemId];
+            var previous = item.CostPrice;
             item.CostPrice = AdjustedCost(item, method, kind, posting.Quantity, posting.UnitPrice);
             if (kind == InputStockMovementKind.Receipt && posting.UnitPrice is { } price)
             {
                 item.LastPurchasePrice = price;
             }
 
-            Write(new InputStockMovement
+            var movement = new InputStockMovement
             {
                 ItemId = posting.ItemId, SeedLotLineId = posting.SeedLotLineId, Kind = kind, DocumentId = documentId, DocumentCode = documentCode, OccurredAt = occurredAt,
                 Quantity = posting.Quantity, UnitCost = item.CostPrice, TransactionPrice = posting.UnitPrice, PartyName = party,
-            });
+            };
+            Write(movement);
             onHand[posting.ItemId] += posting.Quantity;
+            WriteCostAdjustmentIfChanged(item, movement, previous);
         }
     }
+
+    /// <summary>
+    /// Records a cost set by hand (the Owner's price setup of a receipt, or the cost field of the item edit): <paramref name="previous"/> is the cost the item had, the item already holds the new one.
+    /// The row belongs to <paramref name="documentId"/> (the receipt, or the item itself) and is dated now. Nothing is written when the cost did not change.
+    /// </summary>
+    public void RecordManualCostChange(FarmingInputItem item, decimal? previous, Guid documentId, string documentCode)
+    {
+        if (item.CostPrice == previous)
+        {
+            return;
+        }
+
+        Write(CostAdjustmentRow(item, previous, documentId, documentCode, timeProvider.GetUtcNow().ToOffset(BusinessClock.UtcOffset), null));
+    }
+
+    /// <summary>The cost adjustment that follows <paramref name="cause"/> when it moved the cost of its item away from <paramref name="previous"/>: same document and time, no quantity.</summary>
+    private void WriteCostAdjustmentIfChanged(FarmingInputItem item, InputStockMovement cause, decimal? previous)
+    {
+        if (item.CostPrice != previous)
+        {
+            Write(CostAdjustmentRow(item, previous, cause.DocumentId, cause.DocumentCode, cause.OccurredAt, cause.Id));
+        }
+    }
+
+    private static InputStockMovement CostAdjustmentRow(FarmingInputItem item, decimal? previous, Guid? documentId, string documentCode, DateTimeOffset occurredAt, Guid? causedBy) => new()
+    {
+        ItemId = item.Id, Kind = InputStockMovementKind.CostAdjustment, DocumentId = documentId, DocumentCode = documentCode, OccurredAt = occurredAt,
+        Quantity = 0m, UnitCost = item.CostPrice, PreviousUnitCost = previous, CausedByMovementId = causedBy,
+    };
 
     private decimal? AdjustedCost(FarmingInputItem item, InputCostMethod method, InputStockMovementKind kind, decimal quantity, decimal? price) =>
         InputCostRules.Adjusted(method, kind, item.CostPrice, onHand.GetValueOrDefault(item.Id), quantity, price);

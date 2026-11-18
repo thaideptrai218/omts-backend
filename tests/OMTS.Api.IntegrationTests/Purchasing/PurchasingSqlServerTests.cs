@@ -376,7 +376,7 @@ public class PurchasingSqlServerTests
         Assert.Equal(JsonValueKind.Null, totals.GetProperty("raftMaterialCost").ValueKind);
         var row = all.GetProperty("page").GetProperty("items")[0];
         Assert.Equal((100_500m, 100_000m), (row.Money("total"), row.Money("linesTotal")));
-        // The price of a usage is a subquery per usage: the latest Completed line of the item received by its date.
+        // The price of a usage without an issue is the cost on the stock card at the end of its date.
         await host.UseMaterialAsync(world.Raft.Id, world.Material, 3);
         var costs = await (await owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{period}&raftId={world.Raft.Id}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(30_000m, costs.Money("materialCost"));

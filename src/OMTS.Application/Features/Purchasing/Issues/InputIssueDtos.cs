@@ -161,6 +161,7 @@ public sealed record InputMovementView(
     Guid? SeedLotLineId,
     string? SeedLotCode,
     Guid? ReversesMovementId,
+    decimal? PreviousUnitCost = null,
     InputIssueSource? SourceKind = null,
     Guid? SourceRecordId = null,
     Guid? CycleId = null,

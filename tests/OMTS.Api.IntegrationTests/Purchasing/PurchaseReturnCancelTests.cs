@@ -144,9 +144,9 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(20_000m, Assert.Single(corrected.GetProperty("returns").EnumerateArray()).Money("returnValue"));
         Assert.Equal(20_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-returns/{first}")).Money("returnValue"));
         Assert.Equal(30_000, await world.DebtAsync());
-        // A material used now is costed at the corrected price, the latest the item was bought at.
+        // A material used now is costed at the cost price of the item: the Fixed method keeps the 10,000 the first receipt set, whatever the corrected price.
         await factory.UseMaterialAsync(world.Raft.Id, world.Material, 1);
-        Assert.Equal(5_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
+        Assert.Equal(10_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
         var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}/statement");
         Assert.Equal([("Receipt", 50_000m), ("Return", -20_000m)], statement.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
 

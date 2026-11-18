@@ -52,10 +52,10 @@ public sealed class InMemoryStock : IInputStockRepository
 
     public Task<IReadOnlyList<InputStockMovement>> UnreversedOfDocumentAsync(Guid documentId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<InputStockMovement>>(Rows
-            .Where(r => r.DocumentId == documentId && r.Kind != InputStockMovementKind.Reversal && !Rows.Any(x => x.ReversesMovementId == r.Id)).OrderBy(r => r.Sequence).ToList());
+            .Where(r => r.DocumentId == documentId && r.Kind is not (InputStockMovementKind.Reversal or InputStockMovementKind.CostAdjustment) && !Rows.Any(x => x.ReversesMovementId == r.Id)).OrderBy(r => r.Sequence).ToList());
 
     public Task<bool> HasOnlyOpeningAsync(Guid itemId, CancellationToken cancellationToken) =>
-        Task.FromResult(Rows.Where(r => r.ItemId == itemId).All(r => r.Kind is InputStockMovementKind.Opening or InputStockMovementKind.Reversal));
+        Task.FromResult(Rows.Where(r => r.ItemId == itemId).All(r => r.Kind is InputStockMovementKind.Opening or InputStockMovementKind.Reversal or InputStockMovementKind.CostAdjustment));
 
     public Task<decimal?> OpeningQuantityAsync(Guid itemId, CancellationToken cancellationToken) =>
         Task.FromResult(Rows.Where(r => r.ItemId == itemId && r.Kind == InputStockMovementKind.Opening).Select(r => (decimal?)r.Quantity).FirstOrDefault());

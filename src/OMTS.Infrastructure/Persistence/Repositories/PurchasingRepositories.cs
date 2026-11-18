@@ -237,7 +237,7 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
     }
 
     public async Task<bool> HasMovementsAsync(Guid itemId, CancellationToken cancellationToken) =>
-        await db.InputStockMovements.AnyAsync(m => m.ItemId == itemId, cancellationToken)
+        await db.InputStockMovements.AnyAsync(m => m.ItemId == itemId && m.Kind != InputStockMovementKind.CostAdjustment, cancellationToken)
         || await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
         || await db.PurchaseReturnLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
         || await db.MaterialUsages.AnyAsync(u => u.ItemId == itemId, cancellationToken);

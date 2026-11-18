@@ -6516,6 +6516,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("CausedByMovementId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("DocumentCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -6538,6 +6541,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("PartyName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("PreviousUnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 5)

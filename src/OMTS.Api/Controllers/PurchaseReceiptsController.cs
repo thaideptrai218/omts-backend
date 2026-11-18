@@ -38,7 +38,7 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Search([FromQuery] PurchaseReceiptQuery query, CancellationToken cancellationToken) =>
         (await queries.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>BR-FARM-05: the material cost of each raft in the period, from its material usages at the latest purchase prices.</summary>
+    /// <summary>BR-FARM-05: the material cost of each raft in the period, from its material usages at the cost price of each item.</summary>
     [HttpGet(Receipts + "/raft-material-costs")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<RaftMaterialCostResult>(StatusCodes.Status200OK)]

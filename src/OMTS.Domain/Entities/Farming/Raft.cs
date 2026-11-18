@@ -7,8 +7,8 @@ using OMTS.Domain.Entities.Platform;
 namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
-/// E10 – Physical structure grouping lanes. Its material cost is the material used on it, each at the latest purchase
-/// price of the item (BR-FARM-05); float and line counts are not kept.
+/// E10 – Physical structure grouping lanes. Its material cost is the material used on it, each at the cost
+/// price of the item, as its Xuất dùng document booked it (BR-FARM-05); float and line counts are not kept.
 /// </summary>
 public class Raft : AuditableEntity, IHasStatus
 {
