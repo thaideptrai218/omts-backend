@@ -23,7 +23,11 @@ internal sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Ward).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.CompanyName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.TaxCode).HasMaxLength(Lengths.Phone);
-        builder.Property(x => x.IdentityNumber).HasMaxLength(Lengths.Phone);
+        builder.Property(x => x.PersonalTaxId).HasMaxLength(Lengths.Phone);
+        builder.Property(x => x.InvoiceProvinceName).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.InvoiceWardName).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.InvoiceStreet).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.InvoiceEmail).HasMaxLength(Lengths.Email);
         builder.Property(x => x.BankBin).HasMaxLength(Lengths.Phone);
         builder.Property(x => x.BankName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.BankAccountNumber).HasMaxLength(Lengths.ShortText);

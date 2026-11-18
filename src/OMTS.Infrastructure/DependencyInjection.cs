@@ -3,9 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Addresses;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Ocr;
@@ -17,6 +19,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
+using OMTS.Infrastructure.AddressLookup;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
 using OMTS.Infrastructure.Identity;
@@ -199,9 +202,11 @@ public static class DependencyInjection
         services.AddZalo(configuration);
         services.AddPayments(configuration);
         services.AddZalo(configuration);
+        services.AddAddressLookup(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
         services.AddSingleton<ISpreadsheetReader, ClosedXmlSpreadsheetReader>();
 
+        services.AddScoped<AddressCodeBackfill>();
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
 
@@ -406,6 +411,25 @@ public static class DependencyInjection
                 var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
             };
         });
+    }
+
+    /// <summary>The list of provinces and wards and the tax registry: public services that need no key, called with a timeout and a limit on the size of the answer.</summary>
+    internal static void AddAddressLookup(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AddressLookupOptions>().Bind(configuration.GetSection(AddressLookupOptions.SectionName));
+        services.AddHttpClient<IAdministrativeUnitSource, OpenApiVnAdministrativeUnitSource>((provider, http) =>
+            Configure(http, provider.GetRequiredService<IOptions<AddressLookupOptions>>().Value, options => options.AdministrativeUnitsBaseUrl));
+        // The standard client logging writes the URL of each call, which holds the tax code that was looked up: the adapter logs the failures itself, without it.
+        services.AddLogging(logging => logging.AddFilter("System.Net.Http.HttpClient." + nameof(ITaxRegistry), LogLevel.None));
+        services.AddHttpClient<ITaxRegistry, VietQrTaxRegistry>((provider, http) =>
+            Configure(http, provider.GetRequiredService<IOptions<AddressLookupOptions>>().Value, options => options.TaxRegistryBaseUrl));
+
+        static void Configure(HttpClient http, AddressLookupOptions options, Func<AddressLookupOptions, string> baseUrl)
+        {
+            http.BaseAddress = new Uri(baseUrl(options));
+            http.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            http.MaxResponseContentBufferSize = options.MaxResponseBytes;
+        }
     }
 
     internal static void AddZalo(this IServiceCollection services, IConfiguration configuration)

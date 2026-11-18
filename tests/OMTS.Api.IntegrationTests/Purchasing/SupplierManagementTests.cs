@@ -74,24 +74,56 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
         var created = await (await owner.PostAsJsonAsync(Url, new
         {
             name = "Trại giống", supplierType = "Seed", phoneNumber = NewPhone(), province = "Quảng Ninh", ward = "Cái Rồng", note = "Giao sáng",
-            companyName = "Công ty A", taxCode = "0101234567-001", identityNumber = "012345678901",
+            companyName = "Công ty A", taxCode = "0101234567-001",
         })).ReadAsync(HttpStatusCode.Created);
 
         Assert.Matches("^NCC\\d{6,}$", created.GetProperty("code").GetString()!);
         Assert.Equal("Quảng Ninh", created.GetProperty("province").GetString());
-        Assert.Equal("012345678901", created.GetProperty("identityNumber").GetString());
+        // A client that sends no buyer type keeps the company name and tax code only; a tax code makes an Organization.
+        Assert.Equal(("Organization", "Công ty A"), (created.GetProperty("invoiceBuyerType").GetString(), created.GetProperty("companyName").GetString()));
+        Assert.True(created.GetProperty("addressNeedsReview").GetBoolean());
         Assert.NotEqual(default, created.GetProperty("createdAt").GetDateTimeOffset());
     }
 
     [Theory]
     [InlineData("taxCode", "12345", "Tax code")]
-    [InlineData("identityNumber", "123", "Identity number")]
-    public async Task A_badly_formed_tax_code_or_identity_number_is_refused(string property, string value, string field)
+    public async Task A_badly_formed_tax_code_is_refused(string property, string value, string field)
     {
         var owner = await factory.PurchasingOwnerAsync();
         var body = new Dictionary<string, object?> { ["name"] = "S", ["supplierType"] = "Seed", ["phoneNumber"] = NewPhone(), [property] = value };
 
         Assert.Equal(field, await (await owner.PostAsJsonAsync(Url, body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+    }
+
+    private static Dictionary<string, object?> IndividualBuyer(string personalTaxId) => new()
+    {
+        ["name"] = "S", ["supplierType"] = "Seed", ["phoneNumber"] = NewPhone(),
+        ["provinceCode"] = 1, ["provinceName"] = "Thành phố Hà Nội", ["wardCode"] = 4, ["wardName"] = "Phường Ba Đình", ["street"] = "1 Hàng Bài",
+        ["invoiceBuyerType"] = "Individual", ["invoiceName"] = "Nguyễn Văn An", ["personalTaxId"] = personalTaxId,
+    };
+
+    [Fact]
+    public async Task A_badly_formed_personal_tax_id_a_consumer_buyer_and_a_ward_of_another_province_are_refused()
+    {
+        var owner = await factory.PurchasingOwnerAsync();
+
+        Assert.Equal("Personal tax ID", await (await owner.PostAsJsonAsync(Url, IndividualBuyer("123"))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Invoice buyer type", await (await owner.PostAsJsonAsync(Url, new Dictionary<string, object?>(IndividualBuyer("0312345678")) { ["invoiceBuyerType"] = "Consumer" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Ward", await (await owner.PostAsJsonAsync(Url, new Dictionary<string, object?>(IndividualBuyer("0312345678")) { ["wardCode"] = 300, ["wardName"] = "Phường Bến Nghé" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Invoice email", await (await owner.PostAsJsonAsync(Url, new Dictionary<string, object?>(IndividualBuyer("0312345678")) { ["invoiceEmail"] = "nope" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+    }
+
+    [Fact]
+    public async Task An_individual_buyer_with_a_picked_address_is_saved_with_the_names_of_the_list()
+    {
+        var owner = await factory.PurchasingOwnerAsync();
+
+        var created = await (await owner.PostAsJsonAsync(Url, new Dictionary<string, object?>(IndividualBuyer("0312345678")) { ["provinceName"] = "ha noi", ["wardName"] = "ba dinh" })).ReadAsync(HttpStatusCode.Created);
+
+        Assert.Equal(("Thành phố Hà Nội", "Phường Ba Đình", "1 Hàng Bài"), (created.GetProperty("province").GetString(), created.GetProperty("ward").GetString(), created.GetProperty("address").GetString()));
+        Assert.Equal((1, 4, "Individual", true, false), (created.GetProperty("provinceCode").GetInt32(), created.GetProperty("wardCode").GetInt32(), created.GetProperty("invoiceBuyerType").GetString(),
+            created.GetProperty("invoiceAddressSameAsContact").GetBoolean(), created.GetProperty("addressNeedsReview").GetBoolean()));
+        Assert.Equal("Nguyễn Văn An", created.GetProperty("invoiceName").GetString());
     }
 
     [Fact]
@@ -110,15 +142,15 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task The_identity_number_never_reaches_the_list_the_audit_log_or_the_export()
+    public async Task The_personal_tax_id_never_reaches_the_list_the_audit_log_or_the_export()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var tag = NewCode();
-        var created = await (await owner.PostAsJsonAsync(Url, new { name = $"{tag} S", supplierType = "Seed", phoneNumber = NewPhone(), identityNumber = "098765432101" })).ReadAsync(HttpStatusCode.Created);
+        var created = await (await owner.PostAsJsonAsync(Url, new Dictionary<string, object?>(IndividualBuyer("098765432101")) { ["name"] = $"{tag} S" })).ReadAsync(HttpStatusCode.Created);
 
         var row = Items(await ListAsync(owner, $"search={tag}")).Single();
-        Assert.False(row.TryGetProperty("identityNumber", out _));
-        Assert.Equal("098765432101", (await owner.GetFromJsonAsync<JsonElement>($"{Url}/{created.Id()}")).GetProperty("identityNumber").GetString());
+        Assert.False(row.TryGetProperty("personalTaxId", out _));
+        Assert.Equal("098765432101", (await owner.GetFromJsonAsync<JsonElement>($"{Url}/{created.Id()}")).GetProperty("personalTaxId").GetString());
 
         var audits = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == created.Id()).Select(e => e.After).ToListAsync());
         Assert.DoesNotContain(audits, json => json != null && json.Contains("098765432101", StringComparison.Ordinal));

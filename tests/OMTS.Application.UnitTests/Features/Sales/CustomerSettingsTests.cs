@@ -103,7 +103,8 @@ public class CustomerSettingsTests
             phoneLocked: false, Today, required);
 
         Assert.Empty(invalid);
-        Assert.Equal("0312345678", entries.TaxCode);
+        // A tax code satisfies the setting; it is kept on the profile only for an Organization buyer.
+        Assert.Equal(InvoiceBuyerType.Consumer, entries.Invoice.BuyerType);
     }
 
     [Fact]

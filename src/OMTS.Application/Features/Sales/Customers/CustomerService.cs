@@ -12,6 +12,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Parties;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Constants;
@@ -38,6 +39,7 @@ public sealed class CustomerService(
     CustomerDebtStandings standings,
     IAccountRepository accounts,
     ZoneAccessGuard zoneAccess,
+    PartyAddressVerifier addressVerifier,
     IFileStorage storage,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -115,6 +117,11 @@ public sealed class CustomerService(
             invalid.Add("Code");
         }
 
+        if (invalid.Count == 0)
+        {
+            values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -172,6 +179,11 @@ public sealed class CustomerService(
         var required = CustomerSettingsService.RequiredOf(
             await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command)."));
         var (values, invalid) = CustomerEntries.From(request, locked, timeProvider.Today(), required);
+        if (invalid.Count == 0)
+        {
+            values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
+        }
+
         if (invalid.Count > 0 ||!CustomerEntries.CodeAllowed(request.Code))
         {
             if (!CustomerEntries.CodeAllowed(request.Code))
@@ -317,6 +329,11 @@ public sealed class CustomerService(
             if (!CustomerEntries.CodeAllowed(request.Code))
             {
                 invalid.Add("Code");
+            }
+
+            if (invalid.Count == 0)
+            {
+                values = await VerifiedAddressesAsync(values, invalid, cancellationToken);
             }
 
             if (invalid.Count > 0)
@@ -532,6 +549,21 @@ public sealed class CustomerService(
         return new CustomerSaved(await ViewAsync(customer, cancellationToken), saved.Text, saved.Code);
     }
 
+    /// <summary>The ward belongs to the province, for the contact address and for an invoice address of its own; the names are those of the administrative units list.</summary>
+    private async Task<CustomerEntries> VerifiedAddressesAsync(CustomerEntries values, List<string> invalid, CancellationToken cancellationToken)
+    {
+        values = values.WithContactAddress(await addressVerifier.VerifyAsync(values.ContactAddress, "Province", "Ward", invalid, cancellationToken));
+        return values.Invoice.AddressSameAsContact
+            ? values
+            : values with
+            {
+                Invoice = values.Invoice with
+                {
+                    Address = await addressVerifier.VerifyAsync(values.Invoice.Address, "Invoice province", "Invoice ward", invalid, cancellationToken),
+                },
+            };
+    }
+
     private static void Apply(Customer customer, CustomerEntries values)
     {
         customer.Name = values.Name;
@@ -544,10 +576,20 @@ public sealed class CustomerService(
         customer.Email = values.Email;
         customer.Facebook = values.Facebook;
         customer.Province = values.Province;
+        customer.ProvinceCode = values.ProvinceCode;
         customer.Ward = values.Ward;
-        customer.CompanyName = values.CompanyName;
-        customer.TaxCode = values.TaxCode;
-        customer.IdentityNumber = values.IdentityNumber;
+        customer.WardCode = values.WardCode;
+        customer.InvoiceBuyerType = values.Invoice.BuyerType;
+        customer.CompanyName = values.Invoice.Name;
+        customer.TaxCode = values.Invoice.TaxCode;
+        customer.PersonalTaxId = values.Invoice.PersonalTaxId;
+        customer.InvoiceAddressSameAsContact = values.Invoice.AddressSameAsContact;
+        customer.InvoiceProvinceName = values.Invoice.Address.ProvinceName;
+        customer.InvoiceProvinceCode = values.Invoice.Address.ProvinceCode;
+        customer.InvoiceWardName = values.Invoice.Address.WardName;
+        customer.InvoiceWardCode = values.Invoice.Address.WardCode;
+        customer.InvoiceStreet = values.Invoice.Address.Street;
+        customer.InvoiceEmail = values.Invoice.Email;
         customer.BankBin = values.BankBin;
         customer.BankName = values.BankName;
         customer.BankAccountNumber = values.BankAccountNumber;
@@ -572,8 +614,11 @@ public sealed class CustomerService(
             debt,
             RowVersionGuard.Encode(c.RowVersion),
             c.Code, c.StatusId, statusCatalog.DisplayNameOf(c.StatusId), c.CustomerType, c.Gender, c.BirthDate, c.PhoneNumber2, c.Facebook, c.Province, c.Ward,
-            c.CompanyName, c.TaxCode, c.IdentityNumber, c.BankBin, c.BankName, c.BankAccountNumber, photo, c.CreatedAt, creator,
-            await UsedByAsync(c, cancellationToken) is { Count: > 0 });
+            OrganizationName(c), c.TaxCode, c.PersonalTaxId, c.BankBin, c.BankName, c.BankAccountNumber, photo, c.CreatedAt, creator,
+            await UsedByAsync(c, cancellationToken) is { Count: > 0 },
+            c.ProvinceCode, c.WardCode, c.Province, c.Ward, c.Address,
+            c.InvoiceBuyerType, c.CompanyName, c.InvoiceAddressSameAsContact, c.InvoiceProvinceCode, c.InvoiceProvinceName, c.InvoiceWardCode, c.InvoiceWardName, c.InvoiceStreet,
+            c.InvoiceEmail, NeedsAddressReview(c));
     }
 
     private async Task<IReadOnlyList<CustomerListItem>> ItemsAsync(
@@ -590,14 +635,25 @@ public sealed class CustomerService(
             var photo = withPhotos && c.PhotoUrl is { } key ? await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) : null;
             items.Add(new CustomerListItem(
                 c.Id, c.Code, c.Name, c.PhoneNumber, c.Address, c.AccountId is not null, RowVersionGuard.Encode(c.RowVersion), c.StatusId, statusCatalog.DisplayNameOf(c.StatusId),
-                c.CustomerType, c.Gender, c.BirthDate, c.PhoneNumber2, c.Email, c.Facebook, c.Province, c.Ward, c.CompanyName, c.TaxCode, c.Note, photo,
+                c.CustomerType, c.Gender, c.BirthDate, c.PhoneNumber2, c.Email, c.Facebook, c.Province, c.Ward, OrganizationName(c), c.TaxCode, c.Note, photo,
                 r.LastTransactionAt, c.CreatedAt, c.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
                 access.Debt ? r.Debt : null, access.Debt ? r.TotalSales : null, access.Debt ? r.NetSales : null,
-                standing.Over, standing.OverAmount, standing.OverDays, access.Debt ? standing.DebtDays : null));
+                standing.Over, standing.OverAmount, standing.OverDays, access.Debt ? standing.DebtDays : null,
+                c.ProvinceCode, c.WardCode, c.Province, c.Ward, c.Address,
+                c.InvoiceBuyerType, c.CompanyName, c.InvoiceAddressSameAsContact, c.InvoiceProvinceCode, c.InvoiceProvinceName, c.InvoiceWardCode, c.InvoiceWardName, c.InvoiceStreet,
+                c.InvoiceEmail));
         }
 
         return items;
     }
+
+    /// <summary>The company name for older clients: only an Organization has one (the invoice name of an Individual is a person's).</summary>
+    private static string? OrganizationName(Customer c) => c.InvoiceBuyerType == Domain.Enums.InvoiceBuyerType.Organization ? c.CompanyName : null;
+
+    /// <summary>A province or ward name is kept as text with no code: an entry of before the administrative units list, or one the list did not match.</summary>
+    private static bool NeedsAddressReview(Customer c) =>
+        new AddressParts(c.ProvinceCode, c.Province, c.WardCode, c.Ward, c.Address).NeedsReview
+        || (!c.InvoiceAddressSameAsContact && new AddressParts(c.InvoiceProvinceCode, c.InvoiceProvinceName, c.InvoiceWardCode, c.InvoiceWardName, c.InvoiceStreet).NeedsReview);
 
     /// <summary>The filter of a query; a null filter means the search text can match nothing.</summary>
     private async Task<Result<(CustomerSearchFilter? Filter, CustomerFigureAccess Access)>> FilterAsync(CustomerListQuery query, CancellationToken cancellationToken)
@@ -688,11 +744,12 @@ public sealed class CustomerService(
         _ => (default, false),
     };
 
-    // The identity number is personal data: the audit log only says whether one is held.
+    // The personal tax number is personal data: the audit log only says whether one is held.
     private static object Snapshot(Customer c) => new
     {
-        c.Code, c.Name, c.PhoneNumber, c.PhoneNumber2, c.Address, c.Note, c.Email, c.CustomerType, c.Gender, c.BirthDate, c.Facebook, c.Province, c.Ward,
-        c.CompanyName, c.TaxCode, HasIdentityNumber = c.IdentityNumber is not null, c.BankBin, c.BankName, c.BankAccountNumber,
+        c.Code, c.Name, c.PhoneNumber, c.PhoneNumber2, c.Address, c.Note, c.Email, c.CustomerType, c.Gender, c.BirthDate, c.Facebook, c.Province, c.ProvinceCode, c.Ward, c.WardCode,
+        c.InvoiceBuyerType, c.CompanyName, c.TaxCode, HasPersonalTaxId = c.PersonalTaxId is not null, c.InvoiceAddressSameAsContact,
+        c.InvoiceProvinceName, c.InvoiceProvinceCode, c.InvoiceWardName, c.InvoiceWardCode, c.InvoiceStreet, c.InvoiceEmail, c.BankBin, c.BankName, c.BankAccountNumber,
     };
 
     // AuditEvent.RecordCode holds 100 characters; the phone number is the business identity of a profile, when it has one.

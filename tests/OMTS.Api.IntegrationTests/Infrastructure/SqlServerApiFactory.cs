@@ -53,7 +53,11 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
         }.Concat(settings ?? new Dictionary<string, string?>())));
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         // The test seams of this assembly (TestOnlyLegacyCycleController starts a cycle the old way, which the public routes no longer do since the nursery change of 12-13/11/2026), as AuthApiFactory loads them.
-        builder.ConfigureTestServices(services => services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly));
+        builder.ConfigureTestServices(services =>
+        {
+            services.UseStubAddressServices();
+            services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
+        });
     }
 
     public async Task<Account> AddAccountAsync(string username, string password, SubjectType subjectType = SubjectType.CooperativeOwner)

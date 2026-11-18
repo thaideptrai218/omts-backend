@@ -397,7 +397,7 @@ public class CustomerModuleTests
     }
 
     [Fact]
-    public async Task A_profile_edit_keeps_the_whole_form_hides_the_identity_number_from_the_list_and_checks_the_bank_and_the_formats()
+    public async Task A_profile_edit_keeps_the_whole_form_hides_the_personal_tax_number_from_the_list_and_checks_the_bank_and_the_formats()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -407,13 +407,18 @@ public class CustomerModuleTests
         var body = new Dictionary<string, object?>
         {
             ["name"] = "Anh Tùng", ["phoneNumber"] = customer.Text("phoneNumber"), ["rowVersion"] = customer.RowVersion(), ["customerType"] = "Company", ["gender"] = "Male", ["birthDate"] = "1990-05-17",
-            ["phoneNumber2"] = "0988111222", ["email"] = "Tung@Example.com", ["facebook"] = "fb.com/tung", ["province"] = "Quảng Ninh", ["ward"] = "Cẩm Đông", ["companyName"] = "Tùng Seafood",
-            ["taxCode"] = "0312345678", ["identityNumber"] = "012345678901", ["bankBin"] = BankBin, ["bankAccountNumber"] = "0011223344", ["address"] = "Cẩm Phả", ["note"] = "VIP",
+            ["phoneNumber2"] = "0988111222", ["email"] = "Tung@Example.com", ["facebook"] = "fb.com/tung", ["province"] = "Quảng Ninh", ["ward"] = "Cẩm Đông",
+            ["invoiceBuyerType"] = "Individual", ["invoiceName"] = "Anh Tùng", ["personalTaxId"] = "012345678901", ["invoiceAddressSameAsContact"] = false,
+            ["invoiceProvinceCode"] = 1, ["invoiceProvinceName"] = "Thành phố Hà Nội", ["invoiceWardCode"] = 4, ["invoiceWardName"] = "Phường Ba Đình", ["invoiceStreet"] = "1 Hàng Bài",
+            ["bankBin"] = BankBin, ["bankAccountNumber"] = "0011223344", ["address"] = "Cẩm Phả", ["note"] = "VIP",
         };
         var saved = (await (await owner.PutAsJsonAsync($"/api/customers/{sale.CustomerId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("customer");
-        Assert.Equal(("tung@example.com", "012345678901", "Vietcombank", "1990-05-17"), (saved.Text("email"), saved.Text("identityNumber"), saved.Text("bankName"), saved.Text("birthDate")));
+        Assert.Equal(("tung@example.com", "012345678901", "Vietcombank", "1990-05-17"), (saved.Text("email"), saved.Text("personalTaxId"), saved.Text("bankName"), saved.Text("birthDate")));
+        // The old free-text province and ward have no code of the list: the form is told to pick them again.
+        Assert.True(saved.GetProperty("addressNeedsReview").GetBoolean());
+        Assert.Equal(("Individual", "Anh Tùng", false), (saved.Text("invoiceBuyerType"), saved.Text("invoiceName"), saved.GetProperty("invoiceAddressSameAsContact").GetBoolean()));
         var listed = Assert.Single((await GetAsync(owner, $"/api/customers?search={Uri.EscapeDataString("Anh Tùng")}")).GetProperty("items").EnumerateArray());
-        Assert.False(listed.TryGetProperty("identityNumber", out _));
+        Assert.False(listed.TryGetProperty("personalTaxId", out _));
         Assert.False(listed.TryGetProperty("bankAccountNumber", out _));
         var audit = await api.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == sale.CustomerId && e.Action == "Customer.Updated").Select(e => e.After).ToListAsync());
         Assert.DoesNotContain(audit, json => json!.Contains("012345678901"));
@@ -425,7 +430,7 @@ public class CustomerModuleTests
         var fresh = await owner.CustomerAsync(sale.CustomerId);
         foreach (var (field, value, expected) in new (string, object, string)[]
         {
-            ("taxCode", "12345", "Tax code"), ("identityNumber", "123", "Identity number"), ("email", "not-an-email", "Email"), ("bankBin", "000000", "Bank"), ("birthDate", "2999-01-01", "Birth date"),
+            ("personalTaxId", "123", "Personal tax ID"), ("invoiceEmail", "not-an-email", "Invoice email"), ("email", "not-an-email", "Email"), ("bankBin", "000000", "Bank"), ("birthDate", "2999-01-01", "Birth date"),
         })
         {
             var invalid = new Dictionary<string, object?>(body) { ["rowVersion"] = fresh.RowVersion(), [field] = value };

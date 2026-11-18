@@ -20,6 +20,10 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.Property(x => x.Note).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.CompanyName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.TaxCode).HasMaxLength(Lengths.Phone);
-        builder.Property(x => x.IdentityNumber).HasMaxLength(Lengths.Phone);
+        builder.Property(x => x.PersonalTaxId).HasMaxLength(Lengths.Phone);
+        builder.Property(x => x.InvoiceProvinceName).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.InvoiceWardName).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.InvoiceStreet).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.InvoiceEmail).HasMaxLength(Lengths.Email);
     }
 }

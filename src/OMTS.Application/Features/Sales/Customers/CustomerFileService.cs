@@ -3,6 +3,7 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.AdministrativeUnits;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.ReceivingBankAccounts;
@@ -11,10 +12,12 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Sales.Customers;
 
 /// <summary>
-/// Customer export, import and template as .xlsx. The export carries the debt and the sales only for callers who may read them (CUSTOMER_DEBTS View); the identity number
-/// and the bank account are never in a file. Text cells are written as text, so a value such as =1+1 stays text.
+/// Customer export, import and template as .xlsx. The export carries the debt and the sales only for callers who may read them (CUSTOMER_DEBTS View); the personal tax number
+/// and the bank account are never in an export. Text cells are written as text, so a value such as =1+1 stays text. A file names the provinces and wards; the import
+/// matches them to the administrative units list by name, and an address that matches none is kept as text for a new pick.
 /// </summary>
-public sealed class CustomerFileService(CustomerService customers, ISpreadsheetWriter spreadsheets, ISpreadsheetReader reader, TimeProvider timeProvider)
+public sealed class CustomerFileService(
+    CustomerService customers, AdministrativeUnitService units, ISpreadsheetWriter spreadsheets, ISpreadsheetReader reader, TimeProvider timeProvider)
 {
     public const long MaxImportBytes = 2L * 1024 * 1024;
     public const int MaxImportRows = 1000;
@@ -36,8 +39,33 @@ public sealed class CustomerFileService(CustomerService customers, ISpreadsheetW
     private const string Note = "Note";
     private const string Bank = "Bank";
     private const string BankAccount = "Bank account";
+    private const string BuyerType = "Invoice buyer";
+    private const string InvoiceName = "Invoice name";
+    private const string InvoiceEmail = "Invoice email";
+    private const string InvoiceSame = "Invoice address same as contact";
+    private const string InvoiceProvince = "Invoice province";
+    private const string InvoiceWard = "Invoice ward";
+    private const string InvoiceStreet = "Invoice street";
+    private const string PersonalTaxId = "Personal tax ID";
 
-    private static readonly string[] ImportColumns = [Code, Name, Type, Gender, BirthDate, Phone, Phone2, Email, Facebook, Province, Ward, Address, Company, TaxCode, Note, Bank, BankAccount];
+    // The personal tax number is in the import only.
+    private static readonly string[] ImportColumns =
+    [
+        Code, Name, Type, Gender, BirthDate, Phone, Phone2, Email, Facebook, Province, Ward, Address, Company, TaxCode, BuyerType, InvoiceName, PersonalTaxId, InvoiceEmail,
+        InvoiceSame, InvoiceProvince, InvoiceWard, InvoiceStreet, Note, Bank, BankAccount,
+    ];
+
+    private static readonly Dictionary<string, InvoiceBuyerType> BuyerTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Organization"] = InvoiceBuyerType.Organization, ["Doanh nghiệp"] = InvoiceBuyerType.Organization, ["Tổ chức"] = InvoiceBuyerType.Organization,
+        ["Individual"] = InvoiceBuyerType.Individual, ["Cá nhân"] = InvoiceBuyerType.Individual,
+        ["Consumer"] = InvoiceBuyerType.Consumer, ["Người tiêu dùng"] = InvoiceBuyerType.Consumer,
+    };
+
+    private static readonly Dictionary<string, bool> YesNo = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Yes"] = true, ["Có"] = true, ["True"] = true, ["No"] = false, ["Không"] = false, ["False"] = false,
+    };
 
     private static readonly string[] DateFormats = ["dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd"];
 
@@ -64,7 +92,8 @@ public sealed class CustomerFileService(CustomerService customers, ISpreadsheetW
         var (items, access) = found.Value;
         var headers = new List<string>
         {
-            Code, Name, Type, Gender, BirthDate, Phone, Phone2, Email, Facebook, Province, Ward, Address, Company, TaxCode, Note, "Status", "Last transaction", "Created by", "Created at",
+            Code, Name, Type, Gender, BirthDate, Phone, Phone2, Email, Facebook, Province, Ward, Address, Company, TaxCode, BuyerType, InvoiceName, InvoiceEmail,
+            InvoiceSame, InvoiceProvince, InvoiceWard, InvoiceStreet, Note, "Status", "Last transaction", "Created by", "Created at",
         };
         if (access.Debt)
         {
@@ -76,7 +105,8 @@ public sealed class CustomerFileService(CustomerService customers, ISpreadsheetW
             var row = new List<object?>
             {
                 c.Code, c.Name, c.CustomerType.ToString(), c.Gender?.ToString(), c.BirthDate?.ToDateTime(TimeOnly.MinValue), c.PhoneNumber, c.PhoneNumber2, c.Email, c.Facebook,
-                c.Province, c.Ward, c.Address, c.CompanyName, c.TaxCode, c.Note, c.Status, c.LastTransactionAt?.ToOffset(BusinessClock.UtcOffset).DateTime, c.CreatedBy,
+                c.Province, c.Ward, c.Address, c.CompanyName, c.TaxCode, c.InvoiceBuyerType.ToString(), c.InvoiceName, c.InvoiceEmail, c.InvoiceAddressSameAsContact ? "Yes" : "No",
+                c.InvoiceProvinceName, c.InvoiceWardName, c.InvoiceStreet, c.Note, c.Status, c.LastTransactionAt?.ToOffset(BusinessClock.UtcOffset).DateTime, c.CreatedBy,
                 c.CreatedAt.ToOffset(BusinessClock.UtcOffset).DateTime,
             };
             if (access.Debt)
@@ -189,15 +219,46 @@ public sealed class CustomerFileService(CustomerService customers, ISpreadsheetW
                 }
             }
 
+            InvoiceBuyerType? buyerType = null;
+            if (Cell(BuyerType) is { } buyerText)
+            {
+                if (BuyerTypes.TryGetValue(buyerText, out var b))
+                {
+                    buyerType = b;
+                }
+                else
+                {
+                    invalid.Add(BuyerType);
+                }
+            }
+
+            bool? sameAddress = null;
+            if (Cell(InvoiceSame) is { } sameText)
+            {
+                if (YesNo.TryGetValue(sameText, out var same))
+                {
+                    sameAddress = same;
+                }
+                else
+                {
+                    invalid.Add(InvoiceSame);
+                }
+            }
+
             if (invalid.Count > 0)
             {
                 unreadable.Add(new CustomerImportError(row.Number, invalid, "Missing or invalid."));
                 continue;
             }
 
+            var contact = await units.MatchNamesAsync(Cell(Province), Cell(Ward), cancellationToken);
+            var invoiceAddress = await units.MatchNamesAsync(Cell(InvoiceProvince), Cell(InvoiceWard), cancellationToken);
             requests.Add((row.Number, new SaveCustomerRequest(
                 Cell(Name), RestoredPhone(Cell(Phone)), Cell(Address), Cell(Note), null, Cell(Code), type, gender, birth, RestoredPhone(Cell(Phone2)), Cell(Email), Cell(Facebook),
-                Cell(Province), Cell(Ward), Cell(Company), Cell(TaxCode), null, bankBin, Cell(BankAccount))));
+                Cell(Province), Cell(Ward), Cell(Company), Cell(TaxCode), bankBin, Cell(BankAccount),
+                ProvinceCode: contact.ProvinceCode, WardCode: contact.WardCode, InvoiceBuyerType: buyerType, InvoiceName: Cell(InvoiceName), PersonalTaxId: Cell(PersonalTaxId),
+                InvoiceAddressSameAsContact: sameAddress, InvoiceProvinceCode: invoiceAddress.ProvinceCode, InvoiceProvinceName: Cell(InvoiceProvince),
+                InvoiceWardCode: invoiceAddress.WardCode, InvoiceWardName: Cell(InvoiceWard), InvoiceStreet: Cell(InvoiceStreet), InvoiceEmail: Cell(InvoiceEmail))));
         }
 
         // Nothing is saved while a row cannot be read; the other rows are checked once these are fixed.

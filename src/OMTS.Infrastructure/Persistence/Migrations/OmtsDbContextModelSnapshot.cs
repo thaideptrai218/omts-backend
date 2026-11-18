@@ -6968,9 +6968,35 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<string>("IdentityNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<bool>("InvoiceAddressSameAsContact")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("InvoiceBuyerType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("InvoiceEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int?>("InvoiceProvinceCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvoiceProvinceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("InvoiceStreet")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("InvoiceWardCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvoiceWardName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -6981,6 +7007,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("PersonalTaxId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -6989,6 +7019,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Province")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ProvinceCode")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -7017,6 +7050,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Ward")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("WardCode")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -7236,9 +7272,35 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("IdentityNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<bool>("InvoiceAddressSameAsContact")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("InvoiceBuyerType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("InvoiceEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int?>("InvoiceProvinceCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvoiceProvinceName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("InvoiceStreet")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("InvoiceWardCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvoiceWardName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid?>("MergedIntoCustomerId")
                         .HasColumnType("uniqueidentifier");
@@ -7251,6 +7313,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PersonalTaxId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("PhoneCheckedByStaff")
                         .HasColumnType("bit");
@@ -7270,6 +7336,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Province")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ProvinceCode")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -7293,6 +7362,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Ward")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("WardCode")
+                        .HasColumnType("int");
 
                     b.Property<string>("ZaloAccountId")
                         .HasMaxLength(100)

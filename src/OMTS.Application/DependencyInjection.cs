@@ -7,6 +7,7 @@ using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Accounts.Dtos;
+using OMTS.Application.Features.AdministrativeUnits;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
@@ -62,6 +63,8 @@ using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Parties;
+using OMTS.Application.Features.TaxLookup;
 using OMTS.Application.Features.WaterQuality;
 using OMTS.Application.Features.WaterQuality.Dtos;
 
@@ -80,6 +83,9 @@ public static class DependencyInjection
         services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
+        services.AddScoped<AdministrativeUnitService>();
+        services.AddScoped<TaxLookupService>();
+        services.AddScoped<PartyAddressVerifier>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
