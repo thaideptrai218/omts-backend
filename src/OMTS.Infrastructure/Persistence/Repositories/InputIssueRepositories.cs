@@ -199,9 +199,10 @@ internal sealed class InputMovementReader(OmtsDbContext db) : IInputMovementQuer
             .OrderBy(m => m.OccurredAt).ThenBy(m => m.Sequence).ToListAsync(cancellationToken);
         if (!includeReversals)
         {
-            // An edit or cancellation undoes rows with reversal rows: both sides are left out, so the running balance still adds up.
+            // An edit or cancellation undoes rows with reversal rows: both sides are left out, so the running balance still adds up. The cost adjustments they caused go with them.
             var undone = rows.Where(m => m.ReversesMovementId != null).Select(m => m.ReversesMovementId!.Value).ToHashSet();
-            rows = rows.Where(m => m.Kind != InputStockMovementKind.Reversal && !undone.Contains(m.Id)).ToList();
+            var hidden = rows.Where(m => m.Kind == InputStockMovementKind.Reversal || undone.Contains(m.Id)).Select(m => m.Id).ToHashSet();
+            rows = rows.Where(m => !hidden.Contains(m.Id) && !(m.CausedByMovementId is { } cause && hidden.Contains(cause))).ToList();
         }
 
         var lotIds = rows.Where(m => m.SeedLotLineId != null).Select(m => m.SeedLotLineId!.Value).Distinct().ToList();

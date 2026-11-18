@@ -212,6 +212,7 @@ public sealed class FarmingInputItemService(
         }
 
         var before = Snapshot(item, null);
+        var previousCost = item.CostPrice;
         item.Code = code!;
         Apply(item, values);
         var planned = await PlanUnitsAsync(request, item, existing: item.Units.ToList(), cancellationToken);
@@ -230,6 +231,8 @@ public sealed class FarmingInputItemService(
             return openingError;
         }
 
+        // A cost changed in the form shows on the stock card like the opening does: the item is the document, under its (possibly new) code.
+        ledger.RecordManualCostChange(item, previousCost, item.Id, item.Code);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(item, null));
         if (changedAfter is not null)
         {

@@ -1,9 +1,10 @@
 namespace OMTS.Application.Common.Interfaces;
 
 /// <summary>
-/// One material usage of a raft with the price it is costed at: the unit price less the line discount of the latest Completed
-/// purchase receipt line of the item received on or before the usage date (latest time received first). <see cref="UnitPrice"/>
-/// is null when the item had not been bought by then.
+/// One material usage of a raft with the price it is costed at: the cost price of its item per base unit, as the Xuất dùng
+/// document of the usage booked it. <see cref="UnitPrice"/> is the cost snapshot on the issue line of the item when the usage has
+/// an issue; for a usage without one (made before stock was checked) it is the cost of the latest ledger movement of the item up
+/// to the end of the usage day (UTC+7). It is null when the item had no cost then.
 /// </summary>
 public sealed record RaftUsageCostRow(
     Guid RaftId, string RaftCode, Guid ZoneId, string ZoneCode, string ZoneName,
@@ -14,8 +15,8 @@ public sealed record RaftUsageCostFilter(
     DateOnly? From = null, DateOnly? To = null, IReadOnlyCollection<Guid>? RaftIds = null, Guid? ItemId = null, IReadOnlyCollection<Guid>? ZoneIds = null);
 
 /// <summary>
-/// Material cost of rafts (FARM-04, BR-FARM-05) = Σ of the material used on them × the latest purchase price of each item
-/// (<see cref="RaftUsageCostRow"/>), half up to the dong per usage. A usage of an item never bought costs 0.
+/// Material cost of rafts (FARM-04, BR-FARM-05) = Σ of the material used on them × the cost price of each item
+/// (<see cref="RaftUsageCostRow"/>), half up to the dong per usage. A usage of an item with no cost costs 0.
 /// </summary>
 public interface IRaftMaterialCostQuery
 {

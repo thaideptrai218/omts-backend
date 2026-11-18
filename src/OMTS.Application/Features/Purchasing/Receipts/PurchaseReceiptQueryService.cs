@@ -59,16 +59,16 @@ public sealed record PurchaseReceiptTotals(
 public sealed record PurchaseReceiptSearchResult(
     Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message, string? MessageCode);
 
-/// <summary>A material usage of the raft, costed at the latest purchase price of its item on its date.</summary>
-/// <param name="UnitPrice">Unit price less discount per unit of the latest Completed receipt line of the item received on or before <paramref name="Date"/>; 0 when <paramref name="Unpriced"/>.</param>
+/// <summary>A material usage of the raft, costed at the cost price of its item, as the Xuất dùng document of the usage booked it.</summary>
+/// <param name="UnitPrice">Cost of one base unit: the snapshot on the issue line of the usage or, for a usage without an issue, the cost of the item on the stock card at the end of <paramref name="Date"/>; 0 when <paramref name="Unpriced"/>.</param>
 /// <param name="Amount">Quantity × unit price, half up to the dong.</param>
-/// <param name="Unpriced">True when the item had not been bought by then, so the usage costs 0.</param>
+/// <param name="Unpriced">True when the item had no cost then, so the usage costs 0.</param>
 public sealed record RaftUsageCostLine(
     Guid UsageId, DateOnly Date, string RepairReason, Guid ItemId, string ItemCode, string ItemName, string Unit,
     decimal Quantity, decimal UnitPrice, decimal Amount, bool Unpriced);
 
 /// <summary>The material cost of one raft in the period: Σ of the amounts of its material usages dated in it (BR-FARM-05).</summary>
-/// <param name="UnpricedCount">How many of <paramref name="Usages"/> are of an item never bought by their date.</param>
+/// <param name="UnpricedCount">How many of <paramref name="Usages"/> are of an item with no cost.</param>
 public sealed record RaftMaterialCostRow(RaftRef Raft, ZoneRef Zone, decimal MaterialCost, int UnpricedCount, IReadOnlyList<RaftUsageCostLine> Usages);
 
 /// <param name="Message">MSG-GEN-10 when no raft has a material usage in the period.</param>

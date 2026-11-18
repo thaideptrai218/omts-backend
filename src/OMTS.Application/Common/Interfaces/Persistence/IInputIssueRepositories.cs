@@ -93,7 +93,7 @@ public interface IInputMovementQuery
 {
     /// <summary>
     /// The movements of an item oldest first with the balance after each, in the order of <c>OccurredAt</c> then write order. Without reversals, the rows an edit or cancellation
-    /// undid and the reversal rows are left out together, so the balance still adds up.
+    /// undid and the reversal rows are left out together (with the cost adjustments they caused), so the balance still adds up.
     /// </summary>
     Task<IReadOnlyList<InputMovementRow>> ForItemAsync(Guid itemId, bool includeReversals, CancellationToken cancellationToken);
 

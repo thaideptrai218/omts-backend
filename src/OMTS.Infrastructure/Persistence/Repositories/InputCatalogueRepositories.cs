@@ -21,13 +21,13 @@ internal sealed class InputStockRepository(OmtsDbContext db) : IInputStockReposi
 
     public async Task<IReadOnlyList<InputStockMovement>> UnreversedOfDocumentAsync(Guid documentId, CancellationToken cancellationToken) =>
         await db.InputStockMovements.AsNoTracking()
-            .Where(m => m.DocumentId == documentId && m.Kind != InputStockMovementKind.Reversal
+            .Where(m => m.DocumentId == documentId && m.Kind != InputStockMovementKind.Reversal && m.Kind != InputStockMovementKind.CostAdjustment
                 && !db.InputStockMovements.Any(r => r.ReversesMovementId == m.Id))
             .OrderBy(m => m.Sequence).ToListAsync(cancellationToken);
 
     public async Task<bool> HasOnlyOpeningAsync(Guid itemId, CancellationToken cancellationToken) =>
         !await db.InputStockMovements.AnyAsync(
-            m => m.ItemId == itemId && m.Kind != InputStockMovementKind.Opening && m.Kind != InputStockMovementKind.Reversal, cancellationToken)
+            m => m.ItemId == itemId && m.Kind != InputStockMovementKind.Opening && m.Kind != InputStockMovementKind.Reversal && m.Kind != InputStockMovementKind.CostAdjustment, cancellationToken)
         && !await db.InputStockMovements.AnyAsync(
             m => m.ItemId == itemId && m.Kind == InputStockMovementKind.Reversal && m.DocumentId != itemId, cancellationToken);
 

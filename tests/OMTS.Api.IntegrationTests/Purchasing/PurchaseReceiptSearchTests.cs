@@ -94,16 +94,16 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
     }
 
     [Fact]
-    public async Task The_raft_material_cost_prices_each_usage_at_the_latest_purchase_of_its_item_on_its_date()
+    public async Task The_raft_material_cost_prices_a_usage_without_an_issue_at_the_cost_on_the_stock_card_at_the_end_of_its_date()
     {
         var world = await factory.WorldAsync();
         var (otherZone, otherRaft) = await factory.ZoneWithRaftAsync();
         var neverBought = await world.Owner.CreateItemAsync("Material", "piece");
-        // Ten days ago at 10,000 less 1,000 a unit; today at 12,000, and earlier today at 50,000: the latest time received wins.
+        // The first receipt, ten days ago at 10,000 less 1,000 a unit, sets the cost (the Fixed method); the later receipts at 50,000 and 12,000 leave it.
         await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Material, 10, 10_000, Discount: 1_000)) with { ReceiptDate = Today.AddDays(-10), Complete = true });
         await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Material, 1, 50_000)) with { ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-1), Complete = true });
         await world.CompletedAsync(new LineBody(world.Material, 5, 12_000));
-        // A cancelled receipt prices nothing.
+        // A cancelled receipt does not move the cost either.
         var cancelled = await world.CompletedAsync(new LineBody(world.Material, 1, 99_000));
         await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         var olderUse = await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2, Today.AddDays(-5));
@@ -116,19 +116,19 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
 
         var rafts = costs.GetProperty("rafts").EnumerateArray().ToDictionary(r => r.GetProperty("raft").Id());
         var own = rafts[world.Raft.Id];
-        Assert.Equal((36_000m, 1), (own.Money("materialCost"), own.GetProperty("unpricedCount").GetInt32()));
+        Assert.Equal((31_500m, 1), (own.Money("materialCost"), own.GetProperty("unpricedCount").GetInt32()));
         var usages = own.GetProperty("usages").EnumerateArray()
             .Select(u => (u.GetProperty("usageId").GetGuid(), u.Money("quantity"), u.Money("unitPrice"), u.Money("amount"), u.GetProperty("unpriced").GetBoolean()))
             .ToList();
         Assert.Equal(
-            [(beforeAnyPurchase, 4m, 0m, 0m, true), (olderUse, 2m, 9_000m, 18_000m, false), (todayUse, 1.5m, 12_000m, 18_000m, false)], usages);
+            [(beforeAnyPurchase, 4m, 0m, 0m, true), (olderUse, 2m, 9_000m, 18_000m, false), (todayUse, 1.5m, 9_000m, 13_500m, false)], usages);
         var other = rafts[otherRaft.Id];
         Assert.Equal((otherZone.Code, 0m), (other.GetProperty("zone").GetProperty("code").GetString(), other.Money("materialCost")));
         Assert.True(Assert.Single(other.GetProperty("usages").EnumerateArray()).GetProperty("unpriced").GetBoolean());
         Assert.Equal(unpriced, other.GetProperty("usages")[0].GetProperty("usageId").GetGuid());
-        Assert.Equal(36_000m, costs.Money("materialCost"));
+        Assert.Equal(31_500m, costs.Money("materialCost"));
         // FARM-04 shows the raft's material cost of all its usages.
-        Assert.Equal(36_000m, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
+        Assert.Equal(31_500m, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
 
         var single = await (await world.Owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{period}&raftId={otherRaft.Id}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([otherRaft.Id], single.GetProperty("rafts").EnumerateArray().Select(r => r.GetProperty("raft").Id()));

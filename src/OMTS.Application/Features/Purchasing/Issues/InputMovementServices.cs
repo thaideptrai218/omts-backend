@@ -50,11 +50,11 @@ public sealed class InputMovementService(
         }
 
         var (item, rows) = read.Value;
-        string[] headers = ["Document", "Type", "Time", "Party", "Seed lot", "Cost", "Price", "Quantity", "Balance", "Unit"];
+        string[] headers = ["Document", "Type", "Time", "Party", "Seed lot", "Cost", "Previous cost", "Price", "Quantity", "Balance", "Unit"];
         var data = rows.Select(r => (IReadOnlyList<object?>)new List<object?>
         {
             r.Movement.DocumentCode, r.Movement.Kind.ToString(), r.Movement.OccurredAt.ToOffset(BusinessClock.UtcOffset).DateTime, r.Movement.PartyName, r.SeedLotCode,
-            r.Movement.UnitCost, r.Movement.TransactionPrice, r.Movement.Quantity, r.BalanceAfter, item.Unit,
+            r.Movement.UnitCost, r.Movement.PreviousUnitCost, r.Movement.TransactionPrice, r.Movement.Quantity, r.BalanceAfter, item.Unit,
         }).ToList();
         try
         {
@@ -98,7 +98,7 @@ public sealed class InputMovementService(
         var m = r.Movement;
         return new InputMovementView(
             m.Id, m.Sequence, m.Kind, m.DocumentId, m.DocumentCode, m.OccurredAt, m.Quantity, r.BalanceAfter, m.UnitCost, m.TransactionPrice, m.PartyName, m.SeedLotLineId, r.SeedLotCode, m.ReversesMovementId,
-            r.Source?.Kind, r.Source?.RecordId, r.Source?.CycleId, r.Source?.RaftId, r.Source?.ZoneId);
+            m.PreviousUnitCost, r.Source?.Kind, r.Source?.RecordId, r.Source?.CycleId, r.Source?.RaftId, r.Source?.ZoneId);
     }
 
     /// <summary>The movements that match the query, newest first, each with the balance after it in time order.</summary>

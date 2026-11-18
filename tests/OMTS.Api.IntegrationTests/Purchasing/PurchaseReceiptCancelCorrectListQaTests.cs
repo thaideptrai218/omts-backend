@@ -146,7 +146,8 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         Assert.Equal((90_000m, 80_000m, 80_000m), (row.Money("total"), row.Money("linesTotal"), list.GetProperty("totals").Money("receiptsTotal")));
         await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/raft-material-costs?raftId={world.Raft.Id}");
-        Assert.Equal(40_000m, Assert.Single(costs.GetProperty("rafts").EnumerateArray()).Money("materialCost"));
+        // The cost price stays the 25,000 the first receipt set (the Fixed method), not the corrected 20,000.
+        Assert.Equal(50_000m, Assert.Single(costs.GetProperty("rafts").EnumerateArray()).Money("materialCost"));
     }
 
     // PURCHASE-03.2: the file holds the receipts and the three totals shown; the raft material cost is not a receipt total.
