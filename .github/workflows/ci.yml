@@ -40,10 +40,10 @@ jobs:
             filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Purchasing.|FullyQualifiedName~OMTS.Api.IntegrationTests.Farming.|FullyQualifiedName~OMTS.Api.IntegrationTests.Harvest.'
           - name: s4
             sql: true
-            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Labor.|FullyQualifiedName~OMTS.Api.IntegrationTests.WaterQuality.'
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Labor.|FullyQualifiedName~OMTS.Api.IntegrationTests.WaterQuality.|FullyQualifiedName~OMTS.Api.IntegrationTests.Platform.|FullyQualifiedName~OMTS.Api.IntegrationTests.Traceability.'
           - name: s5
             sql: true
-            filter: 'FullyQualifiedName!~OMTS.Api.IntegrationTests.Sales.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Notifications.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Cultivation.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Employees.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Purchasing.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Farming.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Harvest.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Labor.&FullyQualifiedName!~OMTS.Api.IntegrationTests.WaterQuality.'
+            filter: 'FullyQualifiedName!~OMTS.Api.IntegrationTests.Sales.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Notifications.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Cultivation.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Employees.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Purchasing.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Farming.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Harvest.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Labor.&FullyQualifiedName!~OMTS.Api.IntegrationTests.WaterQuality.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Platform.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Traceability.'
     steps:
       - uses: actions/checkout@v7
 
