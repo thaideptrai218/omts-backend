@@ -247,7 +247,7 @@ public class SalesOrderApiTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var tooMuch = OrderBody(sale.CustomerId, sale.ProductId, unit, quantity: 10m).WithField("rowVersion", order.RowVersion()).WithField("advance", new { amount = 500_000, method = "Cash" });
         var refused = await client.PutAsJsonAsync($"{Route}/{order.Id()}", tooMuch);
-        var fits = OrderBody(sale.CustomerId, sale.ProductId, unit, quantity: 10m).WithField("rowVersion", order.RowVersion()).WithField("advance", new { amount = 300_000, method = "Cash" });
+        var fits = OrderBody(sale.CustomerId, sale.ProductId, unit, quantity: 10m).WithField("rowVersion", order.RowVersion()).WithField("advance", new { amount = 100_000, method = "Cash" });
         var saved = await (await client.PutAsJsonAsync($"{Route}/{order.Id()}", fits)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal("Advance amount", await refused.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));

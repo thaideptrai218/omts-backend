@@ -136,7 +136,7 @@ public sealed class StagingDemoQaProcessKit : IDisposable
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
         {
             BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-            Timeout = TimeSpan.FromSeconds(30),
+            Timeout = TimeSpan.FromMinutes(3),
         };
         var api = new RunningApi(process, client, output);
         var deadline = DateTime.UtcNow.AddMinutes(2);

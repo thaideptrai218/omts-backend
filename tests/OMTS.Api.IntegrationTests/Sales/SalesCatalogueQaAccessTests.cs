@@ -101,13 +101,16 @@ public class SalesCatalogueQaAccessTests(AuthApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task An_accountant_of_one_zone_has_no_product_function_and_keeps_customers()
+    public async Task An_accountant_of_one_zone_reads_products_but_changes_none_and_keeps_customers()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (product, customer, other) = (await owner.CreateProductAsync(), await owner.CreateCustomerAsync(), await owner.CreateCustomerAsync());
         var (accountant, _, _) = await StaffAsync(StaffRole.Accountant, await ZoneAsync());
 
-        foreach (var (name, call) in Routes(accountant, product, customer, other).Where(r => r.Name.Contains("product") || r.Name is "discontinue" or "resume"))
+        // An accountant who views invoices, disposals or lots reads the products (read-only reader); the writes stay with the Owner.
+        await (await accountant.GetAsync("/api/products")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.GetAsync($"/api/products/{product.Id()}")).ReadAsync(HttpStatusCode.OK);
+        foreach (var (name, call) in Routes(accountant, product, customer, other).Where(r => (r.Name.Contains("product") && !r.Name.StartsWith("GET", StringComparison.Ordinal)) || r.Name is "discontinue" or "resume"))
         {
             var response = await call();
             Assert.True(await response.CodeOrStatusAsync() == "403 MSG-GEN-08", $"{name}: {await response.Content.ReadAsStringAsync()}");
@@ -179,13 +182,14 @@ public class SalesCatalogueQaAccessTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/customers")).StatusCode);
     }
 
-    // GFR-02: a role with no right gets MSG-GEN-08, whatever it sends. The customer routes do; the product reads check later.
+    // GFR-02: a caller with no right to read products gets MSG-GEN-08 whatever it sends; one who may read them (the accountant views invoices, disposals and lots) is checked on what it sends.
     [Fact]
-    public async Task L6_a_role_without_product_rights_gets_msg_gen_08_whatever_the_filter()
+    public async Task L6_a_reader_of_products_gets_msg_gen_01_for_a_bad_filter_and_the_anonymous_caller_401()
     {
         var (accountant, _, _) = await StaffAsync(StaffRole.Accountant, await ZoneAsync());
 
-        await (await accountant.GetAsync("/api/products?statusId=abc")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.GetAsync("/api/products?statusId=abc")).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/products?statusId=abc")).StatusCode);
     }
 
     [Fact]

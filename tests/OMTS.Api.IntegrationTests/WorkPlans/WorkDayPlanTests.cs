@@ -34,7 +34,7 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(plan.Id, replay.Id);
         await Success(await s.Owner.PostAsJsonAsync($"/api/work-plans/{plan.Id}/assignments", new AssignWorkDayPlan([s.Employee.Id], plan.RowVersion)));
         // The plan assigns through LABOR-02 (OMTS-132): the employee reads it as their own work, on the raft and job type of the plan.
-        var mine = (await s.Worker.GetFromJsonAsync<MyWork>($"/api/me/workforce?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!;
+        var mine = (await (await EmployeeAppAsync(s.Owner, s.Employee)).GetFromJsonAsync<MyWork>($"/api/me/workforce?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!;
         var row = Assert.Single(mine.Assignments);
         Assert.Equal((s.Raft.Id, s.Job.Id, Day), (row.RaftId, row.JobTypeId, row.Date));
         Assert.Equal(HttpStatusCode.BadRequest, (await s.Owner.PutAsJsonAsync($"/api/work-plans/{plan.Id}", input with { Note = "Changed", RowVersion = (await GetAsync(s.Owner, plan.Id)).RowVersion })).StatusCode);
@@ -55,7 +55,7 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         await Success(response); plan = (await response.Content.ReadFromJsonAsync<WorkDayPlanView>())!;
         Assert.True(plan.CanAssign); Assert.Equal("READY_TO_ASSIGN", plan.Status);
         await Success(await s.Manager.PostAsJsonAsync($"/api/work-plans/{plan.Id}/assignments", new AssignWorkDayPlan([s.Employee.Id], plan.RowVersion)));
-        Assert.Single((await s.Worker.GetFromJsonAsync<MyWork>($"/api/me/workforce?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!.Assignments);
+        Assert.Single((await (await EmployeeAppAsync(s.Owner, s.Employee)).GetFromJsonAsync<MyWork>($"/api/me/workforce?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!.Assignments);
     }
 
     [Fact]
@@ -143,11 +143,15 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         await factory.GrantAsync(manager, StaffRole.ZoneManager, zone);
         var raft = new Raft { ZoneId = zone.Id, Code = NewCode() };
         var job = new JobType { Name = "Thu hoặc sửa bè " + NewCode() };
-        var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode() };
+        var phone = NewPhone();
+        var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode(), PhoneNumber = phone };
         await factory.UseDbAsync(db => { db.Rafts.Add(raft); db.Set<JobType>().Add(job); db.Employees.Add(employee); });
         return (await factory.LoginAsync(owner.Username), owner, await factory.LoginAsync(manager.Username), manager,
             raft, job, employee, await factory.LoginAsync(employeeAccount.Username));
     }
+    /// <summary>The employee's own work (<c>/api/me/workforce</c>) takes the token of a login to the employee app (LABOR-03), which a code of the Owner gives.</summary>
+    private Task<HttpClient> EmployeeAppAsync(HttpClient owner, Employee employee) => Labor.EmployeeAppKit.EmployeeClientAsync(owner, factory.CreateClient, employee.Id, employee.PhoneNumber!);
+
     private async Task<WorkDayPlanView> CreateAsync(HttpClient owner, SaveWorkDayPlan input)
     {
         var response = await owner.PostAsJsonAsync("/api/work-plans", input); await Success(response);

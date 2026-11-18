@@ -69,7 +69,7 @@ public class SalesInvoicesMigrationAndDemoTests
         var invoice = new SalesInvoice
         {
             Code = "HD000001", InvoicedAt = DateTimeOffset.UtcNow, InvoiceDate = new DateOnly(2026, 1, 2), Zone = zone, Subtotal = 6_000_000m, Total = 6_000_000m, CreatedByAccountId = account.Id,
-            Lines = [new SalesInvoiceLine { LineNumber = 1, Product = product, HarvestLot = lot, Kg = 200m, UnitPrice = 30_000m, ListPrice = 30_000m, Amount = 6_000_000m, SoldWholeLot = true }],
+            Lines = [new SalesInvoiceLine { LineNumber = 1, Product = product, HarvestLot = lot, Kg = 200m, Quantity = 200m, UnitPrice = 30_000m, ListPrice = 30_000m, Amount = 6_000_000m, SoldWholeLot = true }],
         };
         invoice.Payments.Add(new CustomerPayment { Code = "PT000001", PaymentDate = invoice.InvoiceDate, Amount = 6_000_000m, Method = CustomerPaymentMethod.Cash, CollectedByAccountId = account.Id, RecordedByAccountId = account.Id });
         db.AddRange(cycle, account, lot, product, invoice);
@@ -119,9 +119,12 @@ public class SalesInvoicesMigrationAndDemoTests
                 .Select(i => new { i.Code, Zone = i.Zone.Code, i.PaymentTerm, i.Total, i.CustomerId, i.PurchaseRequestId, i.TakesRequestInFull, Creator = i.CreatedByAccountId, Payments = i.Payments.Sum(p => p.Amount) })
                 .ToListAsync());
             Assert.Equal(["HD000001", "HD000002"], invoices.Select(i => i.Code));
-            Assert.Equal((SalesPaymentTerm.PayNow, 7_200_000m, 7_200_000m), (invoices[0].PaymentTerm, invoices[0].Total, invoices[0].Payments));
-            Assert.Equal((SalesPaymentTerm.PayLater, 6_000_000m, 1_000_000m, false), (invoices[1].PaymentTerm, invoices[1].Total, invoices[1].Payments, invoices[1].TakesRequestInFull));
-            Assert.NotNull(invoices[1].PurchaseRequestId);
+            // 120 kg of the product of the lot at its list price (the lot of zone one holds "Hàu béo", 75,000 VND a kg).
+            Assert.Equal((SalesPaymentTerm.PayNow, 9_000_000m, 9_000_000m), (invoices[0].PaymentTerm, invoices[0].Total, invoices[0].Payments));
+            // 80 kg of the product of the lot of zone two ("Hàu sữa", 60,000 VND a kg).
+            Assert.Equal((SalesPaymentTerm.PayLater, 4_800_000m, 1_000_000m, false), (invoices[1].PaymentTerm, invoices[1].Total, invoices[1].Payments, invoices[1].TakesRequestInFull));
+            // Each demo sale is made from its own order (sales orders), not from a purchase request.
+            Assert.True(await UseDbAsync(api, db => db.SalesInvoices.AllAsync(i => i.SalesOrderId != null)));
             var managers = await UseDbAsync(api, db => db.Accounts.Where(a => a.Username == "quanlyvung1" || a.Username == "quanlyvung2").OrderBy(a => a.Username).Select(a => a.Id).ToListAsync());
             Assert.Equal(managers, invoices.Select(i => i.Creator));
             // No demo lot is closed, and the Owner has a notice of each sale.

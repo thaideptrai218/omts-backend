@@ -12,6 +12,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
@@ -43,7 +44,9 @@ public class HarvestLotCorrectionSqlServerTests
         foreach (var answer in answers)
         {
             var text = await answer.Content.ReadAsStringAsync();
-            Assert.True(answer.IsSuccessStatusCode || answer.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound, $"{(int)answer.StatusCode}: {text}");
+            // A correction that reads the photos of a lot just after a parallel removal took them is refused with "Keep only photos of this lot" (400): a refusal, never a 500.
+            var photosGone = answer.StatusCode == HttpStatusCode.BadRequest && text.Contains("Keep only photos of this lot", StringComparison.Ordinal);
+            Assert.True(answer.IsSuccessStatusCode || answer.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound || photosGone, $"{(int)answer.StatusCode}: {text}");
         }
     }
 
@@ -235,7 +238,8 @@ public class HarvestLotCorrectionSqlServerTests
 
         await AssertAnsweredAsync(answers);
         var count = await owner.ForSaleCountAsync(zoneId);
-        Assert.Equal(await host.QueryAsync(db => db.HarvestLots.CountAsync()), count);
+        // A lot is for sale once it is weighed (Open or Reopened); one Awaiting weighing is not listed.
+        Assert.Equal(await host.QueryAsync(db => db.HarvestLots.CountAsync(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened)), count);
         Assert.Equal(count, (await owner.LotsForSaleAsync(zoneId)).ForSaleCodes().Count);
     }
 }

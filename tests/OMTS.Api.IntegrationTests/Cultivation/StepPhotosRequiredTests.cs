@@ -132,8 +132,7 @@ public class StepPhotosRequiredTests(AuthApiFactory factory) : IClassFixture<Aut
         var client = world.Owner.Client;
         var batch = await client.ReadyNurseryAsync(factory, world.ZoneId, world.Lot, "1000", "900");
 
-        var none = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 0)).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Photos", none.Text("field"));
+        // No photo sent is no longer refused: the cycle then shows the photos of its nursery batch (see NurseryCycleStartTests).
         var cycle = (await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 2)).ReadAsync(HttpStatusCode.Created)).GetProperty("cycle");
 
         Assert.Equal((2, false), (PhotoIds(cycle, "planPhotos").Count, cycle.Flag("planPhotosFromNursery")));

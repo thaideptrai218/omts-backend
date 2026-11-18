@@ -51,14 +51,20 @@ internal static class WorkTestKit
         return IdOf(await CreateAsync(s.Owner, profile));
     }
 
-    /// <summary>The employee linked to a new staff account, whose client is returned: that is how an employee reads and sends their own work.</summary>
+    /// <summary>
+    /// An employee who logged in to the employee app with a code of the Zone Manager (LABOR-03): the client carries the employee-app token, which is what the
+    /// employee reads and sends their own work with (<c>/api/me/*</c> takes no other token). The employee is also linked to a staff account, as a staff member's is.
+    /// </summary>
     public static async Task<(Guid EmployeeId, HttpClient Client)> AddLinkedEmployeeAsync(WorkSetup s, bool staff = false)
     {
         var employeeId = await AddEmployeeAsync(s, staff: staff);
         var account = await s.Factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         await s.Factory.GrantAsync(account, StaffRole.ZoneManager, s.Zone);
         await s.Factory.UpdateAsync<Employee>(employeeId, e => e.AccountId = account.Id);
-        return (employeeId, await s.Factory.LoginAsync(account.Username));
+        var phone = await s.Factory.QueryAsync(db => db.Employees.AsNoTracking().Where(e => e.Id == employeeId).Select(e => e.PhoneNumber!).SingleAsync());
+        var code = await EmployeeAppKit.IssueCodeAsync(s.Manager, employeeId);
+        var tokens = await (await EmployeeAppKit.LoginWithCodeAsync(s.Factory.CreateClient(), phone, code)).JsonAsync(HttpStatusCode.OK);
+        return (employeeId, s.Factory.AsEmployee(tokens));
     }
 
     public static string Day(DateOnly date) => date.ToString("yyyy-MM-dd");

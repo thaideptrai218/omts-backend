@@ -93,7 +93,8 @@ public class PurchaseReceiptEditTests(AuthApiFactory factory) : IClassFixture<Au
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
         Assert.Equal(("Line 1", 50m), (below.GetProperty("field").GetString(), below.Money("minQuantity")));
         await (await world.Owner.EditAsync(receipt, world.Body(Kept(receipt, unused, 10, 2_000)))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        Assert.Equal("Line 1 item", await (await world.Owner.EditAsync(receipt, world.Body(
+        // A seed receipt never holds a supply item, so the receipt is refused as a whole (the field is Lines).
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(receipt, world.Body(
                 new LineBody(world.Material, 100, 1_000, LineId: receipt.LineOf(world.Seed)), Kept(receipt, unused, 10, 2_000))))
             .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 

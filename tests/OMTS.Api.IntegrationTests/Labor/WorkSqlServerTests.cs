@@ -79,11 +79,8 @@ public class WorkSqlServerTests
 
     private static async Task<HttpClient> LinkedClientAsync(Setup s, Guid employeeId)
     {
-        var account = await s.Api.AddAccountAsync($"nv{NewCode()}", Password);
-        await ChangeAsync(s.Api, db => db.Employees.Single(e => e.Id == employeeId).AccountId = account.Id);
-        var client = s.Api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await LoginTokensAsync(client, account.Username)).GetProperty("accessToken").GetString());
-        return client;
+        var phone = await QueryAsync(s.Api, db => db.Employees.Where(e => e.Id == employeeId).Select(e => e.PhoneNumber!).SingleAsync());
+        return await EmployeeAppKit.EmployeeClientAsync(s.Owner, s.Api.CreateClient, employeeId, phone);
     }
 
     [SqlServerFact]

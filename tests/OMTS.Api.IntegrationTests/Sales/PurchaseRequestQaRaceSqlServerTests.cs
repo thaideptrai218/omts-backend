@@ -75,7 +75,8 @@ public class PurchaseRequestQaRaceSqlServerTests
 
             var answers = await InParallelAsync(2, i => i == 0 ? owner.AcceptAsync(request) : owner.DeclineAsync(request));
 
-            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06");
+            // The request waits for its staff (cage orders): an acceptance with no approved employee is refused with MSG-GEN-01 "Insufficient approved staff" whoever is first.
+            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06", "400 MSG-GEN-01");
             Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             await AssertOneResponseAsync(host, trader, request.Id(), answers[0].StatusCode == HttpStatusCode.OK ? StatusIds.PurchaseRequest.Accepted : StatusIds.PurchaseRequest.Declined);
             Assert.Equal(round + 1, SmsTo(host, trader));

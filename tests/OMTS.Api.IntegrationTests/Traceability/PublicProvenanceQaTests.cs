@@ -258,7 +258,8 @@ public class PublicProvenanceQaTests
         var response = await garbage.GetProvenanceAsync(token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(anonymous, await response.Content.ReadAsStringAsync());
+        // The signed photo links carry the expiry second of each request: only that part may differ.
+        Assert.Equal(System.Text.RegularExpressions.Regex.Replace(anonymous, @"expires=\d+&sig=[0-9a-f]+", "signed"), System.Text.RegularExpressions.Regex.Replace(await response.Content.ReadAsStringAsync(), @"expires=\d+&sig=[0-9a-f]+", "signed"));
     }
 
     // BR-TRACE-05: the 404 of an unknown QR code is not cached either, so a code that a cache once answered unknown is looked up again.

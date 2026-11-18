@@ -79,6 +79,8 @@ public class AuthApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureClient(HttpClient client)
     {
         base.ConfigureClient(client);
+        // The first call of a host builds the API description (Swagger), which takes more than the 100 seconds of a default client on a busy CI runner.
+        client.Timeout = TimeSpan.FromMinutes(10);
         TestHosts.Register(client, Services);
     }
 
