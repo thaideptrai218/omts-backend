@@ -142,6 +142,10 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddScoped<ICustomerDebtQuery, CustomerDebtQuery>();
         services.AddScoped<ISalesPerformanceQuery, SalesPerformanceQuery>();
+        services.AddScoped<IProductStockReportQuery, ProductStockReportQuery>();
+        services.AddScoped<IPurchaseReportQuery, PurchaseReportQuery>();
+        services.AddScoped<IEndOfDayReportQuery, EndOfDayReportQuery>();
+        services.AddScoped<IFinancialReportQuery, FinancialReportQuery>();
         services.AddScoped<IPriceTrendsQuery, PriceTrendsQuery>();
         services.AddScoped<IPostSaleIssuesQuery, PostSaleIssuesQuery>();
         services.AddScoped<IReportFilterLookup, ReportFilterLookup>();
@@ -205,6 +209,8 @@ public static class DependencyInjection
         services.AddAddressLookup(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
         services.AddSingleton<ISpreadsheetReader, ClosedXmlSpreadsheetReader>();
+        services.AddSingleton<IReportDocumentRenderer, ReportDocumentExcelRenderer>();
+        services.AddSingleton<IReportDocumentRenderer, ReportDocumentPdfRenderer>();
 
         services.AddScoped<AddressCodeBackfill>();
         services.AddScoped<DeploymentBootstrapper>();

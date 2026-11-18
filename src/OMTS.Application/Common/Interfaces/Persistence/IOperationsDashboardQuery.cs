@@ -3,6 +3,9 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 /// <summary>The sales invoices of the period that count in the daily revenue (BR-FARM-10): not Cancelled, at their latest values.</summary>
 public sealed record DashboardRevenueFigures(decimal Total, int InvoiceCount);
 
+/// <summary>One business day: invoices not Cancelled (by invoice date) and sales returns that stand (by return date).</summary>
+public sealed record DashboardDayFigures(int InvoiceCount, decimal Revenue, int ReturnCount, decimal ReturnValue);
+
 /// <summary>One record waiting for the Owner: its id (to open it), its code when it has one, a short label to show it, and since when it waits.</summary>
 public sealed record PendingTaskRecord(Guid Id, string? Code, string Label, DateTimeOffset Since);
 
@@ -14,6 +17,9 @@ public interface IOperationsDashboardQuery
 {
     /// <summary>The invoices dated from <paramref name="from"/> to <paramref name="to"/> (business dates, both included), of one zone or of every zone, without the Cancelled ones.</summary>
     Task<DashboardRevenueFigures> RevenueAsync(DateOnly from, DateOnly to, Guid? zoneId, CancellationToken cancellationToken);
+
+    /// <summary>The sales result of one business day, of one zone or of every zone.</summary>
+    Task<DashboardDayFigures> DayAsync(DateOnly date, Guid? zoneId, CancellationToken cancellationToken);
 
     /// <summary>Purchase requests and quality claims Awaiting response, payrolls Awaiting finalization, employee requests Awaiting review: always the whole cooperative, <paramref name="oldestCount"/> records of each, oldest first.</summary>
     Task<IReadOnlyList<PendingTaskFigures>> PendingTasksAsync(int oldestCount, CancellationToken cancellationToken);

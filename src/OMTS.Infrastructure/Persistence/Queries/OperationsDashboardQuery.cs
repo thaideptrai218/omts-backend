@@ -24,6 +24,19 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
         return new DashboardRevenueFigures(total, await invoices.CountAsync(cancellationToken));
     }
 
+    public async Task<DashboardDayFigures> DayAsync(DateOnly date, Guid? zoneId, CancellationToken cancellationToken)
+    {
+        var invoices = await RevenueAsync(date, date, zoneId, cancellationToken);
+        var returns = db.SalesReturns.AsNoTracking().Where(r => r.StatusId == StatusIds.SalesReturn.Recorded && r.ReturnDate == date);
+        if (zoneId is { } zone)
+        {
+            returns = returns.Where(r => r.Invoice.ZoneId == zone);
+        }
+
+        var value = await returns.SumAsync(r => (decimal?)r.Value, cancellationToken) ?? 0m;
+        return new DashboardDayFigures(invoices.InvoiceCount, invoices.Total, await returns.CountAsync(cancellationToken), value);
+    }
+
     public async Task<IReadOnlyList<PendingTaskFigures>> PendingTasksAsync(int oldestCount, CancellationToken cancellationToken)
     {
         var requests = db.PurchaseRequests.AsNoTracking().Where(r => r.StatusId == StatusIds.PurchaseRequest.AwaitingResponse);
