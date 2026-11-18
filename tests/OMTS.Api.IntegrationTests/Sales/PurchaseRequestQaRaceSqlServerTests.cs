@@ -52,7 +52,8 @@ public class PurchaseRequestQaRaceSqlServerTests
 
             var answers = await InParallelAsync(2, i => i == 0 ? owner.AcceptAsync(request) : trader.Client.CancelAsync(request));
 
-            await AssertAnswersAsync(answers, "200", "409 MSG06", "409 MSG-GEN-09");
+            // An accept needs the request to still wait for its staff; one that reads it after the cancel won is refused with 400 MSG-GEN-01 (ValidateAcceptanceAsync), as in the other accept races.
+            await AssertAnswersAsync(answers, "200", "409 MSG06", "409 MSG-GEN-09", "400 MSG-GEN-01");
             Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             var acceptWon = answers[0].StatusCode == HttpStatusCode.OK;
             sms += acceptWon ? 1 : 0;
