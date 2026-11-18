@@ -31,10 +31,10 @@ jobs:
             sql: false
           - name: s1
             sql: true
-            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Sales.|FullyQualifiedName~OMTS.Api.IntegrationTests.Notifications.'
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Sales.'
           - name: s2
             sql: true
-            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Cultivation.|FullyQualifiedName~OMTS.Api.IntegrationTests.Employees.'
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Cultivation.|FullyQualifiedName~OMTS.Api.IntegrationTests.Employees.|FullyQualifiedName~OMTS.Api.IntegrationTests.Notifications.'
           - name: s3
             sql: true
             filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Purchasing.|FullyQualifiedName~OMTS.Api.IntegrationTests.Farming.|FullyQualifiedName~OMTS.Api.IntegrationTests.Harvest.'
