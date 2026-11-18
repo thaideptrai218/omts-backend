@@ -59,7 +59,8 @@ public class PurchaseCatalogueSqlServerQaTests
             code = i < 2 ? "VT000001" : "vt000001", name = $"Găng tay {i} {NewCode()}", group = "Material", unit = "đôi",
         }));
 
-        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created, "Code");
+        // The default code of the base unit is "<item code>-<letter>" (case ignored), so a loser whose check of the item code ran before the winner saved is caught by the check of that unit code: the same winner, named by "Unit code".
+        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created, "Code", orField: "Unit code");
         Assert.Equal("VT000002", await ProposedAsync(second));
 
         // GBR-03: the code of a discontinued item stays reserved, for the proposal and for a typed code.
@@ -299,7 +300,7 @@ public class PurchaseCatalogueSqlServerQaTests
     /// Exactly one 2xx response; every other one is 409 MSG-GEN-02 naming the record it saved and the entry that clashed
     /// (<paramref name="field"/>, also for a loser of the unique index race, QA P1 F2).
     /// </summary>
-    private static async Task<Guid> WinnerAsync(IReadOnlyCollection<HttpResponseMessage> responses, HttpStatusCode success, string field)
+    private static async Task<Guid> WinnerAsync(IReadOnlyCollection<HttpResponseMessage> responses, HttpStatusCode success, string field, string? orField = null)
     {
         var winners = responses.Where(r => r.StatusCode == success).ToList();
         Assert.True(winners.Count == 1, string.Join(", ", await Task.WhenAll(responses.Select(r => r.CodeOrStatusAsync()))));
@@ -308,7 +309,8 @@ public class PurchaseCatalogueSqlServerQaTests
         {
             var problem = await loser.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
             Assert.True(problem.TryGetProperty("existingId", out var existingId), problem.ToString());
-            Assert.Equal((winnerId, field), (existingId.GetGuid(), problem.GetProperty("field").GetString()));
+            Assert.Equal(winnerId, existingId.GetGuid());
+            Assert.Contains(problem.GetProperty("field").GetString(), new[] { field, orField });
         }
 
         return winnerId;
