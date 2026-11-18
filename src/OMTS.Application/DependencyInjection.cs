@@ -33,6 +33,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Labor.Costs;
 using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Purchasing;
@@ -168,6 +169,7 @@ public static class DependencyInjection
         services.AddScoped<PayrollService>();
         services.AddScoped<PayrollPaymentService>();
         services.AddScoped<PayrollExportService>();
+        services.AddScoped<LaborCostService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
