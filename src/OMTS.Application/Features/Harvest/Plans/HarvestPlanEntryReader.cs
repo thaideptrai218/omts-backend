@@ -55,7 +55,8 @@ internal static class HarvestPlanEntryReader
                 invalid.Add($"{field} raft");
             }
 
-            if (lanes.Count == 0 || lanes.Any(n => n <= 0) || lanes.Distinct().Count() != lanes.Count)
+            // Lanes are optional (a plan line is a raft); the ones that are sent must still be positive and given once.
+            if (lanes.Any(n => n <= 0) || lanes.Distinct().Count() != lanes.Count)
             {
                 invalid.Add($"{field} lanes");
             }

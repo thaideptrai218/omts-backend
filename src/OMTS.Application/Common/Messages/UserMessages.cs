@@ -462,6 +462,16 @@ public static class UserMessages
     /// <summary>MSG-HARVEST-04 (HARVEST-04 step 3): the yield report holds lots still for sale (Open or Reopened), whose figures can still change (BR-HARVEST-07).</summary>
     public static readonly UserMessage YieldNotFinal = new(Harvest04, "Some lots are still for sale, so their figures may still change.");
 
+    /// <summary>MSG-HARVEST-06: a harvest is recorded only from a line of a harvest plan (owner decision 18/11/2026); lots recorded before still read.</summary>
+    public static readonly UserMessage HarvestNeedsPlan = new(Harvest06, "Chỉ ghi nhận thu hoạch từ kế hoạch thu hoạch. Hãy mở kế hoạch thu hoạch của bè và chọn Thu hoạch theo kế hoạch.");
+
+    /// <summary>MSG-HARVEST-07: a lot not yet weighed at the port cannot be invoiced; its kg is only known after the weighing.</summary>
+    public static UserMessage HarvestLotNotWeighed(string lotCode) => new(
+        Harvest07, $"Lô {lotCode} chưa cân tại cảng nên chưa thể bán. Hãy cân lô trước khi lập hóa đơn.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
     /// <summary>MSG-HARVEST-05 (GFR-05): the next daily close check closes this lot still for sale.</summary>
     /// <param name="closeDate">The day of that check: the lot is closed at its start.</param>
     public static UserMessage HarvestLotAutoCloseWarning(string lotCode, string raftCode, DateOnly closeDate) => new(
@@ -1431,6 +1441,17 @@ public static class UserMessages
         Plan04, $"Kế hoạch thu hoạch {planCode} đã bắt đầu thu nên không thể hủy. Hãy dùng Kết thúc để đóng kế hoạch.")
     {
         Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode },
+    };
+
+    /// <summary>MSG-PLAN-07: a harvest plan is made for sales orders, so it needs at least one.</summary>
+    public static UserMessage PlanNeedsSalesOrder() => new(
+        Plan07, "Kế hoạch thu hoạch phải gắn với ít nhất một đơn đặt hàng. Hãy chọn đơn đặt hàng cần thu hoạch.");
+
+    /// <summary>MSG-PLAN-08: an order already has an active harvest plan; one order has at most one.</summary>
+    public static UserMessage PlanOrderAlreadyPlanned(string orderCode, string planCode) => new(
+        Plan08, $"Đơn đặt hàng {orderCode} đã có kế hoạch thu hoạch {planCode}. Mỗi đơn chỉ có một kế hoạch thu hoạch; hãy sửa kế hoạch đó hoặc hủy nó trước.")
+    {
+        Parameters = new Dictionary<string, object?> { ["order_code"] = orderCode, ["plan_code"] = planCode },
     };
 
     /// <summary>MSG-PLAN-05: the plan was handed to the Zone Managers of its zone (to the Owners when the zone has none).</summary>

@@ -7,16 +7,16 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// PURCHASE-08: fifteen farming input items in the three groups (Seed, Material, Other) with the default codes VT001…VT015
-/// (GBR-03); every Seed item uses "con" (BR-PURCHASE-10) and sells as one product ("Hàu béo", "Hàu sữa" or "Hàu sống loại nhỏ"). An item is skipped when its code or its name already exists.
+/// (GBR-03); every Seed item uses "con" (BR-PURCHASE-10) and sells as one product ("Hàu Thái Bình Dương sống", "Hàu bản địa Vân Đồn sống" or "Hàu Cổ Trai sống"). An item is skipped when its code or its name already exists.
 /// </summary>
 internal sealed class DemoInputItemStep : IDemoSeedStep
 {
     private static readonly (string Code, string Name, InputItemGroup Group, string Unit, string Description, string? Product)[] Items =
     [
-        ("VT001", "Hàu giống Thái Bình Dương 3 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 3 cm, giao theo lô", "Hàu béo"),
-        ("VT002", "Hàu giống Thái Bình Dương 5 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 5 cm", "Hàu béo"),
-        ("VT003", "Hàu giống bản địa Vân Đồn 3 cm", InputItemGroup.Seed, "con", "Giống hàu cửa sông bản địa", "Hàu sữa"),
-        ("VT004", "Hàu giống Cổ Trai 4 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 4 cm", "Hàu sống loại nhỏ"),
+        ("VT001", "Hàu giống Thái Bình Dương 3 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 3 cm, giao theo lô", "Hàu Thái Bình Dương sống"),
+        ("VT002", "Hàu giống Thái Bình Dương 5 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 5 cm", "Hàu Thái Bình Dương sống"),
+        ("VT003", "Hàu giống bản địa Vân Đồn 3 cm", InputItemGroup.Seed, "con", "Giống hàu cửa sông bản địa", "Hàu bản địa Vân Đồn sống"),
+        ("VT004", "Hàu giống Cổ Trai 4 cm", InputItemGroup.Seed, "con", "Hàu giống cỡ 4 cm", "Hàu Cổ Trai sống"),
         ("VT005", "Phao nhựa HDPE 200 lít", InputItemGroup.Material, "cái", "Phao nổi cho bè", null),
         ("VT006", "Dây thừng nilon 14 mm", InputItemGroup.Material, "cuộn", "Cuộn 200 m", null),
         ("VT007", "Lưới nhựa bao hàu", InputItemGroup.Material, "m", "Khổ rộng 1,5 m", null),

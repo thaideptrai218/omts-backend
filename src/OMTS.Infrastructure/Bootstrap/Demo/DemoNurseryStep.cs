@@ -17,7 +17,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 internal sealed class DemoNurseryStep : IDemoSeedStep
 {
     /// <param name="MinOnHand">What the lot must still have on hand to be used.</param>
-    /// <param name="ItemCodes">The seed items the lot is taken from when one of them has stock (so the demo shows both a "Hàu béo" seed, VT001/VT002, and a "Hàu sữa" one, VT003, ready); any lot otherwise.</param>
+    /// <param name="ItemCodes">The seed items the lot is taken from when one of them has stock (so the demo shows both a "Hàu Thái Bình Dương sống" seed, VT001/VT002, and a "Hàu bản địa Vân Đồn sống" one, VT003, ready); any lot otherwise.</param>
     /// <param name="Survivors">When set, the batch is completed right away with these survivors, <paramref name="CompletedDaysAgo"/> days ago.</param>
     private sealed record Plan(string Note, decimal Pieces, int StartedDaysAgo, decimal MinOnHand, decimal? Survivors = null, int CompletedDaysAgo = 0, string[]? ItemCodes = null);
 

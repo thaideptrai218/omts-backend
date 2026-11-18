@@ -35,7 +35,7 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
 
         // Matched by name; a product renamed or discontinued since is simply not requested.
         var products = await context.Db.Products.Where(p => p.StatusId == StatusIds.Usage.InUse).ToDictionaryAsync(p => p.Name, cancellationToken);
-        if (!products.TryGetValue("Hàu sữa", out var milky) || !products.TryGetValue("Hàu béo", out var fat) || !products.TryGetValue("Hàu sống loại nhỏ", out var small))
+        if (!products.TryGetValue("Hàu bản địa Vân Đồn sống", out var milky) || !products.TryGetValue("Hàu Thái Bình Dương sống", out var fat) || !products.TryGetValue("Hàu Cổ Trai sống", out var small))
         {
             return 0;
         }

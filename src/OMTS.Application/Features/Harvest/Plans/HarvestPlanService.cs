@@ -380,6 +380,12 @@ public sealed class HarvestPlanService(
     /// </summary>
     private async Task<Result<Prepared>> PrepareAsync(HarvestPlanEntries entries, HarvestPlan? stored, CancellationToken cancellationToken)
     {
+        // A plan is made for sales orders (MSG-PLAN-07): one plan may serve many orders, but never none.
+        if (entries.SalesOrderIds.Count == 0)
+        {
+            return AppError.Conflict(UserMessages.PlanNeedsSalesOrder(), new Dictionary<string, object?> { ["field"] = "SalesOrderIds" });
+        }
+
         var invalid = new List<string>();
         var now = timeProvider.GetUtcNow();
         var plannedAt = entries.PlannedAt.ToOffset(BusinessClock.UtcOffset);
@@ -407,8 +413,9 @@ public sealed class HarvestPlanService(
                 continue;
             }
 
+            // Lanes are optional: a line without them is checked for its raft only (old plans keep the lanes they have).
             var lanes = raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber) && (l.StatusId == StatusIds.Lane.InUse || keptLanes.Contains(l.Id))).ToList();
-            if (lanes.Count != entry.LaneNumbers.Count || lanes.Any(l => !usedLanes.Add((raft.Id, l.Id))))
+            if (entry.LaneNumbers.Count > 0 && (lanes.Count != entry.LaneNumbers.Count || lanes.Any(l => !usedLanes.Add((raft.Id, l.Id)))))
             {
                 invalid.Add($"{field} lanes");
             }
@@ -420,6 +427,18 @@ public sealed class HarvestPlanService(
             || orders.Any(o => !linked.Contains(o.Id) && o.StatusId is not (StatusIds.SalesOrder.Draft or StatusIds.SalesOrder.Delivering)))
         {
             invalid.Add("Sales orders");
+        }
+
+        // One order has at most one active plan (MSG-PLAN-08); a plan may serve many orders. A cancelled plan frees its orders.
+        if (invalid.Count == 0 && orders.Count > 0)
+        {
+            var existing = await plans.PlansOfOrdersAsync(orders.Select(o => o.Id).ToList(), cancellationToken);
+            var taken = existing.FirstOrDefault(p => p.StatusId != StatusIds.HarvestPlan.Cancelled && p.PlanId != stored?.Id);
+            if (taken is not null)
+            {
+                var orderCode = orders.First(o => o.Id == taken.OrderId).Code;
+                return AppError.Conflict(UserMessages.PlanOrderAlreadyPlanned(orderCode, taken.PlanCode), new Dictionary<string, object?> { ["field"] = "SalesOrderIds" });
+            }
         }
 
         if (invalid.Count > 0)
@@ -479,7 +498,8 @@ public sealed class HarvestPlanService(
         foreach (var line in plan.Lines.Where(l => HarvestPlanRules.LineLocked(HarvestPlanRules.FactsOf(l))))
         {
             var entry = entries.Lines.FirstOrDefault(e => e.Id == line.Id);
-            var sameLanes = entry is not null && entry.LaneNumbers.SequenceEqual(line.Lanes.Select(l => l.Lane.LaneNumber).Order());
+            // A form without lanes (a line is a raft) leaves the lanes of the line as they are.
+            var sameLanes = entry is not null && (entry.LaneNumbers.Count == 0 || entry.LaneNumbers.SequenceEqual(line.Lanes.Select(l => l.Lane.LaneNumber).Order()));
             if (entry is null || entry.RaftId != line.RaftId || !sameLanes || entry.ExpectedCageCount != line.ExpectedCageCount || entry.Note != line.Note)
             {
                 return AppError.Conflict(UserMessages.PlanLineAlreadyHarvested(plan.Code, line.Raft.Code), new Dictionary<string, object?> { ["lineId"] = line.Id });
@@ -568,8 +588,11 @@ public sealed class HarvestPlanService(
             line.ExpectedProductId = ready.CycleProducts.TryGetValue(raft.Id, out var cycleProduct) ? cycleProduct : line.RaftId == raft.Id ? line.ExpectedProductId : null;
             line.ExpectedCageCount = entry.ExpectedCageCount;
             line.Note = entry.Note;
-            var wantedLanes = raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber)).ToList();
             var sameRaft = line.RaftId == raft.Id;
+            // No lanes sent: a line of the same raft keeps the lanes it has; a line moved to another raft has none.
+            var wantedLanes = entry.LaneNumbers.Count == 0 && sameRaft
+                ? line.Lanes.Select(l => l.Lane).ToList()
+                : raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber)).ToList();
             foreach (var lane in line.Lanes.Where(l => !sameRaft || wantedLanes.All(w => w.Id != l.LaneId)).ToList())
             {
                 line.Lanes.Remove(lane);

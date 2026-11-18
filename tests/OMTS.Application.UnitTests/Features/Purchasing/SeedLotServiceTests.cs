@@ -1,6 +1,7 @@
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -51,9 +52,60 @@ public sealed class SeedLotServiceTests
             throw new NotSupportedException();
 
         public Task<SeedLotDetailRows> DetailAsync(Guid lineId, CancellationToken cancellationToken) => Task.FromResult(Detail ?? new SeedLotDetailRows([], [], [], [], [], []));
+
+        public SeedLotHarvestSources Sources { get; set; } = SeedLotHarvestSources.Empty;
+
+        public Task<SeedLotHarvestSources> HarvestSourcesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken) => Task.FromResult(Sources);
     }
 
-    private static SeedLotService Service(FakeQuery query) => new(query, new Catalog());
+    private sealed class FakeSales(IReadOnlyDictionary<Guid, LotSalesFigures>? figures = null) : IHarvestLotSalesQuery
+    {
+        public Task<IReadOnlyDictionary<Guid, LotSalesFigures>> FiguresAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+            Task.FromResult(figures ?? new Dictionary<Guid, LotSalesFigures>());
+
+        public Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private static SeedLotService Service(FakeQuery query, FakeSales? sales = null) => new(query, new Catalog(), sales ?? new FakeSales());
+
+    [Fact]
+    public async Task A_lot_gets_the_kg_of_its_single_cycle_and_a_shared_cycle_is_split_by_pieces_and_marked_estimated()
+    {
+        var (solo, shared, other) = (Lot("PN000020", 1, Figures(direct: 100m)), Lot("PN000020", 2, Figures(direct: 30m)), Lot("PN000020", 3, Figures(direct: 70m)));
+        var (soloCycle, sharedCycle, soloLot, sharedLot) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var query = new FakeQuery([solo, shared, other])
+        {
+            Sources = new SeedLotHarvestSources(
+                [new(soloCycle, solo.LineId, 100m), new(sharedCycle, shared.LineId, 30m), new(sharedCycle, other.LineId, 70m)],
+                [new(soloCycle, soloLot, 90m, 80m), new(sharedCycle, sharedLot, 200m, 200m)]),
+        };
+        var sales = new FakeSales(new Dictionary<Guid, LotSalesFigures>
+        {
+            [soloLot] = new(60m, 10m, 0m, 10m),
+            [sharedLot] = new(100m, 0m, 0m, 0m),
+        });
+
+        var result = await Service(query, sales).SearchAsync(new SeedLotListQuery(), CancellationToken.None);
+
+        var rows = result.Value!.Items.ToDictionary(r => r.Id);
+        Assert.Equal((80m, 50m, 10m, false), (rows[solo.LineId].HarvestedKg, rows[solo.LineId].SoldKg, rows[solo.LineId].ReturnedFromSaleKg, rows[solo.LineId].FiguresEstimated));
+        Assert.Equal((60m, 30m, 0m, true), (rows[shared.LineId].HarvestedKg, rows[shared.LineId].SoldKg, rows[shared.LineId].ReturnedFromSaleKg, rows[shared.LineId].FiguresEstimated));
+        Assert.Equal((140m, 70m, true), (rows[other.LineId].HarvestedKg, rows[other.LineId].SoldKg, rows[other.LineId].FiguresEstimated));
+    }
+
+    [Fact]
+    public async Task A_lot_with_no_cycle_has_no_harvest_figures()
+    {
+        var lot = Lot("PN000021", 1, Figures());
+
+        var result = await Service(new FakeQuery([lot])).SearchAsync(new SeedLotListQuery(), CancellationToken.None);
+
+        Assert.Equal((0m, 0m, false), (result.Value!.Items[0].HarvestedKg, result.Value.Items[0].SoldKg, result.Value.Items[0].FiguresEstimated));
+    }
 
     private IReadOnlyList<SeedLotFiguresRow> Rows() =>
     [

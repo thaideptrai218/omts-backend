@@ -45,6 +45,7 @@ public sealed class ProductService(
     /// <summary>The largest amount the column holds (18 digits).</summary>
     private const decimal MaxUnitPrice = 999_999_999_999_999_999m;
     private const decimal MaxKg = 1_000_000_000m;
+    private const decimal MaxSizeCm = 60m;
 
     private readonly Dictionary<string, InputUnit> stagedUnits = new(StringComparer.OrdinalIgnoreCase);
 
@@ -385,7 +386,7 @@ public sealed class ProductService(
     private AppError WrongStatus(Product product) =>
         AppError.Conflict(UserMessages.WrongStatus($"{ObjectName} {product.Code}", statusCatalog.DisplayNameOf(product.StatusId)));
 
-    private sealed record Values(string Name, decimal UnitPrice, Guid? CategoryId, string? Description, string? Note, decimal? MinKg, decimal? MaxKg);
+    private sealed record Values(string Name, decimal UnitPrice, Guid? CategoryId, string? Description, string? Note, decimal? MinKg, decimal? MaxKg, decimal? SizeMinCm, decimal? SizeMaxCm);
 
     private async Task<(Values Values, List<string> Invalid)> ValidateAsync(SaveProductRequest request, CancellationToken cancellationToken)
     {
@@ -440,7 +441,23 @@ public sealed class ProductService(
             invalid.Add("Max kg");
         }
 
-        return (new Values(name, request.UnitPrice ?? 0, request.CategoryId, description, note, request.MinKg, request.MaxKg), invalid);
+        // Size in cm: the minimum alone is an exact size; 0 < min <= max <= 60, one decimal.
+        var (sizeMin, sizeMax) = (request.SizeMinCm, request.SizeMaxCm);
+        bool Cm(decimal? v) => v is > 0 and <= MaxSizeCm && decimal.Round(v.Value, 1) == v.Value;
+        if (sizeMin is null && sizeMax is not null)
+        {
+            invalid.Add("Size min (cm)");
+        }
+        else if (sizeMin is not null && !Cm(sizeMin))
+        {
+            invalid.Add("Size min (cm)");
+        }
+        else if (sizeMax is not null && (!Cm(sizeMax) || sizeMax < sizeMin))
+        {
+            invalid.Add("Size max (cm)");
+        }
+
+        return (new Values(name, request.UnitPrice ?? 0, request.CategoryId, description, note, request.MinKg, request.MaxKg, sizeMin, sizeMax), invalid);
     }
 
     private static void Apply(Product product, Values values)
@@ -452,6 +469,8 @@ public sealed class ProductService(
         product.Note = values.Note;
         product.MinKg = values.MinKg;
         product.MaxKg = values.MaxKg;
+        product.SizeMinCm = values.SizeMinCm;
+        product.SizeMaxCm = values.SizeMaxCm;
     }
 
     private ProductPriceChange NewPriceChange(Product product, ProductUnit unit, decimal? oldPrice, decimal newPrice) => new()
@@ -608,7 +627,7 @@ public sealed class ProductService(
 
     private static object Snapshot(Product p, IReadOnlyList<UnitPlan>? plans) => new
     {
-        p.Code, p.Name, p.UnitPrice, p.CategoryId, p.Description, p.Note, p.MinKg, p.MaxKg,
+        p.Code, p.Name, p.UnitPrice, p.CategoryId, p.Description, p.Note, p.MinKg, p.MaxKg, p.SizeMinCm, p.SizeMaxCm,
         Units = plans is null
             ? p.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new { Unit = u.Unit?.Name ?? string.Empty, u.Factor, u.Code, u.IsBase, u.SalePrice }).ToList()
             : plans.OrderByDescending(x => x.IsBase).ThenBy(x => x.Factor).Select(x => new { Unit = x.Catalogue.Name, x.Factor, x.Code, x.IsBase, x.SalePrice }).ToList(),

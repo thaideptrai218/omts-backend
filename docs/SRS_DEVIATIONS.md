@@ -31,6 +31,7 @@
 | STK-03 | Phiếu nhập V2 (`PurchaseReceiptsV2`): không có khu vực, chiết khấu, trả trước, ảnh hóa đơn; mã PN000123 | Đã làm |
 | STK-04 | Thanh toán nhà cung cấp không gắn phiếu (`SupplierPaymentsV2`, mã TT); trả hàng có mã TH, bỏ cột hoàn tiền (`PurchaseReturnsV2`) | Đã làm |
 | STK-06 | Không thông báo cho Kế toán khi có phiếu mới (chỉ Chủ HTX) | Chờ backend |
+| SEED-01 | Màn lô giống (quyết định Owner 18/11/2026) hiển thị số lượng (nhập, ươm, thả, thu hoạch kg, bán kg, còn kho), không hiển thị trạng thái suy ra và không có hành trình lô. API vẫn trả `state`/`stateCounts` (phiếu nhập `seedState`, xuất file, test); thêm `harvestedKg`, `soldKg`, `returnedFromSaleKg`, `figuresEstimated`. Kg quy về lô từ các chu kỳ đã thả lô đó; chu kỳ có nhiều lô chia theo số con mỗi lô thả và đánh dấu ước tính | Đã làm trên nhánh, chưa build (máy chỉ có .NET SDK 10) |
 | SAL-01 | Giới hạn công nợ khách và trường bắt buộc là thiết lập chung của HTX (`CustomerSettingsController`) | Đã làm (commit `b8c11848`) |
 | SAL-04 | Thanh toán VietQR khoản không khớp hóa đơn chờ DEBT-02.6 (PR 7b) | Chờ backend |
 | SAL-05 | Rút lại nguồn gốc (TRACE-04) chỉ Chủ HTX; MSG-TRACE-05; bản tiếng Việt của trang nguồn gốc là đề xuất | Đã làm; bản tiếng Việt chờ PM (Q15) |
@@ -65,3 +66,5 @@ Các phần sau chạy bằng bản giả trong Development và chưa có nhà c
 - Q29 (13/11): NUR-15 (thả đủ 100% phần đã chuyển) bị thay bởi kho ươm chung (NUR-16 đến NUR-21). Hỏi PM: đưa mô hình kho ươm, đóng đợt ươm (4004) và cách chia hao hụt theo số mảnh đã thả vào SRS không; sửa số sống sót không thấp hơn đã thả; có giới hạn số mảnh thả theo ngày không (chủ chốt: không).
 
 Các câu hỏi khác và nội dung đầy đủ nằm trong tài liệu chủ của repo Web.
+
+- NUR-22 (18/11): đợt ươm tự đóng (4004, closeLossPieces = 0, lý do "tự đóng khi thả hết") khi một bản ghi thả giống làm kho ươm hết; sửa giảm/xóa bản ghi làm kho còn mảnh thì đợt tự đóng mở lại 4002 (đợt đóng tay giữ nguyên); không thông báo khi tự đóng; không đổi schema. Quyết định của chủ; hỏi PM: đưa vào SRS NURSERY-05.

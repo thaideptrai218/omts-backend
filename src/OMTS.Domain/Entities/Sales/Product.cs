@@ -33,6 +33,10 @@ public class Product : AuditableEntity, IHasStatus
     public decimal? MinKg { get; set; }
     public decimal? MaxKg { get; set; }
 
+    /// <summary>Commercial size (shell length, cm), optional: the minimum alone is an exact size, with the maximum a range ("8-12 cm"). 0 &lt; min &lt;= max &lt;= 60.</summary>
+    public decimal? SizeMinCm { get; set; }
+    public decimal? SizeMaxCm { get; set; }
+
     /// <summary>A deleted product that had history: no list shows it, its documents still name it.</summary>
     public bool IsHidden { get; set; }
 

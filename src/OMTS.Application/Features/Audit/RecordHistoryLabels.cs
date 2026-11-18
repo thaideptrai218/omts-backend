@@ -160,7 +160,9 @@ internal static partial class RecordHistoryLabels
 
     /// <summary>The Vietnamese label of an action; a nursery batch is "closed" (Đóng đợt ươm) where a cycle is "chốt".</summary>
     public static string ActionLabel(string action, string? recordType = null) =>
-        recordType == "NurseryBatch" && action == "Closed" ? "Đóng đợt ươm" : Actions.GetValueOrDefault(action, action);
+        recordType == "NurseryBatch" && action == "Closed" ? "Đóng đợt ươm"
+        : recordType == "NurseryBatch" && action == "Reopened" ? "Mở lại đợt ươm"
+        : Actions.GetValueOrDefault(action, action);
 
     public static string? RoleLabel(string? roleCode) => roleCode is null ? null : Roles.GetValueOrDefault(roleCode, roleCode);
 

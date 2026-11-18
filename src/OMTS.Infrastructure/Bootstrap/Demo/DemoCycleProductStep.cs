@@ -5,15 +5,15 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// The product a cycle farms (owner decision of 13/11/2026): a cycle started in the app always has one, but the demo cycles of <see cref="DemoCultivationCycleStep"/> are started by the bootstrap path before the products
-/// exist, so they are given theirs here, after the demo lots (which give the cycle they split a product themselves, so the lot stays valid). The others alternate between "Hàu béo" and "Hàu sữa", so a harvest plan
+/// exist, so they are given theirs here, after the demo lots (which give the cycle they split a product themselves, so the lot stays valid). The others alternate between "Hàu Thái Bình Dương sống" and "Hàu bản địa Vân Đồn sống", so a harvest plan
 /// and a harvest for the wrong product can be shown refused (HARVEST_PRODUCT_MISMATCH).
 /// Only a cycle with no product is touched by that, so a rerun changes nothing; a cycle with a nursery batch follows the product of its seed item instead (see <see cref="FollowSeedItemAsync"/>). Written directly, like the rest of the demo data.
 /// </summary>
 internal sealed class DemoCycleProductStep : IDemoSeedStep
 {
-    private const string MainProduct = "Hàu béo";
-    private const string OtherProduct = "Hàu sữa";
-    private const string SmallProduct = "Hàu sống loại nhỏ";
+    private const string MainProduct = "Hàu Thái Bình Dương sống";
+    private const string OtherProduct = "Hàu bản địa Vân Đồn sống";
+    private const string SmallProduct = "Hàu Cổ Trai sống";
 
     public string Name => "cycle products";
 
@@ -30,7 +30,7 @@ internal sealed class DemoCycleProductStep : IDemoSeedStep
 
         if (!products.TryGetValue(MainProduct, out var main) || !products.TryGetValue(OtherProduct, out var other))
         {
-            context.Notes.Add("Demo cycle products: the products \"Hàu béo\" and \"Hàu sữa\" are not both In Use, so the demo cycles were left without a product.");
+            context.Notes.Add("Demo cycle products: the products \"Hàu Thái Bình Dương sống\" and \"Hàu bản địa Vân Đồn sống\" are not both In Use, so the demo cycles were left without a product.");
             return fromBatches;
         }
 
@@ -45,8 +45,8 @@ internal sealed class DemoCycleProductStep : IDemoSeedStep
     }
 
     /// <summary>
-    /// "Hàu sống loại nhỏ" is farmed by two open cycles of the demo zones with a seeded lane to harvest (Owner's request of 13/11/2026, to try a harvest for every product): when fewer do, older cycles of the demo zones with
-    /// no nursery batch, no harvest lot yet (so no lot becomes invalid) and a seeded usable lane are moved from "Hàu béo" to it, as long as "Hàu béo" keeps two such cycles. A cycle of the demo zones only, never one of
+    /// "Hàu Cổ Trai sống" is farmed by two open cycles of the demo zones with a seeded lane to harvest (Owner's request of 13/11/2026, to try a harvest for every product): when fewer do, older cycles of the demo zones with
+    /// no nursery batch, no harvest lot yet (so no lot becomes invalid) and a seeded usable lane are moved from "Hàu Thái Bình Dương sống" to it, as long as "Hàu Thái Bình Dương sống" keeps two such cycles. A cycle of the demo zones only, never one of
     /// another zone, so the Owner's own cycles are not touched; with two already farming it, a rerun changes nothing.
     /// </summary>
     private static async Task<int> SpreadSmallProductAsync(DemoSeedContext context, Dictionary<string, Guid> products, CancellationToken cancellationToken)
@@ -87,7 +87,7 @@ internal sealed class DemoCycleProductStep : IDemoSeedStep
         if (moved > 0)
         {
             await db.SaveChangesAsync(cancellationToken);
-            context.Notes.Add($"Demo cycle products: {moved} open demo cycle(s) with a seeded lane now farm \"Hàu sống loại nhỏ\".");
+            context.Notes.Add($"Demo cycle products: {moved} open demo cycle(s) with a seeded lane now farm \"Hàu Cổ Trai sống\".");
         }
 
         return moved;

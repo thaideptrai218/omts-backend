@@ -31,7 +31,7 @@ public enum HarvestPlanLineState
 
 public sealed record HarvestPlanZoneView(Guid Id, string Code, string Name);
 
-public sealed record HarvestPlanProductView(Guid Id, string Code, string Name);
+public sealed record HarvestPlanProductView(Guid Id, string Code, string Name, decimal? SizeMinCm = null, decimal? SizeMaxCm = null);
 
 public sealed record HarvestPlanCustomerView(Guid Id, string Code, string Name);
 
@@ -100,7 +100,8 @@ public sealed record HarvestPlanListItem(
     IReadOnlyList<HarvestPlanOrderView> Orders,
     HarvestPlanProgressView Progress,
     string? CreatedBy,
-    string RowVersion);
+    string RowVersion,
+    decimal? ExpectedCageCount = null);
 
 public sealed record HarvestPlanPage(IReadOnlyList<HarvestPlanListItem> Items, int Page, int PageSize, int Total);
 
@@ -168,8 +169,14 @@ public enum EligibleLaneState
 /// <param name="PlanCode">The open plan the lane waits in when <paramref name="State"/> is InAnotherPlan.</param>
 public sealed record EligibleLaneView(Guid LaneId, int LaneNumber, EligibleLaneState State, string? PlanCode);
 
-/// <summary>A raft with an Open cultivation cycle and at least one lane that can be harvested; <paramref name="Product"/> is what its cycle farms (null when it has not harvested with products yet).</summary>
-public sealed record EligibleRaftView(Guid RaftId, string RaftCode, HarvestPlanZoneView Zone, HarvestPlanProductView? Product, IReadOnlyList<EligibleLaneView> Lanes);
+/// <summary>
+/// A raft with an Open cultivation cycle and at least one lane that can be harvested; <paramref name="Product"/> is what its cycle farms (null when it has not harvested with products yet).
+/// <paramref name="CycleStartDate"/> is when the cycle started, <paramref name="MaturityDays"/> the days its seed needs to mature (null when no seed item gives them) and <paramref name="ExpectedHarvestDate"/> the first day it can be harvested
+/// (start date plus the days; null without them); worked out at read time.
+/// </summary>
+public sealed record EligibleRaftView(
+    Guid RaftId, string RaftCode, HarvestPlanZoneView Zone, HarvestPlanProductView? Product, IReadOnlyList<EligibleLaneView> Lanes,
+    DateOnly? CycleStartDate = null, int? MaturityDays = null, DateOnly? ExpectedHarvestDate = null);
 
 /// <summary>The rafts a plan can be made for, by zone code and raft code.</summary>
 public sealed record EligibleRafts(IReadOnlyList<EligibleRaftView> Rafts);

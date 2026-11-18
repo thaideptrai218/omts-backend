@@ -68,10 +68,10 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
 
         // The lots of the first raft of the first zone carry their product line, so the product has stock; the others stay as lots recorded before products, which count in no stock.
         // A lot holds one product: the one the cycle farms.
-        var products = await db.Products.AsNoTracking().Where(p => p.Name == "Hàu sữa" || p.Name == "Hàu béo").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
+        var products = await db.Products.AsNoTracking().Where(p => p.Name == "Hàu bản địa Vân Đồn sống" || p.Name == "Hàu Thái Bình Dương sống").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
         var split = number == 1 && zoneCode == DemoFarmingZoneStep.ZoneOne && products.Count == 2 && (cycle.ProductId is null || products.ContainsValue(cycle.ProductId.Value));
-        // A demo cycle has no product until the last step: the first lots give the cycle theirs (Hàu sữa).
-        var main = cycle.ProductId ?? products.GetValueOrDefault("Hàu sữa");
+        // A demo cycle has no product until the last step: the first lots give the cycle theirs (Hàu bản địa Vân Đồn sống).
+        var main = cycle.ProductId ?? products.GetValueOrDefault("Hàu bản địa Vân Đồn sống");
         if (split && cycle.ProductId is null)
         {
             await db.CultivationCycles.Where(c => c.Id == cycle.Id).ExecuteUpdateAsync(c => c.SetProperty(x => x.ProductId, main), cancellationToken);

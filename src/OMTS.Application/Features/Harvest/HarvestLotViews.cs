@@ -87,7 +87,7 @@ public sealed class HarvestLotViews(
             lot.CageCount,
             lot.KgPerCage,
             lot.EstimatedKg,
-            HarvestLotFigures.Of(lot, figures[lot.Id]),
+            HarvestLotFigures.Shown(lot, figures[lot.Id]),
             lot.StatusId,
             statusCatalog.DisplayNameOf(lot.StatusId),
             lot.ReopenedOn,
@@ -158,7 +158,7 @@ public sealed class HarvestLotViews(
             .OrderByDescending(l => l.IsForSale).ThenByDescending(l => l.HarvestedAt)
             .Select(lot =>
             {
-                var worked = HarvestLotFigures.Of(lot, figures[lot.Id]);
+                var worked = HarvestLotFigures.Shown(lot, figures[lot.Id]);
                 var canCorrect = editable && MayCorrect(access, lot, raft.ZoneId);
                 return new HarvestLotListItem(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,

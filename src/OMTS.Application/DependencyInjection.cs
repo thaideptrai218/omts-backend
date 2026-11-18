@@ -229,6 +229,7 @@ public static class DependencyInjection
         services.AddScoped<NurseryBatchService>();
         services.AddScoped<NurseryBatchEditService>();
         services.AddScoped<NurseryCompletionService>();
+        services.AddScoped<NurseryPoolAutoClose>();
         services.AddScoped<NurseryReadService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();

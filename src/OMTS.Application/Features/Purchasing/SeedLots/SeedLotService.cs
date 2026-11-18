@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.Purchasing.SeedLots;
 /// receipt is not scoped to a zone, so neither is its lot); the zone filter only narrows the list. The database sums the quantities of every lot in a few set queries; the state, the sums, the order and the
 /// page are worked out here over the lots the filters match, as the harvest lot list does.
 /// </summary>
-public sealed class SeedLotService(ISeedLotRegisterQuery lots, IStatusCatalog statusCatalog)
+public sealed class SeedLotService(ISeedLotRegisterQuery lots, IStatusCatalog statusCatalog, IHarvestLotSalesQuery sales)
 {
     public const int MaxPageSize = 100;
 
@@ -30,7 +30,24 @@ public sealed class SeedLotService(ISeedLotRegisterQuery lots, IStatusCatalog st
             matched.Sum(r => r.ReceivedQty), matched.Sum(r => r.ReturnedQty), matched.Sum(r => r.NursingQty), matched.Sum(r => r.NurseryLossQty),
             matched.Sum(r => r.SeededQty), matched.Sum(r => r.IssuedOtherQty), matched.Sum(r => r.RemainingQty));
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        return new SeedLotRegisterPage(Order(matched, sort, descending).Skip((page - 1) * pageSize).Take(pageSize).ToList(), matched.Count, page, pageSize, totals, counts);
+        var items = await WithHarvestAsync(Order(matched, sort, descending).Skip((page - 1) * pageSize).Take(pageSize).ToList(), cancellationToken);
+        return new SeedLotRegisterPage(items, matched.Count, page, pageSize, totals, counts);
+    }
+
+    /// <summary>The rows with the kg harvested and sold: two set queries for the lots and one for the sales of their harvest lots, whatever the number of rows.</summary>
+    private async Task<IReadOnlyList<SeedLotRegisterRow>> WithHarvestAsync(IReadOnlyList<SeedLotRegisterRow> rows, CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+        {
+            return rows;
+        }
+
+        var sources = await lots.HarvestSourcesAsync(rows.Select(r => r.Id).ToList(), cancellationToken);
+        var saleFigures = await sales.FiguresAsync(sources.HarvestLots.Select(h => h.HarvestLotId).Distinct().ToList(), cancellationToken);
+        var figures = SeedLotHarvestFigures.Attribute(rows.Select(r => r.Id).ToList(), sources, saleFigures);
+        return rows.Select(r => figures.TryGetValue(r.Id, out var f)
+            ? r with { HarvestedKg = f.HarvestedKg, SoldKg = f.SoldKg, ReturnedFromSaleKg = f.ReturnedFromSaleKg, FiguresEstimated = f.Estimated }
+            : r).ToList();
     }
 
     /// <summary>Every lot the filters match in the list's order, for the export (at most <paramref name="max"/>).</summary>
@@ -56,8 +73,9 @@ public sealed class SeedLotService(ISeedLotRegisterQuery lots, IStatusCatalog st
         }
 
         var detail = await lots.DetailAsync(lineId, cancellationToken);
+        var row = (await WithHarvestAsync([Row(found)], cancellationToken))[0];
         return new SeedLotDetail(
-            Row(found),
+            row,
             detail.NurseryBatches.OrderBy(b => b.StartDate).ThenBy(b => b.Code, StringComparer.Ordinal)
                 .Select(b => new SeedLotNurseryBatchView(b.Id, b.Code, b.StatusId, statusCatalog.DisplayNameOf(b.StatusId), b.QuantityIn, b.Survivors, b.StartDate)).ToList(),
             detail.Seedings.OrderBy(s => s.SeedingDate).ThenBy(s => s.RaftCode, StringComparer.Ordinal)

@@ -85,6 +85,40 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
         return rows.ToDictionary(r => r.RaftId, r => r.ProductId);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, CycleMaturity>> CycleMaturityAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken)
+    {
+        var rafts = raftIds.Distinct().ToList();
+        if (rafts.Count == 0)
+        {
+            return new Dictionary<Guid, CycleMaturity>();
+        }
+
+        // The seed of a cycle is the seed item of the line of its nursery batch.
+        var rows = await db.CultivationCycles.AsNoTracking()
+            .Where(c => rafts.Contains(c.RaftId) && c.StatusId == StatusIds.CultivationCycle.Open)
+            .Select(c => new
+            {
+                c.RaftId,
+                c.StartDate,
+                c.ProductId,
+                BatchDays = db.NurseryBatches.Where(b => b.Id == c.NurseryBatchId).Select(b => b.SeedLotLine.Item!.MaturityDays).FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+
+        // A cycle with no batch (or a batch whose seed gives no days) takes the days of a seed item that sells the cycle's product.
+        var productIds = rows.Where(r => r.BatchDays is null && r.ProductId is not null).Select(r => r.ProductId!.Value).Distinct().ToList();
+        var byProduct = productIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : (await db.FarmingInputItems.AsNoTracking()
+                .Where(i => i.Group == OMTS.Domain.Enums.InputItemGroup.Seed && !i.IsHidden && i.ProductId != null && productIds.Contains(i.ProductId.Value) && i.MaturityDays != null)
+                .Select(i => new { ProductId = i.ProductId!.Value, Days = i.MaturityDays!.Value })
+                .ToListAsync(cancellationToken))
+                .GroupBy(i => i.ProductId).ToDictionary(g => g.Key, g => g.Min(i => i.Days));
+        return rows.ToDictionary(
+            r => r.RaftId,
+            r => new CycleMaturity(r.StartDate, r.BatchDays ?? (r.ProductId is { } p && byProduct.TryGetValue(p, out var days) ? days : null)));
+    }
+
     public async Task<IReadOnlyList<PlanOfLot>> PlansOfLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
         var ids = lotIds.Distinct().ToList();
@@ -110,8 +144,8 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
             return new PlannedLanes(rows[0].Code, rows.Select(r => r.LaneId).ToHashSet());
         }
 
-        var code = await db.HarvestPlanLines.AsNoTracking().Where(l => l.Id == lineId).Select(l => l.Plan.Code).FirstOrDefaultAsync(cancellationToken);
-        return code is null ? null : new PlannedLanes(code, new HashSet<Guid>());
+        // A line planned without lanes holds no lane check: the lot may hold any lane of the raft.
+        return null;
     }
 
     public async Task<IReadOnlyList<PlanOfOrder>> PlansOfOrdersAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken)

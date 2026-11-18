@@ -19,6 +19,8 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.Note).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.MinKg).HasPrecision(18, 3);
         builder.Property(x => x.MaxKg).HasPrecision(18, 3);
+        builder.Property(x => x.SizeMinCm).HasPrecision(4, 1);
+        builder.Property(x => x.SizeMaxCm).HasPrecision(4, 1);
         builder.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.CategoryId);
         builder.HasIndex(x => x.IsHidden);

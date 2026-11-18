@@ -110,6 +110,22 @@ internal sealed class SeedLotRegisterQuery(OmtsDbContext db) : ISeedLotRegisterQ
         return new SeedLotDetailRows(batches, seedings, returns, issues, cycles, harvestLots);
     }
 
+    public async Task<SeedLotHarvestSources> HarvestSourcesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
+    {
+        if (lineIds.Count == 0)
+        {
+            return SeedLotHarvestSources.Empty;
+        }
+
+        var ids = lineIds.ToList();
+        var cycleIds = db.SeedingRecords.Where(s => ids.Contains(s.SeedLotLineId)).Select(s => s.CycleId).Distinct();
+        var seedings = await db.SeedingRecords.AsNoTracking().Where(s => cycleIds.Contains(s.CycleId))
+            .Select(s => new SeedLotCycleSeeding(s.CycleId, s.SeedLotLineId, s.Quantity)).ToListAsync(cancellationToken);
+        var harvestLots = await db.HarvestLots.AsNoTracking().Where(h => cycleIds.Contains(h.CycleId))
+            .Select(h => new SeedLotCycleHarvest(h.CycleId, h.Id, h.EstimatedKg, h.WeighedKg)).ToListAsync(cancellationToken);
+        return new SeedLotHarvestSources(seedings, harvestLots);
+    }
+
     /// <summary>The Seed lines of Completed receipts: the seed lots (GBR-04).</summary>
     private IQueryable<PurchaseReceiptLine> SeedLotLines() =>
         db.PurchaseReceiptLines.AsNoTracking().Where(l => l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed && l.Item != null && l.Item.Group == InputItemGroup.Seed);
