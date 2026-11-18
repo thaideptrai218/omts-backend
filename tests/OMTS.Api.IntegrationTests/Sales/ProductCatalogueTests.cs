@@ -38,7 +38,7 @@ public class ProductCatalogueTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task A_typed_code_is_kept_and_is_unique_regardless_of_case_among_product_and_unit_codes()
     {
         var owner = await factory.PurchasingOwnerAsync();
-        var code = $"Hau{NewCode()}"[..14];
+        var code = $"Hau{NewCode()}";
         var first = await (await PostProductAsync(owner, new { name = $"Hàu {NewCode()}", unitPrice = 60_000, code })).ReadAsync(HttpStatusCode.Created);
         Assert.Equal(code, first.GetProperty("product").Text("code"));
 
@@ -46,7 +46,7 @@ public class ProductCatalogueTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("Code", await sameCode.FieldAsync(HttpStatusCode.Conflict, "MSG-GEN-02"));
 
         var asUnitCode = await PostProductAsync(owner, new { name = $"Hàu {NewCode()}", unitPrice = 60_000, code = $"{code}-K" });
-        Assert.Equal("Code", await asUnitCode.FieldAsync(HttpStatusCode.Conflict, "MSG-GEN-02"));
+        Assert.Equal("Unit code", await asUnitCode.FieldAsync(HttpStatusCode.Conflict, "MSG-GEN-02"));
     }
 
     [Theory]

@@ -123,6 +123,7 @@ public class CyclesQaTestsMigrationAndDemo
             await db.CultivationLogs.ExecuteDeleteAsync();
             await db.HarvestLotPhotos.ExecuteDeleteAsync();
             await db.HarvestLotLanes.ExecuteDeleteAsync();
+            await db.HarvestLotProductLines.ExecuteDeleteAsync();
             // The demo sales (PR 6a) point to the lots: an older database had none.
             await db.CustomerPayments.ExecuteDeleteAsync();
             await db.SalesInvoiceLines.ExecuteDeleteAsync();

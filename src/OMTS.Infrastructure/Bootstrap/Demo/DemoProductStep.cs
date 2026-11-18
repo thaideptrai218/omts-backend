@@ -30,8 +30,11 @@ internal sealed class DemoProductStep : IDemoSeedStep
         var groupIds = new Dictionary<string, Guid>();
         foreach (var (name, unitPrice, discontinued, group, units) in Products)
         {
+            // A product the Owner renamed since is found by its Product.Created audit row: it holds the name in its snapshot (as JSON, the way the audit writes it), and, on databases
+            // seeded before product codes, in the record code.
+            var quotedName = System.Text.Json.JsonSerializer.Serialize(name);
             if (await context.Db.Products.AnyAsync(p => p.Name == name, cancellationToken)
-                || await context.Db.AuditEvents.AnyAsync(e => e.Action == "Product.Created" && e.RecordCode == name, cancellationToken))
+                || await context.Db.AuditEvents.AnyAsync(e => e.Action == "Product.Created" && (e.RecordCode == name || (e.After != null && e.After.Contains(quotedName))), cancellationToken))
             {
                 continue;
             }

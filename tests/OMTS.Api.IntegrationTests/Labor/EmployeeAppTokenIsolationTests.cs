@@ -103,16 +103,16 @@ public partial class EmployeeAppTokenIsolationTests(AuthApiFactory factory) : IC
         }
     }
 
-    // The employee scheme is opt-in: the default one stays the staff scheme, and only the employee app controller names the other.
+    // The employee scheme is opt-in: the default one stays the staff scheme, and only the employee app controller and the employee's own work (/api/me/workforce, attendance QR, leave requests) name the other.
     [Fact]
-    public async Task The_default_scheme_is_the_staff_one_and_only_the_employee_app_controller_names_the_employee_scheme()
+    public async Task The_default_scheme_is_the_staff_one_and_only_the_employee_controllers_name_the_employee_scheme()
     {
         var defaultScheme = await factory.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetDefaultAuthenticateSchemeAsync();
 
         Assert.Equal(JwtBearerDefaults.AuthenticationScheme, defaultScheme?.Name);
         var named = Actions.Where(NamesEmployeeScheme).ToList();
         Assert.True(named.Count >= 4);
-        Assert.All(named, a => Assert.Equal(typeof(EmployeeAppController), (a as ControllerActionDescriptor)?.ControllerTypeInfo.AsType()));
+        Assert.All(named, a => Assert.Contains((a as ControllerActionDescriptor)?.ControllerTypeInfo.AsType(), new[] { typeof(EmployeeAppController), typeof(MeWorkforceController) }));
         var login = Actions.Single(a => a.AttributeRouteInfo?.Template == "api/employee-app/login");
         Assert.Contains(login.EndpointMetadata, m => m is IAllowAnonymous);
     }

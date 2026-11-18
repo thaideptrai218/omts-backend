@@ -407,12 +407,12 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
     }
 
     [Fact]
-    public async Task Probe_d2b_a_request_for_a_day_one_year_ago_is_refused()
+    public async Task Probe_d2b_a_request_for_a_day_more_than_366_days_ago_is_refused()
     {
-        // FAILURE MEANS: a day a year back is accepted (unspecified by the SRS, which only bars days of a Finalized payroll; stricter reading: a bounded look-back). A failure here is a decision to make, not necessarily a bug.
+        // PM decision of 17/11/2026 (d2): a request is not older than the 366 days a leave may span. FAILURE MEANS: an older day is accepted.
         var s = await SetupWorkAsync(factory);
         var (employee, mine) = await AddLinkedEmployeeAsync(s);
-        var old = Today().AddYears(-1);
+        var old = Today().AddDays(-367);
         var requests = new (string What, object Body)[]
         {
             ("leave", Leave(old, old.AddDays(1))),

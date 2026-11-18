@@ -118,7 +118,7 @@ public class SalesInvoiceFromOrderTests
         Assert.Equal(3_459_459m, edited.Money("total"));
         Assert.Equal(500_000m, await owner.CustomerDebtAsync(plan.Sale.CustomerId));
         Assert.Equal(
-            [(ProductStockMovementKind.Harvest, 400m), (ProductStockMovementKind.Sale, -60m), (ProductStockMovementKind.Reversal, 60m), (ProductStockMovementKind.Sale, -70m)],
+            [(ProductStockMovementKind.Harvest, 400m), (ProductStockMovementKind.Sale, -60m), (ProductStockMovementKind.Reversal, 60m), (ProductStockMovementKind.Sale, -70m), (ProductStockMovementKind.LotClose, -330m)],
             await StockRowsAsync(api, plan.Product.Id()));
         Assert.Equal(70m, (await owner.GetOrderAsync(plan.OrderId)).GetProperty("lines")[0].Money("deliveredQuantity"));
 

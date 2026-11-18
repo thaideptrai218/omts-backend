@@ -58,9 +58,9 @@ public sealed class TestRoleTests(AuthApiFactory factory) : IClassFixture<AuthAp
                 Assert.Contains(functions, f => f.GetProperty("function").GetString() == "WORK_ASSIGNMENTS");
             if (role is "ZoneManager" or "Employee")
             {
+                // The employee's own work takes the token of the employee app, which a persona of an account does not hold (LABOR-03).
                 var day = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
-                var personal = await client.GetFromJsonAsync<JsonElement>($"/api/me/workforce?from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}");
-                Assert.Equal(JsonValueKind.String, personal.GetProperty("employeeId").ValueKind);
+                Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/api/me/workforce?from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}")).StatusCode);
             }
             if (role != "Owner")
             {

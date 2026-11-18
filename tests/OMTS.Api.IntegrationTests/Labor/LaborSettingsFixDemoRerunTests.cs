@@ -23,7 +23,7 @@ public class LaborSettingsFixDemoRerunTests
         var (accountant, _) = await LoginNewAsync(host.App, StaffRole.Accountant);
         var jobTypes = await accountant.GetFromJsonAsync<JsonElement>(JobTypes);
         var items = jobTypes.GetProperty("items").EnumerateArray().ToList();
-        Assert.Equal(4, items.Count);
+        Assert.Equal(5, items.Count);
         foreach (var jobType in items)
         {
             await (await accountant.PutAsJsonAsync($"{JobTypes}/{jobType.IdOf()}/name", new { name = $"Đã đổi {jobType.Str("name")}", rowVersion = jobType.VersionOf() })).BodyAsync(HttpStatusCode.OK);
@@ -58,6 +58,6 @@ public class LaborSettingsFixDemoRerunTests
 
         var added = await host.QueryAsync(db => db.EmployeeJobTypes.Where(l => l.Employee.PhoneNumber == plannedPhone).Select(l => l.JobTypeId).ToListAsync());
         Assert.Equal([harvesting.IdOf()], added);
-        Assert.Equal(4, await host.QueryAsync(db => db.JobTypes.CountAsync()));
+        Assert.Equal(5, await host.QueryAsync(db => db.JobTypes.CountAsync()));
     }
 }

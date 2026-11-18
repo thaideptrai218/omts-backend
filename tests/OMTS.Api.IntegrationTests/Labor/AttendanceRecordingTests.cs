@@ -101,14 +101,16 @@ public class AttendanceRecordingTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task The_qr_code_needs_an_employee_profile_linked_to_the_account_and_a_working_employee()
+    public async Task The_qr_code_needs_the_employee_app_token_of_a_working_employee()
     {
         var s = await SetupWorkAsync(factory);
-        Assert.Equal("MSG-GEN-08", await (await s.Manager.GetAsync($"{Me}/attendance-qr")).ErrorCodeAsync());
+        // A staff account's token is not an employee's (LABOR-03): the route does not know it.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await s.Manager.GetAsync($"{Me}/attendance-qr")).StatusCode);
 
         var (employee, client) = await AddLinkedEmployeeAsync(s);
         await EndAsync(s.Owner, employee);
-        Assert.Equal("MSG-GEN-09", await (await client.GetAsync($"{Me}/attendance-qr")).ErrorCodeAsync());
+        // Ending the employment revokes the sessions of the employee app.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Me}/attendance-qr")).StatusCode);
     }
 
     [Fact]

@@ -76,6 +76,17 @@ internal static class EmployeeAppKit
     /// <summary>A client carrying the access token of an employee app login.</summary>
     public static HttpClient AsEmployee(this AuthApiFactory factory, JsonElement tokens) => WithBearer(factory.CreateClient(), tokens.GetProperty("accessToken").GetString()!);
 
+    /// <summary>
+    /// A client carrying the employee-app token of the employee (<c>/api/me/*</c> takes no other): <paramref name="issuer"/> (the Owner or the Zone Manager of the zone) issues a code
+    /// and the employee logs in with it on a new phone.
+    /// </summary>
+    public static async Task<HttpClient> EmployeeClientAsync(HttpClient issuer, Func<HttpClient> newClient, Guid employeeId, string phone)
+    {
+        var code = await IssueCodeAsync(issuer, employeeId);
+        var tokens = await (await LoginWithCodeAsync(newClient(), phone, code)).JsonAsync(HttpStatusCode.OK);
+        return WithBearer(newClient(), tokens.GetProperty("accessToken").GetString()!);
+    }
+
     public static HttpClient WithBearer(HttpClient client, string token)
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

@@ -193,7 +193,7 @@ public sealed class PurchaseStaffingService(
         {
             var assignment = new WorkAssignment
             {
-                EmployeeId = invite.EmployeeId, Date = plan.WorkDate, RaftId = plan.RaftId, JobTypeId = plan.JobTypeId, AssignedByAccountId = owner,
+                EmployeeId = invite.EmployeeId, Date = plan.WorkDate, RaftId = plan.RaftId, ZoneId = plan.Raft.ZoneId, JobTypeId = plan.JobTypeId, AssignedByAccountId = owner,
             };
             assignments.Add(assignment);
             var profile = (await employeeProfiles.GetForEditAsync(invite.EmployeeId, ct))!;

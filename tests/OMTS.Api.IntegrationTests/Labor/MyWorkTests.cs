@@ -18,15 +18,12 @@ public class MyWorkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
     private static string Range(DateOnly from, DateOnly to) => $"{Me}/workforce?from={Day(from)}&to={Day(to)}";
 
     [Fact]
-    public async Task An_account_without_an_employee_profile_sees_nothing()
+    public async Task Only_the_employee_app_token_of_an_employee_reads_their_work()
     {
         var s = await SetupWorkAsync(factory);
 
-        var work = await s.Manager.GetFromJsonAsync<JsonElement>(Range(Today(), Today()));
-
-        Assert.Equal(JsonValueKind.Null, work.GetProperty("employeeId").ValueKind);
-        Assert.Equal(JsonValueKind.Null, work.GetProperty("name").ValueKind);
-        Assert.All(new[] { "assignments", "attendance", "requests" }, p => Assert.Equal(0, work.GetProperty(p).GetArrayLength()));
+        // A staff account's token is not an employee's (LABOR-03), and neither is no token.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await s.Manager.GetAsync(Range(Today(), Today()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync(Range(Today(), Today()))).StatusCode);
     }
 
@@ -34,11 +31,12 @@ public class MyWorkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
     public async Task The_period_is_at_most_62_days_and_ends_after_it_starts()
     {
         var s = await SetupWorkAsync(factory);
+        var (_, mine) = await AddLinkedEmployeeAsync(s);
 
-        Assert.Equal("Period", await FieldAsync(await s.Manager.GetAsync(Range(Today(), Today().AddDays(-1)))));
-        Assert.Equal("Period", await FieldAsync(await s.Manager.GetAsync(Range(Today(), Today().AddDays(62)))));
-        Assert.Equal(HttpStatusCode.OK, (await s.Manager.GetAsync(Range(Today(), Today().AddDays(61)))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await s.Manager.GetAsync($"{Me}/workforce")).StatusCode);
+        Assert.Equal("Period", await FieldAsync(await mine.GetAsync(Range(Today(), Today().AddDays(-1)))));
+        Assert.Equal("Period", await FieldAsync(await mine.GetAsync(Range(Today(), Today().AddDays(62)))));
+        Assert.Equal(HttpStatusCode.OK, (await mine.GetAsync(Range(Today(), Today().AddDays(61)))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await mine.GetAsync($"{Me}/workforce")).StatusCode);
     }
 
     [Fact]

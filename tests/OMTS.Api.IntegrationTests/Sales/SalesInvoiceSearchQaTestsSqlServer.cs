@@ -128,7 +128,7 @@ public class SalesInvoiceSearchQaTestsSqlServer(ITestOutputHelper output)
             db.SalesInvoices.Add(invoice);
             db.Set<SalesInvoiceLine>().AddRange(Enumerable.Range(1, lines).Select(n => new SalesInvoiceLine
             {
-                InvoiceId = invoice.Id, LineNumber = n, ProductId = s.ProductId, HarvestLotId = s.LotId, Kg = 1m, UnitPrice = 1_000m, ListPrice = 1_000m, Amount = 1_000m,
+                InvoiceId = invoice.Id, LineNumber = n, ProductId = s.ProductId, HarvestLotId = s.LotId, Kg = 1m, Quantity = 1m, UnitPrice = 1_000m, ListPrice = 1_000m, Amount = 1_000m,
             }));
             db.CustomerPayments.AddRange(Enumerable.Range(0, payments).Select(_ => Payment(customer, invoice.Id, s.Manager.Account.Id)));
             db.Notifications.AddRange(Enumerable.Range(0, sendings).Select(_ => Sending(invoice.Id)));

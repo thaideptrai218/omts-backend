@@ -27,9 +27,11 @@ public class ProvenancePageAccessTests
         var asManager = await sale.Manager.Client.GetProvenanceAsync(token);
 
         Assert.Equal(HttpStatusCode.OK, anonymous.StatusCode);
-        var page = await anonymous.Content.ReadAsStringAsync();
-        Assert.Equal(page, await asOwner.Content.ReadAsStringAsync());
-        Assert.Equal(page, await asManager.Content.ReadAsStringAsync());
+        // The signed photo links carry the expiry second of each request: only that part may differ.
+        static string Unsigned(string html) => System.Text.RegularExpressions.Regex.Replace(html, @"expires=\d+&sig=[0-9a-f]+", "signed");
+        var page = Unsigned(await anonymous.Content.ReadAsStringAsync());
+        Assert.Equal(page, Unsigned(await asOwner.Content.ReadAsStringAsync()));
+        Assert.Equal(page, Unsigned(await asManager.Content.ReadAsStringAsync()));
         Assert.True(anonymous.Headers.CacheControl?.NoStore, anonymous.Headers.CacheControl?.ToString());
     }
 

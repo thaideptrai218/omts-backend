@@ -108,6 +108,7 @@ public class LaborSettingsQaDemoTests
                 ("Treo giống", 35_000m, thisMonth.AddMonths(-6)), ("Treo giống", 36_000m, thisMonth.AddMonths(1)),
                 ("Vệ sinh dây giàn", 30_000m, thisMonth.AddMonths(-6)),
                 ("Đóng gói tại bè", 28_000m, thisMonth.AddMonths(-6)),
+                ("Ươm", 30_000m, thisMonth.AddMonths(-6)),
             ],
             rates.Select(r => (r.Name, r.HourlyRate, r.EffectiveFrom)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.EffectiveFrom));
         Assert.Equal("Đóng gói tại bè", await host.QueryAsync(db => db.JobTypes.Where(j => j.StatusId == StatusIds.Usage.Discontinued).Select(j => j.Name).SingleAsync()));

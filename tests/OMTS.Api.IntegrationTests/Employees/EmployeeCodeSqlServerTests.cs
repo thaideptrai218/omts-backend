@@ -93,7 +93,8 @@ public class EmployeeCodeSqlServerTests
         Assert.Equal($"{tag} B", (await NamesAsync("sortBy=type&sortDir=desc"))[0]);
         Assert.Equal($"{tag} B", (await NamesAsync("sortBy=type"))[^1]);
         Assert.Equal([$"{tag} C", $"{tag} B", $"{tag} A"], await NamesAsync("sortBy=code&sortDir=desc"));
-        Assert.Equal($"{tag} C", (await NamesAsync("sortBy=phone"))[0]);
+        // B and C have no phone, so they come first in an order the server picks; A, the only one with a phone, is last.
+        Assert.Equal($"{tag} A", (await NamesAsync("sortBy=phone"))[^1]);
         // The code of the first employee is the first number of the counter after the codes the migration gave: NV000001 on a new database.
         Assert.Equal("NV000001", a.GetProperty("employee").GetProperty("code").GetString());
         // Search by code is case-insensitive on SQL Server.

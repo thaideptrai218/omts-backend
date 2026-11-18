@@ -39,15 +39,11 @@ public class LaborProbeSqlServerTests
     private static async Task<Guid> NewEmployeeAsync(ProbeSetup s) =>
         IdOf(await CreateAsync(s.Owner, Profile($"Worker {NewCode()}", NewPhone(), s.Zone.Id)));
 
-    /// <summary>The employee reads and sends their own work through an account linked to the profile.</summary>
+    /// <summary>The employee reads and sends their own work with the token of a login to the employee app.</summary>
     private static async Task<HttpClient> LinkedClientAsync(ProbeSetup s, Guid employeeId)
     {
-        var password = NewPassword();
-        var account = await s.Api.AddAccountAsync($"nv{NewCode()}", password);
-        await ChangeAsync(s.Api, db => db.Employees.Single(e => e.Id == employeeId).AccountId = account.Id);
-        var client = s.Api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await LoginTokensAsync(client, account.Username, password)).GetProperty("accessToken").GetString());
-        return client;
+        var phone = await QueryAsync(s.Api, db => db.Employees.Where(e => e.Id == employeeId).Select(e => e.PhoneNumber!).SingleAsync());
+        return await EmployeeAppKit.EmployeeClientAsync(s.Owner, s.Api.CreateClient, employeeId, phone);
     }
 
     // ------------------------------------------------------------------------------------------------------------------------------

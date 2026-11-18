@@ -211,8 +211,9 @@ public class SalesInvoiceCorrectionTests
         Assert.Equal((sale.CustomerId, 240_000m), (edited.GetProperty("customer").Id(), edited.Money("total")));
         Assert.Equal(140_000m, await owner.CustomerDebtAsync(sale.CustomerId));
         Assert.Equal((Guid?)sale.CustomerId, Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
+        // An edit of the invoice sends nothing to the trader again: only the message of the end of the sale is in the inbox.
         var sms = api.SmsTo(await api.PhoneOfAsync(sale.CustomerId));
-        Assert.Contains(sms, m => m.Text.Contains("(corrected)", StringComparison.Ordinal));
+        Assert.DoesNotContain(sms, m => m.Text.Contains("(corrected)", StringComparison.Ordinal));
         var audit = Assert.Single(await api.InvoiceAuditAsync(sold.Id(), SalesInvoiceCorrectionWriter.CorrectedAction));
         Assert.Contains("300000", audit.Before);
         Assert.Contains("240000", audit.After);

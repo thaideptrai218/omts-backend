@@ -42,9 +42,12 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
         var created = 0;
         if (await OldestLotAsync(context, DemoFarmingZoneStep.ZoneOne, cancellationToken) is { } lotOne)
         {
-            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneOne, "quanlyvung1", lotOne.ZoneId, buyer, milky, 120m, cancellationToken);
+            // A lot split per product sells only its own product, which is the one its cycle farms; a lot with no product line takes the usual one.
+            var productOne = lotOne.ProductId ?? milky;
+            var priceOne = await ListPriceAsync(context, productOne, cancellationToken);
+            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneOne, "quanlyvung1", lotOne.ZoneId, buyer, productOne, 120m, cancellationToken);
             var invoiceId = await SellAsync(context, DemoFarmingZoneStep.ZoneOne, "quanlyvung1", new CreateSalesInvoiceRequest(
-                buyer, false, lotOne.ZoneId, [new SalesInvoiceLineEntry(milky, lotOne.Id, 120m, SalesOrderLineId: lineId)], new SalesInvoicePaymentEntry(120m * 60_000m),
+                buyer, false, lotOne.ZoneId, [new SalesInvoiceLineEntry(productOne, lotOne.Id, 120m, SalesOrderLineId: lineId)], new SalesInvoicePaymentEntry(120m * priceOne),
                 NotSoldWholeLotIds: [lotOne.Id], SalesOrderId: orderId), cancellationToken);
             await FinishWithQrCodeAsync(context, invoiceId, lotOne.ZoneId, cancellationToken);
             created++;
@@ -52,9 +55,10 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
 
         if (await OldestLotAsync(context, DemoFarmingZoneStep.ZoneTwo, cancellationToken) is { } lotTwo)
         {
-            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", lotTwo.ZoneId, trader, fat, 80m, cancellationToken);
+            var productTwo = lotTwo.ProductId ?? fat;
+            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", lotTwo.ZoneId, trader, productTwo, 80m, cancellationToken);
             await SellAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", new CreateSalesInvoiceRequest(
-                trader, false, lotTwo.ZoneId, [new SalesInvoiceLineEntry(fat, lotTwo.Id, 80m, SalesOrderLineId: lineId)],
+                trader, false, lotTwo.ZoneId, [new SalesInvoiceLineEntry(productTwo, lotTwo.Id, 80m, SalesOrderLineId: lineId)],
                 new SalesInvoicePaymentEntry(1_000_000m, SalesInvoiceRestPayment.PayLater, PayLaterOwnerAgreed: true),
                 NotSoldWholeLotIds: [lotTwo.Id], SalesOrderId: orderId), cancellationToken);
             created++;
@@ -83,16 +87,20 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
     }
 
     /// <summary>The first lot of the first raft of the zone, still for sale: the newest one of the raft is left alone, so it can still be removed.</summary>
-    private static async Task<(Guid Id, Guid ZoneId)?> OldestLotAsync(DemoSeedContext context, string zoneCode, CancellationToken cancellationToken)
+    private static async Task<(Guid Id, Guid ZoneId, Guid? ProductId)?> OldestLotAsync(DemoSeedContext context, string zoneCode, CancellationToken cancellationToken)
     {
         var raftCode = DemoRaftStep.RaftCode(zoneCode, 1);
         var lot = await context.Db.HarvestLots.AsNoTracking()
             .Where(l => l.Raft.Zone.Code == zoneCode && l.Raft.Code == raftCode && (l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened))
             .OrderBy(l => l.LotCode)
-            .Select(l => new { l.Id, l.Raft.ZoneId })
+            .Select(l => new { l.Id, l.Raft.ZoneId, ProductId = l.ProductLines.OrderBy(p => p.Id).Select(p => (Guid?)p.ProductId).FirstOrDefault() })
             .FirstOrDefaultAsync(cancellationToken);
-        return lot is null ? null : (lot.Id, lot.ZoneId);
+        return lot is null ? null : (lot.Id, lot.ZoneId, lot.ProductId);
     }
+
+    /// <summary>The price on the list of one kg of the product (its base unit).</summary>
+    private static Task<decimal> ListPriceAsync(DemoSeedContext context, Guid productId, CancellationToken cancellationToken) =>
+        context.Db.ProductUnits.AsNoTracking().Where(u => u.ProductId == productId && u.IsBase).Select(u => u.SalePrice).FirstAsync(cancellationToken);
 
     /// <summary>The order the sale is made from, saved through the service the API uses as the same Zone Manager (a sale at the port): one line of the product in kg at its list price.</summary>
     private static async Task<(Guid OrderId, Guid LineId)> OrderAsync(

@@ -167,23 +167,19 @@ public class SalesInvoiceExportTests
         var client = sale.Manager.Client;
         var ordered = await client.SoldAsync(sale, sale.LotId, 2m);
         var plain = await client.SoldAsync(sale, sale.LotId, 3m);
-        var orderCode = "DH" + AcsTestKit.NewCode();
-        var request = new PurchaseRequest
-        {
-            Code = orderCode, CustomerId = sale.CustomerId, ProductId = sale.ProductId, ProductName = "Oyster", RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow,
-        };
-        await api.UseDbAsync(db => db.PurchaseRequests.Add(request));
-        await api.UpdateAsync<SalesInvoice>(ordered.Id(), i => i.PurchaseRequestId = request.Id);
+        // Every invoice has its order (DH code): the filter reads the code of that order, and "contains" finds it by a part of the digits.
+        var orderCode = ordered.GetProperty("salesOrder").Text("code")!;
+        Assert.NotEqual(orderCode, plain.GetProperty("salesOrder").Text("code"));
 
         var list = await client.InvoiceListAsync(Query(("orderCode", orderCode)));
         Assert.Equal([ordered.Text("code")], list.Codes());
-        Assert.Equal(orderCode, list.Rows()[0].Text("orderCode"));
-        Assert.Equal([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[..4] + " ")))).Codes());
+        Assert.Equal(orderCode, list.Rows()[0].GetProperty("salesOrder").Text("code"));
+        Assert.Equal([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[2..] + " ")))).Codes());
         var wildcard = await client.InvoiceListAsync(Query(("orderCode", "DH%")));
         Assert.Equal(("MSG-GEN-10", 0), (wildcard.Text("messageCode"), wildcard.Rows().Count));
         var all = await client.InvoiceListAsync();
         Assert.Equal(2, all.Rows().Count);
-        Assert.Equal(JsonValueKindNull, all.Rows().Single(r => r.Text("code") == plain.Text("code")).GetProperty("orderCode").ValueKind);
+        Assert.Equal(plain.GetProperty("salesOrder").Text("code"), all.Rows().Single(r => r.Text("code") == plain.Text("code")).GetProperty("salesOrder").Text("code"));
 
         using var file = await WorkbookAsync(await client.ExportInvoicesAsync(Query(("orderCode", orderCode))));
         var sheet = file.Worksheet(SalesInvoiceExportSheets.ListSheet);

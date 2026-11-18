@@ -74,7 +74,7 @@ public sealed class NurseryCycleStartTests
     }
 
     [Fact]
-    public async Task A_cycle_starts_without_plan_photos()
+    public async Task A_cycle_started_without_plan_photos_shows_the_photos_of_its_nursery_batch()
     {
         using var api = new AuthApiFactory();
         var world = await api.NurseryWorldAsync();
@@ -83,7 +83,9 @@ public sealed class NurseryCycleStartTests
 
         var started = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 0)).ReadAsync(HttpStatusCode.Created);
 
-        Assert.Equal(0, started.GetProperty("cycle").GetProperty("planPhotos").GetArrayLength());
+        // No photo sent: the cycle shows the photo of the batch, and no plan photo is stored for it.
+        Assert.Equal(1, started.GetProperty("cycle").GetProperty("planPhotos").GetArrayLength());
+        Assert.True(started.GetProperty("cycle").GetProperty("planPhotosFromNursery").GetBoolean());
         Assert.Empty(api.StoredFiles(FileCategories.CyclePlanPhotos));
     }
 

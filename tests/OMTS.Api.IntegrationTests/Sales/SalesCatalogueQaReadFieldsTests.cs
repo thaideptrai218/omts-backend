@@ -37,7 +37,13 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         var manager = await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
         var traderAccount = await factory.AddAccountAsync(NewCode(), StaffPassword, SubjectType.Trader);
         var trader = await factory.LoginAsync(traderAccount.Username, StaffPassword);
-        string[] productFields = ["id", "name", "rowVersion", "status", "statusId", "unitPrice"];
+        string[] productFields =
+        [
+            "categoryId", "categoryName", "code", "createdAt", "createdBy", "description", "id", "isUsed", "maxKg", "minKg", "name", "note", "onHandKg", "photoUrl", "rowVersion", "status",
+            "statusId", "unit", "unitPrice", "units",
+        ];
+        // A seller also reads the photos and the seed items a product comes from.
+        string[] sellerFields = [.. productFields, "photos", "sourceSeeds"];
 
         foreach (var url in new[] { $"/api/products?search={tag}", $"/api/products?search={tag}&statusId={StatusIds.Usage.Discontinued}" })
         {
@@ -53,7 +59,7 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         Assert.DoesNotContain("43000", discontinued.GetRawText());
 
         var forManager = await (await manager.GetAsync($"/api/products/{inUse.Id()}")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(productFields, Keys(forManager));
+        Assert.Equal(sellerFields.Order(StringComparer.Ordinal), Keys(forManager));
         Assert.Equal(42_000, forManager.GetProperty("unitPrice").GetDecimal());
     }
 
@@ -76,7 +82,7 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         Assert.Equal(
             Sorted(
                 [
-                    "address", "addressNeedsReview", "bankAccountNumber", "bankBin", "bankName", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "debtDays", "email", "facebook",
+                    "address", "addressNeedsReview", "bankAccountNumber", "bankBin", "bankName", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook",
                     "gender", "id", "isUsed", "mergedIntoCustomerId", "name", "note", "personalTaxId", "phoneLocked", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion",
                     "status", "statusId", "taxCode", "traderAccount", "ward",
                 ],

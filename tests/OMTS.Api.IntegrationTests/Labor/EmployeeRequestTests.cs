@@ -88,15 +88,17 @@ public class EmployeeRequestTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     [Fact]
-    public async Task A_request_needs_an_employee_profile_linked_to_the_account_and_a_working_employee()
+    public async Task A_request_needs_the_employee_app_token_of_a_working_employee()
     {
         var s = await SetupWorkAsync(factory);
-        Assert.Equal("MSG-GEN-08", await (await SubmitAsync(s.Manager, Leave(Today(), Today()))).ErrorCodeAsync());
+        // A staff account's token is not an employee's (LABOR-03), and neither is no token.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SubmitAsync(s.Manager, Leave(Today(), Today()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SubmitAsync(factory.CreateClient(), Leave(Today(), Today()))).StatusCode);
         var (employee, mine) = await AddLinkedEmployeeAsync(s);
         await EndAsync(s.Owner, employee);
 
-        Assert.Equal("MSG-GEN-09", await (await SubmitAsync(mine, Leave(Today(), Today()))).ErrorCodeAsync());
+        // Ending the employment revokes the sessions of the employee app.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SubmitAsync(mine, Leave(Today(), Today()))).StatusCode);
     }
 
     [Fact]

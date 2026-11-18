@@ -98,13 +98,13 @@ public class SalesCatalogueQaProductTests(AuthApiFactory factory) : IClassFixtur
         var off = await (await owner.PostAsync($"/api/products/{product.Id()}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Discontinued", off.Text("status"));
         var refused = await (await owner.PostAsync($"/api/products/{product.Id()}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        Assert.Equal($"Product {name} is Discontinued and cannot be used for this action.", refused.Text("detail"));
+        Assert.Equal($"Product {product.Text("code")} is Discontinued and cannot be used for this action.", refused.Text("detail"));
 
         var resumed = await (await owner.PostAsync($"/api/products/{product.Id()}/resume", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("In Use", resumed.Text("status"));
         Assert.Equal(name, resumed.Text("name"));
         var again = await (await owner.PostAsync($"/api/products/{product.Id()}/resume", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        Assert.Equal($"Product {name} is In Use and cannot be used for this action.", again.Text("detail"));
+        Assert.Equal($"Product {product.Text("code")} is In Use and cannot be used for this action.", again.Text("detail"));
     }
 
     // A rename keeps the old name out of the unique check, and the old name is free again.

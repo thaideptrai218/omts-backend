@@ -51,7 +51,9 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         foreach (var answer in answers)
         {
             var text = await answer.Content.ReadAsStringAsync();
-            Assert.True(answer.IsSuccessStatusCode || answer.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound, $"{(int)answer.StatusCode}: {text}");
+            // A correction that reads the photos of a lot just after a parallel removal took them is refused with "Keep only photos of this lot" (400): a refusal, never a 500.
+            var photosGone = answer.StatusCode == HttpStatusCode.BadRequest && text.Contains("Keep only photos of this lot", StringComparison.Ordinal);
+            Assert.True(answer.IsSuccessStatusCode || answer.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound || photosGone, $"{(int)answer.StatusCode}: {text}");
         }
     }
 

@@ -92,7 +92,8 @@ public class HarvestLotsMigrationAndDemoTests
         Assert.Equal(120, await RecordCodeLengthAsync(db, "AuditEvents", "RecordCode"));
         Assert.Equal(120, await RecordCodeLengthAsync(db, "Notifications", "RelatedRecordCode"));
 
-        Assert.Equal(["CLOSED", "OPEN", "REOPENED"], await db.Statuses.Where(s => s.Group == StatusGroups.HarvestLot).Select(s => s.Code).OrderBy(c => c).ToListAsync());
+        // A lot is first Awaiting weighing (harvest weighing).
+        Assert.Equal(["AWAITING_WEIGHING", "CLOSED", "OPEN", "REOPENED"], await db.Statuses.Where(s => s.Group == StatusGroups.HarvestLot).Select(s => s.Code).OrderBy(c => c).ToListAsync());
         Assert.Equal([150, 151, 152], await db.StatusTransitions.Where(t => t.Id >= 150 && t.Id <= 152).Select(t => t.Id).OrderBy(i => i).ToListAsync());
 
         // Rows of a lot on both sides of the Down: it goes, and what it pointed to stays.
@@ -169,7 +170,8 @@ public class HarvestLotsMigrationAndDemoTests
                 Assert.Equal(50m, l.KgPerCage);
             });
             Assert.Contains(lots, l => l.EstimatedKg == 180m && l.CageCount == 4);
-            Assert.Contains(lots, l => l.EstimatedKg == l.CageCount * 50m);
+            // Without a product line the estimate is the cages times the 25 kg of a cage ("Lồng") of the product.
+            Assert.Contains(lots, l => l.EstimatedKg == l.CageCount * 25m);
             Assert.Contains(lots, l => l.Raft == "B1-02" && l.Finished >= 2);
             // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): the demo gives each of its five lots one.
 
@@ -197,6 +199,7 @@ public class HarvestLotsMigrationAndDemoTests
                 var id = await db.HarvestLots.Where(l => l.Raft.Code == "B1-02").Select(l => l.Id).SingleAsync();
                 await db.HarvestLotLanes.Where(l => l.LotId == id).ExecuteDeleteAsync();
                 await db.HarvestLotPhotos.Where(p => p.LotId == id).ExecuteDeleteAsync();
+                await db.HarvestLotProductLines.Where(p => p.LotId == id).ExecuteDeleteAsync();
                 return await db.HarvestLots.Where(l => l.Id == id).ExecuteDeleteAsync();
             });
             Assert.Equal(1, gone);

@@ -219,6 +219,13 @@ public class SeedingRaceTests
             var removed = answers[1].StatusCode == HttpStatusCode.NoContent;
             Assert.Equal(!removed, await host.QueryAsync(db => db.SeedingRecords.AnyAsync(r => r.Id == record.Id())));
             Assert.True(answers.Count(a => a.IsSuccessStatusCode) <= 1);
+
+            // A session the correction kept would fill its lane for the rounds that come back to it: remove it, so each round starts with the lanes free.
+            if (!removed)
+            {
+                var current = await owner.GetSeedingAsync(record.Id());
+                (await owner.RemoveSeedingAsync(record.Id(), rowVersion: current.Text("rowVersion"))).EnsureSuccessStatusCode();
+            }
         }
     }
 
