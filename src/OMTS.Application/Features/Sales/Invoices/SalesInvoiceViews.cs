@@ -69,7 +69,7 @@ public sealed class SalesInvoiceViews(
         var names = await accounts.GetDisplayNamesAsync(people, cancellationToken);
         var lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesInvoiceLineView(
             l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot,
-            new SalesInvoiceUnitView(l.UnitId, l.UnitCode, l.UnitName, l.Factor), l.Quantity, l.SalesOrderLineId, l.Product.SizeMinCm, l.Product.SizeMaxCm)).ToList();
+            new SalesInvoiceUnitView(l.UnitId, l.UnitCode, l.UnitName, l.Factor), l.Quantity, l.SalesOrderLineId, l.Product.SizeMinCm, l.Product.SizeMaxCm, l.HarvestLot.HarvestDate)).ToList();
         var payments = invoice.Payments.OrderBy(p => p.CreatedAt).ThenBy(p => p.Code).Select(p => new CustomerPaymentView(
             p.Id, p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.CreatedAt, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId),
             p.CollectedByAccountId is { } collector ? Person(collector, names) : null)).ToList();

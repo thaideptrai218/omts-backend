@@ -55,7 +55,7 @@ public sealed partial class ProvenancePageService(
     }
 
     // The page is never cached, but a photo the browser loads later (a gallery opened, a lazy image) must still open: links live as long as the page is read (design §3).
-    private static readonly TimeSpan PhotoLinkLifetime = TimeSpan.FromHours(1);
+    private static readonly TimeSpan PhotoLinkLifetime = TimeSpan.FromMinutes(10);
 
     // The shape of every QR code SALE-05 gives: 128 random bits in base64url, 22 characters (BR-TRACE-02). Anything else is not looked up.
     [GeneratedRegex(@"\A[A-Za-z0-9_-]{22}\z")]

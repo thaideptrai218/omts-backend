@@ -73,20 +73,33 @@ public sealed class AttendanceRecordingService(
         }
 
         var today = timeProvider.Today();
-        if (assignment.Date != today)
+        // A night shift (L2): yesterday's row can still be checked out, up to 18 hours after its check-in. The day worked stays the day of the check-in.
+        var day = assignment.Date;
+        if (day != today && !await IsOpenOvernightShiftAsync(assignment, isCheckIn, today, cancellationToken))
         {
             return AppError.Invalid("Date (today only)");
         }
 
         var employee = (await employeeReader.GetForWorkAsync([assignment.EmployeeId], cancellationToken))[0];
-        var recorded = await RecordAsync(employee, today, isCheckIn, request, currentZone, cancellationToken);
+        var recorded = await RecordAsync(employee, day, isCheckIn, request, currentZone, cancellationToken);
         if (!recorded.IsSuccess)
         {
             return recorded.Error!;
         }
 
-        var row = (await RowsAsync([employee.Id], today, cancellationToken))[0];
+        var row = (await RowsAsync([employee.Id], day, cancellationToken))[0];
         return row with { Message = recorded.Value!.Message.Text, MessageCode = recorded.Value.Message.Code };
+    }
+
+    private async Task<bool> IsOpenOvernightShiftAsync(WorkAssignment assignment, bool isCheckIn, DateOnly today, CancellationToken cancellationToken)
+    {
+        if (isCheckIn || assignment.Date != today.AddDays(-1))
+        {
+            return false;
+        }
+
+        var record = await attendances.GetAsync(assignment.EmployeeId, assignment.Date, cancellationToken);
+        return record?.CheckInAt is { } checkIn && WorkRules.Now(timeProvider) - checkIn <= WorkRules.MaxShift;
     }
 
     private async Task<Result<StaffAttendanceView>> RecordStaffAsync(Guid employeeId, RecordAttendanceRequest request, bool isCheckIn, CancellationToken cancellationToken)

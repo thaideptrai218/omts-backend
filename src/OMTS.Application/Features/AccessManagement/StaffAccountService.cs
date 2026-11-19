@@ -38,10 +38,10 @@ public sealed class StaffAccountService(
     public const int MaxDisplayNameLength = 200;
     public const int MaxReasonLength = 1000;
 
-    public async Task<Paged<StaffAccountView>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Paged<StaffAccountView>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false)
     {
         (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
-        var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken);
+        var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly);
         // One query each for the linked employees and the pairs of the whole page.
         var accountIds = items.Select(a => a.Id).ToList();
         var employeeIds = await employees.GetIdsByAccountIdsAsync(accountIds, cancellationToken);
@@ -96,6 +96,23 @@ public sealed class StaffAccountService(
         }
 
         return created.Value with { Account = await ViewAsync((await accounts.GetByIdAsync(account.Id, cancellationToken))!, cancellationToken) };
+    }
+
+    /// <summary>An Active Staff account that no employee is linked to yet; anything else is MSG-GEN-01 "Account" (NotFound when it does not exist).</summary>
+    public async Task<Result<Account>> GetLinkableAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        if (await accounts.GetByIdAsync(accountId, cancellationToken) is not { } account)
+        {
+            return AppError.NotFound;
+        }
+
+        if (account.SubjectType != SubjectType.Staff || account.StatusId != StatusIds.Account.Active
+            || await employees.GetByAccountIdAsync(account.Id, cancellationToken) is not null)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        return account;
     }
 
     /// <summary>

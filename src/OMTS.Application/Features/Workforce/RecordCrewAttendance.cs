@@ -40,6 +40,7 @@ public static class CrewAttendanceStatus
 public sealed class RecordCrewAttendance(
     IWorkAssignmentRepository assignments,
     IAttendanceRepository attendances,
+    IAttendanceSettingsRepository settings,
     IWorkEmployeeReader employeeReader,
     ZoneAccessGuard zones,
     AuditLogService audit)
@@ -47,7 +48,7 @@ public sealed class RecordCrewAttendance(
     public const string ReasonCode = "ATTENDANCE_OPEN";
     public const string OverrideAudit = "Record.CompletedWithOpenAttendance";
 
-    private sealed record State(bool Assigned, Attendance? Record);
+    private sealed record State(bool Assigned, Attendance? Record, int? PaidMinutes);
 
     /// <summary>The crew of one record as its view shows it: the work time and the attendance status of each member on the day of the record.</summary>
     public async Task<IReadOnlyList<CrewMemberView>> ViewAsync(IEnumerable<IRecordEmployee> crew, DateOnly day, CancellationToken cancellationToken)
@@ -122,14 +123,21 @@ public sealed class RecordCrewAttendance(
     {
         var all = days.Distinct().ToList();
         var states = new Dictionary<CrewDay, State>();
+        var versions = await settings.ListAsync(cancellationToken);
         foreach (var group in all.GroupBy(d => d.Day))
         {
             var ids = group.Select(d => d.EmployeeId).Distinct().ToList();
-            var assigned = (await assignments.ListOfEmployeesAsync(ids, group.Key, cancellationToken)).Select(a => a.EmployeeId).ToHashSet();
+            var periods = (await assignments.ListOfEmployeesAsync(ids, group.Key, cancellationToken)).ToLookup(a => a.EmployeeId);
             var records = (await attendances.ListOfEmployeesAsync(ids, group.Key, cancellationToken)).ToDictionary(a => a.EmployeeId);
+            var inForce = AttendanceSettingsVersion.EffectiveOn(versions, group.Key);
             foreach (var d in group)
             {
-                states[d] = new State(assigned.Contains(d.EmployeeId), records.GetValueOrDefault(d.EmployeeId));
+                var record = records.GetValueOrDefault(d.EmployeeId);
+                // The same paid time as the attendance board and payroll (L14): break taken off, rounded down. With no job period (no assignment) there is nothing to price, so the raw time stays.
+                int? paid = record is { CheckInAt: { } i, CheckOutAt: { } o } && periods.Contains(d.EmployeeId)
+                    ? WorkHoursCalculator.Calculate(i, o, periods[d.EmployeeId], inForce).Jobs.Sum(j => j.Minutes)
+                    : null;
+                states[d] = new State(periods.Contains(d.EmployeeId), record, paid);
             }
         }
 
@@ -137,7 +145,8 @@ public sealed class RecordCrewAttendance(
     }
 
     /// <summary>
-    /// <c>work.minutes</c> is the raw time from check-in to check-out, with no break taken off and no rounding (the paid hours are worked out when shown, from the attendance settings); null until the check-out.
+    /// <c>work.minutes</c> is the paid time of the day: check-in to check-out with the break taken off and rounded down, as the attendance board and payroll count it (one number, L14); with no work assignment it is
+    /// the raw time from check-in to check-out. Null until the check-out.
     /// </summary>
     private static IReadOnlyList<CrewMemberView> Build(IReadOnlyList<IRecordEmployee> members, DateOnly day, IReadOnlyDictionary<CrewDay, State> states) =>
         RecordCrewService.ViewOf(members).Select(view =>
@@ -146,7 +155,7 @@ public sealed class RecordCrewAttendance(
             var record = state.Record;
             var work = record is null ? null : new CrewWorkView(
                 record.CheckInAt, record.CheckOutAt,
-                record.CheckInAt is { } i && record.CheckOutAt is { } o && o > i ? (int)Math.Floor((o - i).TotalMinutes) : null);
+                state.PaidMinutes ?? (record.CheckInAt is { } i && record.CheckOutAt is { } o && o > i ? (int)Math.Floor((o - i).TotalMinutes) : null));
             var status = record?.CheckOutAt is not null ? CrewAttendanceStatus.Done
                 : record?.CheckInAt is not null ? CrewAttendanceStatus.Working
                 : state.Assigned ? CrewAttendanceStatus.NotCheckedIn

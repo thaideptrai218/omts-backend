@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
@@ -31,7 +32,9 @@ public sealed class EmployeeService(
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IEmployeeEndingReader endingReader,
+    TimeProvider timeProvider)
 {
     public async Task<Result<EmployeeSaved>> CreateAsync(SaveEmployeeRequest request, CancellationToken cancellationToken)
     {
@@ -88,7 +91,7 @@ public sealed class EmployeeService(
             return duplicate;
         }
 
-        return await SavedAsync(employee.Id, caller, created, cancellationToken);
+        return await SavedAsync(employee.Id, caller, created, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken));
     }
 
     public async Task<Result<EmployeeSaved>> UpdateAsync(Guid id, SaveEmployeeRequest request, CancellationToken cancellationToken)
@@ -105,7 +108,9 @@ public sealed class EmployeeService(
             return AppError.Forbidden;
         }
 
-        if (employee.StatusId != StatusIds.Employee.Working)
+        // L10: a Left employee may still be owed wages, so the contact and bank fields can be corrected; everything else (name, code, type, zones, job types) stays as it was.
+        var left = employee.StatusId == StatusIds.Employee.Left;
+        if (employee.StatusId != StatusIds.Employee.Working && !left)
         {
             return AppError.Conflict(UserMessages.WrongStatus("Employee", statusCatalog.DisplayNameOf(employee.StatusId)));
         }
@@ -131,14 +136,29 @@ public sealed class EmployeeService(
         }
 
         var input = checkedInput.Value!;
-        var zoneIds = EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller);
+        var zoneIds = left ? employee.WorkingZones.Select(w => w.ZoneId).ToList() : EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller);
+        var jobTypeIds = left ? employee.JobTypes.Select(j => j.JobTypeId).ToList() : input.JobTypeIds;
         var before = EmployeeProfileChanges.Snapshot(employee, employee.WorkingZones.Select(w => w.ZoneId).ToList(), employee.JobTypes.Select(j => j.JobTypeId).ToList());
         var accountNumberBefore = employee.BankAccount?.AccountNumber;
         var phoneBefore = employee.PhoneNumber;
-        EmployeeProfileChanges.ApplyFields(employee, input);
-        var zonesChanged = EmployeeProfileChanges.SyncZones(employees, employee, zoneIds);
-        var jobTypesChanged = EmployeeProfileChanges.SyncJobTypes(employees, employee, input.JobTypeIds);
-        var typeChanged = input is { Type: { } type, TypeFrom: { } from } && EmployeeProfileChanges.ChangeType(employees, employee, type, from);
+        var (zonesChanged, jobTypesChanged, typeChanged) = (false, false, false);
+        if (left)
+        {
+            EmployeeProfileChanges.ApplyContactAndBank(employee, input);
+        }
+        else
+        {
+            // A working zone that still has assignments from today on cannot be taken off the profile (L16).
+            if (await RefuseZoneRemovalAsync(employee, zoneIds, cancellationToken) is { } stillAssigned)
+            {
+                return stillAssigned;
+            }
+
+            EmployeeProfileChanges.ApplyFields(employee, input);
+            zonesChanged = EmployeeProfileChanges.SyncZones(employees, employee, zoneIds);
+            jobTypesChanged = EmployeeProfileChanges.SyncJobTypes(employees, employee, input.JobTypeIds);
+            typeChanged = input is { Type: { } type, TypeFrom: { } from } && EmployeeProfileChanges.ChangeType(employees, employee, type, from);
+        }
 
         // These are rows of their own: the profile itself must still get a new version and "last updated by".
         if (zonesChanged || jobTypesChanged || typeChanged)
@@ -153,7 +173,7 @@ public sealed class EmployeeService(
             await employeeApp.RevokeAsync(employee.Id, OMTS.Domain.Enums.EmployeeDeviceUnlinkReason.PhoneChanged, cancellationToken);
         }
 
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, EmployeeProfileChanges.Snapshot(employee, zoneIds, input.JobTypeIds, accountNumberBefore));
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, EmployeeProfileChanges.Snapshot(employee, zoneIds, jobTypeIds, accountNumberBefore));
         if (changedAfter is not null)
         {
             audit.Record(new AuditEntry("Employee.Updated", nameof(Employee)) { RecordId = employee.Id, Before = changedBefore, After = changedAfter });
@@ -164,7 +184,19 @@ public sealed class EmployeeService(
             return duplicate;
         }
 
-        return await SavedAsync(employee.Id, caller, null, cancellationToken);
+        return await SavedAsync(employee.Id, caller, null, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken));
+    }
+
+    /// <summary>L16: the same ID number on another profile is a warning, not an error (a person may be re-hired as a new profile); the client shows it after the save.</summary>
+    private async Task<EmployeeIdNumberWarning?> DuplicateIdNumberAsync(Employee employee, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(employee.IdNumber) || await employees.FindWithIdNumberAsync(employee.IdNumber, employee.Id, cancellationToken) is not { } other)
+        {
+            return null;
+        }
+
+        return new EmployeeIdNumberWarning(
+            other.Id, other.Code, other.FullName, $"Số CCCD này cũng đang có ở hồ sơ {other.FullName}{(other.Code is null ? string.Empty : $" ({other.Code})")}. Hồ sơ vẫn được lưu; hãy kiểm tra xem có phải cùng một người.");
     }
 
     /// <summary>
@@ -205,6 +237,25 @@ public sealed class EmployeeService(
 
             throw;
         }
+    }
+
+    private async Task<AppError?> RefuseZoneRemovalAsync(Employee employee, IReadOnlyCollection<Guid> keptZoneIds, CancellationToken cancellationToken)
+    {
+        var today = timeProvider.Today();
+        foreach (var removed in employee.WorkingZones.Where(w => !keptZoneIds.Contains(w.ZoneId)))
+        {
+            var future = await endingReader.ListAssignmentsInZoneFromAsync(employee.Id, removed.ZoneId, today, cancellationToken);
+            if (future.Count > 0)
+            {
+                var dates = future.Select(a => a.Date).ToList();
+                var zoneCode = removed.Zone?.Code ?? string.Empty;
+                return new AppError(
+                    ErrorKind.Validation, EmployeeEndingMessages.ZoneHasAssignments(employee.FullName, zoneCode, dates),
+                    new Dictionary<string, object?> { ["field"] = "Working zones", ["zoneId"] = removed.ZoneId, ["dates"] = dates.Distinct().Order().ToList() });
+            }
+        }
+
+        return null;
     }
 
     private Task<AppError?> FindTakenFieldAsync(StaffAccountWithPassword created, CancellationToken cancellationToken) =>
@@ -252,6 +303,50 @@ public sealed class EmployeeService(
         return await SavedAsync(employee.Id, await callers.GetAsync(cancellationToken), created.Value, cancellationToken);
     }
 
+    /// <summary>Links an existing, unlinked Active staff account to an Employed employee who has none (Owner only). Grants are untouched.</summary>
+    public async Task<Result<EmployeeSaved>> LinkAccountAsync(Guid id, LinkEmployeeAccountRequest request, CancellationToken cancellationToken)
+    {
+        if (request.AccountId is not { } accountId)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (employee.AccountId is not null || employee.StatusId != StatusIds.Employee.Working)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        var linkable = await staffAccounts.GetLinkableAsync(accountId, cancellationToken);
+        if (!linkable.IsSuccess)
+        {
+            return linkable.Error!;
+        }
+
+        employee.AccountId = accountId;
+        audit.Record(new AuditEntry("Employee.AccountLinked", nameof(Employee))
+        {
+            RecordId = employee.Id,
+            RecordCode = employee.Code,
+            After = new { AccountId = accountId, linkable.Value!.Username },
+        });
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        return await SavedAsync(employee.Id, await callers.GetAsync(cancellationToken), null, cancellationToken);
+    }
+
     /// <summary>LABOR-01.5: the display name and phone number are the employee's; no phone number is MSG-GEN-01 "Phone number".</summary>
     private async Task<Result<StaffAccountWithPassword>> AddAccountAsync(Employee employee, NewEmployeeAccount request, CancellationToken cancellationToken) =>
         // A username or phone collision is MSG-ACCOUNT-09 naming the field, as in ACCOUNT-09 (LABOR-01).
@@ -272,7 +367,8 @@ public sealed class EmployeeService(
         return refused;
     }
 
-    private async Task<EmployeeSaved> SavedAsync(Guid id, EmployeeCaller caller, StaffAccountWithPassword? created, CancellationToken cancellationToken)
+    private async Task<EmployeeSaved> SavedAsync(
+        Guid id, EmployeeCaller caller, StaffAccountWithPassword? created, CancellationToken cancellationToken, EmployeeIdNumberWarning? duplicate = null)
     {
         var saved = UserMessages.Saved("Employee profile");
         return new EmployeeSaved(
@@ -281,6 +377,7 @@ public sealed class EmployeeService(
             saved.Code,
             created?.TemporaryPassword,
             created?.TemporaryPasswordExpiresAt,
-            created?.MessageCode);
+            created?.MessageCode,
+            duplicate);
     }
 }

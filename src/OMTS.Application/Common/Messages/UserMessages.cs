@@ -847,7 +847,10 @@ public static class UserMessages
             : $"Choose a date after {Date(lockedUntil)}.";
         return new UserMessage(Labor04, $"The payroll of {period} is {payrollStatus}, so this change cannot apply to {Date(date)}. {nextStep}")
         {
-            Parameters = new Dictionary<string, object?> { ["period"] = period, ["payroll_status"] = payrollStatus, ["date"] = date, ["next_step"] = nextStep },
+            Parameters = new Dictionary<string, object?>
+            {
+                ["period"] = period, ["payroll_status"] = payrollStatus, ["date"] = date, ["next_step"] = nextStep, ["locked_until"] = lockedUntil, ["can_be_sent_back"] = canBeSentBack,
+            },
         };
     }
 
@@ -903,7 +906,7 @@ public static class UserMessages
         var autoNote = automatic ? ", and OMTS creates the payroll of each new pay period at its start" : string.Empty;
         return new UserMessage(Labor36, $"With these settings, the next pay periods are {period1} and {period2}{autoNote}. Do you want to save?")
         {
-            Parameters = new Dictionary<string, object?> { ["period_1"] = period1, ["period_2"] = period2, ["auto_note"] = autoNote },
+            Parameters = new Dictionary<string, object?> { ["period_1"] = period1, ["period_2"] = period2, ["auto_note"] = autoNote, ["automatic"] = automatic },
         };
     }
 

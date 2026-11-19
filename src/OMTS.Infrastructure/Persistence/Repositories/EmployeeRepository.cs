@@ -124,6 +124,9 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
         .Include(e => e.Account)
         .AsSplitQuery();
 
+    public Task<Employee?> FindWithIdNumberAsync(string idNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
+        db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.IdNumber == idNumber && e.Id != exceptEmployeeId, cancellationToken);
+
     public Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
         db.Employees.AsNoTracking().FirstOrDefaultAsync(
             e => e.PhoneNumber == phoneNumber && e.StatusId == StatusIds.Employee.Working && e.Id != exceptEmployeeId, cancellationToken);

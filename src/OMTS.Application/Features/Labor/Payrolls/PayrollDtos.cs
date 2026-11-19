@@ -28,15 +28,21 @@ public sealed record CreatePayrollRequest(
 public sealed record ReloadPayrollRequest(PayrollReloadMode? Mode);
 
 /// <param name="ExpenseMonth">yyyy-MM: the month the wages count in as a cost.</param>
-public sealed record FinalizePayrollRequest(string? ExpenseMonth);
+/// <param name="ExpectedTotal">The total of the sheet as the Owner last saw it (the detail's <c>total</c>); when the recalculated total differs, 409 and nothing is finalized (L11). Optional.</param>
+/// <param name="ExpectedSlips">The number of payslips as last seen; checked with <paramref name="ExpectedTotal"/>. Optional.</param>
+public sealed record FinalizePayrollRequest(string? ExpenseMonth, decimal? ExpectedTotal = null, int? ExpectedSlips = null);
+
+/// <summary>One reason a sheet cannot be finalized, as data. <c>Kind</c> is PeriodNotEnded, IncompleteAttendance, NoRate or NoHours; <c>Dates</c> are the days concerned.</summary>
+public sealed record NotReadyItem(string Kind, Guid? EmployeeId, string? EmployeeName, IReadOnlyList<DateOnly> Dates, string? JobName);
 
 /// <param name="Method">Cash or BankTransfer.</param>
 /// <param name="Lines">The payslips of the sheet to pay, each from 1 to what is still owed.</param>
-public sealed record PayPayrollRequest(DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, IReadOnlyList<PayPayrollLine>? Lines);
+/// <param name="CashAccountId">With BankTransfer, the active Bank account (Sổ quỹ) the money is paid from; optional. 400 "Cash account" with Cash or an account that is not an active Bank one.</param>
+public sealed record PayPayrollRequest(DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, IReadOnlyList<PayPayrollLine>? Lines, Guid? CashAccountId = null);
 
 public sealed record PayPayrollLine(Guid? SlipId, decimal? Amount);
 
-public sealed record StandalonePayrollPaymentRequest(Guid? EmployeeId, decimal? Amount, DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note);
+public sealed record StandalonePayrollPaymentRequest(Guid? EmployeeId, decimal? Amount, DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, Guid? CashAccountId = null);
 
 /// <param name="Status">Repeated: <c>status=Creating&amp;status=Provisional</c>; none means every status.</param>
 /// <param name="SortBy">code (default), name, from, total, paid or status.</param>
@@ -82,7 +88,7 @@ public sealed record PayrollSlipRow(
 public sealed record PayrollSheetDetail(
     Guid Id, string Code, string Name, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, PayrollSheetStatus Status,
     string? ExpenseMonth, string? Note, string? CreatedBy, DateTimeOffset CreatedAt, decimal Total, decimal Paid, decimal Outstanding,
-    IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount);
+    IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount, DateTimeOffset? CalculatedAt = null);
 
 public sealed record PayrollVoucherRef(Guid Id, string Code, Guid SlipId, string EmployeeName, decimal Amount);
 
@@ -115,9 +121,11 @@ public sealed record PayrollSlipJobLine(string JobName, decimal Hours, decimal H
 
 public sealed record PayrollSlipPayment(Guid Id, string VoucherCode, DateTimeOffset PaidAt, PaymentMethod Method, decimal Amount, WagePaymentKind Kind, string Status);
 
-public sealed record PayrollSlipAttendanceDay(DateOnly Date, string JobName, decimal Hours);
+/// <summary>One job type on one day: the rafts worked, the check-in and check-out, the hours, the rate in force and the amount (hours x rate, to the VND) so the payslip can be explained day by day.</summary>
+public sealed record PayrollSlipAttendanceDay(
+    DateOnly Date, string JobName, decimal Hours, string? RaftCodes = null, DateTimeOffset? CheckInAt = null, DateTimeOffset? CheckOutAt = null, decimal HourlyRate = 0, decimal Amount = 0);
 
 public sealed record PayrollSlipDetail(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, Guid EmployeeId, string EmployeeName, DateOnly From, DateOnly To, decimal Hours,
     decimal MainPay, decimal Bonus, decimal Deduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status,
-    IReadOnlyList<PayrollSlipJobLine> Lines, IReadOnlyList<PayrollSlipPayment> Payments, IReadOnlyList<PayrollSlipAttendanceDay> Attendance);
+    IReadOnlyList<PayrollSlipJobLine> Lines, IReadOnlyList<PayrollSlipPayment> Payments, IReadOnlyList<PayrollSlipAttendanceDay> Attendance, string? EmployeeCode = null);

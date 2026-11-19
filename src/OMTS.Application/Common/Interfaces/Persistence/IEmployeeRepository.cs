@@ -29,6 +29,9 @@ public interface IEmployeeRepository
     /// <summary>Another employee of the cooperative with this code, whatever its letter case.</summary>
     Task<Employee?> FindByCodeAsync(string code, Guid? exceptEmployeeId, CancellationToken cancellationToken);
 
+    /// <summary>Another employee (any status) holding this ID number, if any: saving is allowed, the caller only warns (L16).</summary>
+    Task<Employee?> FindWithIdNumberAsync(string idNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);
+
     /// <summary>The Employed employee who has this number (at most one, BR-LABOR-01), other than <paramref name="exceptEmployeeId"/>.</summary>
     Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);
 

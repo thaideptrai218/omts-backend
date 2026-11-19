@@ -34,6 +34,12 @@ public class WorkAssignment : AuditableEntity
     /// <summary>Empty for the first period of the day.</summary>
     public DateTimeOffset? StartsAt { get; set; }
 
+    /// <summary>
+    /// When this period was closed by a check-out. Set only when the employee checked out and was assigned again the same day, so the time between the two sessions is not paid
+    /// (BR-LABOR-05). Null: the period lasts until the next period or the check-out.
+    /// </summary>
+    public DateTimeOffset? EndsAt { get; set; }
+
     public Guid AssignedByAccountId { get; set; }
 
     /// <summary><see cref="AttendanceMethod.Correction"/> when the Cooperative Owner corrected this period (LABOR-04.4); otherwise null.</summary>

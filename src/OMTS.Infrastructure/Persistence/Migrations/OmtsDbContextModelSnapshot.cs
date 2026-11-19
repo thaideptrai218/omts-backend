@@ -3939,6 +3939,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("EndsAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid?>("HarvestPlanLineId")
                         .HasColumnType("uniqueidentifier");
 

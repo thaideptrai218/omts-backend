@@ -194,6 +194,13 @@ public sealed class CashVoucherService(
             return CancelledError(voucher);
         }
 
+        // A wage or advance voucher is made by Payroll and the debt of the payslip follows it: cancelling it here would reopen the debt (or leave an advance deducted that was never paid) with no trace in Payroll (L7).
+        if (voucher.TypeId == CashVoucherTypeIds.PaymentPayroll)
+        {
+            return new AppError(
+                ErrorKind.Conflict, PayrollMessages.PayrollVoucherNotCancellable(voucher.Code), new Dictionary<string, object?> { ["reasonCode"] = "PAYROLL_VOUCHER" });
+        }
+
         var reason = SupplierPaymentRules.Trimmed(request.Reason);
         if (reason?.Length > CashBookRules.MaxReasonLength)
         {

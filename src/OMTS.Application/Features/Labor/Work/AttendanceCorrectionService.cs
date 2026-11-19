@@ -101,7 +101,7 @@ public sealed class AttendanceCorrectionService(
         var account = currentUser.AccountId ?? throw new InvalidOperationException("Attendance is corrected by a logged-in user.");
         var before = Snapshot(record, existing);
         record = ApplyTimes(employee, day, record, request, reason, account);
-        ApplyPeriods(employee, day, existing, inputs, zoneOfRaft, reason, account);
+        ApplyPeriods(employee, day, existing, inputs, zoneOfRaft, reason, account, request.CheckInAt, request.CheckOutAt);
         audit.Record(new AuditEntry("Attendance.Corrected", nameof(Attendance))
         {
             RecordId = record.Id, RecordCode = employee.Code, Before = before, After = Snapshot(record, inputs), Reason = reason,
@@ -116,7 +116,12 @@ public sealed class AttendanceCorrectionService(
     private static void Validate(FieldCheck check, Employee employee, DateOnly day, CorrectAttendanceRequest request, IReadOnlyList<DayPeriodInput> inputs)
     {
         check.Check(request.CheckInAt is null || BusinessClock.ToBusinessDate(request.CheckInAt.Value) == day, "Check-in");
-        check.Check(request.CheckOutAt is null || BusinessClock.ToBusinessDate(request.CheckOutAt.Value) == day, "Check-out");
+        // A night shift ends on the next day (L2): the check-out is on the day of the check-in or the next, no later than 18 hours after the check-in; the day worked stays the day of the check-in.
+        check.Check(
+            request.CheckOutAt is null
+            || (BusinessClock.ToBusinessDate(request.CheckOutAt.Value) is var outDay && (outDay == day || outDay == day.AddDays(1))
+                && (request.CheckInAt is not { } inAt || request.CheckOutAt.Value - inAt <= WorkRules.MaxShift)),
+            "Check-out");
         check.Check(request.CheckInAt is null || request.CheckOutAt is null || request.CheckOutAt > request.CheckInAt, "Check-out");
         check.Check(request.CheckInAt is not null || request.CheckOutAt is not null, "Check-in");
         if (WorkRules.TypeOn(employee, day) == EmployeeType.Staff)
@@ -211,23 +216,29 @@ public sealed class AttendanceCorrectionService(
     }
 
     /// <summary>The periods are matched in time order: a period that changes is marked Correction with the reason, extra ones are added and surplus ones removed.</summary>
-    private void ApplyPeriods(Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, IReadOnlyDictionary<Guid, Guid> zoneOfRaft, string reason, Guid account)
+    private void ApplyPeriods(
+        Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, IReadOnlyDictionary<Guid, Guid> zoneOfRaft, string reason, Guid account,
+        DateTimeOffset? checkIn, DateTimeOffset? checkOut)
     {
+        var result = new List<WorkAssignment>();
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
             var zoneId = input.RaftId is { } raftOfInput ? zoneOfRaft[raftOfInput] : input.ZoneId!.Value;
             if (i >= existing.Count)
             {
-                assignments.Add(new WorkAssignment
+                var added = new WorkAssignment
                 {
                     EmployeeId = employee.Id, Date = day, RaftId = input.RaftId, ZoneId = zoneId, JobTypeId = input.JobTypeId!.Value, StartsAt = input.StartsAt,
                     AssignedByAccountId = account, Method = AttendanceMethod.Correction, CorrectionReason = reason,
-                });
+                };
+                assignments.Add(added);
+                result.Add(added);
                 continue;
             }
 
             var period = existing[i];
+            result.Add(period);
             if (period.RaftId == input.RaftId && period.ZoneId == zoneId && period.JobTypeId == input.JobTypeId && period.StartsAt == input.StartsAt)
             {
                 continue;
@@ -240,6 +251,35 @@ public sealed class AttendanceCorrectionService(
         foreach (var surplus in existing.Skip(inputs.Count))
         {
             assignments.Remove(surplus);
+        }
+
+        KeepEndsConsistent(result, checkIn, checkOut);
+    }
+
+    /// <summary>
+    /// A period closed at its own check-out (<see cref="WorkAssignment.EndsAt"/>, a day worked in two sessions) keeps that end only while it still lies after the period's start, before the next period
+    /// starts and not after the check-out entered; otherwise the end is cleared so it cannot disagree with the corrected times. The last period always runs to the check-out (L1).
+    /// </summary>
+    private static void KeepEndsConsistent(IReadOnlyList<WorkAssignment> periods, DateTimeOffset? checkIn, DateTimeOffset? checkOut)
+    {
+        for (var i = 0; i < periods.Count; i++)
+        {
+            var period = periods[i];
+            if (period.EndsAt is not { } ends)
+            {
+                continue;
+            }
+
+            var start = period.StartsAt ?? checkIn;
+            var last = i == periods.Count - 1;
+            var valid = !last
+                && (start is null || ends > start)
+                && ends <= (periods[i + 1].StartsAt ?? ends)
+                && (checkOut is null || ends <= checkOut);
+            if (!valid)
+            {
+                period.EndsAt = null;
+            }
         }
     }
 

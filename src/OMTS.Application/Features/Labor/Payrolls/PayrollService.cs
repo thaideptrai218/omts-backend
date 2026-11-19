@@ -75,7 +75,7 @@ public sealed class PayrollService(
         var paid = figures.Where(f => f.Minutes > 0).ToList();
         if (paid.Count == 0)
         {
-            return AppError.Invalid("Period", "No employee has hours in this period.");
+            return AppError.Invalid("Period", "Kỳ này chưa có nhân viên nào có giờ công.");
         }
 
         if (await OverlapAsync(start, end, paid.Select(f => f.Employee.Id).ToHashSet(), null, cancellationToken) is { } overlap)
@@ -171,16 +171,31 @@ public sealed class PayrollService(
         }
 
         var figures = await FiguresAsync(sheet, true, cancellationToken);
-        if (NotReady(sheet, figures, timeProvider.Today()) is { Count: > 0 } reasons)
+        if (NotReady(sheet, figures, timeProvider.Today()) is ({ Count: > 0 } reasons, var items))
         {
-            return new AppError(ErrorKind.Validation, PayrollMessages.NotReady(reasons));
+            return new AppError(ErrorKind.Validation, PayrollMessages.NotReady(reasons), new Dictionary<string, object?> { ["items"] = items });
         }
 
         var employeeIds = sheet.Scope == PayrollScope.Selected ? sheet.SelectedEmployees.Select(s => s.EmployeeId).ToList() : null;
         if (await work.ListAwaitingRequestsAsync(sheet.PeriodStart, sheet.PeriodEnd, employeeIds, cancellationToken) is { Count: > 0 } waiting)
         {
-            var list = string.Join(", ", waiting.Select(r => $"{r.Employee.FullName} {r.FromDate.ToString("dd/MM", CultureInfo.InvariantCulture)}").Distinct().Take(5));
+            var list = string.Join(", ", waiting.Select(r => $"{r.Employee.FullName} {PayrollMessages.ShortDate(r.FromDate)}").Distinct().Take(5));
             return AppError.Conflict(PayrollMessages.RequestsAwaitingReview(PayrollRules.NameOf(sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd), waiting.Count, list));
+        }
+
+        // L11: the Owner approves the numbers on the screen. When the records changed since (an attendance corrected, a request approved), the recalculated totals differ: nothing is finalized, the new
+        // numbers come back and the Owner confirms them. A request without the expected values finalizes as before.
+        if (request.ExpectedTotal is not null || request.ExpectedSlips is not null)
+        {
+            var (slipsNow, totalNow) = await PreviewAsync(sheet, figures, cancellationToken);
+            var viewedSlips = request.ExpectedSlips ?? sheet.Lines.Count;
+            var viewedTotal = request.ExpectedTotal ?? sheet.Lines.Sum(l => l.Net);
+            if (slipsNow != viewedSlips || Math.Abs(totalNow - viewedTotal) >= 0.5m)
+            {
+                return AppError.Conflict(
+                    PayrollMessages.TotalsChanged(PayrollRules.NameOf(sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd), viewedSlips, slipsNow, viewedTotal, totalNow),
+                    new Dictionary<string, object?> { ["reasonCode"] = "TOTALS_CHANGED", ["currentTotal"] = totalNow, ["currentSlips"] = slipsNow, ["expectedTotal"] = viewedTotal, ["expectedSlips"] = viewedSlips });
+            }
         }
 
         await lines.SyncAsync(sheet, figures, dropEmpty: true, cancellationToken);
@@ -257,32 +272,56 @@ public sealed class PayrollService(
         return data.Employees.Select(e => PayrollCalculator.Calculate(e, sheet.PeriodStart, sheet.PeriodEnd, data)).ToList();
     }
 
-    /// <summary>Why the sheet cannot be finalized (MSG-LABOR-28); empty when it can.</summary>
-    private static List<string> NotReady(Payroll sheet, IReadOnlyList<SlipFigures> figures, DateOnly today)
+    /// <summary>
+    /// Why the sheet cannot be finalized (MSG-LABOR-28), in Vietnamese with the names and dates; empty when it can. <see cref="NotReadyItem"/> carries the same reasons as data
+    /// (the error's <c>items</c>), so the client can link each one to the screen that fixes it (correct attendance of an employee and day, a pay rate).
+    /// </summary>
+    private static (List<string> Reasons, List<NotReadyItem> Items) NotReady(Payroll sheet, IReadOnlyList<SlipFigures> figures, DateOnly today)
     {
         var reasons = new List<string>();
+        var items = new List<NotReadyItem>();
         if (sheet.PeriodEnd >= today)
         {
-            reasons.Add($"the pay period ends on {sheet.PeriodEnd.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} and has not ended");
+            reasons.Add($"kỳ lương chưa kết thúc (kết thúc ngày {PayrollMessages.Date(sheet.PeriodEnd)})");
+            items.Add(new NotReadyItem("PeriodNotEnded", null, null, [sheet.PeriodEnd], null));
         }
 
         foreach (var f in figures.Where(f => f.IncompleteDays.Count > 0))
         {
-            reasons.Add($"the attendance of {f.Employee.FullName} on {string.Join(", ", f.IncompleteDays.Take(5).Select(d => d.ToString("dd/MM", CultureInfo.InvariantCulture)))} is incomplete");
+            var days = string.Join(", ", f.IncompleteDays.Take(5).Select(PayrollMessages.ShortDate)) + (f.IncompleteDays.Count > 5 ? $" và {f.IncompleteDays.Count - 5} ngày khác" : string.Empty);
+            reasons.Add($"{f.Employee.FullName}: thiếu giờ vào hoặc giờ ra ngày {days}");
+            items.Add(new NotReadyItem("IncompleteAttendance", f.Employee.Id, f.Employee.FullName, f.IncompleteDays, null));
         }
 
         foreach (var f in figures.Where(f => f.UnratedDays.Count > 0))
         {
             var (day, job) = f.UnratedDays[0];
-            reasons.Add($"{f.Employee.FullName}: the hours of {job} on {day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} have no hourly rate");
+            reasons.Add($"{f.Employee.FullName}: giờ làm \"{job}\" ngày {PayrollMessages.Date(day)} chưa có đơn giá");
+            items.Add(new NotReadyItem("NoRate", f.Employee.Id, f.Employee.FullName, f.UnratedDays.Select(u => u.Day).Distinct().ToList(), job));
         }
 
         if (figures.All(f => f.Minutes == 0))
         {
-            reasons.Add("no employee has hours in the period");
+            reasons.Add("kỳ này chưa có nhân viên nào có giờ công");
+            items.Add(new NotReadyItem("NoHours", null, null, [], null));
         }
 
-        return reasons;
+        return (reasons, items);
+    }
+
+    /// <summary>The slips and the total (net of advances) the sheet would show if reloaded now, worked out without changing anything (L11).</summary>
+    private async Task<(int Slips, decimal Total)> PreviewAsync(Payroll sheet, IReadOnlyList<SlipFigures> figures, CancellationToken cancellationToken)
+    {
+        var paid = figures.Where(f => f.Minutes > 0).ToList();
+        var balances = (await payments.ListOpenAdvancesAsync(paid.Select(f => f.Employee.Id).ToList(), cancellationToken))
+            .GroupBy(a => a.Advance.EmployeeId).ToDictionary(g => g.Key, g => g.Sum(a => a.Remaining));
+        var bonus = sheet.Lines.ToDictionary(l => l.EmployeeId, l => l.Bonus);
+        var total = paid.Sum(f =>
+        {
+            var income = f.MainPay + bonus.GetValueOrDefault(f.Employee.Id);
+            return income - Math.Min(income, balances.GetValueOrDefault(f.Employee.Id));
+        });
+        return (paid.Count, total);
     }
 
     /// <summary>
@@ -300,7 +339,7 @@ public sealed class PayrollService(
         }
 
         return clashing.FirstOrDefault() is { } other
-            ? new AppError(ErrorKind.Validation, UserMessages.Invalid("Period"), new Dictionary<string, object?> { ["field"] = "Period", ["existingId"] = other.Id, ["hint"] = $"Overlaps payroll {other.Code}." })
+            ? new AppError(ErrorKind.Validation, UserMessages.Invalid("Period"), new Dictionary<string, object?> { ["field"] = "Period", ["existingId"] = other.Id, ["hint"] = $"Kỳ này trùng một phần với bảng lương {other.Code} ({PayrollMessages.Date(other.PeriodStart)} - {PayrollMessages.Date(other.PeriodEnd)})." })
             : null;
     }
 

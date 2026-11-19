@@ -69,7 +69,8 @@ internal sealed class ProvenancePageQuery(OmtsDbContext db) : IProvenancePageQue
                 from lane in db.HarvestLotLanes.AsNoTracking()
                 where ids.Contains(lane.LotId)
                 from seeded in db.SeedingRecordLanes.AsNoTracking()
-                where seeded.LaneId == lane.LaneId && seeded.SeedingRecord.CycleId == lane.Lot.CycleId
+                // Only the sessions of this lot's own cycle, on or before its harvest day: a later reseeding of the lane is another batch.
+                where seeded.LaneId == lane.LaneId && seeded.SeedingRecord.CycleId == lane.Lot.CycleId && seeded.SeedingRecord.SeedingDate <= lane.Lot.HarvestDate
                 select new
                 {
                     lane.LotId,

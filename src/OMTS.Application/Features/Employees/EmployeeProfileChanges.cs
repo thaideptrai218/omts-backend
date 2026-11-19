@@ -27,6 +27,18 @@ internal static class EmployeeProfileChanges
         employee.IdNumber = input.IdNumber is null ? employee.IdNumber : input.IdNumber.Length == 0 ? null : input.IdNumber;
     }
 
+    /// <summary>The contact and bank fields only, for a Left employee still owed wages (L10): name, code, ID number, dates, zones, job types and type stay.</summary>
+    public static void ApplyContactAndBank(Employee employee, EmployeeInput input)
+    {
+        employee.PhoneNumber = input.PhoneNumber;
+        employee.Address = input.Address;
+        employee.Area = input.Area;
+        employee.Ward = input.Ward;
+        employee.OtherInformation = input.OtherInformation;
+        employee.Notes = input.Notes;
+        employee.BankAccount = input.BankAccount;
+    }
+
     /// <summary>A new profile with its working zones, job types and first type period, added to the unit of work; the caller gives it its code.</summary>
     public static Employee AddNew(IEmployeeRepository employees, Guid cooperativeId, EmployeeInput input)
     {

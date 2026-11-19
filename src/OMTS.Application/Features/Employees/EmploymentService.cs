@@ -5,6 +5,8 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.AccessManagement;
+using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.EmployeeApp;
@@ -27,6 +29,8 @@ public sealed class EmploymentService(
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
     EmployeeQueryService queries,
+    EmploymentConsequencesService consequences,
+    StaffAccountService staffAccounts,
     INotificationDispatcher notifications,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -73,6 +77,8 @@ public sealed class EmploymentService(
             return AppError.Invalid("Last working day");
         }
 
+        // The summary is read before the assignments go, so it lists what this end removed (L9).
+        var summary = await consequences.SummaryAsync(employee, lastDay, caller, cancellationToken);
         await workRecords.RemoveAssignmentsAfterAsync(employee.Id, lastDay, cancellationToken);
         var previous = employee.LastWorkingDay;
         employee.LastWorkingDay = lastDay;
@@ -97,7 +103,27 @@ public sealed class EmploymentService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new EmploymentChanged(await queries.ViewAsync(employee, caller, cancellationToken));
+        var (locked, note) = request.LockAccount ? await LockLinkedAccountAsync(employee, caller, lastDay, cancellationToken) : (false, null);
+        return new EmploymentChanged(await queries.ViewAsync(employee, caller, cancellationToken), summary, locked, note);
+    }
+
+    /// <summary>
+    /// Q6: the linked staff account is locked in the same request when the Owner confirmed (<c>lockAccount</c>), after the end is saved, so a refusal here never undoes the end. Only the Owner locks accounts.
+    /// </summary>
+    private async Task<(bool Locked, string? Note)> LockLinkedAccountAsync(Employee employee, EmployeeCaller caller, DateOnly lastDay, CancellationToken cancellationToken)
+    {
+        if (!caller.IsOwner)
+        {
+            return (false, "OwnerOnly");
+        }
+
+        if (employee.Account is not { SubjectType: SubjectType.Staff, StatusId: StatusIds.Account.Active } account)
+        {
+            return (false, "NoActiveAccount");
+        }
+
+        var locked = await staffAccounts.LockAsync(account.Id, new ReasonRequest($"{employee.FullName} nghỉ việc, ngày làm cuối {lastDay:dd/MM/yyyy}."), cancellationToken);
+        return locked.IsSuccess ? (true, null) : (false, locked.Error!.Message.Code);
     }
 
     /// <summary>Left → Employed from today, without a new approval, when no Employed employee has the phone number (LABOR-01.4.E1).</summary>

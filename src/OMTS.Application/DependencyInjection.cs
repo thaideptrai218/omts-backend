@@ -150,6 +150,7 @@ public static class DependencyInjection
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
+        services.AddScoped<EmploymentConsequencesService>();
         services.AddScoped<EmploymentEndService>();
 
         // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
@@ -180,6 +181,7 @@ public static class DependencyInjection
         services.AddScoped<PayrollPaymentService>();
         services.AddScoped<PayrollExportService>();
         services.AddScoped<LaborCostService>();
+        services.AddScoped<LaborCostExportService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
@@ -291,7 +293,6 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
-        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();

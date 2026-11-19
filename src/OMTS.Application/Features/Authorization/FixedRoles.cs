@@ -58,9 +58,13 @@ public static class FixedRoles
         StaffRole.Accountant,
         AccountantCode,
         "Accountant",
-        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll and sales reports; usually granted at All zones.",
+        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll (view and export) and sales reports; usually granted at All zones.",
         [
-            Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(Payroll), Full(SalesReports), Full(CashBookOperations), Full(CashBookSettings),
+            Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(SalesReports), Full(CashBookOperations), Full(CashBookSettings),
+            // Payroll is the Owner's to prepare, finalize and pay (PAY-01); the Accountant reads and exports the sheets, payslips, payments and labour costs to reconcile the cash book (decision of 19/11/2026, Q2).
+            new(Payroll, [View, Export]),
+            // The employee list is read to match a payslip or a wage voucher to a person; no personal or bank data (it is shown only to those who maintain the employee) and no editing.
+            new(LaborWorkers, [View]),
             // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
             new(InputIssues, [View, Export]),
             Full(InputDisposals),

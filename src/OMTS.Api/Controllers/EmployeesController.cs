@@ -22,7 +22,8 @@ public sealed class EmployeesController(
     EmployeeQueryService queries,
     EmployeeFileService files,
     EmployeeWorkingZoneService workingZones,
-    EmploymentService employment) : ControllerBase
+    EmploymentService employment,
+    EmploymentConsequencesService consequences) : ControllerBase
 {
     /// <summary>
     /// Filters: <c>search</c> (name, code or phone), <c>statusId</c>, <c>zoneId</c>, <c>employeeType</c> (SeasonalWorker or Staff, the
@@ -103,7 +104,27 @@ public sealed class EmployeesController(
     public async Task<IActionResult> CreateAccount(Guid id, NewEmployeeAccount request, CancellationToken cancellationToken) =>
         (await employees.CreateAccountAsync(id, request, cancellationToken)).ToActionResult(e => StatusCode(StatusCodes.Status201Created, e));
 
-    /// <summary>LABOR-01.3: the employee is Left from the day after <c>lastWorkingDay</c>.</summary>
+    /// <summary>The Cooperative Owner links an existing, unlinked Active staff account to an Employed employee who has none.</summary>
+    [HttpPost("{id:guid}/account/link")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<EmployeeSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> LinkAccount(Guid id, LinkEmployeeAccountRequest request, CancellationToken cancellationToken) =>
+        (await employees.LinkAccountAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Read-only (L9): what ending the employment on <c>lastWorkingDay</c> (today when left out; not after today) would remove or leave open: the future assignments,
+    /// days checked in and not out, advances not deducted, payslips still owed and the linked account (Owner only). Changes nothing.
+    /// </summary>
+    [HttpGet("{id:guid}/end-employment/preview")]
+    [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Edit, PermissionScope.AnyZone)]
+    [ProducesResponseType<EndingConsequences>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> EndEmploymentPreview(Guid id, DateOnly? lastWorkingDay, CancellationToken cancellationToken) =>
+        (await consequences.PreviewAsync(id, lastWorkingDay, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// LABOR-01.3: the employee is Left from the day after <c>lastWorkingDay</c>. <c>lockAccount: true</c> also locks the linked staff account (Owner only; <c>accountLocked</c> and
+    /// <c>accountNote</c> in the answer). The answer carries <c>summary</c>, the same figures as the preview.
+    /// </summary>
     [HttpPost("{id:guid}/end-employment")]
     [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Edit, PermissionScope.AnyZone)]
     [ProducesResponseType<EmploymentChanged>(StatusCodes.Status200OK)]

@@ -17,8 +17,8 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
 {
     [HttpGet]
     [ProducesResponseType<Paged<StaffAccountView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(string? search, int? statusId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await staffAccounts.SearchAsync(search, statusId, page, pageSize, cancellationToken));
+    public async Task<IActionResult> Search(string? search, int? statusId, int page = 1, int pageSize = 20, bool unlinked = false, CancellationToken cancellationToken = default) =>
+        Ok(await staffAccounts.SearchAsync(search, statusId, page, pageSize, cancellationToken, unlinked));
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType<StaffAccountView>(StatusCodes.Status200OK)]

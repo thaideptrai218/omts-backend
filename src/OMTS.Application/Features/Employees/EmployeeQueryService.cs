@@ -1,4 +1,8 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
@@ -14,6 +18,10 @@ public sealed class EmployeeQueryService(
     IAccountRepository accounts,
     EmployeeCallerAccess callers,
     EmployeeViewBuilder views,
+    IPayrollReader payrollReader,
+    IPayrollWorkReader workReader,
+    ICurrentUser currentUser,
+    PermissionService permissions,
     TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
@@ -45,7 +53,29 @@ public sealed class EmployeeQueryService(
 
         var caller = await callers.GetAsync(cancellationToken);
         var (items, total) = await employees.SearchAsync(filter.Value, FirstZones(caller), page, pageSize, cancellationToken);
-        return new Paged<EmployeeListItem>(items.Select(e => views.ListItem(e, caller)).ToList(), page, pageSize, total);
+        var listed = items.Select(e => views.ListItem(e, caller)).ToList();
+        return new Paged<EmployeeListItem>(await WithPayrollFiguresAsync(listed, cancellationToken), page, pageSize, total);
+    }
+
+    /// <summary>
+    /// Adds the hours of this month and the wage still owed to each row for a caller with PAYROLL View (Owner, Accountant): one read of the month's work and one grouped read of the debts for the
+    /// whole page, never one per employee. Other callers get the rows as they are.
+    /// </summary>
+    private async Task<List<EmployeeListItem>> WithPayrollFiguresAsync(List<EmployeeListItem> rows, CancellationToken cancellationToken)
+    {
+        var access = currentUser.AccountId is { } accountId ? await permissions.GetAccessAsync(accountId, cancellationToken) : null;
+        if (rows.Count == 0 || access?.Allows(PermissionFunctions.Payroll, PermissionAction.View, PermissionScope.NoZone, null) != true)
+        {
+            return rows;
+        }
+
+        var ids = rows.Select(r => r.Id).ToList();
+        var today = timeProvider.Today();
+        var from = new DateOnly(today.Year, today.Month, 1);
+        var data = await workReader.LoadAsync(from, today, ids, cancellationToken);
+        var hours = data.Employees.ToDictionary(e => e.Id, e => PayrollCalculator.Calculate(e, from, today, data).Hours);
+        var owed = await payrollReader.OwedByEmployeeAsync(ids, cancellationToken);
+        return rows.Select(r => r with { MonthHours = hours.GetValueOrDefault(r.Id), OutstandingWage = owed.GetValueOrDefault(r.Id) }).ToList();
     }
 
     /// <summary>

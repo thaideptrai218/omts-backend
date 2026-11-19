@@ -135,6 +135,27 @@ public sealed class WorkHoursCalculatorTests
     }
 
     [Fact]
+    public void The_gap_between_two_sessions_of_a_day_is_not_worked()
+    {
+        // L1: in 07:00, out 11:00, assigned again 14:00, out 17:00: 4 h + 3 h, not 07:00 to 17:00.
+        var first = Period(Harvest, RaftB01, null);
+        first.EndsAt = At("11:00");
+        var hours = WorkHoursCalculator.Calculate(At("07:00"), At("17:00"), [first, Period(Harvest, RaftB01, "14:00")], Settings("11:30", "12:30", AttendanceRoundingUnit.None));
+
+        Assert.Equal(420, MinutesOf(hours, Harvest));
+        Assert.Equal([240, 180], hours.Periods.Select(p => p.Minutes));
+    }
+
+    [Fact]
+    public void A_night_shift_counts_the_time_across_midnight()
+    {
+        // L2: 22:00 to 02:00 the next day is 4 h; the break window of the day of the check-in does not touch it.
+        var hours = WorkHoursCalculator.Calculate(At("22:00"), At("02:00").AddDays(1), [Period(Harvest, RaftB01, null)], Settings("11:30", "12:30", AttendanceRoundingUnit.None));
+
+        Assert.Equal(240, MinutesOf(hours, Harvest));
+    }
+
+    [Fact]
     public void A_period_of_work_in_a_zone_with_no_raft_counts_its_hours_like_any_other()
     {
         // Decision of 17/11/2026: the nursery is a zone, so its assignment has no raft; the hours (and the pay of the job type) do not depend on one.

@@ -29,3 +29,11 @@ public sealed record LotSaleReturn(Guid InvoiceId, Guid Id, string Code, DateOnl
 
 /// <summary>One correction saved in Correct traceability data (TRACE-03) of a record of the trace: the audit row <c>*.TraceCorrected</c> (GBR-02).</summary>
 public sealed record TraceCorrectionRow(Guid RecordId, DateTimeOffset CorrectedAt, Guid? ActorAccountId, string? Reason);
+
+/// <summary>The harvest plan (and its sales orders) a lot was recorded from, and the quality claims still open on its invoices: read only, for the chain view of the trace.</summary>
+public sealed record LotTraceContext(
+    string? PlanCode, DateOnly? PlannedDate, int? PlanStatusId, IReadOnlyList<TraceOrderRef> Orders, IReadOnlyList<TraceOpenClaim> OpenClaims);
+
+/// <summary>One invoice line of a lot found from a seed lot (reverse trace), on an invoice that is not cancelled.</summary>
+public sealed record SeedLotInvoiceRow(
+    Guid LotId, Guid InvoiceId, string InvoiceCode, DateOnly InvoiceDate, Guid ZoneId, string ZoneCode, string? CustomerName, string? CustomerPhone, bool WalkIn, decimal Kg);

@@ -23,6 +23,15 @@ public sealed class LotTracingController(LotTraceService traces) : ControllerBas
         (await traces.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
+    /// Reverse trace for a recall: from a seed lot code (PN000123-1 or the receipt code) or a supplier name to the lots of the caller's zones, their invoices and customers. No term: 400
+    /// MSG-GEN-01; none found: 200 with an empty list and MSG-GEN-10.
+    /// </summary>
+    [HttpGet("api/harvest-lots/trace-by-seed-lot")]
+    [ProducesResponseType<SeedForwardTrace>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> TraceFromSeed([FromQuery] SeedLotTraceQuery query, CancellationToken cancellationToken) =>
+        (await traces.TraceFromSeedAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
     /// Steps 2-3: the lot with its status and publish state, the backward trace with what is missing (MSG-TRACE-02 in <c>message</c>, items in <c>missing</c>), the forward trace and
     /// the TRACE-03 correction marks. 403 MSG-GEN-08 outside the caller's zones, 404 for an unknown lot.
     /// </summary>

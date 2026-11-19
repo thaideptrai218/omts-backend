@@ -27,6 +27,10 @@ public sealed class CooperativeProfileService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
+    /// <summary>The name of the cooperative for anonymous screens (login, tab title) and print labels.</summary>
+    public async Task<Result<CooperativeBrand>> GetBrandAsync(CancellationToken cancellationToken) =>
+        await cooperatives.GetCurrentAsync(cancellationToken) is { } cooperative ? new CooperativeBrand(cooperative.FullName, cooperative.ShortName) : AppError.NotFound;
+
     public async Task<Result<CooperativeProfileView>> GetAsync(CancellationToken cancellationToken) =>
         await cooperatives.GetCurrentAsync(cancellationToken) is { } cooperative ? await views.ProfileAsync(cooperative, cancellationToken) : AppError.NotFound;
 

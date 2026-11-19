@@ -28,7 +28,7 @@ internal sealed class DemoCooperativeProfileStep : IDemoSeedStep
             var saved = DemoSeedContext.Ensure(await service.UpdateAsync(new UpdateCooperativeProfileRequest
             {
                 FullName = profile.FullName,
-                ShortName = profile.ShortName ?? "HTX Hàu Vân Đồn",
+                ShortName = profile.ShortName ?? "HTX Trung Nam",
                 TaxCode = profile.TaxCode ?? "0201234567",
                 YearEstablished = profile.YearEstablished ?? 2012,
                 OfficeAddress = profile.OfficeAddress ?? "Thôn Cái Rồng, Thị trấn Cái Rồng, Huyện Vân Đồn, Tỉnh Quảng Ninh",
@@ -37,10 +37,10 @@ internal sealed class DemoCooperativeProfileStep : IDemoSeedStep
                 Website = profile.Website ?? "https://htx-vandon.example.com",
                 SocialLink = profile.SocialLink ?? "https://social.example.com/htx-vandon",
                 IntroductionVi = profile.IntroductionVi ??
-                    "Hợp tác xã Nuôi hàu Vân Đồn nuôi hàu Thái Bình Dương trên bè tại vùng biển Vân Đồn, Quảng Ninh, từ năm 2012. " +
+                    $"{profile.FullName} nuôi hàu Thái Bình Dương trên bè tại vùng biển Vân Đồn, Quảng Ninh, từ năm 2012. " +
                     "Hàu được nuôi từ con giống chọn lọc, nước biển được đo mỗi tháng và mỗi lô thu hoạch đều truy được về bè nuôi.",
                 IntroductionEn = profile.IntroductionEn ??
-                    "Van Don Oyster Cooperative has farmed Pacific oysters on rafts in the sea of Van Don, Quang Ninh, since 2012. " +
+                    $"{profile.FullName} has farmed Pacific oysters on rafts in the sea of Van Don, Quang Ninh, since 2012. " +
                     "The oysters grow from selected seed, the sea water is measured every month and every harvest lot is traced to its raft.",
                 LegalRepresentative = profile.LegalRepresentative ?? "Nguyễn Văn Hải",
                 BusinessLines = profile.BusinessLines.Count > 0

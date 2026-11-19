@@ -12,6 +12,9 @@ internal static class WorkRules
     /// <summary>The longest reason or note (the length of the Reason columns).</summary>
     public const int MaxReason = 1000;
 
+    /// <summary>The longest a shift may last (night shifts end on the next day, L2): the latest check-out after the check-in.</summary>
+    public static readonly TimeSpan MaxShift = TimeSpan.FromHours(18);
+
     /// <summary>The longest reason an employee writes (SCR-LABOR-07).</summary>
     public const int MaxRequestReason = 500;
 
