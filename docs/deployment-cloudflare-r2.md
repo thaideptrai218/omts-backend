@@ -38,30 +38,24 @@ Environment variables (Docker / EC2 `.env`; never commit them):
 
 `Storage__Local__*` is not used with `R2`.
 
-### EC2 (deploy/ec2)
+### Staging VPS (deploy/staging)
 
-In `deploy/ec2/compose.yml`, replace the three `Storage__Local__*` lines of the `api` service with:
-```yaml
-  Storage__Provider: R2
-  Storage__R2__AccountId: ${R2_ACCOUNT_ID:?Set R2_ACCOUNT_ID in .env}
-  Storage__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in .env}
-  Storage__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in .env}
-  Storage__R2__Bucket: ${R2_BUCKET:-omts-files}
-```
-and in `deploy/ec2/.env.example` replace `STORAGE_SIGNING_KEY=REPLACE_ME` with:
+`deploy/staging/compose.yml` already sets `Storage__Provider: R2` and reads the keys from `/opt/omts/.env` on the VPS:
 ```
 R2_ACCOUNT_ID=REPLACE_ME
 R2_ACCESS_KEY_ID=REPLACE_ME
 R2_SECRET_ACCESS_KEY=REPLACE_ME
-R2_BUCKET=omts-files
+R2_BUCKET=omts-files-staging
 ```
-The `files` volume of the API is then no longer needed for uploads; keep it until the copy below is done.
-Then `docker compose up -d api` and check `GET /health`.
+Write these lines into `.env` **before** CD deploys the compose change: the `:?` checks make `compose config` fail without
+them, and `deploy.sh` then rolls back. Keep `STORAGE_SIGNING_KEY` in `.env` for a rollback to `Local`.
+The `omts-files` volume of the API is then no longer needed for uploads; keep it until the copy below is done.
+After the deploy, check `GET /health`.
 
 ## 3. Move the files already uploaded (Local → R2)
 
 The database rows keep the storage **keys** (`{category}/{yyyy}/{MM}/{guid}.{ext}`), not URLs. So moving is a copy under the same
-keys: no row changes. From the EC2 host, with the AWS CLI and the same R2 keys:
+keys: no row changes. From the host, with the AWS CLI (the VPS has none: run the `amazon/aws-cli` image) and the same R2 keys:
 ```bash
 export AWS_ACCESS_KEY_ID=<R2 access key id> AWS_SECRET_ACCESS_KEY=<R2 secret>
 docker cp $(docker compose ps -q api):/app/App_Data/files ./files-backup

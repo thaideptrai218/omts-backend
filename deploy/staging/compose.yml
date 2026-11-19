@@ -27,9 +27,12 @@ x-api-environment: &api-environment
   ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
   Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
   Provenance__PublicBaseUrl: ${PROVENANCE_PUBLIC_BASE_URL:?Set PROVENANCE_PUBLIC_BASE_URL in .env}
-  Storage__Provider: Local
-  Storage__Local__RootPath: /app/App_Data/files
-  Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?Set STORAGE_SIGNING_KEY in .env}
+  # Files live in the private R2 bucket (docs/deployment-cloudflare-r2.md). STORAGE_SIGNING_KEY stays in .env for a rollback to Local.
+  Storage__Provider: R2
+  Storage__R2__AccountId: ${R2_ACCOUNT_ID:?Set R2_ACCOUNT_ID in .env}
+  Storage__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in .env}
+  Storage__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in .env}
+  Storage__R2__Bucket: ${R2_BUCKET:-omts-files-staging}
   Sms__Provider: None
   Zalo__Provider: ${ZALO_PROVIDER:-}
   Zalo__AppSecret: ${ZALO_APP_SECRET:-}
