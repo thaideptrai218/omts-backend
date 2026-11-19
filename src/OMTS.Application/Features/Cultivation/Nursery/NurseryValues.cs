@@ -14,6 +14,8 @@ public static class NurseryValues
     public const string Completed = "NurseryBatch.Completed";
     public const string SurvivorsCorrected = "NurseryBatch.SurvivorsCorrected";
     public const string Closed = "NurseryBatch.Closed";
+    /// <summary>A batch that closed by itself (pool used up) opens again as Completed when a seeding record is lowered or removed (NUR-22).</summary>
+    public const string Reopened = "NurseryBatch.Reopened";
 
     /// <summary>Legacy event of before v2 (13/11/2026): no new one is written, the old ones are still read in the history.</summary>
     public const string AllocationsChanged = "NurseryBatch.AllocationsChanged";

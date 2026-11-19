@@ -18,7 +18,9 @@ public sealed record SeedLotNamedRef(Guid Id, string Code, string Name);
 /// <paramref name="NursingQty"/> is what the nursery holds now (batches Nursing and the pieces left in the pool of Completed ones); <paramref name="NurseryLossQty"/> what was lost in the nursery;
 /// <paramref name="SeededQty"/> what was hung on lanes, directly or from the nursery; <paramref name="IssuedOtherQty"/> what manual issues and disposals took;
 /// <paramref name="RemainingQty"/> = received − returned − seeded − nursery loss − issued, in the nursery or in the stock; <paramref name="AvailableQty"/> is the part of it still in the stock.
-/// <paramref name="State"/> is worked out from these and never stored. <paramref name="LastUsedAt"/> is the latest nursery start, seeding or issue (a day when only its date is known), null while unused.
+/// <paramref name="HarvestedKg"/>, <paramref name="SoldKg"/> (invoiced less returned, cancelled invoices ignored) and <paramref name="ReturnedFromSaleKg"/> are the kg the cycles the lot was hung in gave, shared in proportion to the pieces
+/// of each lot when a cycle has several lots; <paramref name="FiguresEstimated"/> is true then, or while a harvest lot is not weighed (its estimated kg counts). They are filled on the list page and the detail, not in the export.
+/// <paramref name="State"/> is worked out from these and never stored (the screen no longer shows it). <paramref name="LastUsedAt"/> is the latest nursery start, seeding or issue (a day when only its date is known), null while unused.
 /// </summary>
 public record SeedLotRegisterRow(
     Guid Id,
@@ -39,7 +41,11 @@ public record SeedLotRegisterRow(
     decimal RemainingQty,
     SeedLotState State,
     DateTimeOffset? LastUsedAt,
-    decimal AvailableQty = 0m);
+    decimal AvailableQty = 0m,
+    decimal HarvestedKg = 0m,
+    decimal SoldKg = 0m,
+    decimal ReturnedFromSaleKg = 0m,
+    bool FiguresEstimated = false);
 
 /// <summary>The sums of every lot the filters match (state filter included), not only the page.</summary>
 public sealed record SeedLotRegisterTotals(

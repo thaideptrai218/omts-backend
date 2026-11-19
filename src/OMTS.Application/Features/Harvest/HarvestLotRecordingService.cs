@@ -26,7 +26,7 @@ namespace OMTS.Application.Features.Harvest;
 /// uploaded nothing is saved and nobody is told (GFR-01). Everything the save decides is read again after the uploads, which can take minutes at sea: the Open cycle, the lane states, the
 /// average kg per cage it copies (BR-HARVEST-02), the harvest time and the lot code. The cycle row is part of the save, so of two parallel saves that change the lane states of a cycle
 /// one answers MSG06 and saves nothing, and a new send is checked against the new states. Two lots that take one code without sharing a cycle lose nothing: the loser takes the next code, with its photos.
-/// A lot may be recorded from a line of a harvest plan (read again with the rest and moved on in the same save, so two lots of one line never both pass) and may be split into product lines; its cages
+/// Since 18/11/2026 a lot is recorded only from a line of a harvest plan (MSG-HARVEST-06) and harvests the raft: every harvestable lane, no lane chosen; <c>allowWithoutPlan</c> is for the demo seed alone. A lot may be recorded from a line of a harvest plan (read again with the rest and moved on in the same save, so two lots of one line never both pass) and may be split into product lines; its cages
 /// against the cages the line expects only warn.
 /// </summary>
 public sealed class HarvestLotRecordingService(
@@ -58,7 +58,7 @@ public sealed class HarvestLotRecordingService(
 
     private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, decimal? PlanCagesExpected, IReadOnlyList<Farming.FarmingWarning> Warnings, IReadOnlyList<Employee> CrewAdded);
 
-    public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
+    public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken, bool allowWithoutPlan = false)
     {
         // A first look: a request that will be refused stores nothing.
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
@@ -84,7 +84,16 @@ public sealed class HarvestLotRecordingService(
             return planned.Error!;
         }
 
-        request = WithPlannedLanes(request, planned.Value);
+        if (planned.Value is null && !allowWithoutPlan)
+        {
+            return AppError.Conflict(UserMessages.HarvestNeedsPlan);
+        }
+
+        if (planned.Value is not null)
+        {
+            request = WithPlannedLanes(request, raft, open!.States);
+        }
+
         // A new lot needs 1 to 3 on-site photos; a lot recorded before the photos stays valid without.
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
         var (resolvedLines, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
@@ -120,17 +129,17 @@ public sealed class HarvestLotRecordingService(
             return uploaded.Error!;
         }
 
-        return await SaveAsync(raftId, request, uploaded.Value!, recorder, cancellationToken);
+        return await SaveAsync(raftId, request, uploaded.Value!, recorder, allowWithoutPlan, cancellationToken);
     }
 
     /// <summary>One attempt per lot code: a new attempt starts clean, from the database as it now is. The uploads stay until the last attempt fails.</summary>
-    private async Task<Result<HarvestLotSaved>> SaveAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, CancellationToken cancellationToken)
+    private async Task<Result<HarvestLotSaved>> SaveAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, bool allowWithoutPlan, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
             // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race on the lot code reads the database again.
             unitOfWork.DiscardChanges();
-            var prepared = await photoStore.PrepareSaveAsync(keys, () => PrepareAsync(raftId, request, keys, recorder, cancellationToken));
+            var prepared = await photoStore.PrepareSaveAsync(keys, () => PrepareAsync(raftId, request, keys, recorder, allowWithoutPlan, cancellationToken));
             if (!prepared.IsSuccess)
             {
                 return prepared.Error!;
@@ -167,7 +176,7 @@ public sealed class HarvestLotRecordingService(
         }
     }
 
-    private async Task<Result<PreparedLot>> PrepareAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, CancellationToken cancellationToken)
+    private async Task<Result<PreparedLot>> PrepareAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, bool allowWithoutPlan, CancellationToken cancellationToken)
     {
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
         if (raft is null)
@@ -189,7 +198,16 @@ public sealed class HarvestLotRecordingService(
             return planned.Error!;
         }
 
-        request = WithPlannedLanes(request, planned.Value);
+        if (planned.Value is null && !allowWithoutPlan)
+        {
+            return AppError.Conflict(UserMessages.HarvestNeedsPlan);
+        }
+
+        if (planned.Value is not null)
+        {
+            request = WithPlannedLanes(request, raft, open!.States);
+        }
+
         var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
         if (lineError is not null)
         {
@@ -287,9 +305,18 @@ public sealed class HarvestLotRecordingService(
         return resolved.IsSuccess ? resolved.Value : resolved.Error!;
     }
 
-    /// <summary>A lot recorded from a plan line holds the lanes of the plan without those left out, whatever lanes the form sent.</summary>
-    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, PlannedHarvest? planned) =>
-        planned is null ? request : request with { LaneNumbers = planned.LaneNumbers };
+    /// <summary>
+    /// A lot recorded from a plan line harvests the raft, not chosen lanes (owner decision 18/11/2026): it holds every In Use lane of the raft that can be harvested now (seeded, not damaged or out of service),
+    /// whatever lanes the form sent, and finishes none of them (a lane is finished by its own action).
+    /// </summary>
+    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states) =>
+        request with
+        {
+            LaneNumbers = raft.Lanes
+                .Where(l => l.StatusId == StatusIds.Lane.InUse && !l.IsDamaged && !l.IsOutOfService && states.TryGetValue(l.Id, out var state) && LaneStateRules.CanBeHarvested(state))
+                .Select(l => l.LaneNumber).Order().ToList(),
+            FinishedLaneNumbers = [],
+        };
 
     /// <summary>
     /// The product lines of the form, checked against the catalogue. A lot holds one product, the one farmed in the Open cycle: a line sent without a product takes it, and when the cycle has a product and the form sends

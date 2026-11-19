@@ -45,7 +45,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
             canHarvestNow |= canHarvest;
             lineViews.Add(new HarvestPlanLineView(
                 line.Id, line.LineNumber, line.RaftId, line.Raft.Code, ZoneView(line.Raft.Zone),
-                line.ExpectedProduct is { } p ? new HarvestPlanProductView(p.Id, p.Code, p.Name) : null, line.ExpectedCageCount, line.Note,
+                line.ExpectedProduct is { } p ? new HarvestPlanProductView(p.Id, p.Code, p.Name, p.SizeMinCm, p.SizeMaxCm) : null, line.ExpectedCageCount, line.Note,
                 HarvestPlanRules.LineState(fact),
                 line.Lot is { } lot ? new HarvestPlanLotView(lot.Id, lot.LotCode, lot.CageCount, lot.EstimatedKg, lot.HarvestedAt) : null,
                 lanes, canHarvest, HarvestPlanRules.LineLocked(fact)));
@@ -71,7 +71,8 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
             return new HarvestPlanListItem(
                 p.Id, p.Code, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), ZonesOf(visible), p.PlannedAt, p.Note,
                 visible.OrderBy(l => l.LineNumber).Select(l => l.Raft.Code).Distinct().ToList(), OrderViews(p), Progress(visible),
-                names.GetValueOrDefault(p.CreatedByAccountId), RowVersionGuard.Encode(p.RowVersion));
+                names.GetValueOrDefault(p.CreatedByAccountId), RowVersionGuard.Encode(p.RowVersion),
+                visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null);
         }).ToList();
     }
 

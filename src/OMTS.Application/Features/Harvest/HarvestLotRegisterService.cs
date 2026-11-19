@@ -72,7 +72,7 @@ public sealed class HarvestLotRegisterService(
         var rows = await lots.SearchAsync(filter, cancellationToken);
         var figures = await sales.FiguresAsync(rows.Select(r => r.Id).ToList(), cancellationToken);
         var worked = rows
-            .Select(r => (Row: r, Figures: HarvestLotFigures.Of(r.EstimatedKg, r.WeighedKg, r.LeftoverKg, r.StatusId != StatusIds.HarvestLot.Closed, figures[r.Id])))
+            .Select(r => (Row: r, Figures: HarvestLotFigures.Shown(r.StatusId, r.EstimatedKg, r.WeighedKg, r.LeftoverKg, figures[r.Id])))
             .ToList();
         var totals = new HarvestLotRegisterTotals(
             worked.Sum(w => w.Row.CageCount), worked.Sum(w => w.Row.EstimatedKg), worked.Sum(w => w.Row.WeighedKg ?? 0m), worked.Sum(w => w.Figures.SoldKg),

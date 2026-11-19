@@ -43,6 +43,9 @@ public class FarmingInputItem : AuditableEntity, IHasStatus
     public Guid? ProductId { get; set; }
     public Product? Product { get; set; }
 
+    /// <summary>Seed items only: days from seeding until the oysters can be harvested ("Thời gian trưởng thành"); null when not set. A cycle's expected harvest date is its seeding date plus this, computed at read time.</summary>
+    public int? MaturityDays { get; set; }
+
     public ICollection<InputItemUnit> Units { get; set; } = [];
     public ICollection<InputItemPhoto> Photos { get; set; } = [];
     /// <summary>Optional note, outside the SRS attributes (kept, gap Q17).</summary>

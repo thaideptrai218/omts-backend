@@ -34,7 +34,7 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
         var products = await db.Products.AsNoTracking().Where(p => p.StatusId == StatusIds.Usage.InUse).ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
         var buyer = await db.Customers.AsNoTracking().Where(c => c.PhoneNumber == BuyerPhone && c.MergedIntoCustomerId == null).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(cancellationToken);
         var trader = await db.Customers.AsNoTracking().Where(c => c.Account!.Username == TraderUsername && c.MergedIntoCustomerId == null).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(cancellationToken);
-        if (!products.TryGetValue("Hàu sữa", out var milky) || !products.TryGetValue("Hàu béo", out var fat) || buyer is null || trader is null)
+        if (!products.TryGetValue("Hàu bản địa Vân Đồn", out var milky) || !products.TryGetValue("Hàu Thái Bình Dương", out var fat) || buyer is null || trader is null)
         {
             return 0;
         }

@@ -38,6 +38,7 @@ internal sealed record DemoReceiptPlan(
     decimal Discount = 0);
 
 /// <summary>
+/// Seed receipts are spread over the four seed items (VT001 domestic Pacific, VT002 imported Pacific, VT003 Aug-Oct season Pacific, VT004 native) from the hatchery and the seed farm.
 /// Twenty-six purchase receipts over the last 85 days: 22 Completed (paid in full, partly or not at all, one with a partial
 /// return, one with a return cancelled by the Owner), 2 Cancelled and 2 Draft. Material lines name the raft they were bought for, and so do two seed receipts. One
 /// line has a fractional quantity, so its amount is not a whole thousand (BR-PURCHASE-02), and one a discount per unit. The last six are unpaid receipts of
@@ -58,11 +59,11 @@ internal static class DemoReceiptPlans
 
     public static readonly IReadOnlyList<DemoReceiptPlan> All =
     [
-        new("DEMO-R01", Hatchery, 85, Done, "Nhập giống vụ xuân",
-            [new("VT001", 20000, 900, "LOT-HG-0801"), new("VT002", 5000, 1500, "LOT-HG-0802")], D1, 1,
+        new("DEMO-R01", Hatchery, 85, Done, "Nhập giống Thái Bình Dương sản xuất trong nước",
+            [new("VT001", 25000, 1020, "LOT-HG-0801")], D1, 1,
             Payments: [new(85, 10_000_000, Transfer), new(70, 15_000_000, Transfer)]),
         new("DEMO-R02", SeedFarm, 80, Done, "Nhập giống bản địa",
-            [new("VT003", 30000, 700, "LOT-BL-0805")], Payments: [new(80, 21_000_000, Cash)]),
+            [new("VT004", 30000, 700, "LOT-BL-0805")], Payments: [new(80, 21_000_000, Cash)]),
         new("DEMO-R03", Company, 75, Done, "Phao và dây cho bè B1-01",
             [new("VT005", 20, 380_000), new("VT006", 6, 650_000)], D1, 1,
             Payments: [new(75, 4_000_000, Cash), new(60, 3_000_000, Cash)]),
@@ -74,21 +75,21 @@ internal static class DemoReceiptPlans
             [new("VT008", 40, 220_000), new("VT009", 8, 450_000)], D1, 2, Payments: [new(65, 12_000_000, Transfer)], Discount: 300_000),
         new("DEMO-R06", Store, 60, Done, "Dầu và găng tay tháng 8",
             [new("VT011", 300.5m, 21_000), new("VT012", 40, 18_000)], Payments: [new(60, 7_000_000, Cash)]),
-        new("DEMO-R07", Hatchery, 55, Done, "Nhập giống Cổ Trai",
-            [new("VT004", 15000, 1200, "LOT-HG-0820")], D2, 2,
+        new("DEMO-R07", Hatchery, 55, Done, "Nhập giống Thái Bình Dương nhập khẩu",
+            [new("VT002", 15000, 1200, "LOT-NK-0820")], D2, 2,
             Payments: [new(55, 5_000_000, Cash), new(40, 6_000_000, Transfer)]),
         new("DEMO-R08", SeedFarm, 50, Done, "Nhập giống, chưa thanh toán",
-            [new("VT001", 12000, 900, "LOT-BL-0829"), new("VT003", 8000, 700, "LOT-BL-0830")]),
+            [new("VT001", 12000, 900, "LOT-HG-0829"), new("VT004", 8000, 700, "LOT-BL-0830")]),
         new("DEMO-R09", Company, 45, Done, "Phao và cọc neo bè B2-02",
             [new("VT005", 10, 380_000), new("VT009", 6, 450_000)], D2, 2, Payments: [new(45, 6_500_000, Transfer)], Discount: 150_000),
         new("DEMO-R10", Shop, 40, Done, "Gỗ và dây buộc bè B1-03",
             [new("VT008", 25, 220_000), new("VT010", 20, 48_000, Discount: 3_000)], D1, 3, Payments: [new(20, 2_500_000, Cash)]),
         new("DEMO-R11", Store, 38, Done, "Áo phao, vôi, thùng xốp",
             [new("VT013", 12, 250_000), new("VT014", 200, 6_000), new("VT015", 60, 35_000)], Payments: [new(38, 6_000_000, Cash)]),
-        new("DEMO-R12", Hatchery, 30, Done, "Nhập giống 5 cm",
-            [new("VT002", 8000, 1500, "LOT-HG-0924")], Payments: [new(30, 3_000_000, Transfer), new(10, 4_000_000, Transfer)]),
+        new("DEMO-R12", Hatchery, 30, Done, "Nhập giống Thái Bình Dương vụ tháng 8–10",
+            [new("VT003", 8000, 1500, "LOT-HG-0924")], Payments: [new(30, 3_000_000, Transfer), new(10, 4_000_000, Transfer)]),
         new("DEMO-R13", SeedFarm, 25, Done, "Nhập giống bản địa đợt 2",
-            [new("VT003", 25000, 700, "LOT-BL-0928")], Payments: [new(25, 17_000_000, Transfer)]),
+            [new("VT004", 25000, 700, "LOT-BL-0928")], Payments: [new(25, 17_000_000, Transfer)]),
         new("DEMO-R14", Company, 20, Done, "Dây và lưới bè B1-04",
             [new("VT006", 4, 650_000), new("VT007", 300, 12_000)], D1, 4, Payments: [new(20, 2_000_000, Cash)],
             Return: new("VT006", 1, 18, "Dây bị sờn, trả lại nhà cung cấp", "Ghi nhầm phiếu, hàng không trả lại")),
@@ -97,12 +98,12 @@ internal static class DemoReceiptPlans
         new("DEMO-R16", Shop, 8, Done, "Gỗ khung bè B2-03",
             [new("VT008", 30, 220_000)], D2, 3),
         new("DEMO-R17", SeedFarm, 35, DemoReceiptOutcome.Cancelled, "Nhập nhầm loại giống",
-            [new("VT001", 6000, 900, "LOT-BL-0918")], Payments: [new(35, 2_000_000, Cash)],
+            [new("VT001", 6000, 900, "LOT-HG-0918")], Payments: [new(35, 2_000_000, Cash)],
             CancelReason: "Nhập nhầm loại giống, hủy phiếu và nhập lại"),
         new("DEMO-R18", Company, 28, DemoReceiptOutcome.Cancelled, "Cọc neo bè B2-04",
             [new("VT009", 10, 450_000)], D2, 4, CancelReason: "Nhà cung cấp giao thiếu hàng"),
         new("DEMO-R19", Hatchery, 5, DemoReceiptOutcome.Draft, "Đặt giống đợt tới, chờ xác nhận",
-            [new("VT004", 10000, 1200)]),
+            [new("VT001", 10000, 1200)]),
         new("DEMO-R20", Company, 3, DemoReceiptOutcome.Draft, "Phao bè B2-05, chờ báo giá",
             [new("VT005", 8, 380_000)], D2, 5),
         new("DEMO-R21", DemoExtraSupplierStep.PhoneAt(0), 62, Done, "Găng tay bảo hộ", [new("VT012", 120, 18_000)]),

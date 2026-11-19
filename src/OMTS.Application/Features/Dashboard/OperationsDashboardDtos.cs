@@ -42,7 +42,23 @@ public sealed record DashboardPendingTaskGroup(string Kind, int Count, IReadOnly
 
 public sealed record DashboardPendingTasksTile(int Total, IReadOnlyList<DashboardPendingTaskGroup> Groups);
 
-/// <summary>FARM-06: every tile worked out now (<c>ComputedAt</c>); the filters are echoed (<c>ZoneId</c>, the period in <c>DailyRevenue</c>).</summary>
+/// <summary>
+/// The sales result of one business day (KiotViet-style "Kết quả bán hàng hôm nay"): the invoices not Cancelled by invoice date, the sales returns that stand by return date. <c>NetRevenue</c> is
+/// <c>Revenue − ReturnValue</c>. Of the zone chosen, or of every zone.
+/// </summary>
+public sealed record DashboardDayTile(DateOnly Date, int InvoiceCount, decimal Revenue, int ReturnCount, decimal ReturnValue, decimal NetRevenue);
+
+/// <summary>
+/// Customers whose debt is due, by the debt limit of the cooperative (the days limit of the customer settings): the invoices have no due date of their own, so "due" means the oldest unpaid
+/// invoice is older than <c>MaxDays</c> (<c>OverdueCount</c>, also customers over the amount limit) or reaches it within 7 days (<c>DueSoonCount</c>). Both are 0 and <c>PolicyEnabled</c>
+/// false while the debt warning is off; <c>DebtorCount</c> (customers owing more than 0) is always given.
+/// </summary>
+public sealed record DashboardDueDebtsTile(int DebtorCount, int OverdueCount, int DueSoonCount, bool PolicyEnabled, int? MaxDays);
+
+/// <summary>
+/// FARM-06: every tile worked out now (<c>ComputedAt</c>); the filters are echoed (<c>ZoneId</c>, the period in <c>DailyRevenue</c>). <c>Today</c>/<c>Yesterday</c> and <c>DueDebts</c> were added
+/// for the KiotViet-style overview. An Accountant reads the same tiles, but <c>PendingTasks</c> (the Owner's decisions) is empty for them.
+/// </summary>
 public sealed record OperationsDashboard(
     DateTimeOffset ComputedAt,
     Guid? ZoneId,
@@ -50,4 +66,7 @@ public sealed record OperationsDashboard(
     DashboardReceivablesTile Receivables,
     DashboardOpenHarvestLotsTile OpenHarvestLots,
     DashboardWaterAlertsTile WaterAlerts,
-    DashboardPendingTasksTile PendingTasks);
+    DashboardPendingTasksTile PendingTasks,
+    DashboardDayTile Today,
+    DashboardDayTile Yesterday,
+    DashboardDueDebtsTile DueDebts);

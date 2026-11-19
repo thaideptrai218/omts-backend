@@ -49,6 +49,18 @@ public sealed record SeedLotDetailRows(
     IReadOnlyList<SeedLotCycleRow> Cycles,
     IReadOnlyList<SeedLotHarvestLotRow> HarvestLots);
 
+/// <summary>One seeding session total: the pieces of a seed lot hung in a cycle (every lot of the cycle is listed, so a cycle's whole seeding is known).</summary>
+public sealed record SeedLotCycleSeeding(Guid CycleId, Guid SeedLotLineId, decimal Quantity);
+
+/// <summary>A harvest lot of a cycle with its kg; the sales figures are read separately by lot id.</summary>
+public sealed record SeedLotCycleHarvest(Guid CycleId, Guid HarvestLotId, decimal EstimatedKg, decimal? WeighedKg);
+
+/// <summary>What the harvest and sales figures of seed lots are worked out from: the seeding of every cycle the lots were hung in, and the harvest lots of those cycles.</summary>
+public sealed record SeedLotHarvestSources(IReadOnlyList<SeedLotCycleSeeding> Seedings, IReadOnlyList<SeedLotCycleHarvest> HarvestLots)
+{
+    public static readonly SeedLotHarvestSources Empty = new([], []);
+}
+
 /// <summary>What the seed lot screen reads: the lots with their quantities worked out by the database (a few set queries, no query per lot).</summary>
 public interface ISeedLotRegisterQuery
 {
@@ -64,4 +76,7 @@ public interface ISeedLotRegisterQuery
     Task<ILookup<Guid, SeedLotFigures>> FiguresOfReceiptsAsync(IReadOnlyCollection<Guid> receiptIds, CancellationToken cancellationToken);
 
     Task<SeedLotDetailRows> DetailAsync(Guid lineId, CancellationToken cancellationToken);
+
+    /// <summary>The seeding of every cycle these lots were hung in (all lots of those cycles) and the harvest lots of those cycles: two set queries, whatever the number of lots.</summary>
+    Task<SeedLotHarvestSources> HarvestSourcesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
 }

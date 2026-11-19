@@ -87,7 +87,7 @@ public sealed class SalesOrderViews(
     private static List<SalesOrderLineView> LineViews(SalesOrder order, IReadOnlyDictionary<Guid, decimal> delivered) =>
         order.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesOrderLineView(
             l.Id, l.LineNumber, l.ProductId, l.Product?.Code ?? string.Empty, l.Product?.Name ?? string.Empty, l.UnitId, l.UnitCode, l.UnitName, l.Factor, l.Quantity,
-            l.UnitPrice, l.ListPrice, l.Amount, delivered.GetValueOrDefault(l.Id), l.Note)).ToList();
+            l.UnitPrice, l.ListPrice, l.Amount, delivered.GetValueOrDefault(l.Id), l.Note, l.Product?.SizeMinCm, l.Product?.SizeMaxCm)).ToList();
 
     /// <summary>"x/y" per unit: what is delivered of what was ordered, the lines of one unit added up.</summary>
     private static IReadOnlyList<SalesOrderProgressView> Progress(IEnumerable<SalesOrderLineView> lines) =>

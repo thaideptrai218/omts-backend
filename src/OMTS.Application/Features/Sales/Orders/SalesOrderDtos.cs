@@ -111,7 +111,9 @@ public sealed record SalesOrderLineView(
     decimal ListPrice,
     decimal Amount,
     decimal DeliveredQuantity,
-    string? Note);
+    string? Note,
+    decimal? SizeMinCm = null,
+    decimal? SizeMaxCm = null);
 
 /// <summary>What is delivered of what was ordered in one unit: "60/100 kg".</summary>
 public sealed record SalesOrderProgressView(Guid UnitId, string UnitCode, string UnitName, decimal Ordered, decimal Delivered);

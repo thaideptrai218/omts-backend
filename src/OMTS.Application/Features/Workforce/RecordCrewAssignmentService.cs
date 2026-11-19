@@ -2,11 +2,15 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Labor.Work;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Application.Features.Workforce;
 
@@ -15,6 +19,9 @@ public sealed record CrewAssignmentSkip(Guid EmployeeId, string Reason);
 
 /// <summary>The answer of the automatic work assignment that follows a record with a crew: how many were assigned and who was left out, with the reason.</summary>
 public sealed record CrewAssignmentResult(int Created, IReadOnlyList<CrewAssignmentSkip> Skipped);
+
+/// <summary>The answer of giving a cancelled record's work assignments back: how many were removed and who, having checked in, keeps the attendance.</summary>
+public sealed record CrewReleaseResult(int Removed, IReadOnlyList<string> Kept);
 
 public static class CrewSkipReasons
 {
@@ -53,6 +60,9 @@ public static class RecordCrewJobs
 public sealed class RecordCrewAssignmentService(
     WorkAssignmentService work,
     IWorkAssignmentRepository assignments,
+    IAttendanceRepository attendances,
+    PayPeriodLock payPeriods,
+    AuditLogService audit,
     IWorkEmployeeReader employeeReader,
     IJobTypeRepository jobTypes,
     ZoneAccessGuard zones,
@@ -97,7 +107,10 @@ public sealed class RecordCrewAssignmentService(
 
         var ids = crew.Select(e => e.Id).ToList();
         var people = (await employeeReader.GetForWorkAsync(ids, cancellationToken)).ToDictionary(e => e.Id);
-        var working = (await assignments.ListOfEmployeesAsync(ids, today, cancellationToken)).Select(a => a.EmployeeId).ToHashSet();
+        var periods = (await assignments.ListOfEmployeesAsync(ids, today, cancellationToken)).ToLookup(a => a.EmployeeId);
+        var attended = (await attendances.ListOfEmployeesAsync(ids, today, cancellationToken)).ToDictionary(a => a.EmployeeId);
+        // Busy only while working: an employee who already checked out is free and is assigned again (the day is reopened by the assignment).
+        var working = periods.Select(g => g.Key).Where(id => !(attended.TryGetValue(id, out var done) && done.CheckInAt is not null && done.CheckOutAt is not null)).ToHashSet();
         var eligible = new List<Guid>();
         foreach (var employee in crew)
         {
@@ -128,6 +141,48 @@ public sealed class RecordCrewAssignmentService(
 
         skipped.AddRange(eligible.Select(id => new CrewAssignmentSkip(id, failure)));
         return new CrewAssignmentResult(0, skipped);
+    }
+
+    /// <summary>
+    /// A cancelled record gives its crew's work back: the assignments of the day of the record, at its place, with its job, of the employees named on it, are removed unless the employee is checked in; those keep
+    /// their attendance and are returned in <see cref="CrewReleaseResult.Kept"/> for the caller to tell the user. Only a day of today or later in an open pay period is touched. Nothing is saved: the caller saves.
+    /// </summary>
+    public async Task<CrewReleaseResult> ReleaseAsync(DateOnly recordDate, Guid zoneId, Guid? raftId, string jobName, IReadOnlyList<Employee> crew, CancellationToken cancellationToken)
+    {
+        if (crew.Count == 0 || recordDate < timeProvider.Today() || await payPeriods.CheckAsync(recordDate, cancellationToken) is not null)
+        {
+            return new CrewReleaseResult(0, []);
+        }
+
+        var ids = crew.Select(e => e.Id).ToList();
+        var attended = (await attendances.ListOfEmployeesAsync(ids, recordDate, cancellationToken)).ToDictionary(a => a.EmployeeId);
+        var removed = 0;
+        var kept = new List<string>();
+        foreach (var assignment in await assignments.ListOfEmployeesAsync(ids, recordDate, cancellationToken))
+        {
+            var here = raftId is null ? assignment.RaftId is null && assignment.ZoneId == zoneId : assignment.RaftId == raftId;
+            if (assignment.StartsAt is not null || !here || assignment.JobType.Name != jobName
+                || !await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.ZoneId, cancellationToken))
+            {
+                continue;
+            }
+
+            if (attended.TryGetValue(assignment.EmployeeId, out var record) && record.CheckInAt is not null)
+            {
+                kept.Add(assignment.Employee.FullName);
+                continue;
+            }
+
+            assignments.Remove(assignment);
+            audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
+            {
+                RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = assignment.ZoneId,
+                Before = new { EmployeeId = assignment.EmployeeId, Employee = assignment.Employee.FullName, assignment.Date, Job = assignment.JobType.Name }, Reason = "The record that named the employee was cancelled.",
+            });
+            removed++;
+        }
+
+        return new CrewReleaseResult(removed, kept);
     }
 
     /// <summary>All or none, as the work assignment is. Null when it was made, else the reason code; a lost race or a refusal never reaches the caller as an error, as the record is already saved.</summary>

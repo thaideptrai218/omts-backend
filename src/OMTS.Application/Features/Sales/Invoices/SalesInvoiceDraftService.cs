@@ -15,7 +15,7 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// <param name="SuggestedLotId">The lot to take it from: a lot recorded from a harvest plan that serves the order first, then the other open lots of any zone the caller may invoice that hold the product; null when none does.</param>
 public sealed record SalesInvoiceDraftLine(
     Guid SalesOrderLineId, int LineNumber, Guid ProductId, string ProductCode, string ProductName, Guid UnitId, string UnitCode, string UnitName, decimal Factor, decimal OrderedQuantity,
-    decimal DeliveredQuantity, decimal Quantity, decimal UnitPrice, decimal ListPrice, decimal Amount, Guid? SuggestedLotId, string? SuggestedLotCode, bool SuggestedByPlan);
+    decimal DeliveredQuantity, decimal Quantity, decimal UnitPrice, decimal ListPrice, decimal Amount, Guid? SuggestedLotId, string? SuggestedLotCode, bool SuggestedByPlan, decimal? SizeMinCm = null, decimal? SizeMaxCm = null);
 
 /// <summary>"Xử lý đặt hàng": the invoice an order proposes to make now. Nothing is saved.</summary>
 /// <param name="Zone">The zone the invoice would take: the zone of the first lot proposed (an invoice takes the zone of its first lot); null when no lot is proposed.</param>
@@ -68,7 +68,7 @@ public sealed class SalesInvoiceDraftService(
             var lot = lots.FirstOrDefault(x => x.Products.Any(p => p.ProductId == l.ProductId));
             return new SalesInvoiceDraftLine(
                 l.Id, l.LineNumber, l.ProductId, l.Product?.Code ?? string.Empty, l.Product?.Name ?? string.Empty, l.UnitId, l.UnitCode, l.UnitName, l.Factor, l.Quantity,
-                delivered.GetValueOrDefault(l.Id), remaining, l.UnitPrice, l.ListPrice, InvoiceMoney.LineAmount(remaining, l.UnitPrice), lot?.Id, lot?.LotCode, lot?.Suggested ?? false);
+                delivered.GetValueOrDefault(l.Id), remaining, l.UnitPrice, l.ListPrice, InvoiceMoney.LineAmount(remaining, l.UnitPrice), lot?.Id, lot?.LotCode, lot?.Suggested ?? false, l.Product?.SizeMinCm, l.Product?.SizeMaxCm);
         }).ToList();
         var subtotal = InvoiceMoney.Subtotal(lines.Select(l => l.Amount));
         var share = SalesInvoiceOrderShare.DiscountShare(order.DiscountAmount, order.Subtotal, subtotal, shared);

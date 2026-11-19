@@ -43,7 +43,22 @@ public sealed class WorkQueryService(
         var ids = periods.Select(p => p.EmployeeId).Distinct().ToList();
         var attended = (await attendances.ListOfEmployeesAsync(ids, day, cancellationToken)).ToDictionary(a => a.EmployeeId);
         var leave = (await requests.ListApprovedLeaveAsync(ids, day, cancellationToken)).Select(l => l.EmployeeId).ToHashSet();
-        return Result<IReadOnlyList<AssignmentView>>.Success(WorkRules.Rows(periods, attended, leave));
+        var versions = await settings.ListAsync(cancellationToken);
+        var inForce = AttendanceSettingsVersion.EffectiveOn(versions, day);
+        var byEmployee = periods.ToLookup(p => p.EmployeeId);
+        // The paid time of the day is the one payroll uses (WorkHoursCalculator): break taken off, rounded down; the break shown is what that calculation took off.
+        var rows = WorkRules.Rows(periods, attended, leave).Select(row =>
+        {
+            if (!attended.TryGetValue(row.EmployeeId, out var record) || record.CheckInAt is not { } start || record.CheckOutAt is not { } end || end <= start)
+            {
+                return row;
+            }
+
+            var hours = WorkHoursCalculator.Calculate(start, end, byEmployee[row.EmployeeId], inForce);
+            var gross = (int)Math.Floor((end - start).TotalMinutes);
+            return row with { WorkedMinutes = hours.Jobs.Sum(j => j.Minutes), BreakMinutes = Math.Max(0, gross - hours.Periods.Sum(p => p.Minutes)) };
+        }).ToList();
+        return Result<IReadOnlyList<AssignmentView>>.Success(rows);
     }
 
     /// <summary>LABOR-02 steps 3 and 5: the job types In Use, and the Employed employees with a working zone among the caller's zones, with their leave and assignment of the day.</summary>
@@ -62,7 +77,15 @@ public sealed class WorkQueryService(
         var latestOf = (await assignments.ListDayAsync(day, cancellationToken))
             .GroupBy(p => p.EmployeeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last());
-        var checkedIn = (await attendances.ListDayAsync(day, cancellationToken)).Where(a => a.CheckInAt is not null).Select(a => a.EmployeeId).ToHashSet();
+        var records = (await attendances.ListDayAsync(day, cancellationToken)).ToList();
+        var checkedIn = records.Where(a => a.CheckInAt is not null && a.CheckOutAt is null).Select(a => a.EmployeeId).ToHashSet();
+        // An employee who checked out is free again: no assignment of the day is shown as holding them.
+        var finished = records.Where(a => a.CheckInAt is not null && a.CheckOutAt is not null).Select(a => a.EmployeeId).ToHashSet();
+        foreach (var id in finished)
+        {
+            latestOf.Remove(id);
+        }
+
         var options = people.Select(e => new WorkEmployeeOption(e.Id, e.FullName, leave.Contains(e.Id))
         {
             Code = e.Code,

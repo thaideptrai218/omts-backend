@@ -51,6 +51,40 @@ public sealed class CustomerDebtStandings(ICooperativeRepository cooperatives, C
         return ids.ToDictionary(id => id, id => policy.Evaluate(debtOf[id], allocations.GetValueOrDefault(id)?.DebtAgeDays));
     }
 
+    /// <summary>
+    /// The dashboard's due debts: how many customers owe more than 0, how many are over the limit (amount or days) and how many reach the days limit within <paramref name="soonDays"/> days.
+    /// The last two are 0 while the warning is off (the invoices have no due date of their own).
+    /// </summary>
+    public async Task<(int Debtors, int Overdue, int DueSoon)> DueSummaryAsync(CustomerDebtPolicy policy, int soonDays, CancellationToken cancellationToken)
+    {
+        var debtOf = (await debtQuery.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
+        var owing = debtOf.Where(d => d.Value > 0m).Select(d => d.Key).ToList();
+        if (!policy.Enabled || owing.Count == 0)
+        {
+            return (owing.Count, 0, 0);
+        }
+
+        var allocations = policy.MaxDays is null
+            ? new Dictionary<Guid, CustomerDebtAllocation>()
+            : (await debts.AllocationsAsync(owing, cancellationToken)).ToDictionary(a => a.Key, a => a.Value);
+        var overdue = 0;
+        var dueSoon = 0;
+        foreach (var id in owing)
+        {
+            var days = allocations.GetValueOrDefault(id)?.DebtAgeDays;
+            if (policy.Evaluate(debtOf[id], days).Over)
+            {
+                overdue++;
+            }
+            else if (policy.MaxDays is { } max && days is { } age && age >= max - soonDays)
+            {
+                dueSoon++;
+            }
+        }
+
+        return (owing.Count, overdue, dueSoon);
+    }
+
     /// <summary>The ids of every customer over the limit; empty while the warning is off.</summary>
     public async Task<IReadOnlySet<Guid>> OverLimitIdsAsync(CustomerDebtPolicy policy, CancellationToken cancellationToken)
     {

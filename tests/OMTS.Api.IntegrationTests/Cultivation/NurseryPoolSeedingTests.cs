@@ -157,6 +157,42 @@ public sealed class NurseryPoolSeedingTests
         Assert.Equal("LanePercent", again.Text("field"));
     }
 
+    // NUR-22 (18/11/2026): the session that uses the pool up closes the batch by itself (loss 0, no manual close); lowering it opens the batch again; a removal does the same; a manual close with a leftover still works.
+    [Fact]
+    public async Task A_batch_closes_by_itself_when_seeding_uses_the_pool_up_and_opens_again_when_pieces_come_back()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        var client = world.Owner.Client;
+        var batch = await client.ReadyNurseryAsync(api, world.ZoneId, world.Lot, "10000", "9500");
+        var cycle = await client.StartNurseryCycleAsync(world.Raft1, batch.Id());
+        var record = await client.SeedingRecordAsync(cycle.Id(), NurseryTestKit.NurserySession([1], 4000m));
+        Assert.Equal(4002, (await client.GetNurseryAsync(batch.Id())).GetProperty("statusId").GetInt32());
+
+        var second = await client.SeedingRecordAsync(cycle.Id(), NurseryTestKit.NurserySession([2], 5500m));
+        var closed = await client.GetNurseryAsync(batch.Id());
+        Assert.Equal((4004, 0m, 0m, 9500m, "tự đóng khi thả hết", false), (closed.GetProperty("statusId").GetInt32(), closed.Pieces("remaining"), closed.Pieces("closeLossPieces"), closed.Pieces("seeded"), closed.Text("closeReason"), closed.Flag("canClose")));
+        var entry = (await client.NurseryHistoryAsync(batch.Id())).GetProperty("entries").EnumerateArray().Last();
+        Assert.Equal(("Closed", "tự đóng khi thả hết"), (entry.Text("action"), entry.Text("reason")));
+
+        // Lowering the second session gives pieces back: the batch is Completed again and nothing was written off.
+        var put = await client.PutSeedingAsync(second.Id(), second.AsCorrection() with { Quantity = 5000m, RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(second.Id()) });
+        await put.ReadAsync(HttpStatusCode.OK);
+        var reopened = await client.GetNurseryAsync(batch.Id());
+        Assert.Equal((4002, 500m, 0m), (reopened.GetProperty("statusId").GetInt32(), reopened.Pieces("remaining"), reopened.Pieces("closeLossPieces")));
+
+        // Used up again, then removed: open again too.
+        var back = await client.PutSeedingAsync(second.Id(), second.AsCorrection() with { Quantity = 5500m, RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(second.Id()) });
+        await back.ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(4004, (await client.GetNurseryAsync(batch.Id())).GetProperty("statusId").GetInt32());
+        await (await client.RemoveSeedingAsync(record.Id(), "Nhập nhầm", await api.IssueRowVersionAsync<SeedingRecord>(record.Id()))).ReadAsync(HttpStatusCode.NoContent);
+        Assert.Equal((4002, 4000m), ((await client.GetNurseryAsync(batch.Id())).GetProperty("statusId").GetInt32(), (await client.GetNurseryAsync(batch.Id())).Pieces("remaining")));
+
+        // Leftover above 0 is still closed by hand (loss above 0).
+        await (await client.PostCloseAsync(api, batch.Id())).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(4004, (await client.GetNurseryAsync(batch.Id())).GetProperty("statusId").GetInt32());
+    }
+
     // Two cycles drew 3 000 and 4 000 from a batch of 10 000 in, 9 500 survived; closing wrote the 2 500 left off. The loss of the batch (500 + 2 500) is shared by what each cycle drew (3/7 and 4/7).
     [Fact]
     public async Task The_summary_of_a_cycle_shares_the_loss_of_the_batch_by_what_each_cycle_seeded()

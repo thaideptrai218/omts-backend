@@ -28,7 +28,9 @@ public sealed record SaveProductRequest(
     string? Note = null,
     decimal? MinKg = null,
     decimal? MaxKg = null,
-    IReadOnlyList<ProductUnitInput>? Units = null);
+    IReadOnlyList<ProductUnitInput>? Units = null,
+    decimal? SizeMinCm = null,
+    decimal? SizeMaxCm = null);
 
 /// <param name="SalePrice">The price of one of this unit; the base unit (kg) carries the list price. Null for a trader.</param>
 public sealed record ProductUnitView(Guid Id, Guid UnitId, string Name, decimal Factor, string Code, bool IsBase, decimal? SalePrice);
@@ -60,6 +62,8 @@ public sealed record ProductView(
     string? PhotoUrl,
     decimal? MinKg,
     decimal? MaxKg,
+    decimal? SizeMinCm,
+    decimal? SizeMaxCm,
     decimal? OnHandKg,
     bool IsUsed,
     DateTimeOffset CreatedAt,
@@ -86,6 +90,8 @@ public sealed record ProductDetailView(
     string? PhotoUrl,
     decimal? MinKg,
     decimal? MaxKg,
+    decimal? SizeMinCm,
+    decimal? SizeMaxCm,
     decimal? OnHandKg,
     bool IsUsed,
     DateTimeOffset CreatedAt,
@@ -95,7 +101,7 @@ public sealed record ProductDetailView(
 {
     public static ProductDetailView Of(ProductView p, IReadOnlyList<ProductPhotoView> photos, IReadOnlyList<ProductSourceSeedView> sourceSeeds) => new(
         p.Id, p.Name, p.UnitPrice, p.StatusId, p.Status, p.RowVersion, p.Code, p.CategoryId, p.CategoryName, p.Unit, p.Units, p.Description, p.Note,
-        photos.Count > 0 ? photos[0].Url : null, p.MinKg, p.MaxKg, p.OnHandKg, p.IsUsed, p.CreatedAt, p.CreatedBy, photos, sourceSeeds);
+        photos.Count > 0 ? photos[0].Url : null, p.MinKg, p.MaxKg, p.SizeMinCm, p.SizeMaxCm, p.OnHandKg, p.IsUsed, p.CreatedAt, p.CreatedBy, photos, sourceSeeds);
 }
 
 /// <summary>A saved product with MSG-GEN-05 (SALE-11 step 5).</summary>

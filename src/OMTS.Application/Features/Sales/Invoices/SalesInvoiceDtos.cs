@@ -89,7 +89,7 @@ public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? Phon
 /// <param name="SalesOrderLineId">The order line the line delivers; null outside an order.</param>
 public sealed record SalesInvoiceLineView(
     Guid Id, int LineNumber, Guid ProductId, string ProductName, Guid HarvestLotId, string LotCode, decimal Kg, decimal UnitPrice, decimal ListPrice, SalesPriceSource PriceSource,
-    decimal Amount, bool SoldWholeLot, SalesInvoiceUnitView Unit, decimal Quantity, Guid? SalesOrderLineId);
+    decimal Amount, bool SoldWholeLot, SalesInvoiceUnitView Unit, decimal Quantity, Guid? SalesOrderLineId, decimal? SizeMinCm = null, decimal? SizeMaxCm = null);
 
 public sealed record SalesInvoiceUnitView(Guid Id, string Code, string Name, decimal Factor);
 

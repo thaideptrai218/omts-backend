@@ -23,6 +23,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 public sealed class SeedingRecordCorrectionService(
     ISeedingRecordRepository records,
     INurseryBatchRepository nurseries,
+    NurseryPoolAutoClose autoClose,
     IRaftRepository rafts,
     CycleWriteGuard writes,
     SeedingSessionReader reader,
@@ -152,6 +153,8 @@ public sealed class SeedingRecordCorrectionService(
             if (batch is not null)
             {
                 unitOfWork.MarkChanged(batch);
+                // Owner rule of 18/11/2026: the batch closes when the pool is used up, and opens again when pieces come back.
+                await autoClose.SyncAsync(batch.Id, record.Id, record.Quantity, cancellationToken);
             }
             else
             {
@@ -205,6 +208,12 @@ public sealed class SeedingRecordCorrectionService(
         unitOfWork.MarkChanged(record.Cycle);
         await stockSync.RemoveAsync(record, record.Cycle.Raft, reason, cancellationToken);
         records.Remove(record);
+        if (record.NurseryBatchId is { } batchId)
+        {
+            // The pieces go back to the pool: a batch that closed by itself opens again (NUR-22).
+            await autoClose.SyncAsync(batchId, record.Id, null, cancellationToken);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }

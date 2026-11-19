@@ -45,6 +45,12 @@ public sealed record AssignmentView(
     public bool Complete { get; init; }
     public bool OnLeave { get; init; }
 
+    /// <summary>Paid minutes of the day (break taken off, rounded down as payroll does); null until check-in and check-out are both recorded. Only the day list fills it.</summary>
+    public int? WorkedMinutes { get; init; }
+
+    /// <summary>Minutes of break taken off that day; null as WorkedMinutes.</summary>
+    public int? BreakMinutes { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Message { get; init; }
 

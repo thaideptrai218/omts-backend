@@ -17,14 +17,14 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 internal sealed class DemoNurseryStep : IDemoSeedStep
 {
     /// <param name="MinOnHand">What the lot must still have on hand to be used.</param>
-    /// <param name="ItemCodes">The seed items the lot is taken from when one of them has stock (so the demo shows both a "Hàu béo" seed, VT001/VT002, and a "Hàu sữa" one, VT003, ready); any lot otherwise.</param>
+    /// <param name="ItemCodes">The seed items the lot is taken from when one of them has stock (so the demo shows both a Pacific oyster seed, VT001, and a native oyster one, VT004, ready); any lot otherwise.</param>
     /// <param name="Survivors">When set, the batch is completed right away with these survivors, <paramref name="CompletedDaysAgo"/> days ago.</param>
     private sealed record Plan(string Note, decimal Pieces, int StartedDaysAgo, decimal MinOnHand, decimal? Survivors = null, int CompletedDaysAgo = 0, string[]? ItemCodes = null);
 
     private static readonly Plan[] Plans =
     [
-        new("Đợt ươm demo 1: đã ươm xong, sẵn sàng thả (9.500 mảnh sống sót)", 10_000m, 12, 10_000m, 9_500m, 3, ["VT001", "VT002"]),
-        new("Đợt ươm demo 2: đã ươm xong, sẵn sàng thả (6.000 mảnh sống sót)", 6_500m, 9, 6_500m, 6_000m, 2, ["VT003"]),
+        new("Đợt ươm demo 1: đã ươm xong, sẵn sàng thả (9.500 mảnh sống sót)", 10_000m, 12, 10_000m, 9_500m, 3, ["VT001"]),
+        new("Đợt ươm demo 2: đã ươm xong, sẵn sàng thả (6.000 mảnh sống sót)", 6_500m, 9, 6_500m, 6_000m, 2, ["VT004"]),
         new("Đợt ươm demo 3: vào ươm 7 ngày trước, chờ ươm xong", 3_500m, 7, 3_500m),
     ];
 

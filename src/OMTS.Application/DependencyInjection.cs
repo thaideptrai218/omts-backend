@@ -48,6 +48,10 @@ using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Reports;
 using OMTS.Application.Features.Reports.PostSaleIssues;
 using OMTS.Application.Features.Reports.PriceTrends;
+using OMTS.Application.Features.Reports.EndOfDay;
+using OMTS.Application.Features.Reports.Financial;
+using OMTS.Application.Features.Reports.ProductStock;
+using OMTS.Application.Features.Reports.Purchases;
 using OMTS.Application.Features.Reports.SalesPerformance;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
@@ -229,6 +233,7 @@ public static class DependencyInjection
         services.AddScoped<NurseryBatchService>();
         services.AddScoped<NurseryBatchEditService>();
         services.AddScoped<NurseryCompletionService>();
+        services.AddScoped<NurseryPoolAutoClose>();
         services.AddScoped<NurseryReadService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();
@@ -386,6 +391,16 @@ public static class DependencyInjection
         services.AddScoped<PriceTrendsExportService>();
         services.AddScoped<PostSaleIssuesService>();
         services.AddScoped<PostSaleIssuesExportService>();
+        // KiotViet-style reports (OMTS-227): product stock, purchases, end of day and the financial statement (read only)
+        services.AddScoped<ProductStockService>();
+        services.AddScoped<ProductStockExportService>();
+        services.AddScoped<PurchaseReportService>();
+        services.AddScoped<PurchaseReportExportService>();
+        services.AddScoped<EndOfDayService>();
+        services.AddScoped<EndOfDayExportService>();
+        services.AddScoped<OMTS.Application.Features.Reports.Documents.ReportDocumentExport>();
+        services.AddScoped<FinancialReportService>();
+        services.AddScoped<FinancialReportExportService>();
         // DEBT-02 customer payments, money paid back, confirmations and cancellations
         services.AddScoped<CustomerPaymentViews>();
         services.AddScoped<CustomerPaymentStatusChanges>();

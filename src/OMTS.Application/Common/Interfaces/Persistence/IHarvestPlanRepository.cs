@@ -19,6 +19,12 @@ public sealed record PlanOfLot(Guid LotId, Guid PlanId, string PlanCode, IReadOn
 /// <summary>The lanes planned on a line, with the code of its plan: what a lot recorded from the line may hold.</summary>
 public sealed record PlannedLanes(string PlanCode, IReadOnlySet<Guid> LaneIds);
 
+/// <summary>The start of an Open cycle and the days its seed needs to mature; the oysters can be harvested from the start date plus the days.</summary>
+public sealed record CycleMaturity(DateOnly StartDate, int? MaturityDays)
+{
+    public DateOnly? ExpectedHarvestDate => MaturityDays is { } days ? StartDate.AddDays(days) : null;
+}
+
 /// <summary>A plan serving an order.</summary>
 public sealed record PlanOfOrder(Guid OrderId, Guid PlanId, string PlanCode, int StatusId, DateTimeOffset PlannedAt, bool WasAssigned);
 
@@ -46,6 +52,12 @@ public interface IHarvestPlanRepository
     /// The product each of these rafts farms in its Open cycle (<c>CultivationCycle.ProductId</c>); a raft with no Open cycle, or an Open cycle started before products were recorded, is absent.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, Guid>> CycleProductsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// When the Open cycle of each of these rafts was started and the days its seed needs to mature (the seed item of its nursery batch; for a cycle without a batch, the seed item that sells the cycle's product); <c>MaturityDays</c> is null
+    /// when no seed item gives one. A raft with no Open cycle is absent. The expected harvest date is the start date plus the days, worked out at read time (<see cref="CycleMaturity.ExpectedHarvestDate"/>).
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, CycleMaturity>> CycleMaturityAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken);
 
     /// <summary>The plan each of these lots was recorded from, with its orders; a lot outside a plan is absent.</summary>
     Task<IReadOnlyList<PlanOfLot>> PlansOfLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);

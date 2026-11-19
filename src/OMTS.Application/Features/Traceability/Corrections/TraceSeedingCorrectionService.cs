@@ -31,6 +31,7 @@ public sealed class TraceSeedingCorrectionService(
     LaneStateReader laneStates,
     RowVersionGuard rowVersions,
     Cultivation.Seeding.SeedingStockSync stockSync,
+    Cultivation.Nursery.NurseryPoolAutoClose autoClose,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -96,6 +97,11 @@ public sealed class TraceSeedingCorrectionService(
             unitOfWork.MarkChanged(record);
             unitOfWork.MarkChanged(record.Cycle);
             unitOfWork.MarkChanged(plan.Fields.Lot.Receipt);
+            if (record.NurseryBatchId is { } batchId)
+            {
+                await autoClose.SyncAsync(batchId, record.Id, plan.Fields.Quantity, cancellationToken);
+            }
+
             audit.Record(SeedingValues.Entry(TraceCorrectionAudit.SeedingRecordCorrected, record) with
             {
                 Before = plan.ChangedBefore, After = TraceCorrectionAudit.After(plan.ChangedAfter, published, !plan.IsOwner), Reason = plan.Fields.Reason,

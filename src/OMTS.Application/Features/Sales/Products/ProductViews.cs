@@ -50,6 +50,6 @@ public sealed class ProductViews(IProductRepository products, IAccountRepository
         return new ProductView(
             p.Id, p.Name, hidePrice ? null : p.UnitPrice, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), RowVersionGuard.Encode(p.RowVersion),
             p.Code, p.CategoryId, p.Category?.Name, string.IsNullOrEmpty(baseName) ? ProductRules.BaseUnitName : baseName, units, p.Description, p.Note, photoUrl,
-            p.MinKg, p.MaxKg, hideStock ? null : onHand, isUsed, p.CreatedAt, p.CreatedBy is { } id ? creatorNames.GetValueOrDefault(id) : null);
+            p.MinKg, p.MaxKg, p.SizeMinCm, p.SizeMaxCm, hideStock ? null : onHand, isUsed, p.CreatedAt, p.CreatedBy is { } id ? creatorNames.GetValueOrDefault(id) : null);
     }
 }

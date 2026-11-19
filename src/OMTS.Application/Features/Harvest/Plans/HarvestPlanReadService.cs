@@ -161,11 +161,17 @@ public sealed class HarvestPlanReadService(
         var catalogue = cycleProducts.Count == 0
             ? new Dictionary<Guid, Product>()
             : (await products.GetByIdsAsync(cycleProducts.Values.Distinct().ToList(), cancellationToken)).ToDictionary(p => p.Id);
-        var result = found.Select(f => new EligibleRaftView(
-            f.Raft.Id, f.Raft.Code, f.Zone,
-            cycleProducts.TryGetValue(f.Raft.Id, out var productId) && catalogue.TryGetValue(productId, out var product) ? new HarvestPlanProductView(product.Id, product.Code, product.Name) : null,
-            f.Raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && f.States[l.Id] != LaneState.NotSeeded).OrderBy(l => l.LaneNumber)
-                .Select(l => LaneOf(l, f.States[l.Id], claims)).ToList())).ToList();
+        var maturity = await plans.CycleMaturityAsync(raftIds, cancellationToken);
+        var result = found.Select(f =>
+        {
+            maturity.TryGetValue(f.Raft.Id, out var cycle);
+            return new EligibleRaftView(
+                f.Raft.Id, f.Raft.Code, f.Zone,
+                cycleProducts.TryGetValue(f.Raft.Id, out var productId) && catalogue.TryGetValue(productId, out var product) ? new HarvestPlanProductView(product.Id, product.Code, product.Name, product.SizeMinCm, product.SizeMaxCm) : null,
+                f.Raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && f.States[l.Id] != LaneState.NotSeeded).OrderBy(l => l.LaneNumber)
+                    .Select(l => LaneOf(l, f.States[l.Id], claims)).ToList(),
+                cycle?.StartDate, cycle?.MaturityDays, cycle?.ExpectedHarvestDate);
+        }).ToList();
         return new EligibleRafts(result);
     }
 

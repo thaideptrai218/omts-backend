@@ -23,6 +23,7 @@ public sealed class SeedingRecordService(
     ICultivationCycleRepository cycles,
     ISeedingRecordRepository records,
     INurseryBatchRepository nurseries,
+    NurseryPoolAutoClose autoClose,
     IRaftRepository rafts,
     CycleWriteGuard writes,
     SeedingSessionReader reader,
@@ -153,6 +154,8 @@ public sealed class SeedingRecordService(
         {
             // The pool of the batch is shared by every cycle: two sessions that each fit but not together conflict on the batch row (MSG06).
             unitOfWork.MarkChanged(batch!);
+            // Owner rule of 18/11/2026: a record that uses the pool up closes the batch in the same save.
+            await autoClose.SyncAsync(batch!.Id, record.Id, record.Quantity, cancellationToken);
         }
         else
         {

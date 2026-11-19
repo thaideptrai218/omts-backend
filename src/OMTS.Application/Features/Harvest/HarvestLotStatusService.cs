@@ -152,5 +152,7 @@ public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditL
     }
 
     /// <summary>MSG-GEN-09 naming the lot and its status: it is no longer for sale.</summary>
-    public AppError NotForSale(HarvestLot lot) => AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", statusCatalog.DisplayNameOf(lot.StatusId)));
+    public AppError NotForSale(HarvestLot lot) => lot.StatusId == StatusIds.HarvestLot.AwaitingWeighing
+        ? AppError.Conflict(UserMessages.HarvestLotNotWeighed(lot.LotCode))
+        : AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", statusCatalog.DisplayNameOf(lot.StatusId)));
 }

@@ -2,18 +2,21 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
+using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Dashboard;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// FARM-06 – the operations dashboard; Cooperative Owner only (SRS 27/10), anyone else gets 403 MSG-GEN-08. Read only: every figure is worked out from the records when asked (BR-FARM-10).
-/// The gate is the Owner account type. The <c>DASHBOARD_*</c> functions of <c>PermissionFunctions</c> only tell the client which tiles to show in <c>/api/me/permissions</c>; no role can hold them.
+/// FARM-06 – the operations dashboard; the Cooperative Owner and, since 19/11/2026 (user decision D5, SRS_DEVIATIONS), an Accountant of every zone (SALES_REPORTS View); anyone else gets 403 MSG-GEN-08.
+/// Read only: every figure is worked out from the records when asked (BR-FARM-10). An Accountant gets the same tiles but no pending tasks (the Owner's decisions).
+/// The <c>DASHBOARD_*</c> functions of <c>PermissionFunctions</c> only tell the client which tiles to show in <c>/api/me/permissions</c>; no role can hold them.
 /// </summary>
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
-[RequireCooperativeOwner]
+[RequirePermission(PermissionFunctions.SalesReports, PermissionAction.View, PermissionScope.AnyZone)]
 public sealed class OperationsDashboardController(OperationsDashboardService dashboard) : ControllerBase
 {
     /// <summary>

@@ -44,7 +44,8 @@ public sealed class HarvestPlanProgress(
         }
 
         var lanes = line.Lanes.Where(l => !l.IsSkipped).Select(l => l.Lane.LaneNumber).Order().ToList();
-        if (lanes.Count == 0)
+        // A line planned without lanes (a plan line is a raft) records whatever lanes the form sends; only a line whose every lane was left out records nothing.
+        if (lanes.Count == 0 && line.Lanes.Count > 0)
         {
             return AppError.Conflict(UserMessages.WrongStatus($"Raft {line.Raft.Code} of {HarvestPlanCodeService.ObjectName} {plan.Code}", "left out"));
         }
