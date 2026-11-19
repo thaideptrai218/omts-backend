@@ -9,11 +9,11 @@ using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceSearchTestKit;
 
 namespace OMTS.Api.IntegrationTests.Dashboard;
 
-/// <summary>FARM-06: the Owner alone opens it, a filter that cannot be read is MSG-GEN-01, and every answer says when it was worked out.</summary>
+/// <summary>FARM-06: the Owner and an Accountant of every zone open it (D5, 19/11/2026), a filter that cannot be read is MSG-GEN-01, and every answer says when it was worked out.</summary>
 public class OperationsDashboardAccessAndFilterTests
 {
     [Fact]
-    public async Task Only_the_cooperative_owner_opens_the_dashboard()
+    public async Task Only_the_cooperative_owner_and_an_accountant_of_every_zone_open_the_dashboard()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -22,7 +22,8 @@ public class OperationsDashboardAccessAndFilterTests
         var trader = await api.TraderAsync();
 
         Assert.Equal(HttpStatusCode.OK, (await sale.Owner.Client.GetDashboardAsync()).StatusCode);
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client, allZonesManager.Client, trader })
+        Assert.Equal(HttpStatusCode.OK, (await accountant.Client.GetDashboardAsync()).StatusCode);
+        foreach (var client in new[] { sale.Manager.Client, allZonesManager.Client, trader })
         {
             var refused = await client.GetDashboardAsync();
             Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (refused.StatusCode, await refused.ErrorCodeAsync()));
