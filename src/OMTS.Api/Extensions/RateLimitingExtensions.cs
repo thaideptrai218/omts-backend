@@ -62,7 +62,8 @@ public static class RateLimitingExtensions
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = async (context, cancellationToken) =>
             {
-                var message = UserMessages.TooManyRequests;
+                // The public provenance page answers its own MSG-ORIGIN-05 so the page can offer its QR code to open on a phone.
+                var message = context.HttpContext.Request.Path.StartsWithSegments("/api/public/provenance") ? UserMessages.ProvenanceTooManyRequests : UserMessages.TooManyRequests;
                 context.HttpContext.Response.Headers.RetryAfter = "60";
                 await context.HttpContext.Response.WriteAsJsonAsync(
                     new { status = 429, title = message.Code, code = message.Code, detail = message.Text },

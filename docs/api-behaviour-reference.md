@@ -351,7 +351,7 @@ SALE-07 `PUT /api/sales-invoices/{id}/correction` and SALE-08 `POST /api/sales-i
 
 Migration `20261109053538_SalesInvoiceCorrectionAndCancellation` only adds nullable columns.
 
-- Public provenance page (BR-ORIGIN-01, BR-ORIGIN-05): `GET /api/origin/{qrToken}`, anonymous, the token at the end of the QR link of an invoice. It lists the Published lots of the invoice with their origin (products, zone and raft, seed lots and suppliers, seeding dates, cultivation logs, the average water of the zone while the lot grew, harvest, the kg sold) and a Withdrawn lot only with its withdrawal time; never the customer, the staff or a price (decided 10/11/2026). An unknown token, a cancelled invoice or one with no published lot answers 404.
+- `GET /api/origin/{qrToken}` was removed (19/11/2026): it exposed the suppliers, the kg and the water measurements. The QR code of an invoice opens the provenance page `GET /api/public/provenance/{qrToken}` only.
 - There is no port weighing slip (decision of 17/11/2026): weighing at the port is the weighing of the harvest lot (`POST /api/harvest-lots/{id}/weigh`). The trader confirms in person, and an invoice is made from an order (DH), never from a weighing. The `/api/port-weighings` and `/api/me/port-weighings` endpoints, the weighing tables and the `portWeighingId`, `cageKgs`, `cageCount`, `deliveredCages` and `weighedCages` fields were removed.
 - `GET /api/me/invoices` (`page`, `pageSize` up to 100, newest first; MSG-GEN-11 in `message` when empty) and `GET /api/me/invoices/{id}`: the logged-in trader's own invoices with their lines, the money, the payments and `qrUrl`, without the staff data. Staff get 403 MSG-GEN-08; an invoice of another profile is 404.
 
