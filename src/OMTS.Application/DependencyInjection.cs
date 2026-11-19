@@ -291,7 +291,6 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
-        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();

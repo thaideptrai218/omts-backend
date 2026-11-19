@@ -1,3 +1,5 @@
+using ClosedXML.Excel.Drawings;
+using QRCoder;
 using System.Globalization;
 using ClosedXML.Excel;
 using OMTS.Application.Common.Interfaces.Reports;
@@ -42,11 +44,34 @@ internal sealed class ClosedXmlSpreadsheetWriter : ISpreadsheetWriter
             }
 
             worksheet.SheetView.FreezeRows(1);
+            AddQrCode(worksheet, sheet);
         }
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
+    }
+
+    /// <summary>The QR code of the sheet, if any, one empty column to the right of the table, its caption in the cell above it.</summary>
+    private static void AddQrCode(IXLWorksheet worksheet, SpreadsheetSheet sheet)
+    {
+        if (string.IsNullOrWhiteSpace(sheet.QrCodeText))
+        {
+            return;
+        }
+
+        var column = sheet.Headers.Count + 2;
+        if (!string.IsNullOrWhiteSpace(sheet.QrCodeCaption))
+        {
+            var caption = worksheet.Cell(1, column);
+            caption.Value = sheet.QrCodeCaption;
+            caption.Style.Font.Bold = true;
+        }
+
+        using var data = new QRCodeGenerator().CreateQrCode(sheet.QrCodeText, QRCodeGenerator.ECCLevel.M);
+        var png = new PngByteQRCode(data).GetGraphic(8);
+        using var image = new MemoryStream(png);
+        worksheet.AddPicture(image, XLPictureFormat.Png, "QrCode").MoveTo(worksheet.Cell(2, column)).WithSize(180, 180);
     }
 
     private static void SetValue(IXLCell cell, object? value)

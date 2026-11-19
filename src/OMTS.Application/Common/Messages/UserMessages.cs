@@ -584,6 +584,12 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["cooperative_phone"] = cooperativePhone },
     };
 
+    /// <summary>
+    /// MSG-ORIGIN-05: the provenance page was opened too often from this network (429). The page offers its QR code so the buyer can open it on a phone (another network) instead.
+    /// </summary>
+    public static readonly UserMessage ProvenanceTooManyRequests = new(
+        Origin05, "This page has been opened too many times from this network. Please wait a minute, or scan the QR code with your phone to open it.");
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(

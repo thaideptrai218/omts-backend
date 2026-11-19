@@ -124,7 +124,6 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotReferenceQuery, HarvestLotReferenceQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
-        services.AddScoped<IPublicOriginQuery, PublicOriginQuery>();
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<IQualityClaimRepository, QualityClaimRepository>();
@@ -357,10 +356,12 @@ public static class DependencyInjection
         services.AddSingleton<LocalFileUrlSigner>();
         services.AddSingleton<LocalFileStorage>();
         services.AddSingleton<AzureBlobFileStorage>();
+        services.AddSingleton<R2FileStorage>();
         services.AddSingleton<IFileStorage>(provider => provider.GetRequiredService<IOptions<StorageOptions>>().Value.Provider switch
         {
             StorageOptions.LocalProvider => provider.GetRequiredService<LocalFileStorage>(),
             StorageOptions.AzureBlobProvider => provider.GetRequiredService<AzureBlobFileStorage>(),
+            StorageOptions.R2Provider => provider.GetRequiredService<R2FileStorage>(),
             var other => throw UnknownProvider(StorageOptions.SectionName, other),
         });
     }

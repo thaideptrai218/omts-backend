@@ -13,4 +13,6 @@ public interface ISpreadsheetWriter
 /// One worksheet: a header row, then one row per item. Cell values are strings, numbers, booleans,
 /// <see cref="DateTime"/> (already in business local time) or null for an empty cell.
 /// </summary>
-public sealed record SpreadsheetSheet(string Name, IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<object?>> Rows);
+/// <remarks><c>QrCodeText</c>: when set, a QR code of that text is drawn to the right of the table with <c>QrCodeCaption</c> above it (the provenance QR of a printed invoice).</remarks>
+public sealed record SpreadsheetSheet(
+    string Name, IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<object?>> Rows, string? QrCodeText = null, string? QrCodeCaption = null);
