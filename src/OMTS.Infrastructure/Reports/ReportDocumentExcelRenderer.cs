@@ -6,7 +6,7 @@ namespace OMTS.Infrastructure.Reports;
 
 /// <summary>
 /// A <see cref="ReportDocument"/> as an .xlsx in the KiotViet layout, one sheet per section: "Ngày lập" top left, the merged centred title and filter lines, the light blue header row (frozen,
-/// repeated on every printed page), beige group rows, grey sub-groups and detail rows with thin grey borders. Numbers stay numbers (thousand separators by format). A4 landscape, one page wide.
+/// repeated on every printed page), beige group rows, grey sub-groups and detail rows with thin grey borders. Numbers stay numbers (thousand separators by format). A4 portrait or landscape as the document says, one page wide.
 /// </summary>
 internal sealed class ReportDocumentExcelRenderer : IReportDocumentRenderer
 {
@@ -79,9 +79,16 @@ internal sealed class ReportDocumentExcelRenderer : IReportDocumentRenderer
             WriteRow(sheet, ++row, item, columns);
         }
 
+        if (!string.IsNullOrWhiteSpace(section.Note))
+        {
+            var note = Merged(sheet, row += 2, last, section.Note, XLAlignmentHorizontalValues.Left, bold: false);
+            note.Style.Font.Italic = true;
+            note.Style.Font.FontSize = 9;
+        }
+
         sheet.SheetView.FreezeRows(headerRow);
         var page = sheet.PageSetup;
-        page.PageOrientation = XLPageOrientation.Landscape;
+        page.PageOrientation = document.Orientation == ReportOrientation.Landscape ? XLPageOrientation.Landscape : XLPageOrientation.Portrait;
         page.PaperSize = XLPaperSize.A4Paper;
         page.FitToPages(1, 0);
         page.SetRowsToRepeatAtTop(headerRow, headerRow);
