@@ -37,6 +37,9 @@ public sealed record HarvestFields
     /// <summary>Sends <c>replaceCrew=true</c>: the crew of a correction becomes exactly the <c>crew</c> fields, none clearing it.</summary>
     public bool ReplaceCrew { get; init; }
 
+    /// <summary>Posts without a harvest plan line even when the kit could plan one, to see MSG-HARVEST-06.</summary>
+    public bool WithoutPlan { get; init; }
+
     /// <summary>Sends no photo when recording, to see it refused (the kit adds one otherwise).</summary>
     public bool NoPhoto { get; init; }
 
@@ -123,6 +126,16 @@ public static class HarvestTestKit
         if (fields.Photos.Count == 0 && !fields.NoPhoto)
         {
             fields = fields with { Photos = [FarmingTestKit.Jpeg] };
+        }
+
+        // A harvest is recorded only from a line of a harvest plan (MSG-HARVEST-06): a test that names no line gets a plan of the raft with the lanes it sent.
+        if (fields.PlanLineId is null && !fields.WithoutPlan)
+        {
+            var lanes = fields.Lanes.Select(l => int.TryParse(l, out var n) ? n : 0).Where(n => n > 0).ToList();
+            if (await HarvestPlanTestKit.PlannedLineForAsync(raftId, lanes) is { } lineId)
+            {
+                fields = fields.FromPlanLine(lineId);
+            }
         }
 
         return await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
