@@ -9,7 +9,7 @@ using QuestPDF.Infrastructure;
 namespace OMTS.Infrastructure.Reports;
 
 /// <summary>
-/// A <see cref="ReportDocument"/> as a PDF in the KiotViet layout: A4 landscape, "Ngày lập" top left with the centred title and filter lines, a light blue header row repeated on every page,
+/// A <see cref="ReportDocument"/> as a PDF in the KiotViet layout: A4 portrait or landscape as the document says, "Ngày lập" top left with the centred title and filter lines, a light blue header row repeated on every page,
 /// beige group rows, grey sub-groups, detail rows with thin grey bottom borders, numbers right-aligned with thousand separators, document codes in blue, the footer text centred and
 /// "Trang:n/N" on the right. Uses the Noto Sans files embedded in this assembly, never the fonts of the machine.
 /// QuestPDF Community license: free for an organisation under USD 1M yearly revenue (https://www.questpdf.com/license/).
@@ -45,7 +45,7 @@ internal sealed class ReportDocumentPdfRenderer : IReportDocumentRenderer
     public byte[] Render(ReportDocument document) =>
         Document.Create(container => container.Page(page =>
         {
-            page.Size(PageSizes.A4.Landscape());
+            page.Size(document.Orientation == ReportOrientation.Landscape ? PageSizes.A4.Landscape() : PageSizes.A4);
             page.Margin(28, Unit.Point);
             page.DefaultTextStyle(style => style.FontFamily(FontFamily).FontSize(8.5f).FontColor(TextColor));
             page.Content().Column(column =>
@@ -74,12 +74,9 @@ internal sealed class ReportDocumentPdfRenderer : IReportDocumentRenderer
     private static void Title(IContainer container, ReportDocument document) =>
         container.Column(column =>
         {
-            column.Item().Row(row =>
-            {
-                row.RelativeItem().Text($"Ngày lập: {document.CreatedAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}").FontSize(9);
-                row.RelativeItem(3).AlignCenter().Text(document.Title).FontSize(18).Bold().FontColor("#222222");
-                row.RelativeItem();
-            });
+            // "Ngày lập" on its own line above the title (as KiotViet), so it never wraps on a portrait page.
+            column.Item().Text($"Ngày lập: {document.CreatedAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}").FontSize(9);
+            column.Item().PaddingTop(4).AlignCenter().Text(document.Title).FontSize(18).Bold().FontColor("#222222");
             foreach (var line in document.FilterLines)
             {
                 column.Item().PaddingTop(5).AlignCenter().Text(line).FontSize(9.5f);
@@ -118,6 +115,10 @@ internal sealed class ReportDocumentPdfRenderer : IReportDocumentRenderer
                     WriteRow(table, section.Columns, row);
                 }
             });
+            if (!string.IsNullOrWhiteSpace(section.Note))
+            {
+                column.Item().PaddingTop(4).Text(section.Note).FontSize(8).Italic();
+            }
         });
 
     private static void WriteRow(TableDescriptor table, IReadOnlyList<ReportColumn> columns, ReportRow row)

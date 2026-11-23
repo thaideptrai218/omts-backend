@@ -46,7 +46,7 @@ public static class PayrollSheetDocumentBuilder
         }
 
         return new ReportDocument(
-            $"Bảng lương {sheet.Code}", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, [new ReportSection(null, columns, rows)], cooperativeName);
+            $"Bảng lương {sheet.Code}", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, [new ReportSection(null, columns, rows)], cooperativeName, ReportOrientation.Landscape);
     }
 
     internal static string Day(DateOnly day) => day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);

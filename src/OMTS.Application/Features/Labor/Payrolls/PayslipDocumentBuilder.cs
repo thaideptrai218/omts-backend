@@ -31,7 +31,7 @@ public static class PayslipDocumentBuilder
             $"Kỳ làm việc: {PayrollSheetDocumentBuilder.Day(slip.From)} - {PayrollSheetDocumentBuilder.Day(slip.To)}",
             $"Bảng lương: {slip.PayrollCode}",
         };
-        return new ReportDocument($"Phiếu lương {slip.Code}", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, sections, cooperativeName);
+        return new ReportDocument($"Phiếu lương {slip.Code}", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, sections, cooperativeName, ReportOrientation.Landscape);
     }
 
     private static ReportSection Income(PayrollSlipDetail slip)

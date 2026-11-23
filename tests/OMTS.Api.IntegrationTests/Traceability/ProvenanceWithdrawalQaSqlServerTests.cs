@@ -148,8 +148,17 @@ public class ProvenanceWithdrawalQaSqlServerTests
 
     private sealed class HookedTraceQuery(ILotTraceQuery inner, SaleLinesHook hook) : ILotTraceQuery
     {
-        public Task<IReadOnlyList<HarvestLot>> SearchAsync(string? lotCode, string? invoiceCode, PermittedZones zones, int max, CancellationToken cancellationToken) =>
-            inner.SearchAsync(lotCode, invoiceCode, zones, max, cancellationToken);
+        public Task<IReadOnlyList<HarvestLot>> SearchAsync(
+            string? lotCode, string? invoiceCode, DateOnly? harvestFrom, DateOnly? harvestTo, string? raftCode, string? productName, PermittedZones zones, int max, CancellationToken cancellationToken) =>
+            inner.SearchAsync(lotCode, invoiceCode, harvestFrom, harvestTo, raftCode, productName, zones, max, cancellationToken);
+
+        public Task<IReadOnlyList<HarvestLot>> LotsOfSeedAsync(string term, PermittedZones zones, int max, CancellationToken cancellationToken) =>
+            inner.LotsOfSeedAsync(term, zones, max, cancellationToken);
+
+        public Task<IReadOnlyList<SeedLotInvoiceRow>> InvoicesOfLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+            inner.InvoicesOfLotsAsync(lotIds, cancellationToken);
+
+        public Task<LotTraceContext> ContextAsync(Guid lotId, CancellationToken cancellationToken) => inner.ContextAsync(lotId, cancellationToken);
 
         public Task<IReadOnlyList<LotSaleReturn>> SaleReturnsAsync(Guid lotId, CancellationToken cancellationToken) => inner.SaleReturnsAsync(lotId, cancellationToken);
 

@@ -8,10 +8,11 @@ namespace OMTS.Application.Features.Purchasing.Items;
 
 /// <summary>
 /// "Thiết lập giá" of a receipt: the items on its lines with the price of this receipt, their cost price and their last purchase price (all per base unit), and the Owner's bulk update of
-/// the cost prices. Reading follows the right to view receipts (API filter), the update is Owner only. The update records no movement: the cost of past movements stays.
+/// the cost prices. Reading follows the right to view receipts (API filter), the update is Owner only. Each cost the update really changes writes a cost adjustment row on the stock card of
+/// the item, naming this receipt; the cost of past movements stays.
 /// </summary>
 public sealed class ReceiptPriceSetupService(
-    IPurchaseReceiptRepository receipts, IFarmingInputItemRepository items, AuditLogService audit, IUnitOfWork unitOfWork)
+    IPurchaseReceiptRepository receipts, IFarmingInputItemRepository items, InputStockLedger ledger, AuditLogService audit, IUnitOfWork unitOfWork)
 {
     private const decimal MaxCost = 1_000_000_000_000m;
 
@@ -64,7 +65,9 @@ public sealed class ReceiptPriceSetupService(
             {
                 RecordId = item.Id, RecordCode = item.Code, Before = new { item.CostPrice }, After = new { input.CostPrice },
             });
+            var previous = item.CostPrice;
             item.CostPrice = input.CostPrice;
+            ledger.RecordManualCostChange(item, previous, receipt.Id, receipt.Code);
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

@@ -6,7 +6,7 @@ namespace OMTS.Domain.Entities.Purchasing;
 /// <summary>
 /// One row of the append-only movement ledger of an input item, in base units. The quantity on hand of an item is the sum of its rows, that of a seed lot the sum of the
 /// rows naming the lot. A document that is edited or cancelled never changes its rows: a <see cref="InputStockMovementKind.Reversal"/> row with the opposite quantity
-/// (naming the row it undoes in <see cref="ReversesMovementId"/>) is added, then the new rows.
+/// (naming the row it undoes in <see cref="ReversesMovementId"/>) is added, then the new rows. A <see cref="InputStockMovementKind.CostAdjustment"/> row has quantity 0, so it never changes a balance.
 /// </summary>
 public class InputStockMovement : Entity
 {
@@ -29,8 +29,14 @@ public class InputStockMovement : Entity
     /// <summary>Signed: positive adds to the stock.</summary>
     public decimal Quantity { get; set; }
 
-    /// <summary>The cost of one base unit of the item when the row was written.</summary>
+    /// <summary>The cost of one base unit of the item when the row was written; on a <see cref="InputStockMovementKind.CostAdjustment"/> row, the new cost.</summary>
     public decimal? UnitCost { get; set; }
+
+    /// <summary>On a <see cref="InputStockMovementKind.CostAdjustment"/> row only: the cost before the change (null when the item had none). Null on every other row.</summary>
+    public decimal? PreviousUnitCost { get; set; }
+
+    /// <summary>On a cost adjustment that a posting caused: the row of that posting, so the adjustment is hidden together with it when reversals are hidden. Null on every other row, and on a manual cost change.</summary>
+    public Guid? CausedByMovementId { get; set; }
 
     /// <summary>The price of one base unit on the document (a receipt or return price); null on rows with none.</summary>
     public decimal? TransactionPrice { get; set; }

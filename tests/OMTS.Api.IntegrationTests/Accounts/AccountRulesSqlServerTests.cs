@@ -323,8 +323,8 @@ public class AccountRulesSqlServerTests
         public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
             blind.Blind() ? Task.FromResult<Account?>(null) : inner.FindByEmailAsync(email, cancellationToken);
 
-        public Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken) =>
-            inner.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken);
+        public Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false) =>
+            inner.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly);
 
         public Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) => inner.ListActiveOwnerIdsAsync(cancellationToken);
 

@@ -53,7 +53,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var colleague = await factory.ZoneManagerAsync(world.Zone);
         var receipt = await author.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000)) with { Complete = true });
         var seedReceipt = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900)) with { Complete = true });
-        // The raft cost prices the material used on it at its latest purchase: the receipt, until it is cancelled.
+        // The raft cost prices the material used on it at the cost price of the item, which the receipt set.
         await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
 
         await (await colleague.CancelAsync(receipt.Id(), "Wrong supplier")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
@@ -64,7 +64,8 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var cancelled = await (await author.CancelAsync(receipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Cancelled", "Wrong supplier"), (cancelled.GetProperty("status").GetString(), cancelled.GetProperty("cancelReason").GetString()));
-        Assert.Equal(0m, await MaterialCostAsync(world));
+        // Cancelling the receipt does not take the cost price back (the Fixed method keeps it), so what was used keeps its cost.
+        Assert.Equal(100_000m, await MaterialCostAsync(world));
         // A cancelled seed receipt has no seed lot any more.
         var cancelledSeed = await (await author.CancelAsync(seedReceipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
         Assert.Null(cancelledSeed.SeedLotCodeOf(world.Seed));

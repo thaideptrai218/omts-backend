@@ -57,6 +57,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jobs:EmploymentEnd:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:HarvestLotAutoClose:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:OrphanFileCleanup:Enabled", "false");
+        builder.UseSetting("Checkout:ReportRetryEnabled", "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices((context, services) =>
         {

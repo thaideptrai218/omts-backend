@@ -29,6 +29,7 @@ using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
 using OMTS.Infrastructure.Payments;
+using OMTS.Infrastructure.Payments.Checkout;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
@@ -136,6 +137,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
+        services.AddScoped<ITraderCheckoutRepository, TraderCheckoutRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
@@ -205,6 +207,7 @@ public static class DependencyInjection
         services.AddOcr(configuration);
         services.AddZalo(configuration);
         services.AddPayments(configuration);
+        services.AddCheckout(configuration);
         services.AddZalo(configuration);
         services.AddAddressLookup(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
@@ -357,10 +360,12 @@ public static class DependencyInjection
         services.AddSingleton<LocalFileUrlSigner>();
         services.AddSingleton<LocalFileStorage>();
         services.AddSingleton<AzureBlobFileStorage>();
+        services.AddSingleton<R2FileStorage>();
         services.AddSingleton<IFileStorage>(provider => provider.GetRequiredService<IOptions<StorageOptions>>().Value.Provider switch
         {
             StorageOptions.LocalProvider => provider.GetRequiredService<LocalFileStorage>(),
             StorageOptions.AzureBlobProvider => provider.GetRequiredService<AzureBlobFileStorage>(),
+            StorageOptions.R2Provider => provider.GetRequiredService<R2FileStorage>(),
             var other => throw UnknownProvider(StorageOptions.SectionName, other),
         });
     }
@@ -465,6 +470,47 @@ public static class DependencyInjection
             var other => throw UnknownProvider(ZaloOptions.SectionName, other.Provider),
         });
     }
+
+    /// <summary>
+    /// The trader payments of the Zalo Mini App (decision of 21/11/2026): Checkout SDK + payOS. <c>Fake</c> only in Development, as <c>Payments:Provider</c>; elsewhere it
+    /// acts as unset, and unset answers MSG04 to every checkout. The report to Zalo goes through <c>Zalo:ProxyUrl</c> like the other Zalo calls.
+    /// </summary>
+    internal static void AddCheckout(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<CheckoutOptions>()
+            .Bind(configuration.GetSection(CheckoutOptions.SectionName))
+            .Validate(o => o.TimeoutSeconds is >= 1 and <= 120, $"{CheckoutOptions.SectionName}:TimeoutSeconds must be between 1 and 120.")
+            .Validate(
+                o => o.Provider is "" or CheckoutOptions.PayOsProvider or CheckoutOptions.FakeProvider,
+                $"{CheckoutOptions.SectionName}:Provider must be empty, {CheckoutOptions.PayOsProvider} or {CheckoutOptions.FakeProvider}.")
+            .ValidateOnStart();
+        services.AddHttpClient<PayOsGateway>((provider, http) =>
+        {
+            var checkout = provider.GetRequiredService<IOptions<CheckoutOptions>>().Value;
+            http.BaseAddress = new Uri(checkout.PayOsBaseUrl);
+            http.Timeout = TimeSpan.FromSeconds(checkout.TimeoutSeconds);
+        });
+        services.AddHttpClient<ZaloCheckoutClient>((provider, http) =>
+        {
+            var checkout = provider.GetRequiredService<IOptions<CheckoutOptions>>().Value;
+            http.BaseAddress = new Uri(checkout.ZaloPaymentBaseUrl);
+            http.Timeout = TimeSpan.FromSeconds(checkout.TimeoutSeconds);
+        })
+        .ConfigurePrimaryHttpMessageHandler(provider => ZaloProxyHandlerFactory.Create(provider.GetRequiredService<IOptions<ZaloOptions>>().Value));
+        services.AddSingleton<FakePayOsGateway>();
+        services.AddSingleton<FakeZaloCheckout>();
+        services.AddTransient<IPayOsGateway>(provider => UsesFakeCheckout(provider)
+            ? provider.GetRequiredService<FakePayOsGateway>()
+            : provider.GetRequiredService<PayOsGateway>());
+        services.AddTransient<IZaloCheckout>(provider => UsesFakeCheckout(provider)
+            ? provider.GetRequiredService<FakeZaloCheckout>()
+            : provider.GetRequiredService<ZaloCheckoutClient>());
+        services.AddHostedService<TraderCheckoutReportService>();
+    }
+
+    private static bool UsesFakeCheckout(IServiceProvider provider) =>
+        provider.GetRequiredService<IOptions<CheckoutOptions>>().Value.Provider == CheckoutOptions.FakeProvider
+        && provider.GetRequiredService<IHostEnvironment>().IsDevelopment();
 
     private static InvalidOperationException UnknownProvider(string section, string value) =>
         new($"Unknown {section}:Provider '{value}'. See the README for the supported providers.");

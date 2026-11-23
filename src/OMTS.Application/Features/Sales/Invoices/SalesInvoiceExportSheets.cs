@@ -59,7 +59,7 @@ public static class SalesInvoiceExportSheets
             ["Order", invoice.SalesOrder?.Code],
             ["Note", invoice.Note],
             .. Cancellation(invoice),
-        ]),
+        ], invoice.QrUrl, "Quét mã để xem nguồn gốc"),
         new SpreadsheetSheet(LinesSheet, ["Line", "Product", "Harvest lot", "Kg", "Unit price", "Price source", "Amount", "Unit", "Quantity"],
         [
             .. invoice.Lines.Select(l => (IReadOnlyList<object?>)[l.LineNumber, l.ProductName, l.LotCode, l.Kg, l.UnitPrice, l.PriceSource.ToString(), l.Amount, l.Unit.Name, l.Quantity]),

@@ -53,6 +53,7 @@ using OMTS.Application.Features.Reports.Financial;
 using OMTS.Application.Features.Reports.ProductStock;
 using OMTS.Application.Features.Reports.Purchases;
 using OMTS.Application.Features.Reports.SalesPerformance;
+using OMTS.Application.Features.Sales.Checkout;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.Disposals;
@@ -411,6 +412,10 @@ public static class DependencyInjection
         services.AddScoped<CustomerPaymentCodeService>();
         services.AddScoped<CustomerDebtAdjustmentService>();
         services.AddScoped<CustomerPaymentStatusService>();
+        // Trader payments from the Zalo Mini App: Checkout SDK + payOS (decision of 21/11/2026)
+        services.AddScoped<TraderCheckoutReporter>();
+        services.AddScoped<TraderCheckoutService>();
+        services.AddScoped<PayOsNoticeService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
         services.AddScoped<SalesInvoiceNotifications>();

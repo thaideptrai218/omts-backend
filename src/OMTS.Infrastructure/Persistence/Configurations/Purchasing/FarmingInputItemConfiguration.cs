@@ -85,6 +85,7 @@ internal sealed class InputStockMovementConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.DocumentCode).HasMaxLength(Lengths.Code);
         builder.Property(x => x.Quantity).HasPrecision(18, 5);
         builder.Property(x => x.UnitCost).HasPrecision(18, 4);
+        builder.Property(x => x.PreviousUnitCost).HasPrecision(18, 4);
         builder.Property(x => x.TransactionPrice).HasPrecision(18, 4);
         builder.Property(x => x.PartyName).HasMaxLength(Lengths.Name);
         builder.ReferencesAccount(nameof(InputStockMovement.RecordedByAccountId));

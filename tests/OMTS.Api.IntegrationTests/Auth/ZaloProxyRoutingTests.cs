@@ -22,7 +22,7 @@ public class ZaloProxyRoutingTests
     private readonly string _user = "u" + Convert.ToHexString(RandomNumberGenerator.GetBytes(3));
     private readonly string _password = "p@ss:" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)) + "/%";
 
-    [Fact(Skip = "FINDING: on the Linux runner of CI the call reaches the stand-in proxy once, with no Proxy-Authorization, and is not repeated after the 407 (it passes on Windows). The staging API runs on Linux behind this proxy: check the login with the real tinyproxy of the VPS before relying on this test.")]
+    [Fact(Skip = "FINDING (flaky on the CI runner only): the call sometimes reaches the stand-in proxy once, with no Proxy-Authorization, and is not repeated after the 407 (test of 39 s). It failed in the run that skipped it first and in 1 of 3 CI runs of the PR that brought it back. It passed 30 of 30 runs alone, the whole Auth group, and 12 of 12 runs under CPU load in a Linux container (dotnet/sdk:8.0). The real tinyproxy of the VPS accepted the login from the Linux staging host (a fake Zalo token answered ZALO_TOKEN_INVALID through it).")]
     public async Task Zalo_calls_leave_through_the_proxy_with_its_login()
     {
         await using var proxy = FakeConnectProxy.Start();

@@ -43,11 +43,23 @@ public sealed record ReportRow(ReportRowKind Kind, IReadOnlyList<object?> Cells)
     public static ReportRow Detail(params object?[] cells) => new(ReportRowKind.Detail, cells);
 }
 
-/// <summary>A table with an optional heading (the Excel sheet name too). The header row repeats on every PDF page and every printed Excel page.</summary>
-public sealed record ReportSection(string? Heading, IReadOnlyList<ReportColumn> Columns, IReadOnlyList<ReportRow> Rows);
+/// <summary>
+/// A table with an optional heading (the Excel sheet name too). The header row repeats on every PDF page and every printed Excel page. <c>Note</c> is one line of small italic text under the table
+/// (for example how a figure was worked out).
+/// </summary>
+public sealed record ReportSection(string? Heading, IReadOnlyList<ReportColumn> Columns, IReadOnlyList<ReportRow> Rows, string? Note = null);
+
+/// <summary>The paper direction of a printed report (A4): the PDF page and the Excel page setup follow it.</summary>
+public enum ReportOrientation
+{
+    Portrait,
+    Landscape,
+}
 
 /// <summary>
 /// A printable report in the KiotViet style, independent of the file format: "Ngày lập" top left, the centred title and filter lines, the tables, the footer text centred with
-/// "Trang: n/N" on the right. <c>CreatedAt</c> is in business local time. Rendered to PDF or Excel by an <c>IReportDocumentRenderer</c>.
+/// "Trang: n/N" on the right. <c>CreatedAt</c> is in business local time. <c>Orientation</c> is the A4 direction (portrait unless asked otherwise). Rendered to PDF or Excel by an
+/// <c>IReportDocumentRenderer</c>.
 /// </summary>
-public sealed record ReportDocument(string Title, DateTime CreatedAt, IReadOnlyList<string> FilterLines, IReadOnlyList<ReportSection> Sections, string FooterText);
+public sealed record ReportDocument(
+    string Title, DateTime CreatedAt, IReadOnlyList<string> FilterLines, IReadOnlyList<ReportSection> Sections, string FooterText, ReportOrientation Orientation = ReportOrientation.Portrait);

@@ -151,7 +151,7 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal(600_000m, returned.Money("returned"));
         Assert.All(returned.GetProperty("lines").EnumerateArray(), l => Assert.Equal(0m, l.Money("seeded")));
-        // What was used stays costed at the latest purchase price of the item.
+        // What was used stays costed at the cost price of the item.
         Assert.Equal(50_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
         Assert.Equal(0, await world.DebtAsync());
     }

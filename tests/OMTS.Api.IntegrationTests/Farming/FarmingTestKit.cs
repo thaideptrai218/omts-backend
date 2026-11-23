@@ -160,8 +160,13 @@ public static class FarmingTestKit
         (await (await owner.PutAsJsonAsync($"/api/zones/{zoneId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
 
     /// <summary>Creates a raft and returns the saved raft, the <c>raft</c> of the answer (FARM-04.0 step 6).</summary>
-    public static async Task<JsonElement> CreateRaftAsync(this HttpClient owner, Guid zoneId, RaftBody? body = null) =>
-        (await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created)).GetProperty("raft");
+    public static async Task<JsonElement> CreateRaftAsync(this HttpClient owner, Guid zoneId, RaftBody? body = null)
+    {
+        var raft = (await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created)).GetProperty("raft");
+        // A harvest is recorded only from a harvest plan, which the Owner makes: the kit remembers who made the raft to plan its harvests.
+        Harvest.HarvestPlanTestKit.RememberRaftOwner(raft.GetProperty("id").GetGuid(), owner);
+        return raft;
+    }
 
     /// <summary>Edits a raft and returns the saved raft, the <c>raft</c> of the answer (FARM-04.2).</summary>
     public static async Task<JsonElement> EditRaftAsync(this HttpClient owner, Guid raftId, RaftBody body) =>

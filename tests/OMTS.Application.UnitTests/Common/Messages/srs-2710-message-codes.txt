@@ -32,6 +32,9 @@ MSG-HARVEST-02
 MSG-HARVEST-03
 MSG-HARVEST-04
 MSG-HARVEST-05
+# Added after the 27/10 SRS (plan-only harvest 18/11, origin rate limit 19/11); the SRS update is pending.
+MSG-HARVEST-06
+MSG-HARVEST-07
 MSG-TRACE-01
 MSG-TRACE-02
 MSG-TRACE-03
@@ -42,6 +45,7 @@ MSG-ORIGIN-01
 MSG-ORIGIN-02
 MSG-ORIGIN-03
 MSG-ORIGIN-04
+MSG-ORIGIN-05
 MSG-ACCOUNT-01
 MSG-ACCOUNT-02
 MSG-ACCOUNT-03
@@ -167,6 +171,8 @@ MSG-PLAN-03
 MSG-PLAN-04
 MSG-PLAN-05
 MSG-PLAN-06
+MSG-PLAN-07
+MSG-PLAN-08
 # A sale waiting for its VietQR transfer stopped by the system (OMTS-224, PM 17/11), added after the SRS 27/10 catalogue
 MSG-SALE-24
 # The Owner is told when the supplier payment SMS reach 80 % of the daily budget (OMTS-218, PM 17/11), added after the SRS 27/10 catalogue

@@ -36,7 +36,7 @@ public static class LaborCostDocumentBuilder
         }
 
         var filters = new List<string> { $"Từ ngày {Day(costs.From)} đến ngày {Day(costs.To)}" };
-        return new ReportDocument("Chi phí nhân công theo bè", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, sections, cooperativeName);
+        return new ReportDocument("Chi phí nhân công theo bè", createdAt.ToOffset(BusinessClock.UtcOffset).DateTime, filters, sections, cooperativeName, ReportOrientation.Landscape);
     }
 
     private static string Day(DateOnly day) => day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
