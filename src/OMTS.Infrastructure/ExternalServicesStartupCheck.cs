@@ -78,7 +78,10 @@ internal sealed class ExternalServicesStartupCheck(
             logger.LogWarning("Email provider is Fake: emails are NOT sent.");
         }
 
-        logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
+        if (ocr.Value.Provider != OcrProviderOptions.PaddleProvider)
+        {
+            logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
+        }
         logger.LogWarning("Payment notification provider is not configured: no receiving bank account can be accepted (MSG-DEBT-02), so VietQR stays out of use.");
 
         if (zalo.Value.Provider != ZaloOptions.GraphProvider)

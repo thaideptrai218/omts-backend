@@ -19,7 +19,7 @@ public sealed partial class FakeOcrService(IOptions<OcrProviderOptions> options,
     // Markers are looked for at the start of the photo, where test images carry them.
     private const int MarkerWindow = 64 * 1024;
 
-    public async Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken)
+    public async Task<OcrResult> RecognizeAsync(Stream photo, string contentType, OcrCrop? crop, CancellationToken cancellationToken)
     {
         var fake = options.Value.Fake;
         var text = await ReadMarkerWindowAsync(photo, cancellationToken);

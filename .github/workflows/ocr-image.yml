@@ -1,0 +1,52 @@
+name: OCR image
+
+# Builds the PaddleOCR sidecar of WATER-01 (tools/ocr-service) and pushes ghcr.io/<owner>/<repo>-ocr:sha-<7 chars>.
+# Only when tools/ocr-service changes on develop, or by hand: the image is ~2.3 GB with the models baked in, so it is not
+# rebuilt on every API deploy. The staging host runs the tag pinned by OCR_IMAGE in /opt/omts/.env (docs/deployment-ocr.md);
+# this workflow never deploys.
+on:
+  push:
+    branches: [develop]
+    paths: ["tools/ocr-service/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}-ocr
+
+jobs:
+  build-push:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: tag
+        run: echo "tag=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: tools/ocr-service
+          pull: true
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # No GHA cache: rare builds, and a 2 GB layer cache would evict the API image's cache.
+
+      - run: echo "Pushed ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}: set OCR_IMAGE to it in /opt/omts/.env (docs/deployment-ocr.md)." >> "$GITHUB_STEP_SUMMARY"
