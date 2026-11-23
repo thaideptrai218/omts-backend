@@ -30,6 +30,11 @@ public sealed class EmploymentConsequencesService(
         }
 
         var caller = await callers.GetAsync(cancellationToken);
+        if (!caller.Sees(employee))
+        {
+            return AppError.NotFound;
+        }
+
         if (!caller.Maintains(employee))
         {
             return AppError.Forbidden;

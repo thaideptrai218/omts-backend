@@ -54,6 +54,11 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             query = query.Where(e => ids.Contains(e.Id));
         }
 
+        if (filter.VisibleZoneIds is { } visible)
+        {
+            query = query.Where(e => e.WorkingZones.Any(w => visible.Contains(w.ZoneId)));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var text = filter.Search.Trim();

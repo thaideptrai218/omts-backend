@@ -83,7 +83,7 @@ public class FixedRolesScopeQaTests
 
         foreach (var (function, action) in new[]
         {
-            (SupplierPayments, Create), (SupplierPayments, View), (CustomerDebts, View), (CustomerPayments, Edit), (Payroll, Create), (PayRules, Edit), (Suppliers, View),
+            (SupplierPayments, Create), (SupplierPayments, View), (CustomerDebts, View), (CustomerPayments, Edit), (Payroll, View), (Payroll, Export), (PayRules, Edit), (Suppliers, View),
             (PurchaseReceipts, View),
         })
         {
@@ -141,7 +141,9 @@ public class FixedRolesScopeQaTests
         // Records with no zone: suppliers by the Zone Manager role (Create), supplier payments by the Accountant role.
         Assert.True(access.Allows(Suppliers, Create, PermissionScope.ZoneScoped, ZoneB));
         Assert.True(access.Allows(SupplierPayments, Create, PermissionScope.NoZone, null));
-        Assert.True(access.Allows(Payroll, Create, PermissionScope.ZoneScoped, ZoneA));
+        // Payroll: the Accountant role views and exports, it never prepares or pays (19/11/2026).
+        Assert.True(access.Allows(Payroll, View, PermissionScope.ZoneScoped, ZoneA));
+        Assert.False(access.Allows(Payroll, Create, PermissionScope.ZoneScoped, ZoneA));
 
         var described = access.DescribeFunctions().ToDictionary(f => f.Function);
         Assert.Equal([ZoneC], described[SalesInvoices].ZoneIds);

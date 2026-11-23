@@ -10,7 +10,7 @@ public enum StaffingRefusal
     /// <summary>The caller has no right to staff this line in this status (a Zone Manager on a Draft, a caller with no work assignment right in the zone).</summary>
     Forbidden,
 
-    /// <summary>The plan is over: Completed or Cancelled.</summary>
+    /// <summary>The plan is over or handed over: HandedOver, Completed or Cancelled.</summary>
     WrongStatus,
 }
 
@@ -35,14 +35,14 @@ public static class HarvestPlanStaffingRules
 {
     /// <summary>
     /// Who chooses the crew of a line: the Owner while the plan is a Draft or Assigned; the Zone Manager of the line's zone (any caller who may create work assignments there, the Owner included) once it is
-    /// Assigned or Harvesting; nobody once it is Completed or Cancelled.
+    /// Assigned, Received or Harvesting; nobody once it is HandedOver, Completed or Cancelled.
     /// </summary>
     /// <param name="isOwner">The caller is the Cooperative Owner.</param>
     /// <param name="mayWorkInZone">The caller may create work assignments in the zone of the line (the Owner in every zone).</param>
     public static StaffingRefusal Refusal(int statusId, bool isOwner, bool mayWorkInZone) => statusId switch
     {
         StatusIds.HarvestPlan.Draft => isOwner ? StaffingRefusal.None : StaffingRefusal.Forbidden,
-        StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting => isOwner || mayWorkInZone ? StaffingRefusal.None : StaffingRefusal.Forbidden,
+        StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting => isOwner || mayWorkInZone ? StaffingRefusal.None : StaffingRefusal.Forbidden,
         _ => StaffingRefusal.WrongStatus,
     };
 

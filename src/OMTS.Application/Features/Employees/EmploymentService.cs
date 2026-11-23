@@ -51,6 +51,11 @@ public sealed class EmploymentService(
         }
 
         var caller = await callers.GetAsync(cancellationToken);
+        if (!caller.Sees(employee))
+        {
+            return AppError.NotFound;
+        }
+
         if (!caller.Maintains(employee))
         {
             return AppError.Forbidden;
@@ -136,6 +141,11 @@ public sealed class EmploymentService(
         }
 
         var caller = await callers.GetAsync(cancellationToken);
+        if (!caller.Sees(employee))
+        {
+            return AppError.NotFound;
+        }
+
         if (!caller.Maintains(employee))
         {
             return AppError.Forbidden;

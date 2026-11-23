@@ -74,7 +74,7 @@ public class PurchaseRequestQaSmsTests(PurchaseRequestQaSendFactory factory) : I
         factory.Gate.FailSaveNumber = 0;
         Assert.Equal(0, calls);
         Assert.Empty((await factory.NotificationRowsAsync(request.Id())).Sendings());
-        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
     }
 
     // The second save fails after the service took the message. GFR-06 holds: 200, saved. The row stays Sending, and nothing ends that (the code says so).

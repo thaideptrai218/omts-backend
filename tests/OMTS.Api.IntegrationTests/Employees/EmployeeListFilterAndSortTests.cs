@@ -157,7 +157,7 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task Without_a_sort_the_list_keeps_its_name_order_and_a_zone_manager_still_gets_their_zone_first()
+    public async Task Without_a_sort_the_list_keeps_its_name_order_and_a_zone_manager_gets_only_the_employees_of_their_zone()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var other = await factory.AddZoneAsync(NewCode());
@@ -165,14 +165,16 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
         var tag = NewCode();
         await CreateAsync(owner, Profile($"{tag} A in other zone", null, other.Id));
         await CreateAsync(owner, Profile($"{tag} B in own zone", null, zone.Id));
+        await CreateAsync(owner, Profile($"{tag} C in both zones", null, zone.Id, b => b["workingZoneIds"] = new[] { zone.Id, other.Id }));
 
         var byOwner = Names(await ListAsync(owner, $"search={tag}"));
         var byManager = Names(await ListAsync(manager, $"search={tag}"));
-        var sortedByManager = Names(await ListAsync(manager, $"search={tag}&sortBy=name"));
+        var sortedByManager = Names(await ListAsync(manager, $"search={tag}&sortBy=name&sortDir=desc"));
 
-        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone"], byOwner);
-        Assert.Equal([$"{tag} B in own zone", $"{tag} A in other zone"], byManager);
-        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone"], sortedByManager);
+        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone", $"{tag} C in both zones"], byOwner);
+        // Owner decision of 24/11/2026: the employee of the other zone only is not in the manager's list at all.
+        Assert.Equal([$"{tag} B in own zone", $"{tag} C in both zones"], byManager);
+        Assert.Equal([$"{tag} C in both zones", $"{tag} B in own zone"], sortedByManager);
     }
 
     [Fact]

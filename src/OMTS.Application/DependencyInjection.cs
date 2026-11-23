@@ -346,6 +346,7 @@ public static class DependencyInjection
         services.AddScoped<HarvestPlanCodeService>();
         services.AddScoped<HarvestPlanViews>();
         services.AddScoped<HarvestPlanProgress>();
+        services.AddScoped<HarvestPlanHandoverService>();
         services.AddScoped<HarvestPlanNotifier>();
         services.AddScoped<HarvestPlanStaffingService>();
         services.AddScoped<HarvestPlanService>();

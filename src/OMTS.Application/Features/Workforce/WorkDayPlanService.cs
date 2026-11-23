@@ -8,6 +8,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Sales.Requests;
 using OMTS.Application.Features.Sales.Requests.Dtos;
@@ -28,7 +29,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
     IRaftRepository rafts, IJobTypeRepository jobTypes, IWorkAssignmentRepository assignments, IEmployeeRequestRepository employeeRequests,
     IPurchaseRequestRepository purchases,
     IAccountRepository accounts, ICurrentUser user, PermissionService permissions, WorkPlanAccessService access,
-    PurchaseStaffingService staffing, WorkAssignmentService work, RowVersionGuard versions,
+    PurchaseStaffingService staffing, WorkAssignmentService work, RowVersionGuard versions, EmployeeCallerAccess employeeCallers,
     AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -136,7 +137,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             if (input.Cages is null or <= 0 || input.Cages > order.RequestedCages || input.CagesPerEmployeePerDay is null or <= 0 || input.PickupDate is null || input.PickupDate < input.WorkDate)
                 return AppError.Invalid("Staffing capacity");
             order.PlannedCages = input.Cages; order.WorkDate = input.WorkDate; order.PlannedPickupDate = input.PickupDate;
-            order.CagesPerEmployeePerDay = input.CagesPerEmployeePerDay; order.StaffingNote = input.Note?.Trim(); order.StatusId = S.AwaitingStaff;
+            order.CagesPerEmployeePerDay = input.CagesPerEmployeePerDay; order.StaffingNote = input.Note?.Trim();
             uow.MarkChanged(order);
         }
         p.RaftId = raft.Id; p.Raft = raft; p.JobTypeId = job.Id; p.JobType = job; p.WorkDate = input.WorkDate;
@@ -179,7 +180,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         if (!await access.CanAssignAsync(p, ct)) return AppError.Forbidden;
         if (p.PurchaseRequestId is { } orderId) return await staffing.EmployeesAsync(p.WorkDate, ct, orderId);
         var options = new List<StaffingEmployeeOption>();
-        foreach (var e in await purchases.StaffingEmployeesAsync(ct))
+        foreach (var e in await purchases.StaffingEmployeesAsync((await employeeCallers.GetAsync(ct)).VisibleZoneIds, ct))
         {
             var reason = e.Account is not { StatusId: StatusIds.Account.Active, SubjectType: SubjectType.Staff } ? "Chưa có tài khoản nhân viên đang hoạt động"
                 : (await employeeRequests.ListApprovedLeaveAsync([e.Id], p.WorkDate, ct)).Count > 0 ? "Đã duyệt nghỉ trong ngày này"

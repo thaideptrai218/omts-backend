@@ -8,7 +8,7 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepository
 {
-    private static readonly int[] OpenStatuses = [StatusIds.HarvestPlan.Draft, StatusIds.HarvestPlan.Assigned, StatusIds.HarvestPlan.Harvesting];
+    private static readonly int[] OpenStatuses = [StatusIds.HarvestPlan.Draft, StatusIds.HarvestPlan.Assigned, StatusIds.HarvestPlan.Received, StatusIds.HarvestPlan.Harvesting, StatusIds.HarvestPlan.HandedOver];
 
     public Task<HarvestPlan?> GetForEditAsync(Guid planId, CancellationToken cancellationToken) =>
         WithAll(db.HarvestPlans).FirstOrDefaultAsync(p => p.Id == planId, cancellationToken);
@@ -38,7 +38,7 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
 
     public async Task<IReadOnlyList<HarvestPlan>> ListInProgressAsync(IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken)
     {
-        var query = db.HarvestPlans.AsNoTracking().Where(p => p.StatusId == StatusIds.HarvestPlan.Assigned || p.StatusId == StatusIds.HarvestPlan.Harvesting);
+        var query = db.HarvestPlans.AsNoTracking().Where(p => p.StatusId == StatusIds.HarvestPlan.Assigned || p.StatusId == StatusIds.HarvestPlan.Received || p.StatusId == StatusIds.HarvestPlan.Harvesting);
         if (zoneIds is not null)
         {
             var zones = zoneIds.ToList();

@@ -12,8 +12,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Employees;
 
 /// <summary>
-/// LABOR-01 access per the §I.4.4 matrix (Owner Full, Zone Manager Full*, others No) and BR-LABOR-01: every Zone Manager sees
-/// every employee and maintains those with a working zone among their zones; an All zones pair maintains everyone.
+/// LABOR-01 access per the §I.4.4 matrix (Owner Full, Zone Manager Full*, others No) and BR-LABOR-01, owner decision of 24/11/2026: a caller limited to some zones sees and maintains only the
+/// employees with a working zone among their zones; the Owner and an All zones pair see and maintain everyone.
 /// </summary>
 public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -61,7 +61,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
     }
 
     [Fact]
-    public async Task A_manager_of_another_zone_sees_the_employee_without_personal_data_and_cannot_change_them()
+    public async Task A_manager_of_another_zone_does_not_see_the_employee_nor_change_them()
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
@@ -69,7 +69,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var id = IdOf(saved);
         var (inZone, otherZone, everywhere) = (await ManagerAsync(factory, zoneA), await ManagerAsync(factory, zoneB), await ManagerAsync(factory, null));
 
-        foreach (var (client, maintains) in new[] { (inZone, true), (otherZone, false), (everywhere, true) })
+        foreach (var (client, maintains) in new[] { (inZone, true), (everywhere, true) })
         {
             var view = await client.GetFromJsonAsync<JsonElement>($"/api/employees/{id}");
             Assert.Equal(saved.GetProperty("employee").GetProperty("phoneNumber").GetString(), view.GetProperty("phoneNumber").GetString());
@@ -80,15 +80,18 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
             Assert.Equal(JsonValueKind.Null, view.GetProperty("account").ValueKind);
         }
 
+        // The manager of another zone does not see the employee at all (decision of 24/11/2026): not found, never forbidden.
+        Assert.Equal(HttpStatusCode.NotFound, (await otherZone.GetAsync($"/api/employees/{id}")).StatusCode);
         var body = Profile("Bị đổi", null, zoneB.Id, b => b["rowVersion"] = RowVersionOf(saved));
         foreach (var refused in new[]
         {
             await otherZone.PutAsJsonAsync($"/api/employees/{id}", body),
             await otherZone.PostAsJsonAsync($"/api/employees/{id}/end-employment", await EndBodyAsync(owner, id, Today())),
             await otherZone.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = RowVersionOf(saved) }),
+            await otherZone.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id }),
         })
         {
-            Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
+            Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
         }
 
         Assert.Equal(StatusIds.Employee.Working, await factory.QueryAsync(db => db.Employees.Where(e => e.Id == id).Select(e => e.StatusId).SingleAsync()));
@@ -155,9 +158,9 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal([zone.Id], await ZonesAsync(IdOf(saved)));
     }
 
-    // LABOR-01.2 and BR-LABOR-01: one of their own zones, on any Employed employee.
+    // LABOR-01.2 and BR-LABOR-01: one of their own zones, on an Employed employee the caller sees (decision of 24/11/2026: a manager does not see an employee of other zones only).
     [Fact]
-    public async Task Add_my_zone_gives_the_managers_zone_to_any_employed_employee_and_then_they_maintain_them()
+    public async Task Add_my_zone_gives_the_callers_zone_to_an_employed_employee_they_see_and_then_they_maintain_them()
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var (zoneB, closed) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
@@ -165,13 +168,17 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var saved = await CreateAsync(owner, Profile($"Add zone {NewCode()}", NewPhone(), zoneA.Id));
         var id = IdOf(saved);
         var manager = await ManagerAsync(factory, zoneB);
+        // A manager of zones A and B sees the employee through zone A and brings zone B in.
+        var both = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.ZoneManager, zoneA), (StaffRole.ZoneManager, zoneB))).Client;
 
-        var notMine = await manager.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneA.Id });
-        var missing = await manager.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { });
+        var unseen = await manager.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id });
+        var notMine = await both.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = (await factory.AddZoneAsync(NewCode())).Id });
+        var missing = await both.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { });
         var discontinued = await (await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username)).PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = closed.Id });
-        var added = await (await manager.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id })).BodyAsync(HttpStatusCode.OK);
-        var again = await (await manager.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id })).BodyAsync(HttpStatusCode.OK);
+        var added = await (await both.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id })).BodyAsync(HttpStatusCode.OK);
+        var again = await (await both.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id })).BodyAsync(HttpStatusCode.OK);
 
+        Assert.Equal(HttpStatusCode.NotFound, unseen.StatusCode);
         Assert.Equal("MSG-GEN-08", await notMine.ErrorCodeAsync());
         Assert.Equal(("MSG-GEN-01", "Working zones"), (await missing.ErrorCodeAsync(), await FieldAsync(missing)));
         Assert.Equal(("MSG-GEN-01", "Working zones"), (await discontinued.ErrorCodeAsync(), await FieldAsync(discontinued)));
@@ -185,23 +192,68 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal("MSG-GEN-09", await (await (await ManagerAsync(factory, null)).PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = closed.Id })).ErrorCodeAsync());
     }
 
-    // SCR-LABOR-01: "every employee of the cooperative, those of the user's zones first".
+    // SCR-LABOR-01 and the owner decision of 24/11/2026: a caller limited to some zones lists only the employees with a working zone among them.
     [Fact]
-    public async Task The_list_shows_every_employee_with_those_of_the_managers_zones_first()
+    public async Task The_list_shows_a_manager_only_the_employees_of_their_zones_and_the_owner_everyone()
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
         var tag = NewCode();
         var other = IdOf(await CreateAsync(owner, Profile($"{tag} A other", NewPhone(), zoneB.Id)));
         var mine = IdOf(await CreateAsync(owner, Profile($"{tag} B mine", NewPhone(), zoneA.Id)));
+        var shared = IdOf(await CreateAsync(owner, Profile($"{tag} C both", NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
 
         var managerList = await (await ManagerAsync(factory, zoneA)).GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
         var ownerList = await owner.GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
+        var everywhereList = await (await ManagerAsync(factory, null)).GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
 
-        Assert.Equal([mine, other], managerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
-        Assert.Equal([true, false], managerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("canMaintain").GetBoolean()));
-        Assert.Equal([other, mine], ownerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
+        Assert.Equal([mine, shared], managerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
+        Assert.Equal(2, managerList.GetProperty("total").GetInt32());
+        Assert.Equal([true, true], managerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("canMaintain").GetBoolean()));
+        Assert.Equal([other, mine, shared], ownerList.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
+        Assert.Equal(3, everywhereList.GetProperty("total").GetInt32());
         Assert.All(ownerList.GetProperty("items").EnumerateArray(), i => Assert.True(i.GetProperty("canMaintain").GetBoolean()));
+    }
+
+    [Fact]
+    public async Task An_employee_of_several_zones_is_seen_through_the_zone_in_scope_and_the_other_zones_are_not_shown()
+    {
+        var (owner, zoneA, _) = await SetupAsync(factory);
+        var zoneB = await factory.AddZoneAsync(NewCode());
+        var name = $"Shared {NewCode()}";
+        var id = IdOf(await CreateAsync(owner, Profile(name, NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
+        var managerA = await ManagerAsync(factory, zoneA);
+        var managerB = await ManagerAsync(factory, zoneB);
+
+        var seenByA = await managerA.GetFromJsonAsync<JsonElement>($"/api/employees/{id}");
+        var rowOfA = (await managerA.GetFromJsonAsync<JsonElement>($"/api/employees?search={Uri.EscapeDataString(name)}")).GetProperty("items")[0];
+        var seenByB = await managerB.GetFromJsonAsync<JsonElement>($"/api/employees/{id}");
+        var seenByOwner = await owner.GetFromJsonAsync<JsonElement>($"/api/employees/{id}");
+
+        Assert.Equal([zoneA.Code], seenByA.GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("code").GetString()));
+        Assert.Equal([zoneA.Code], rowOfA.GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("code").GetString()));
+        Assert.Equal([zoneB.Code], seenByB.GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("code").GetString()));
+        Assert.Equal(2, seenByOwner.GetProperty("workingZones").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task The_export_and_the_leave_requests_follow_the_same_scope_for_the_callers_that_have_them()
+    {
+        var (owner, zoneA, _) = await SetupAsync(factory);
+        var zoneB = await factory.AddZoneAsync(NewCode());
+        var tag = NewCode();
+        var other = IdOf(await CreateAsync(owner, Profile($"{tag} out of scope", NewPhone(), zoneB.Id)));
+        var mine = IdOf(await CreateAsync(owner, Profile($"{tag} in scope", NewPhone(), zoneA.Id)));
+        var accountantOfA = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.Accountant, zoneA))).Client;
+        var accountantEverywhere = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.Accountant, null))).Client;
+
+        var listA = await accountantOfA.GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
+        var listAll = await accountantEverywhere.GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
+
+        Assert.Equal([mine], listA.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
+        Assert.Equal(2, listAll.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await accountantOfA.GetAsync($"/api/employees/{other}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await accountantEverywhere.GetAsync($"/api/employees/{other}")).StatusCode);
     }
 
     private Task<List<Guid>> ZonesAsync(Guid id) =>

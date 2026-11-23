@@ -11,6 +11,8 @@ public enum HarvestPlanAction
     Cancel,
     Harvest,
     SkipLane,
+    Receive,
+    HandOver,
 }
 
 /// <summary>A lane of a plan line: still to harvest, in the line's lot, or left out ("Không thu").</summary>

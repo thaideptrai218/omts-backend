@@ -96,7 +96,14 @@ public static class HarvestPlanTestKit
 
         var plan = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("plan");
         var assigned = await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/assign", new { });
-        return assigned.IsSuccessStatusCode ? plan.LineId() : null;
+        if (!assigned.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        // A lot is recorded from a plan a Zone Manager received ("Nhận"): the kit presses it as the Owner, who may harvest in every zone.
+        var received = await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/receive", new { });
+        return received.IsSuccessStatusCode ? plan.LineId() : null;
     }
 
     public static Dictionary<string, object?> WithPlanField(this Dictionary<string, object?> body, string field, object? value)
@@ -128,6 +135,20 @@ public static class HarvestPlanTestKit
     {
         var plan = await client.CreatePlanAsync(body);
         return await client.PlanCommandAsync(plan.Id(), "assign");
+    }
+
+    /// <summary>An assigned plan that was received too ("Nhận"), pressed by <paramref name="receiver"/> (the Owner when none): lots can be recorded from it.</summary>
+    public static async Task<JsonElement> ReceivedPlanAsync(this HttpClient client, object body, HttpClient? receiver = null)
+    {
+        var plan = await client.AssignedPlanAsync(body);
+        return await (receiver ?? client).PlanCommandAsync(plan.Id(), "receive");
+    }
+
+    /// <summary>The plan handed over ("Bàn giao") by <paramref name="manager"/> and completed by the Owner ("Hoàn thành"); every line must be done.</summary>
+    public static async Task<JsonElement> CompletedPlanAsync(this HttpClient owner, Guid planId, HttpClient? manager = null)
+    {
+        await (manager ?? owner).PlanCommandAsync(planId, "hand-over");
+        return await owner.PlanCommandAsync(planId, "finish");
     }
 
     public static Task<HttpResponseMessage> PostSkipAsync(this HttpClient client, Guid planId, Guid lineId, int[] lanes, string? reason, string command = "skip-lanes") =>

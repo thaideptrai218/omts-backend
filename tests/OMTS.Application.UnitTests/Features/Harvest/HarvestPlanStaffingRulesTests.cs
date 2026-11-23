@@ -12,12 +12,15 @@ public class HarvestPlanStaffingRulesTests
     // Owner: Draft and Assigned (and Harvesting through the zone right it holds everywhere), never once over.
     [InlineData(StatusIds.HarvestPlan.Draft, true, true, StaffingRefusal.None)]
     [InlineData(StatusIds.HarvestPlan.Assigned, true, true, StaffingRefusal.None)]
+    [InlineData(StatusIds.HarvestPlan.Received, true, true, StaffingRefusal.None)]
+    [InlineData(StatusIds.HarvestPlan.HandedOver, true, true, StaffingRefusal.WrongStatus)]
     [InlineData(StatusIds.HarvestPlan.Harvesting, true, true, StaffingRefusal.None)]
     [InlineData(StatusIds.HarvestPlan.Completed, true, true, StaffingRefusal.WrongStatus)]
     [InlineData(StatusIds.HarvestPlan.Cancelled, true, true, StaffingRefusal.WrongStatus)]
     // Zone Manager with the work assignment right in the zone: from the hand-over on.
     [InlineData(StatusIds.HarvestPlan.Draft, false, true, StaffingRefusal.Forbidden)]
     [InlineData(StatusIds.HarvestPlan.Assigned, false, true, StaffingRefusal.None)]
+    [InlineData(StatusIds.HarvestPlan.Received, false, true, StaffingRefusal.None)]
     [InlineData(StatusIds.HarvestPlan.Harvesting, false, true, StaffingRefusal.None)]
     [InlineData(StatusIds.HarvestPlan.Completed, false, true, StaffingRefusal.WrongStatus)]
     [InlineData(StatusIds.HarvestPlan.Cancelled, false, true, StaffingRefusal.WrongStatus)]

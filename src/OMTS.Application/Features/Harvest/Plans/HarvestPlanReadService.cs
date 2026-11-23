@@ -29,7 +29,7 @@ public sealed class HarvestPlanReadService(
     private const int MaxPageSize = 100;
 
     private static readonly int[] StatusIdsOfPlans =
-        [StatusIds.HarvestPlan.Draft, StatusIds.HarvestPlan.Assigned, StatusIds.HarvestPlan.Harvesting, StatusIds.HarvestPlan.Completed, StatusIds.HarvestPlan.Cancelled];
+        [StatusIds.HarvestPlan.Draft, StatusIds.HarvestPlan.Assigned, StatusIds.HarvestPlan.Received, StatusIds.HarvestPlan.Harvesting, StatusIds.HarvestPlan.HandedOver, StatusIds.HarvestPlan.Completed, StatusIds.HarvestPlan.Cancelled];
 
     public async Task<Result<HarvestPlanPage>> SearchAsync(HarvestPlanListQuery query, CancellationToken cancellationToken)
     {
@@ -72,7 +72,7 @@ public sealed class HarvestPlanReadService(
     public async Task<Result<HarvestPlanNextCode>> NextCodeAsync(CancellationToken cancellationToken) =>
         !(await access.ScopeAsync(PermissionAction.Create, cancellationToken)).IsEmpty ? new HarvestPlanNextCode(await codes.PeekAsync(cancellationToken)) : AppError.Forbidden;
 
-    /// <summary>The plans Assigned or Harvesting in the zones the caller harvests: what the harvest screen offers to record from.</summary>
+    /// <summary>The plans Assigned, Received or Harvesting in the zones the caller harvests: what the harvest screen offers to receive and record from.</summary>
     public async Task<Result<HarvestPlansToHarvest>> InProgressAsync(CancellationToken cancellationToken)
     {
         var (isEmpty, zoneIds) = await access.HarvestZonesAsync(cancellationToken);

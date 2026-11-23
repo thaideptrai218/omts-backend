@@ -83,9 +83,14 @@ internal sealed class EmployeeRequestRepository(OmtsDbContext db) : IEmployeeReq
             r => r.EmployeeId == employeeId && r.Type == type && r.StatusId == StatusIds.EmployeeRequest.AwaitingReview && r.FromDate <= to && r.ToDate >= from,
             cancellationToken);
 
-    public async Task<IReadOnlyList<EmployeeRequest>> ListAsync(int? statusId, int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<EmployeeRequest>> ListAsync(int? statusId, int take, IReadOnlyCollection<Guid>? zoneIds, CancellationToken cancellationToken)
     {
         var query = db.EmployeeRequests.AsNoTracking().Include(r => r.Employee).Where(r => statusId == null || r.StatusId == statusId);
+        if (zoneIds is not null)
+        {
+            query = query.Where(r => r.Employee.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+        }
+
         // Awaiting review first (the lowest status id), the oldest first; the others newest first (SCR-LABOR-03).
         var awaiting = StatusIds.EmployeeRequest.AwaitingReview;
         return await query

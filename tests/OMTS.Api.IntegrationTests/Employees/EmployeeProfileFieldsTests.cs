@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Employees.EmployeeRequests;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
@@ -123,8 +124,10 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         var ownDetail = await (await own.GetAsync($"{Url}/{id}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("079090001234", ownDetail.GetProperty("idNumber").GetString());
 
-        // Another zone sees the employee and the code, and none of the personal fields.
-        var outsiderDetail = await (await outsider.GetAsync($"{Url}/{id}")).ReadAsync(HttpStatusCode.OK);
+        // Another zone does not see the employee at all (24/11/2026); an Accountant of the zone sees the employee and the code, and none of the personal fields.
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"{Url}/{id}")).StatusCode);
+        var reader = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.Accountant, zone))).Client;
+        var outsiderDetail = await (await reader.GetAsync($"{Url}/{id}")).ReadAsync(HttpStatusCode.OK);
         Assert.False(outsiderDetail.GetProperty("canMaintain").GetBoolean());
         Assert.Equal(CodeOf(created), outsiderDetail.GetProperty("code").GetString());
         foreach (var field in new[] { "gender", "idNumber", "startDate" })

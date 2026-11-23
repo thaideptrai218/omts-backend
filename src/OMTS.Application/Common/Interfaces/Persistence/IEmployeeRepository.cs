@@ -71,6 +71,7 @@ public enum EmployeeSort
 /// <param name="PhoneNumber">The search read as a whole phone number in its stored form, if it is one: it also finds that number.</param>
 /// <param name="Today">The day the employee type in force is read at.</param>
 /// <param name="Ids">Only these employees (the export of selected rows); the filters above are then left empty by the caller.</param>
+/// <param name="VisibleZoneIds">Only the employees with a working zone among these zones (a caller limited to some zones); null: every employee, an empty collection: none.</param>
 public sealed record EmployeeSearchFilter(
     string? Search,
     string? PhoneNumber,
@@ -81,4 +82,5 @@ public sealed record EmployeeSearchFilter(
     DateOnly Today,
     EmployeeSort Sort = EmployeeSort.Default,
     bool Descending = false,
-    IReadOnlyCollection<Guid>? Ids = null);
+    IReadOnlyCollection<Guid>? Ids = null,
+    IReadOnlyCollection<Guid>? VisibleZoneIds = null);

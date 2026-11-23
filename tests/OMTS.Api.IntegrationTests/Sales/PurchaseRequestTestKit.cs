@@ -52,7 +52,7 @@ public static class PurchaseRequestTestKit
         (await (await trader.PostRequestAsync(productId, cages, pickupDate, note)).ReadAsync(HttpStatusCode.Created)).GetProperty("request");
 
     /// <summary>
-    /// Accepting needs a staffing plan whose staff agreed (decision of 31/10/2026), so an answer the Owner could give first puts one in
+    /// Accepting needs a staffing plan with staff chosen (decision of 24/11/2026: no agreement is awaited), so an answer the Owner could give first puts one in
     /// place the short way, for the cages and the date it accepts: the staffing rules have their own tests. A stale row version, or a
     /// request no longer to be answered, is left as it is, so its refusal is still what the test sees.
     /// </summary>
@@ -120,7 +120,6 @@ public static class PurchaseRequestTestKit
             ClientOperationId = Guid.NewGuid(), Approved = true, RespondedAt = DateTimeOffset.UtcNow,
         });
         db.Add(new PurchaseShiftInvitation { PurchaseRequestId = requestId, Employee = employee, Approved = true, RespondedAt = DateTimeOffset.UtcNow, ReservedWorkDate = day });
-        row.StatusId = StatusIds.PurchaseRequest.AwaitingStaff;
         row.PlannedCages = cages;
         row.WorkDate = day;
         row.PlannedPickupDate = pickup;

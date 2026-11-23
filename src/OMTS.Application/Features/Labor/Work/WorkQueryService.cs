@@ -128,7 +128,9 @@ public sealed class WorkQueryService(
             return AppError.Invalid("Status");
         }
 
-        var rows = await requests.ListAsync(statusId, MaxRequests, cancellationToken);
+        // A caller limited to some zones reads the requests of the employees working in them only.
+        var permitted = await zones.PermittedZonesAsync(PermissionFunctions.WorkAssignments, PermissionAction.View, cancellationToken);
+        var rows = await requests.ListAsync(statusId, MaxRequests, permitted.AllZones ? null : permitted.ZoneIds.ToList(), cancellationToken);
         return Result<IReadOnlyList<EmployeeRequestView>>.Success(rows.Select(r => EmployeeRequestViews.Of(r, statusCatalog)).ToList());
     }
 

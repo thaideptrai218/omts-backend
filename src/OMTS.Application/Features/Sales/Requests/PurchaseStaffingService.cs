@@ -8,6 +8,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -19,13 +20,17 @@ using S = OMTS.Domain.Constants.StatusIds.PurchaseRequest;
 
 namespace OMTS.Application.Features.Sales.Requests;
 
-/// <summary>Yêu cầu 31/10/2026: nhân viên xác nhận ca trước khi Chủ HTX nhận đơn theo lồng.</summary>
+/// <summary>
+/// Kế hoạch nhân công của đơn theo lồng. Từ 24/11/2026 (quyết định của Chủ HTX): người phụ trách chọn nhân viên và ca thành phân công ngay,
+/// nhân viên chỉ nhận thông báo, không phải đồng ý hay từ chối, và đơn vẫn ở "Chờ phản hồi" (không còn "Chờ nhân viên"). Nhận đơn chỉ cần đã có kế hoạch.
+/// Trạng thái "Chờ nhân viên" và lời mời chưa trả lời của đơn gửi trước đó vẫn đọc và vẫn nhận đơn được.
+/// </summary>
 public sealed class PurchaseStaffingService(
     IPurchaseRequestRepository requests, IWorkAssignmentRepository assignments, IAttendanceRepository attendances,
     IEmployeeRequestRepository employeeRequests, IAccountRepository accounts,
     ICurrentUser user, PermissionService permissions, RowVersionGuard versions, IStatusCatalog statuses,
     AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock,
-    IWorkDayPlanRepository plans, WorkPlanAccessService planAccess, IEmployeeRepository employeeProfiles)
+    IWorkDayPlanRepository plans, WorkPlanAccessService planAccess, IEmployeeRepository employeeProfiles, EmployeeCallerAccess employeeCallers)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
     private async Task<bool> IsOwnerAsync(CancellationToken ct) => user.AccountId is { } id &&
@@ -41,7 +46,7 @@ public sealed class PurchaseStaffingService(
         else if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
         if (day == default || day < Today) return AppError.Invalid("Work date");
         var result = new List<StaffingEmployeeOption>();
-        foreach (var e in await requests.StaffingEmployeesAsync(ct))
+        foreach (var e in await requests.StaffingEmployeesAsync((await employeeCallers.GetAsync(ct)).VisibleZoneIds, ct))
         {
             var reason = await UnavailableAsync(e, day, purchaseRequestId, ct);
             result.Add(new(e.Id, e.FullName, reason is null, reason));
@@ -84,28 +89,34 @@ public sealed class PurchaseStaffingService(
         var existingIds = row.ShiftInvitations.Select(i => i.EmployeeId).ToHashSet();
         var newIds = input.EmployeeIds.Where(e => !existingIds.Contains(e)).ToHashSet();
         if (row.ShiftInvitations.Count + newIds.Count > 100) return AppError.Invalid("Shift invitations");
-        var employees = (await requests.StaffingEmployeesAsync(ct)).Where(e => newIds.Contains(e.Id)).ToList();
+        var employees = (await requests.StaffingEmployeesAsync((await employeeCallers.GetAsync(ct)).VisibleZoneIds, ct)).Where(e => newIds.Contains(e.Id)).ToList();
         if (employees.Count != newIds.Count) return AppError.Invalid("Employee");
         foreach (var e in employees)
             if (await UnavailableAsync(e, input.WorkDate, row.Id, ct) is not null) return AppError.Invalid("Employee unavailable");
         row.PlannedCages = input.Cages; row.WorkDate = input.WorkDate; row.PlannedPickupDate = input.PickupDate;
         row.CagesPerEmployeePerDay = input.CagesPerEmployeePerDay; row.StaffingNote = input.Note?.Trim();
-        row.StatusId = S.AwaitingStaff;
+        // Đơn không vào "Chờ nhân viên": ca thành phân công ngay, ghi lại như một ca đã được nhận (giữ nguyên dạng PurchaseStaffingView và danh sách ca).
+        var now = clock.GetUtcNow();
         foreach (var e in employees)
         {
-            var invite = new PurchaseShiftInvitation { PurchaseRequestId = row.Id, PurchaseRequest = row, EmployeeId = e.Id, Employee = e };
+            var invite = new PurchaseShiftInvitation
+            {
+                PurchaseRequestId = row.Id, PurchaseRequest = row, EmployeeId = e.Id, Employee = e,
+                Approved = true, RespondedAt = now, ReservedWorkDate = input.WorkDate, Reason = null,
+            };
             requests.AddInvitation(invite);
             // EF cập nhật navigation; thêm rõ ràng để adapter khác cũng trả đúng tiến độ.
             if (!row.ShiftInvitations.Contains(invite)) row.ShiftInvitations.Add(invite);
-            await notifications.NotifyAsync([e.AccountId!.Value], "PURCHASE_SHIFT_INVITED", "Mời xác nhận ca làm",
-                $"{row.Code}: {row.PlannedCages} lồng, ngày {row.WorkDate:dd/MM/yyyy}. Vui lòng đồng ý hoặc từ chối ca.",
+            await CreateAssignmentAsync(row, plan, e.Id, user.AccountId ?? plan.CreatorAccountId, ct);
+            await notifications.NotifyAsync([e.AccountId!.Value], "PURCHASE_SHIFT_ASSIGNED", "Bạn được phân công ca làm",
+                $"{row.Code}: {row.PlannedCages} lồng, ngày {row.WorkDate:dd/MM/yyyy}, bè {plan.Raft.Code}. Ca đã được phân công, bạn không cần xác nhận.",
                 nameof(PurchaseRequest), row.Code, false, ct, row.Id);
         }
         if (employees.Count > 0)
         {
             uow.MarkChanged(plan);
             uow.MarkChanged(row);
-            audit.Record(new AuditEntry("PurchaseRequest.StaffInvited", nameof(PurchaseRequest))
+            audit.Record(new AuditEntry("PurchaseRequest.StaffAssigned", nameof(PurchaseRequest))
             { RecordId = row.Id, RecordCode = row.Code, After = new { row.PlannedCages, row.WorkDate, row.CagesPerEmployeePerDay, EmployeeIds = newIds } });
             await uow.SaveChangesAsync(ct);
         }
@@ -162,8 +173,9 @@ public sealed class PurchaseStaffingService(
 
     public async Task<AppError?> ValidateAcceptanceAsync(PurchaseRequest row, int? cages, DateOnly? pickup, CancellationToken ct)
     {
-        var summary = Summary(row);
-        if (row.StatusId != S.AwaitingStaff || summary?.HasEnoughStaff != true) return AppError.Invalid("Insufficient approved staff");
+        // Chỉ cần đã có kế hoạch nhân công (người đã được phân công ngay khi chọn); không đếm sự đồng ý của nhân viên.
+        if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff) || Summary(row) is null || row.ShiftInvitations.Count(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate) == 0)
+            return AppError.Invalid("Staffing plan required");
         if (row.PlannedCages != cages || row.PlannedPickupDate != pickup || row.WorkDate < Today) return AppError.Invalid("Staffing plan mismatch");
         var plan = await plans.ForPurchaseAsync(row.Id, ct);
         if (plan?.Approved != true || plan.WorkDate != row.WorkDate || plan.ResponsibleAccount.StatusId != StatusIds.Account.Active)
@@ -175,42 +187,47 @@ public sealed class PurchaseStaffingService(
             return AppError.Invalid("Plan responsible");
         if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Work plan");
-        foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate))
-            if (await UnavailableAsync(invite.Employee, row.WorkDate!.Value, row.Id, ct) is not null) return AppError.Invalid("Employee unavailable");
         return null;
     }
 
     /// <summary>
-    /// Nhận đơn: mỗi nhân viên đã đồng ý ca có phân công đầu ngày của LABOR-02 (OMTS-132) trên bè, loại việc và ngày của kế hoạch, lưu cùng câu
-    /// trả lời của Chủ HTX. Vùng của bè thêm vào vùng làm việc của nhân viên chưa có, như LABOR-02 bước 9.
+    /// Nhận đơn: các ca của kế hoạch đã là phân công từ lúc chọn nhân viên (<see cref="PlanAsync"/>); chỉ đơn gửi theo luồng cũ có người đã đồng ý ca mà chưa có phân công thì được tạo nốt ở đây.
+    /// Không tạo trùng phân công đã có.
     /// </summary>
     public async Task ActivateAssignmentsAsync(PurchaseRequest row, CancellationToken ct)
     {
         var plan = (await plans.ForPurchaseAsync(row.Id, ct))!;
         // The Owner who accepts assigns the work; without a caller (a job of the system) the planner of the work day plan does.
         var owner = user.AccountId ?? plan.CreatorAccountId;
-        foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate))
-        {
-            var assignment = new WorkAssignment
-            {
-                EmployeeId = invite.EmployeeId, Date = plan.WorkDate, RaftId = plan.RaftId, ZoneId = plan.Raft.ZoneId, JobTypeId = plan.JobTypeId, AssignedByAccountId = owner,
-            };
-            assignments.Add(assignment);
-            var profile = (await employeeProfiles.GetForEditAsync(invite.EmployeeId, ct))!;
-            if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId))
-            {
-                employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = invite.EmployeeId, ZoneId = plan.Raft.ZoneId });
-                uow.MarkChanged(profile);
-            }
+        var reserved = row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate).Select(i => i.EmployeeId).ToList();
+        var existing = (await PlannedAssignmentsAsync(row, plan, ct)).Select(a => a.EmployeeId).ToHashSet();
+        foreach (var employeeId in reserved.Where(id => !existing.Contains(id)))
+            await CreateAssignmentAsync(row, plan, employeeId, owner, ct);
+        uow.MarkChanged(plan);
+    }
 
-            audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
-            {
-                RecordId = assignment.Id, RecordCode = profile.Code, ZoneId = plan.Raft.ZoneId,
-                After = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
-            });
+    /// <summary>
+    /// Phân công đầu ngày của LABOR-02 (OMTS-132) trên bè, loại việc và ngày của kế hoạch. Vùng của bè thêm vào vùng làm việc của nhân viên chưa có, như LABOR-02 bước 9.
+    /// </summary>
+    private async Task CreateAssignmentAsync(PurchaseRequest row, WorkDayPlan plan, Guid employeeId, Guid assignedBy, CancellationToken ct)
+    {
+        var assignment = new WorkAssignment
+        {
+            EmployeeId = employeeId, Date = plan.WorkDate, RaftId = plan.RaftId, ZoneId = plan.Raft.ZoneId, JobTypeId = plan.JobTypeId, AssignedByAccountId = assignedBy,
+        };
+        assignments.Add(assignment);
+        var profile = (await employeeProfiles.GetForEditAsync(employeeId, ct))!;
+        if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId))
+        {
+            employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employeeId, ZoneId = plan.Raft.ZoneId });
+            uow.MarkChanged(profile);
         }
 
-        uow.MarkChanged(plan);
+        audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
+        {
+            RecordId = assignment.Id, RecordCode = profile.Code, ZoneId = plan.Raft.ZoneId,
+            After = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
+        });
     }
 
     /// <summary>Các phân công mà việc nhận đơn đã tạo: phân công đầu ngày của người đã đồng ý ca, trên đúng bè và loại việc của kế hoạch.</summary>

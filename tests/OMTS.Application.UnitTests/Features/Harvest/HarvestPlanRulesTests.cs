@@ -9,12 +9,17 @@ public class HarvestPlanRulesTests
 {
     private const int Draft = StatusIds.HarvestPlan.Draft;
     private const int Assigned = StatusIds.HarvestPlan.Assigned;
+    private const int Received = StatusIds.HarvestPlan.Received;
+    private const int HandedOver = StatusIds.HarvestPlan.HandedOver;
     private const int Harvesting = StatusIds.HarvestPlan.Harvesting;
     private const int Completed = StatusIds.HarvestPlan.Completed;
     private const int Cancelled = StatusIds.HarvestPlan.Cancelled;
 
     private static readonly HarvestPlanCaller Owner = new(IsOwner: true, CanEdit: true, CanDelete: true);
     private static readonly HarvestPlanCaller Manager = new(IsOwner: false, CanEdit: false, CanDelete: false);
+
+    private static IReadOnlyList<HarvestPlanAction> Buttons(int status, HarvestPlanCaller caller, bool hasLot = false, bool canHarvestNow = false, bool mayHarvestInPlan = false, bool allLinesDone = false) =>
+        HarvestPlanRules.AllowedActions(status, caller, hasLot, canHarvestNow, mayHarvestInPlan, allLinesDone);
 
     private static PlanLineFacts Open(int lanes = 2) => new(false, lanes, 0);
     private static PlanLineFacts WithLot(int lanes = 2) => new(true, lanes, 0);
@@ -59,40 +64,44 @@ public class HarvestPlanRulesTests
     // ---- Status moves ----
 
     [Fact]
-    public void The_first_lot_of_an_assigned_plan_starts_the_harvest()
+    public void The_first_lot_of_a_received_plan_starts_the_harvest()
     {
-        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Assigned, [WithLot(), Open()], allDoneBefore: false));
+        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [WithLot(), Open()], allDoneBefore: false));
     }
 
     [Fact]
     public void The_first_lane_left_out_starts_the_harvest()
     {
-        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Assigned, [SomeSkipped(), Open()], allDoneBefore: false));
+        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [SomeSkipped(), Open()], allDoneBefore: false));
     }
 
     [Fact]
-    public void A_plan_with_nothing_recorded_stays_assigned()
+    public void A_plan_with_nothing_recorded_stays_received()
     {
-        Assert.Empty(HarvestPlanRules.Settle(Assigned, [Open(), Open()], allDoneBefore: false));
+        Assert.Empty(HarvestPlanRules.Settle(Received, [Open(), Open()], allDoneBefore: false));
     }
 
     [Fact]
-    public void The_last_lot_of_a_harvesting_plan_completes_it()
+    public void An_assigned_plan_never_moves_with_the_lines_nobody_received_it()
     {
-        Assert.Equal([Completed], HarvestPlanRules.Settle(Harvesting, [WithLot(), WithLot()], allDoneBefore: false));
-        Assert.Equal([Completed], HarvestPlanRules.Settle(Harvesting, [WithLot(), AllSkipped()], allDoneBefore: false));
+        Assert.Empty(HarvestPlanRules.Settle(Assigned, [WithLot(), Open()], allDoneBefore: false));
+        Assert.Empty(HarvestPlanRules.Settle(Assigned, [AllSkipped()], allDoneBefore: false));
     }
 
     [Fact]
-    public void A_plan_of_one_line_goes_from_assigned_through_harvesting_to_completed_with_its_lot()
+    public void The_system_never_completes_a_plan_whatever_the_lines()
     {
-        Assert.Equal([Harvesting, Completed], HarvestPlanRules.Settle(Assigned, [WithLot()], allDoneBefore: false));
+        Assert.Empty(HarvestPlanRules.Settle(Harvesting, [WithLot(), WithLot()], allDoneBefore: false));
+        Assert.Empty(HarvestPlanRules.Settle(Harvesting, [WithLot(), AllSkipped()], allDoneBefore: true));
+        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [WithLot()], allDoneBefore: false));
+        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [AllSkipped(), AllSkipped(3)], allDoneBefore: false));
     }
 
     [Fact]
-    public void An_assigned_plan_with_every_lane_left_out_and_no_lot_goes_straight_to_completed()
+    public void A_handed_over_plan_opens_again_when_a_line_is_open_again_and_stays_handed_over_otherwise()
     {
-        Assert.Equal([Completed], HarvestPlanRules.Settle(Assigned, [AllSkipped(), AllSkipped(3)], allDoneBefore: false));
+        Assert.Equal([Harvesting], HarvestPlanRules.Settle(HandedOver, [Open(), WithLot()], allDoneBefore: true));
+        Assert.Empty(HarvestPlanRules.Settle(HandedOver, [WithLot(), AllSkipped()], allDoneBefore: true));
     }
 
     [Fact]
@@ -102,7 +111,7 @@ public class HarvestPlanRulesTests
     }
 
     [Fact]
-    public void A_plan_that_finished_by_itself_opens_again_when_a_line_is_open_again()
+    public void A_completed_plan_that_was_whole_opens_again_when_a_line_is_open_again()
     {
         Assert.Equal([Harvesting], HarvestPlanRules.Settle(Completed, [Open(), WithLot()], allDoneBefore: true));
     }
@@ -136,18 +145,33 @@ public class HarvestPlanRulesTests
     {
         Assert.True(HarvestPlanRules.AllowsAssign(Draft));
         Assert.False(HarvestPlanRules.AllowsAssign(Assigned));
-        Assert.True(HarvestPlanRules.AllowsFinish(Harvesting));
+        Assert.True(HarvestPlanRules.AllowsReceive(Assigned));
+        Assert.False(HarvestPlanRules.AllowsReceive(Draft));
+        Assert.False(HarvestPlanRules.AllowsReceive(Received));
+        Assert.True(HarvestPlanRules.AllowsHandOver(Harvesting));
+        Assert.False(HarvestPlanRules.AllowsHandOver(Received));
+        Assert.False(HarvestPlanRules.AllowsHandOver(HandedOver));
+        Assert.True(HarvestPlanRules.AllowsFinish(HandedOver));
+        Assert.False(HarvestPlanRules.AllowsFinish(Harvesting));
         Assert.False(HarvestPlanRules.AllowsFinish(Assigned));
         Assert.True(HarvestPlanRules.AllowsCancel(Draft));
         Assert.True(HarvestPlanRules.AllowsCancel(Assigned));
+        Assert.True(HarvestPlanRules.AllowsCancel(Received));
         Assert.False(HarvestPlanRules.AllowsCancel(Harvesting));
-        Assert.True(HarvestPlanRules.AllowsHarvest(Assigned));
+        Assert.False(HarvestPlanRules.AllowsCancel(HandedOver));
+        Assert.True(HarvestPlanRules.AllowsHarvest(Received));
         Assert.True(HarvestPlanRules.AllowsHarvest(Harvesting));
+        Assert.False(HarvestPlanRules.AllowsHarvest(Assigned));
+        Assert.False(HarvestPlanRules.AllowsHarvest(HandedOver));
         Assert.False(HarvestPlanRules.AllowsHarvest(Draft));
         Assert.False(HarvestPlanRules.AllowsHarvest(Completed));
         Assert.True(HarvestPlanRules.AllowsUnskip(Completed));
+        Assert.True(HarvestPlanRules.AllowsUnskip(HandedOver));
+        Assert.False(HarvestPlanRules.AllowsUnskip(Assigned));
         Assert.False(HarvestPlanRules.AllowsUnskip(Cancelled));
         Assert.True(HarvestPlanRules.AllowsEdit(Harvesting));
+        Assert.True(HarvestPlanRules.AllowsEdit(Received));
+        Assert.False(HarvestPlanRules.AllowsEdit(HandedOver));
         Assert.False(HarvestPlanRules.AllowsEdit(Completed));
     }
 
@@ -160,34 +184,59 @@ public class HarvestPlanRulesTests
     }
 
     [Fact]
-    public void A_handed_over_plan_offers_the_harvest_to_a_manager_and_the_edit_to_the_owner()
+    public void An_assigned_plan_offers_the_receive_to_a_manager_and_the_edit_to_the_owner_but_no_harvest()
     {
-        Assert.Equal([Edit, Cancel, HarvestPlanAction.Harvest, SkipLane], HarvestPlanRules.AllowedActions(Assigned, Owner, hasLot: false, canHarvestNow: true));
-        Assert.Equal([HarvestPlanAction.Harvest, SkipLane], HarvestPlanRules.AllowedActions(Assigned, Manager, hasLot: false, canHarvestNow: true));
-        // A reader (or a caller with no line open in a zone it harvests in) gets no harvest button.
-        Assert.Empty(HarvestPlanRules.AllowedActions(Assigned, Manager, hasLot: false, canHarvestNow: false));
+        Assert.Equal([Edit, HarvestPlanAction.Receive, Cancel], Buttons(Assigned, Owner, canHarvestNow: true, mayHarvestInPlan: true));
+        Assert.Equal([HarvestPlanAction.Receive], Buttons(Assigned, Manager, canHarvestNow: true, mayHarvestInPlan: true));
+        // A reader (a caller that may not harvest in a zone of the plan) gets no button.
+        Assert.Empty(Buttons(Assigned, Manager));
     }
 
     [Fact]
-    public void A_plan_being_harvested_is_finished_not_cancelled()
+    public void A_received_plan_offers_the_harvest_and_the_cancel_while_no_lot_exists()
     {
-        var actions = HarvestPlanRules.AllowedActions(Harvesting, Owner, hasLot: true, canHarvestNow: true);
+        Assert.Equal([HarvestPlanAction.Harvest, SkipLane], Buttons(Received, Manager, canHarvestNow: true, mayHarvestInPlan: true));
+        Assert.Equal([Edit, Cancel, HarvestPlanAction.Harvest, SkipLane], Buttons(Received, Owner, canHarvestNow: true, mayHarvestInPlan: true));
+        Assert.Empty(Buttons(Received, Manager));
+    }
 
-        Assert.Equal([Edit, Finish, HarvestPlanAction.Harvest, SkipLane], actions);
+    [Fact]
+    public void The_hand_over_needs_every_line_of_the_whole_plan_done()
+    {
+        var open = Buttons(Harvesting, Manager, hasLot: true, canHarvestNow: true, mayHarvestInPlan: true, allLinesDone: false);
+        var done = Buttons(Harvesting, Manager, hasLot: true, canHarvestNow: false, mayHarvestInPlan: true, allLinesDone: true);
+
+        Assert.Equal([HarvestPlanAction.Harvest, SkipLane], open);
+        Assert.Equal([HarvestPlanAction.HandOver], done);
+        // The Owner edits and finishes only after the hand-over, and a reader never hands over.
+        Assert.Equal([Edit, HarvestPlanAction.HandOver], Buttons(Harvesting, Owner, hasLot: true, mayHarvestInPlan: true, allLinesDone: true));
+        Assert.Equal([Edit], Buttons(Harvesting, Owner, hasLot: true, allLinesDone: true));
+    }
+
+    [Fact]
+    public void A_plan_being_harvested_is_handed_over_not_cancelled()
+    {
+        var actions = Buttons(Harvesting, Owner, hasLot: true, canHarvestNow: true, mayHarvestInPlan: true);
+
+        Assert.Equal([Edit, HarvestPlanAction.Harvest, SkipLane], actions);
         Assert.DoesNotContain(Cancel, actions);
+        Assert.DoesNotContain(Finish, actions);
     }
 
     [Fact]
-    public void With_no_line_open_nothing_is_left_to_harvest()
+    public void A_handed_over_plan_is_completed_by_the_owner_alone()
     {
-        Assert.Equal([Edit, Finish], HarvestPlanRules.AllowedActions(Harvesting, Owner, hasLot: true, canHarvestNow: false));
+        Assert.Equal([Finish], Buttons(HandedOver, Owner, hasLot: true, mayHarvestInPlan: true, allLinesDone: true));
+        // A caller with the right to edit plans in every zone is still not the Owner: only the Owner completes.
+        Assert.Empty(Buttons(HandedOver, new HarvestPlanCaller(IsOwner: false, CanEdit: true, CanDelete: true), hasLot: true, mayHarvestInPlan: true, allLinesDone: true));
+        Assert.Empty(Buttons(HandedOver, Manager, hasLot: true, mayHarvestInPlan: true, allLinesDone: true));
     }
 
     [Fact]
     public void A_plan_that_is_over_offers_nothing()
     {
-        Assert.Empty(HarvestPlanRules.AllowedActions(Completed, Owner, hasLot: true, canHarvestNow: false));
-        Assert.Empty(HarvestPlanRules.AllowedActions(Cancelled, Owner, hasLot: false, canHarvestNow: true));
+        Assert.Empty(Buttons(Completed, Owner, hasLot: true));
+        Assert.Empty(Buttons(Cancelled, Owner, canHarvestNow: true, mayHarvestInPlan: true));
     }
 
     // ---- Clashes ----

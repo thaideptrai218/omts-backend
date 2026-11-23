@@ -30,7 +30,7 @@ Kế toán (`ACCOUNTANT`) không đổi. Chủ HTX không bị ảnh hưởng (q
 
 ## Không làm / chưa làm
 
-- **Kế hoạch thu hoạch, tiếp nhận và bàn giao lại (D3):** backend chưa có trạng thái "đã tiếp nhận" hay "bàn giao lại". Hiện có Nháp, Đã giao (Chủ HTX bấm "Giao QLV", thông báo `HARVEST_PLAN_ASSIGNED`), Đang thu (tự động khi có lô hoặc luống bỏ qua đầu tiên), Hoàn tất (tự động khi mọi dòng xong, hoặc Chủ HTX "Kết thúc"), Hủy. Quản lý vùng đã xem kế hoạch đã giao, ghi lô thu hoạch, bỏ luống và chọn nhân công cho dòng. Thêm bước tiếp nhận/bàn giao là đổi chuyển trạng thái nên cần chủ xác nhận (AGENTS.md); đề xuất ở báo cáo giao việc.
+- **Kế hoạch thu hoạch, tiếp nhận và bàn giao lại (D3):** backend chưa có trạng thái "đã tiếp nhận" hay "bàn giao lại". Hiện có Nháp, Đã giao (Chủ HTX bấm "Giao QLV", thông báo `HARVEST_PLAN_ASSIGNED`), Đang thu (tự động khi có lô hoặc luống bỏ qua đầu tiên), Hoàn tất (tự động khi mọi dòng xong, hoặc Chủ HTX "Kết thúc"), Hủy. Quản lý vùng đã xem kế hoạch đã giao, ghi lô thu hoạch, bỏ luống và chọn nhân công cho dòng. Thêm bước tiếp nhận/bàn giao là đổi chuyển trạng thái nên cần chủ xác nhận (AGENTS.md); đề xuất ở báo cáo giao việc. **Đã làm ngày 24/11/2026 (chủ chốt):** thêm Đã nhận (4206) và Đã bàn giao (4207); Quản lý vùng bấm "Nhận" (`POST /api/harvest-plans/{id}/receive`) và "Bàn giao" (`.../hand-over`), hệ thống không còn tự hoàn tất kế hoạch, chỉ Chủ HTX "Hoàn thành" (`.../finish`) kế hoạch đã bàn giao; xem [SRS_DEVIATIONS.md](SRS_DEVIATIONS.md).
 - **Một Kế toán:** backend không ép; Web cảnh báo.
 - Báo cáo theo vùng cho Quản lý vùng: chưa làm trong đợt này (cần danh sách báo cáo và mã quyền từng báo cáo).
 

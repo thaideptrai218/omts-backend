@@ -118,8 +118,9 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         Assert.True(plan.IsSuccessStatusCode, await plan.Content.ReadAsStringAsync());
         var worker = await factory.LoginAsync(employeeAccount.Username);
         var invite = Assert.Single((await worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Today:yyyy-MM-dd}&to={Today.AddDays(2):yyyy-MM-dd}"))!);
-        var approval = await worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(true, null, invite.RowVersion));
-        Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
+        // The shift is a work assignment at once and the employee has nothing to answer (decision of 24/11/2026).
+        Assert.True(invite.Approved);
+        Assert.False(invite.CanRespond);
         row = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
         reply = reply with { RowVersion = row.RowVersion };
         var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", reply);

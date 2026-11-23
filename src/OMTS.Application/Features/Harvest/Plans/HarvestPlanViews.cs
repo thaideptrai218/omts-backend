@@ -61,7 +61,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
             plan.Id, plan.Code, plan.StatusId, statusCatalog.DisplayNameOf(plan.StatusId), ZonesOf(visible), plan.PlannedAt, plan.Note,
             Ref(plan.CreatedByAccountId), plan.AssignedAt, Ref(plan.AssignedByAccountId), plan.CompletedAt, plan.CancelledAt, Ref(plan.CancelledByAccountId), plan.CancelReason,
             lineViews, OrderViews(plan), Progress(visible),
-            HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow),
+            HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow, mayHarvest.Values.Any(m => m), HarvestPlanProgress.AllDone(plan)),
             plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion));
     }
 

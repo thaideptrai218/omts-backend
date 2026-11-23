@@ -104,7 +104,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
         NewStatus(S.CustomerPayment.Completed, G.CustomerPayment, "COMPLETED", "Completed", "The money has arrived or was recorded by the Accountant; counts in the debt."),
         NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
-        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "User decision 31/10/2026: employees approve their shift before the Owner accepts the request."),
+        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "Legacy (31/10/2026 flow): requests sent before 24/11/2026 may still wait here for employees to answer; new staffing plans keep the request Awaiting response and make the work assignments at once."),
         NewStatus(S.CustomerPayment.PendingTransfer, G.CustomerPayment, "PENDING_TRANSFER", "Pending transfer", "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.", initial: true),
         NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft", "Being prepared; holds no quantity. Removed, never cancelled.", initial: true),
         NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed", "The quantities have left the stock; may still be edited, which writes them again."),
@@ -117,10 +117,12 @@ internal static class StatusCatalogSeed
         NewStatus(S.SalesOrder.Completed, G.SalesOrder, "COMPLETED", "Completed", "Finished by hand or fully delivered; what is left of its advance is general credit of the customer. A cancelled invoice reopens it."),
         NewStatus(S.SalesOrder.Cancelled, G.SalesOrder, "CANCELLED", "Cancelled", "Cancelled with a reason; what is left of its advance is general credit of the customer.", final: true),
         NewStatus(S.HarvestPlan.Draft, G.HarvestPlan, "DRAFT", "Draft", "Being prepared by the Owner; the Zone Managers do not see it yet.", initial: true),
-        NewStatus(S.HarvestPlan.Assigned, G.HarvestPlan, "ASSIGNED", "Assigned", "Handed to the Zone Managers of its zone; no lot is recorded and no lane left out yet."),
-        NewStatus(S.HarvestPlan.Harvesting, G.HarvestPlan, "HARVESTING", "Harvesting", "A lot is recorded from a line of the plan, or a lane is left out."),
-        NewStatus(S.HarvestPlan.Completed, G.HarvestPlan, "COMPLETED", "Completed", "Every line has its lot or has every lane left out, or the Owner finished the plan by hand; removing a lot of a plan finished by itself opens it again."),
+        NewStatus(S.HarvestPlan.Assigned, G.HarvestPlan, "ASSIGNED", "Assigned", "Handed to the Zone Managers of its zone; none of them has pressed Receive yet, so no lot is recorded and no lane left out."),
+        NewStatus(S.HarvestPlan.Harvesting, G.HarvestPlan, "HARVESTING", "Harvesting", "A lot is recorded from a line of the plan, or a lane is left out; it stays here until a Zone Manager hands the plan over."),
+        NewStatus(S.HarvestPlan.Completed, G.HarvestPlan, "COMPLETED", "Completed", "The Owner closed a plan the Zone Manager handed over; removing a lot or putting a lane back opens it again."),
         NewStatus(S.HarvestPlan.Cancelled, G.HarvestPlan, "CANCELLED", "Cancelled", "Cancelled with a reason before any lot was recorded.", final: true),
+        NewStatus(S.HarvestPlan.Received, G.HarvestPlan, "RECEIVED", "Đã nhận", "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on."),
+        NewStatus(S.HarvestPlan.HandedOver, G.HarvestPlan, "HANDED_OVER", "Đã bàn giao", "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan."),
 
         // STD-NURSERY-BATCH (ươm giống, decision of 12/11/2026): a Completed batch is not cancelled.
         NewStatus(S.NurseryBatch.Nursing, G.NurseryBatch, "NURSING", "Nursing", "The pieces left the stock and are in the nursery; it can be edited or cancelled.", initial: true),
@@ -167,7 +169,7 @@ internal static class StatusCatalogSeed
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
-        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.", false),
+        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "A staffing plan exists (employees assigned at once, no agreement to wait for); the accepted cages are above 0, not more than the requested cages and equal to the planned cages; the pickup date is not before today and equals the planned pickup.", false),
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
@@ -206,12 +208,15 @@ internal static class StatusCatalogSeed
         NewTransition(30108, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The Owner saves an order made from the request.", false),
         NewTransition(30109, S.PurchaseRequest.Accepted, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.", false),
         NewTransition(30110, S.HarvestPlan.Draft, S.HarvestPlan.Assigned, "HARVEST-PLAN", Owner, Action, "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.", false),
-        NewTransition(30111, S.HarvestPlan.Assigned, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The first lot is recorded from a line of the plan, or the first lane is left out.", false),
-        NewTransition(30112, S.HarvestPlan.Harvesting, S.HarvestPlan.Completed, "HARVEST-PLAN", $"{Owner}; {SystemActor}", Action, "Every line has its lot or every lane left out, or the Owner finishes the plan: lanes still to do stay as they are.", false),
-        NewTransition(30113, S.HarvestPlan.Assigned, S.HarvestPlan.Completed, "HARVEST-PLAN", SystemActor, Action, "Every lane of every line is left out and no lot was recorded.", false),
+        NewTransition(30111, S.HarvestPlan.Received, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The first lot is recorded from a line of the plan, or the first lane is left out.", false),
+        NewTransition(30112, S.HarvestPlan.HandedOver, S.HarvestPlan.Completed, "HARVEST-PLAN", Owner, Action, "The plan was handed over by a Zone Manager; only the Owner completes it. The system never completes a plan by itself.", false),
+        NewTransition(30120, S.HarvestPlan.Assigned, S.HarvestPlan.Received, "HARVEST-PLAN", OwnerOrZoneManager, Action, "A Zone Manager of a zone of the plan presses Receive; there is no refusal.", false),
+        NewTransition(30121, S.HarvestPlan.Harvesting, S.HarvestPlan.HandedOver, "HARVEST-PLAN", OwnerOrZoneManager, Action, "Every line of the plan has its lot or has every lane left out; a Zone Manager presses Hand over.", false),
+        NewTransition(30122, S.HarvestPlan.HandedOver, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "A lot of a handed over plan is removed, or a lane left out is put back: a line is open again.", false),
+        NewTransition(30123, S.HarvestPlan.Received, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given and no lot was recorded from the plan.", true),
         NewTransition(30114, S.HarvestPlan.Draft, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given.", true),
         NewTransition(30115, S.HarvestPlan.Assigned, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given and no lot was recorded from the plan.", true),
-        NewTransition(30116, S.HarvestPlan.Completed, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "A lot of a plan that finished by itself is removed, or a lane left out is put back: a line is open again.", false),
+        NewTransition(30116, S.HarvestPlan.Completed, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The Owner completed the plan and a lot is removed or a lane left out is put back: a line is open again.", false),
 
         // NURSERY-03 and NURSERY-02 (ươm giống); there is no way back from either.
         NewTransition(30090, S.NurseryBatch.Nursing, S.NurseryBatch.Completed, "NURSERY-03", OwnerOrZoneManager, Action, "The survivors are not above the pieces put in; no share and no cycle is created (v2, 13/11/2026).", false),
@@ -230,10 +235,10 @@ internal static class StatusCatalogSeed
         NewTransition(236, S.Payroll.Creating, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A sheet still being made is dropped.", false),
 
         // STD-PURCHASE-REQUEST: the staffing plan before the response (decision of 31/10/2026).
-        NewTransition(30082, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.AwaitingStaff, "SALE-03", Owner, Action, "The Owner sends dated shift invitations with a cage capacity.", false),
+        NewTransition(30082, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.AwaitingStaff, "SALE-03", Owner, Action, "Legacy, no longer made: since 24/11/2026 the Owner picks the employees, their shifts become work assignments at once and the request stays Awaiting response.", false),
         NewTransition(30083, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "The Owner declines with a reason.", true),
         NewTransition(30084, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "Only the requesting customer may cancel; release shift reservations.", false),
-        NewTransition(30085, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.", false),
+        NewTransition(30085, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "A staffing plan exists (employees chosen, assignments made); cages and pickup match it. No employee agreement is counted any more.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),
