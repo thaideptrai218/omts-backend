@@ -1,13 +1,13 @@
 name: OCR image
 
 # Builds the PaddleOCR sidecar of WATER-01 (tools/ocr-service) and pushes ghcr.io/<owner>/<repo>-ocr:sha-<7 chars>.
-# Only when tools/ocr-service changes on develop, or by hand: the image is ~2.3 GB with the models baked in, so it is not
-# rebuilt on every API deploy. The staging host runs the tag pinned by OCR_IMAGE in /opt/omts/.env (docs/deployment-ocr.md);
-# this workflow never deploys.
+# Only when tools/ocr-service (or this file) changes on develop, or by hand: the image is ~2.3 GB with the models baked in,
+# so it is not rebuilt on every API deploy. The staging host runs the tag pinned by OCR_IMAGE in /opt/omts/.env
+# (docs/deployment-ocr.md); this workflow never deploys.
 on:
   push:
     branches: [develop]
-    paths: ["tools/ocr-service/**"]
+    paths: ["tools/ocr-service/**", ".github/workflows/ocr-image.yml"]
   workflow_dispatch:
 
 permissions:
@@ -49,4 +49,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           # No GHA cache: rare builds, and a 2 GB layer cache would evict the API image's cache.
 
-      - run: echo "Pushed ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}: set OCR_IMAGE to it in /opt/omts/.env (docs/deployment-ocr.md)." >> "$GITHUB_STEP_SUMMARY"
+      # A block scalar: a plain one cannot hold ": " (YAML reads it as a mapping and the whole workflow is invalid).
+      - run: |
+          echo "Pushed ${IMAGE}:${TAG}. Set OCR_IMAGE to it in /opt/omts/.env (docs/deployment-ocr.md)." >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
