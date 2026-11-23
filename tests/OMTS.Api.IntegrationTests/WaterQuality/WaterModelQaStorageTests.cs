@@ -588,7 +588,7 @@ public class WaterModelQaStorageTests
 
     private sealed class StubOcr(Func<Stream, string, Task<OcrResult>> answer) : IOcrService
     {
-        public Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken) => answer(photo, contentType);
+        public Task<OcrResult> RecognizeAsync(Stream photo, string contentType, OcrCrop? crop, CancellationToken cancellationToken) => answer(photo, contentType);
     }
 
     /// <summary>A storage that holds nothing and counts the reads that reach it.</summary>

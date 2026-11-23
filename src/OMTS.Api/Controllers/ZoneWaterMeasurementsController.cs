@@ -24,9 +24,11 @@ public sealed class ZoneWaterMeasurementsController(
     private const long MaxUploadBytes = 12 * 1024 * 1024;
 
     /// <summary>
-    /// Multipart: <c>photo</c> (JPEG/PNG, at most 10 MB). Stores the photo and reads it with OCR; no measurement is saved.
-    /// Answers the <c>photoKey</c> to record with, the suggested values, the indicators not read (MSG-WATER-01) and the
-    /// values outside the zone thresholds (MSG-WATER-02). When OCR fails, <c>ocr.status</c> is Failed and the key still comes back.
+    /// Multipart: <c>photo</c> (JPEG/PNG, at most 10 MB) and optionally <c>crop</c> = "left,top,right,bottom", the part of
+    /// the photo that shows the meter display as fractions 0…1 (each side at least 0.05). Stores the whole photo and reads
+    /// it with OCR (only the crop, when given); no measurement is saved. Answers the <c>photoKey</c> to record with, the
+    /// suggested values, the indicators not read (MSG-WATER-01) and the values outside the zone thresholds (MSG-WATER-02).
+    /// When OCR fails, <c>ocr.status</c> is Failed and the key still comes back. A malformed crop is 400 Invalid "Crop".
     /// </summary>
     [HttpPost("recognize")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]
@@ -34,10 +36,10 @@ public sealed class ZoneWaterMeasurementsController(
     [UploadField(WaterMeasurementRecordingService.PhotoField)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<RecognitionResult>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Recognize(Guid zoneId, IFormFile? photo, CancellationToken cancellationToken)
+    public async Task<IActionResult> Recognize(Guid zoneId, IFormFile? photo, [FromForm] string? crop, CancellationToken cancellationToken)
     {
         var file = photo is null ? null : await photo.ToIncomingFileAsync(cancellationToken);
-        return (await recording.RecognizeAsync(zoneId, file, cancellationToken)).ToActionResult(Ok);
+        return (await recording.RecognizeAsync(zoneId, file, crop, cancellationToken)).ToActionResult(Ok);
     }
 
     /// <summary>

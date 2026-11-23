@@ -28,6 +28,7 @@ using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
+using OMTS.Infrastructure.Ocr.Paddle;
 using OMTS.Infrastructure.Payments;
 using OMTS.Infrastructure.Payments.Checkout;
 using OMTS.Infrastructure.Persistence;
@@ -375,14 +376,30 @@ public static class DependencyInjection
         services.AddOptions<OcrProviderOptions>().Bind(configuration.GetSection(OcrProviderOptions.SectionName));
         services.AddSingleton<FakeOcrService>();
         services.AddSingleton<NotConfiguredOcrService>();
-        // Only the fake (Development/tests) exists until the real OCR provider ticket. Unset or unknown fails
-        // closed: no readings, MSG-WATER-01 and manual entry, instead of fabricated values.
-        services.AddSingleton<IOcrService>(provider =>
+        services.AddHttpClient<PaddleOcrService>((provider, http) =>
         {
-            var name = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider;
-            return name == OcrProviderOptions.FakeProvider
-                ? provider.GetRequiredService<FakeOcrService>()
-                : provider.GetRequiredService<NotConfiguredOcrService>();
+            var paddle = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Paddle;
+            // Only the Paddle provider needs the URL; the provider switch below rejects it empty.
+            if (Uri.TryCreate(paddle.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var baseUrl))
+            {
+                http.BaseAddress = baseUrl;
+            }
+
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, paddle.HttpTimeoutSeconds));
+        });
+        // Paddle reads with the sidecar; Fake only in Development/tests. Unset or unknown fails closed: no readings,
+        // MSG-WATER-01 and manual entry, instead of fabricated values. Transient: the typed HttpClient must not be kept.
+        services.AddTransient<IOcrService>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value switch
+        {
+            // "ocr:8000" parses as an absolute URI with the scheme "ocr": require http or https.
+            { Provider: OcrProviderOptions.PaddleProvider, Paddle.BaseUrl: var url }
+                when !Uri.TryCreate(url, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https") =>
+                throw new InvalidOperationException(
+                    $"{OcrProviderOptions.SectionName}:Paddle:BaseUrl must be an absolute URL (e.g. http://ocr:8000) when {OcrProviderOptions.SectionName}:Provider is Paddle."),
+            // Profile() throws on an unknown Layout indicator: a typo stops the host instead of leaving values unread.
+            { Provider: OcrProviderOptions.PaddleProvider, Paddle: var paddle } when paddle.Profile() is not null => provider.GetRequiredService<PaddleOcrService>(),
+            { Provider: OcrProviderOptions.FakeProvider } => provider.GetRequiredService<FakeOcrService>(),
+            _ => provider.GetRequiredService<NotConfiguredOcrService>(),
         });
     }
 

@@ -4,11 +4,12 @@ namespace OMTS.Application.Common.Interfaces.Ocr;
 /// OCR Service adapter (WATER-01): reads pH, salinity, temperature and the measurement time from a photo of the water
 /// meter. Only the meter photo is sent. The values are only suggestions until a person confirms them (BR-WATER-02).
 /// Provider failures are returned as a failed <see cref="OcrResult"/>, never thrown; the caller enforces
-/// the timeout through the cancellation token.
+/// the timeout through the cancellation token. <c>crop</c>, when set, is the part of the photo that shows the
+/// display; a provider may ignore it.
 /// </summary>
 public interface IOcrService
 {
-    Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken);
+    Task<OcrResult> RecognizeAsync(Stream photo, string contentType, OcrCrop? crop, CancellationToken cancellationToken);
 }
 
 /// <summary>A value read from the photo with the provider's confidence (0…1).</summary>

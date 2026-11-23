@@ -10,6 +10,6 @@ public sealed class NotConfiguredOcrService : IOcrService
 {
     public const string ErrorCode = "NOT_CONFIGURED";
 
-    public Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken) =>
+    public Task<OcrResult> RecognizeAsync(Stream photo, string contentType, OcrCrop? crop, CancellationToken cancellationToken) =>
         Task.FromResult(OcrResult.Failed(ErrorCode));
 }
