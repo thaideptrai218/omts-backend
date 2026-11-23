@@ -122,14 +122,15 @@ public class FixedRolesScopeQaTests
     {
         var access = Staff(Pair(ZoneA, FixedRoles.ZoneManager), Pair(ZoneC, FixedRoles.Accountant));
 
-        Assert.True(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneA));
+        // Selling is not the Zone Manager's (20/11/2026): invoices are viewed and exported in zone C by its Accountant pair, and created nowhere.
+        Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneA));
         Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneC));
-        Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneB));
+        Assert.False(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneA));
         Assert.True(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneB));
-        Assert.Equal(new[] { ZoneA, ZoneC }.Order(), access.PermittedZonesFor(SalesInvoices, View).ZoneIds.Order());
-        // The Accountant of zone C exports invoices too (PM answer 12/11/2026), so the export zones add up like the view zones.
-        Assert.Equal(new[] { ZoneA, ZoneC }.Order(), access.PermittedZonesFor(SalesInvoices, Export).ZoneIds.Order());
+        Assert.Equal([ZoneC], access.PermittedZonesFor(SalesInvoices, View).ZoneIds);
+        // The Accountant of zone C exports invoices too (PM answer 12/11/2026).
+        Assert.Equal([ZoneC], access.PermittedZonesFor(SalesInvoices, Export).ZoneIds);
         // Purchase receipts have no zone: every receipt for the Zone Manager role, rafts of zone A only (PairZonesFor).
         Assert.True(access.PermittedZonesFor(PurchaseReceipts, Delete).AllZones);
         Assert.Equal([ZoneA], access.PairZonesFor(PurchaseReceipts, Create).ZoneIds);
@@ -143,7 +144,7 @@ public class FixedRolesScopeQaTests
         Assert.True(access.Allows(Payroll, Create, PermissionScope.ZoneScoped, ZoneA));
 
         var described = access.DescribeFunctions().ToDictionary(f => f.Function);
-        Assert.Equal(new[] { ZoneA, ZoneC }.Order(), described[SalesInvoices].ZoneIds.Order());
+        Assert.Equal([ZoneC], described[SalesInvoices].ZoneIds);
         Assert.True(described[SupplierPayments].AllZones);
         Assert.Equal([ZoneA], described[WaterMeasurements].ZoneIds);
     }
@@ -154,7 +155,12 @@ public class FixedRolesScopeQaTests
     {
         var access = Staff(Pair(null, FixedRoles.ZoneManager));
 
-        foreach (var function in new[] { SupplierPayments, CustomerPayments, CustomerDebts, PayRules, Payroll, SalesReports })
+        // Selling (orders, invoices, returns, customers, claims, purchase requests) is the Owner's too since 20/11/2026.
+        foreach (var function in new[]
+        {
+            SupplierPayments, CustomerPayments, CustomerDebts, PayRules, Payroll, SalesReports,
+            SalesOrders, SalesInvoices, SalesReturns, Customers, QualityClaims, PurchaseRequests,
+        })
         {
             Assert.False(access.Allows(function, View, PermissionScope.NoZone, null), function);
             Assert.False(access.Allows(function, View, PermissionScope.ZoneScoped, ZoneA), function);
@@ -165,23 +171,57 @@ public class FixedRolesScopeQaTests
         Assert.True(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneB));
     }
 
-    // An order has no zone: a Zone Manager of zone A takes, changes and reads every order, never cancels one; harvest plans stay zone-scoped (it sees the plans with a line in zone A).
+    // 20/11/2026: a Zone Manager of zone A holds no order right at all (the Owner takes and changes the orders); harvest plans stay zone-scoped (it sees the plans with a line in zone A).
     [Fact]
-    public void A_zone_manager_reaches_every_order_whatever_the_zone_but_the_plans_of_its_own_zone_only()
+    public void A_zone_manager_holds_no_order_right_and_sees_the_plans_of_its_own_zone_only()
     {
         var access = Staff(Pair(ZoneA, FixedRoles.ZoneManager));
 
-        foreach (var action in new[] { View, Create, Edit })
+        foreach (var action in new[] { View, Create, Edit, Delete, Export })
         {
-            Assert.True(access.Allows(SalesOrders, action, PermissionScope.NoZone, null), $"{action}");
-            Assert.True(access.Allows(SalesOrders, action, PermissionScope.ZoneScoped, ZoneB), $"{action} on a record of zone B");
-            Assert.True(access.PermittedZonesFor(SalesOrders, action).AllZones, $"{action}");
+            Assert.False(access.Allows(SalesOrders, action, PermissionScope.NoZone, null), $"{action}");
+            Assert.True(access.PermittedZonesFor(SalesOrders, action).IsEmpty, $"{action}");
         }
 
-        Assert.False(access.Allows(SalesOrders, Delete, PermissionScope.NoZone, null));
-        Assert.True(access.PermittedZonesFor(SalesOrders, Delete).IsEmpty);
         Assert.Equal([ZoneA], access.PermittedZonesFor(HarvestPlans, View).ZoneIds);
         Assert.False(access.Allows(HarvestPlans, View, PermissionScope.ZoneScoped, ZoneB));
+        Assert.False(access.Allows(HarvestPlans, Edit, PermissionScope.ZoneScoped, ZoneA));
+    }
+
+    // Owner decision of 20/11/2026: the Zone Manager works the work assignment and the attendance of its own zone only (the services check the zone of each record with these rights).
+    [Fact]
+    public void A_zone_manager_edits_work_assignments_and_attendance_in_its_own_zone_only_and_the_owner_anywhere()
+    {
+        var manager = Staff(Pair(ZoneA, FixedRoles.ZoneManager));
+        var owner = new AccountAccess(Guid.NewGuid(), SubjectType.CooperativeOwner, false, true, []);
+
+        foreach (var function in new[] { WorkAssignments, Attendance })
+        {
+            foreach (var action in new[] { Create, Edit })
+            {
+                Assert.True(manager.Allows(function, action, PermissionScope.ZoneScoped, ZoneA), $"{function} {action} in zone A");
+                Assert.False(manager.Allows(function, action, PermissionScope.ZoneScoped, ZoneB), $"{function} {action} in zone B");
+                Assert.True(manager.Allows(function, action, PermissionScope.AnyZone, null), $"{function} {action} on any zone");
+                Assert.True(owner.Allows(function, action, PermissionScope.ZoneScoped, ZoneB), $"owner {function} {action}");
+            }
+        }
+
+        // Payroll, pay rates and every other money right stay out of its reach.
+        foreach (var function in new[] { Payroll, PayRules, CashBookOperations, SupplierPayments, CustomerPayments })
+        {
+            Assert.False(manager.Allows(function, View, PermissionScope.AnyZone, null), function);
+        }
+    }
+
+    // Two pairs of the Zone Manager role (the Owner grants a second zone) add their zones up; a zone with no pair stays out.
+    [Fact]
+    public void Two_zone_manager_pairs_add_their_zones_up()
+    {
+        var access = Staff(Pair(ZoneA, FixedRoles.ZoneManager), Pair(ZoneB, FixedRoles.ZoneManager));
+
+        Assert.True(access.Allows(Attendance, Edit, PermissionScope.ZoneScoped, ZoneA));
+        Assert.True(access.Allows(Attendance, Edit, PermissionScope.ZoneScoped, ZoneB));
+        Assert.False(access.Allows(Attendance, Edit, PermissionScope.ZoneScoped, ZoneC));
     }
 
     // A pair whose role row is not a fixed role (an old custom role kept with a placeholder code) carries no permission.

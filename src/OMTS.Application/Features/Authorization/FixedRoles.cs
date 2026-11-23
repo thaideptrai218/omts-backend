@@ -29,26 +29,23 @@ public static class FixedRoles
     public const string ZoneManagerCode = "ZONE_MANAGER";
     public const string AccountantCode = "ACCOUNTANT";
 
-    /// <summary>Field work in the assigned zones; views purchase requests, claims and invoice corrections, decides none.</summary>
+    /// <summary>
+    /// Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce. Selling is not the Zone Manager's
+    /// (owner decision of 20/11/2026, reversing 27/10 and 02/11): no orders, invoices, returns, customers, quality claims or purchase requests.
+    /// </summary>
     public static readonly FixedRole ZoneManager = new(
         StaffRole.ZoneManager,
         ZoneManagerCode,
         "Zone Manager",
-        "Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing, customers, sales invoices at the port, sales returns and workforce.",
+        "Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce (work assignment and attendance of the zone). Selling is the Owner's.",
         [
             Full(CultivationCycles), Full(CultivationLogs), Full(WaterMeasurements), Full(Harvests), Full(HarvestLots),
-            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts), Full(Suppliers), Full(Customers),
-            new(PurchaseRequests, [View]),
-            new(SalesInvoices, [View, Create, Export]),
-            new(QualityClaims, [View]),
-            new(SalesReturns, [View, Create]),
+            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts), Full(Suppliers),
             // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
             new(LaborWorkers, [View, Create, Edit]),
             Full(WorkAssignments), Full(Attendance),
             Full(InputIssues),
             Full(ProductDisposals),
-            // Every order (an order has no zone; the buyers at the port); cancelling an order is the Owner's.
-            new(SalesOrders, [View, Create, Edit]),
             // The plans handed to its zones: it harvests from them with HARVESTS and leaves lanes out, but never makes or changes a plan.
             new(HarvestPlans, [View]),
         ]);

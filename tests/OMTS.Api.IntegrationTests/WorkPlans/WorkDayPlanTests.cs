@@ -133,6 +133,35 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal("ASSIGNED", (await GetAsync(s.Manager, plan.Id)).Status);
     }
 
+    [Fact]
+    public async Task A_zone_manager_plans_for_itself_in_its_own_zone_and_in_no_other()
+    {
+        var s = await SetupAsync(); var outsider = await SetupAsync();
+        var own = new SaveWorkDayPlan(s.Raft.Id, s.Job.Id, Day, s.ManagerAccount.Id, Guid.NewGuid());
+
+        // Owner decision of 20/11/2026: the Zone Manager of the zone makes and changes a work-day plan of its zone, naming itself, so the plan is ready to staff.
+        var plan = await CreateAsync(s.Manager, own);
+        Assert.Equal("READY_TO_ASSIGN", plan.Status); Assert.True(plan.CanAssign);
+        var responsibles = (await s.Manager.GetFromJsonAsync<List<WorkPlanResponsible>>($"/api/work-plans/responsibles?raftId={s.Raft.Id}"))!;
+        Assert.Equal([s.ManagerAccount.Id], responsibles.Select(o => o.Id));
+        await Success(await s.Manager.PutAsJsonAsync($"/api/work-plans/{plan.Id}", own with { Note = "Đổi ghi chú", RowVersion = plan.RowVersion }));
+
+        // Another zone: 403 on the candidates, on a new plan and on changing the plan of this zone.
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.GetAsync($"/api/work-plans/responsibles?raftId={s.Raft.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.PostAsJsonAsync("/api/work-plans", own with { ResponsibleAccountId = outsider.ManagerAccount.Id, ClientOperationId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.PutAsJsonAsync($"/api/work-plans/{plan.Id}", own with { ResponsibleAccountId = outsider.ManagerAccount.Id, RowVersion = plan.RowVersion })).StatusCode);
+
+        // In its own zone it still cannot name someone else, nor tie a plan to a trader's purchase request (the Owner's alone).
+        Assert.Equal(HttpStatusCode.BadRequest, (await s.Manager.PostAsJsonAsync("/api/work-plans", own with { ResponsibleAccountId = s.OwnerAccount.Id, ClientOperationId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await s.Manager.PostAsJsonAsync("/api/work-plans", own with { ClientOperationId = Guid.NewGuid(), PurchaseRequestId = Guid.NewGuid(), Cages = 1, CagesPerEmployeePerDay = 1, PickupDate = Day })).StatusCode);
+
+        // An Accountant holds no work-assignment right at all.
+        var accountant = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
+        await factory.GrantAsync(accountant, StaffRole.Accountant, null);
+        var accountantClient = await factory.LoginAsync(accountant.Username);
+        Assert.Equal(HttpStatusCode.Forbidden, (await accountantClient.PostAsJsonAsync("/api/work-plans", own with { ClientOperationId = Guid.NewGuid() })).StatusCode);
+    }
+
     private async Task<(HttpClient Owner, Account OwnerAccount, HttpClient Manager, Account ManagerAccount, Raft Raft, JobType Job, Employee Employee, HttpClient Worker)> SetupAsync()
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password);

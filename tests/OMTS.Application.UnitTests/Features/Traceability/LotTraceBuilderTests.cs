@@ -110,14 +110,20 @@ public sealed class LotTraceBuilderTests
         var (lot, sessions) = Scenario();
         IReadOnlyList<LotSaleLine> lines = [Line("HD000001", Zone.Id, 1, 10m), Line("HD000001", Zone.Id, 2, 5m), Line("HD000002", OtherZoneId, 1, 7m, customer: null)];
 
+        // Since 20/11/2026 the Zone Manager holds no SALES_INVOICES right: the Accountant of the zone is the viewer of the invoices of one zone here.
+        var accountant = Build(lot, sessions, Staff(FixedRoles.Accountant, Zone.Id), lines);
         var manager = Build(lot, sessions, Staff(FixedRoles.ZoneManager, Zone.Id), lines);
         var owner = Build(lot, sessions, Owner(), lines);
 
-        Assert.Equal([("HD000001", 15m, false), ("HD000002", 7m, true)], manager.Invoices.Select(i => (i.InvoiceCode, i.Kg, i.WalkIn)));
+        Assert.Equal([("HD000001", 15m, false), ("HD000002", 7m, true)], accountant.Invoices.Select(i => (i.InvoiceCode, i.Kg, i.WalkIn)));
+        Assert.Equal(22m, accountant.InvoicedKg);
+        Assert.Equal([30_000m, 30_000m], accountant.Invoices[0].Lines.Select(l => l.UnitPrice!.Value));
+        Assert.Equal([(decimal?)null], accountant.Invoices[1].Lines.Select(l => l.UnitPrice));
+        Assert.Null(accountant.Invoices[1].Lines[0].Amount);
+        // The Zone Manager still traces the kg sold, but sees no price, amount or trader of any invoice.
         Assert.Equal(22m, manager.InvoicedKg);
-        Assert.Equal([30_000m, 30_000m], manager.Invoices[0].Lines.Select(l => l.UnitPrice!.Value));
-        Assert.Equal([(decimal?)null], manager.Invoices[1].Lines.Select(l => l.UnitPrice));
-        Assert.Null(manager.Invoices[1].Lines[0].Amount);
+        Assert.All(manager.Invoices.SelectMany(i => i.Lines), l => Assert.Null(l.UnitPrice));
+        Assert.All(manager.Invoices, i => Assert.Null(i.CustomerName));
         Assert.Equal(210_000m, owner.Invoices[1].Lines[0].Amount);
         Assert.All(owner.Invoices, i => Assert.Empty(i.Returns));
     }

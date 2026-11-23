@@ -64,9 +64,10 @@ public sealed class SalesReturnListServiceTests
 
     private static AccountAccess Owner() => new(Guid.NewGuid(), SubjectType.CooperativeOwner, false, true, []);
 
-    private static AccountAccess Manager(params Guid[] zones) => new(
+    // Since 20/11/2026 no fixed role holds SALES_RETURNS but the Owner's (the Zone Manager lost it), so the zone limit is read with a grant that holds only that right.
+    private static AccountAccess Viewer(params Guid[] zones) => new(
         Guid.NewGuid(), SubjectType.Staff, false, true,
-        zones.Select(z => new ZoneGrant(z, Guid.NewGuid(), FixedRoles.ZoneManager.Code, FixedRoles.ZoneManager.Name, FixedRoles.ZoneManager.GrantedPermissions)).ToList());
+        zones.Select(z => new ZoneGrant(z, Guid.NewGuid(), "CUSTOM", "Returns viewer", [GrantedPermission.Of(PermissionFunctions.SalesReturns, [PermissionAction.View])])).ToList());
 
     private static SalesReturnListRow Row(Guid zoneId, Guid? orderId, Guid? customerId, Guid recordedBy) => new(
         Guid.NewGuid(), "TL000002", new DateOnly(2026, 11, 17), At, Guid.NewGuid(), "HD000009", orderId, orderId is null ? null : "DH000004", customerId, customerId is null ? null : "KH000001",
@@ -93,10 +94,10 @@ public sealed class SalesReturnListServiceTests
     }
 
     [Fact]
-    public async Task A_zone_manager_is_limited_to_the_zones_they_may_view_and_is_refused_another_zone()
+    public async Task A_staff_caller_is_limited_to_the_zones_they_may_view_and_is_refused_another_zone()
     {
         var returns = new FakeReturns([]);
-        var manager = Manager(zoneA);
+        var manager = Viewer(zoneA);
 
         var own = await Service(returns, manager).SearchAsync(new SalesReturnListQuery(), CancellationToken.None);
         var chosenOther = await Service(returns, manager).SearchAsync(new SalesReturnListQuery(ZoneId: zoneB), CancellationToken.None);

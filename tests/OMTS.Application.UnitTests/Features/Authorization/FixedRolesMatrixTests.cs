@@ -64,21 +64,22 @@ public class FixedRolesMatrixTests
         { "LABOR-11", No, Full, PayRules, [View, Create, Edit] },
         { "LABOR-12", No, Full, Payroll, [View, Create, Edit, Export] },
         { "LABOR-14", No, Full, Payroll, [Create] },
+        // Selling is not the Zone Manager's (owner decision of 20/11/2026, which reverses the 27/10 and 02/11 columns below): every sales row is No for it.
         // Responding (Edit) is Owner-only.
-        { "SALE-03", R, No, PurchaseRequests, [Edit] },
-        { "SALE-04", Full, No, Customers, [View, Create, Edit] },
+        { "SALE-03", No, No, PurchaseRequests, [View, Edit] },
+        { "SALE-04", No, No, Customers, [View, Create, Edit] },
         // Deleting a customer nothing refers to and exporting the list are part of the customer screen, not of the SRS use case.
-        { "SALE-04.2", Full, No, Customers, [Delete, Export] },
-        { "SALE-05", Full, No, SalesInvoices, [Create] },
-        { "SALE-06", Full, No, SalesInvoices, [Create] },
+        { "SALE-04.2", No, No, Customers, [Delete, Export] },
+        { "SALE-05", No, No, SalesInvoices, [Create] },
+        { "SALE-06", No, No, SalesInvoices, [Create] },
         // Correcting (Edit) and cancelling (Delete) are Owner-only.
-        { "SALE-07", R, No, SalesInvoices, [Edit] },
-        { "SALE-08", R, No, SalesInvoices, [Delete] },
-        { "SALE-09", Full, R, SalesInvoices, [View, Export] },
+        { "SALE-07", No, No, SalesInvoices, [Edit] },
+        { "SALE-08", No, No, SalesInvoices, [Delete] },
+        { "SALE-09", No, R, SalesInvoices, [View, Export] },
         { "DEBT-02", No, Full, CustomerPayments, [View, Create, Edit, Export] },
         { "DEBT-03", No, Full, CustomerDebts, [View, Export] },
-        { "CLAIM-02", R, No, QualityClaims, [Edit] },
-        { "CLAIM-03", Full, No, SalesReturns, [View, Create] },
+        { "CLAIM-02", No, No, QualityClaims, [View, Edit] },
+        { "CLAIM-03", No, No, SalesReturns, [View, Create] },
         { "REPORT-01", No, Full, SalesReports, [View, Export] },
         { "REPORT-02", No, Full, SalesReports, [View, Export] },
         { "REPORT-03", No, Full, SalesReports, [View, Export] },
@@ -90,8 +91,8 @@ public class FixedRolesMatrixTests
         { "INPUT-DISPOSALS", No, Full, InputDisposals, [View, Export] },
         // Product disposals (Xuất hủy hàu) are not a use case of the SRS matrix either: the Zone Manager records those of its zones, the Owner any; the Accountant reads and exports them.
         { "PRODUCT-DISPOSALS", Full, R, ProductDisposals, [View, Create, Edit, Delete, Export] },
-        // Orders of goods (DH) are not a use case of the SRS matrix either: the Zone Manager saves, changes and finishes those of its zones (no cancelling); the Accountant reads and exports them; cancelling is the Owner's.
-        { "SALES-ORDERS", Full, R, SalesOrders, [View, Create, Edit] },
+        // Orders of goods (DH) are not a use case of the SRS matrix either: since 20/11/2026 the Zone Manager holds none (the Owner takes and changes them); the Accountant reads and exports them; cancelling is the Owner's.
+        { "SALES-ORDERS", No, R, SalesOrders, [View, Create, Edit] },
         { "SALES-ORDERS-EXPORT", No, Full, SalesOrders, [Export] },
         { "SALES-ORDERS-CANCEL", No, No, SalesOrders, [Delete] },
         // Harvest plans (KHT) are not a use case of the SRS matrix either: the Owner makes, changes, hands over and cancels them; the Zone Manager only views the plans handed to its zones (it harvests from them with HARVESTS); the Accountant has none.

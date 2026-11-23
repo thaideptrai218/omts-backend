@@ -57,12 +57,15 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
     }
     public async Task<Result<IReadOnlyList<WorkPlanResponsible>>> ResponsiblesAsync(Guid raftId, CancellationToken ct)
     {
+        // The Owner, or a Zone Manager with WORK_ASSIGNMENTS Create in the zone of the raft (decision of 20/11/2026). A Zone Manager plans for itself only, so it is the one name it is offered.
         var who = await access.CurrentAsync(ct);
-        if (who?.IsCooperativeOwner != true) return AppError.Forbidden;
+        if (who is null || !who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone, null)) return AppError.Forbidden;
         var raft = await rafts.GetForEditAsync(raftId, ct);
+        if (raft is not null && !who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, raft.ZoneId)) return AppError.Forbidden;
         if (raft?.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse) return AppError.Invalid("Raft");
         var owner = await accounts.GetByIdAsync(who.AccountId, ct);
         var result = new List<WorkPlanResponsible> { new(who.AccountId, owner!.DisplayName, true) };
+        if (!who.IsCooperativeOwner) return Result<IReadOnlyList<WorkPlanResponsible>>.Success(result);
         foreach (var candidate in await plans.ResponsibleCandidatesAsync(ct))
             if ((await permissions.GetAccessAsync(candidate.Id, ct)) is { } rights &&
                 rights.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, raft.ZoneId) &&
@@ -72,14 +75,21 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
     }
     public async Task<Result<WorkDayPlanView>> SaveAsync(Guid? id, SaveWorkDayPlan input, CancellationToken ct)
     {
+        // The Owner, or a Zone Manager with WORK_ASSIGNMENTS Create (new plan) or Edit (change) in the zone of the raft (decision of 20/11/2026).
         var who = await access.CurrentAsync(ct);
-        if (who?.IsCooperativeOwner != true) return AppError.Forbidden;
+        var action = id is null ? PermissionAction.Create : PermissionAction.Edit;
+        if (who is null || !who.Allows(PermissionFunctions.WorkAssignments, action, PermissionScope.AnyZone, null)) return AppError.Forbidden;
         if (input.ClientOperationId == Guid.Empty || input.WorkDate < Today || input.WorkDate == default || input.Note?.Length > 500)
             return AppError.Invalid("Work plan");
         var raft = await rafts.GetForEditAsync(input.RaftId, ct);
         var job = await jobTypes.GetForEditAsync(input.JobTypeId, ct);
+        if (raft is not null && !who.Allows(PermissionFunctions.WorkAssignments, action, PermissionScope.ZoneScoped, raft.ZoneId)) return AppError.Forbidden;
         if (raft?.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse || job?.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Job type");
+        // A Zone Manager plans for itself: it names itself as the responsible, so the plan is its own to see and to staff.
+        if (!who.IsCooperativeOwner && input.ResponsibleAccountId != who.AccountId) return AppError.Invalid("Plan responsible");
+        // A plan tied to a trader's purchase request moves that request along, and purchase requests are the Owner's alone.
+        if (!who.IsCooperativeOwner && input.PurchaseRequestId is not null) return AppError.Forbidden;
         var responsible = await accounts.GetByIdAsync(input.ResponsibleAccountId, ct);
         var responsibleAccess = responsible is null ? null : await permissions.GetAccessAsync(responsible.Id, ct);
         if (responsible?.StatusId != StatusIds.Account.Active ||
@@ -93,6 +103,9 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         {
             p = await plans.GetAsync(planId, ct);
             if (p is null) return AppError.NotFound;
+            // The plan being changed must be in a zone the caller may edit, and a Zone Manager changes only a plan it is responsible for.
+            if (!who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Edit, PermissionScope.ZoneScoped, p.Raft.ZoneId) ||
+                !who.IsCooperativeOwner && !await access.CanViewAsync(p, ct)) return AppError.Forbidden;
             if (await versions.CheckAsync(p, input.RowVersion, ct) is { } stale) return stale;
             if (await AssignedCountAsync(p, ct) > 0 || p.PurchaseRequest?.ShiftInvitations.Count > 0)
                 return AppError.Invalid("Work plan already assigned");

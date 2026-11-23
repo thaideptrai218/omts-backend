@@ -45,7 +45,7 @@ public sealed record HarvestPlanLaneView(
 /// <summary>The lot recorded from a line.</summary>
 public sealed record HarvestPlanLotView(Guid Id, string LotCode, decimal CageCount, decimal EstimatedKg, DateTimeOffset HarvestedAt);
 
-/// <summary>A line of a plan with its lanes; <paramref name="Zone"/> is the zone of its raft; <paramref name="ExpectedProduct"/> the product of the raft's cultivation cycle. <paramref name="CanHarvest"/>: a lot can be recorded from it now, and lanes left out (the caller still needs HARVESTS Create). <paramref name="Locked"/>: it has a lot or a lane left out, so the Owner cannot change it.</summary>
+/// <summary>A line of a plan with its lanes; <paramref name="Zone"/> is the zone of its raft; <paramref name="ExpectedProduct"/> the product of the raft's cultivation cycle. <paramref name="CanHarvest"/>: a lot can be recorded from it now, and lanes left out (the caller still needs HARVESTS Create). <paramref name="Locked"/>: it has a lot or a lane left out, so the Owner cannot change it. <paramref name="ExpectedHarvestDate"/>: the first day the oysters of the raft's Open cycle are mature (start plus the seed's maturity days), null when unknown; it only lets the screen WARN before an early harvest, never a refusal (HARV-01).</summary>
 public sealed record HarvestPlanLineView(
     Guid Id,
     int LineNumber,
@@ -59,7 +59,8 @@ public sealed record HarvestPlanLineView(
     HarvestPlanLotView? Lot,
     IReadOnlyList<HarvestPlanLaneView> Lanes,
     bool CanHarvest,
-    bool Locked);
+    bool Locked,
+    DateOnly? ExpectedHarvestDate = null);
 
 /// <summary>How far the plan is: lines done of all lines, and the lanes harvested, left out and still planned.</summary>
 public sealed record HarvestPlanProgressView(int Lines, int LinesDone, int Lanes, int LanesHarvested, int LanesSkipped);

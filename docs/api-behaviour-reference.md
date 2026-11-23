@@ -182,6 +182,11 @@ payroll…) follow the role only, so an Accountant pair for one zone opens them 
 a purchase receipt line are still those of the zones of their Zone Manager pairs. A staff account without an Effective pair
 cannot log in.
 
+Selling is not the Zone Manager's (owner decision of 20/11/2026, reversing 27/10 and 02/11): `ZONE_MANAGER` holds no `SALES_ORDERS`, `SALES_INVOICES`, `SALES_RETURNS`, `CUSTOMERS`, `QUALITY_CLAIMS` or `PURCHASE_REQUESTS`. It keeps cultivation, water,
+harvest (`HARVESTS`, `HARVEST_LOTS`, `HARVEST_PLANS` View), `LOT_TRACING`, `PROVENANCE`, `PURCHASE_RECEIPTS`, `SUPPLIERS`, input and product disposals, employees, work assignment and attendance. Wherever this reference below says the Zone Manager sells,
+views or answers sales records (invoices, resend, sales returns, quality claims, customers, orders, purchase requests, the sale at the port), read it as Owner only (Accountant unchanged: view and export of invoices, orders and customers as listed). `GET /api/me/permissions` of a Zone Manager no
+longer lists those functions. The lot trace and the reverse trace by seed lot still show the invoices that sold a lot (code, kg) to a Zone Manager but no price, amount or trader (those follow `SALES_INVOICES` View).
+
 ### Farming zones and licenses
 
 - Zones (FARM-02): `GET /api/zones/next-code` (Owner) proposes the next code `KV01`, `KV02`… (GBR-03: the highest `KVnn` in
@@ -478,9 +483,14 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
 - `POST /api/workforce/assignments/{id}/check-in` and `/check-out` with `qrCode` (the code of `GET /api/me/attendance-qr`, valid
   60 seconds, else `MSG-LABOR-13`) or null to mark by hand; `POST /api/workforce/crew-start`; Staff employees:
   `GET /api/workforce/staff-attendance`, `POST /api/workforce/staff/{employeeId}/check-in|check-out`.
-- Owner: `GET`/`PUT /api/workforce/attendance/{employeeId}/{day}` corrects times and job periods with a reason;
-  `POST /api/workforce/leave-requests/{id}/review` approves or rejects (a rejection needs a note); `GET /api/workforce/leave-requests`
-  is also read by the Zone Manager.
+- Owner, or the Zone Manager of the zone (decision of 20/11/2026, `ATTENDANCE` Edit): `GET`/`PUT /api/workforce/attendance/{employeeId}/{day}` corrects times and job periods with a mandatory reason, for any day not in a pay period whose payroll is
+  Awaiting finalization or Finalized (409 `MSG-LABOR-04` for everyone, the Owner too), audited as `Attendance.Corrected` with the values before and after. The zone of the day is that of its job periods (a Staff employee, or a day with none: a
+  working zone of the employee); a Zone Manager needs the right in every zone the day touches, and in the zone of any raft it moves an employee onto (403 `MSG-GEN-08` otherwise; an Accountant has no attendance right, 403).
+  `POST /api/workforce/leave-requests/{id}/review` approves or rejects (a rejection needs a note): the Owner, or a Zone Manager holding `ATTENDANCE` Edit in a working zone of the employee (a request has no zone of its own); applying a missed time
+  needs the right in the zones of the day's job periods and of the raft chosen for a seasonal worker with no work that day. `GET /api/workforce/leave-requests` is also read by the Zone Manager (every request, unchanged).
+- Work-day plans (`/api/work-plans`, decision of 20/11/2026): `GET /api/work-plans/responsibles?raftId=`, `POST /api/work-plans` and `PUT /api/work-plans/{id}` need `WORK_ASSIGNMENTS` Create (new) or Edit (change) in the zone of the raft, so the
+  Owner and the Zone Manager of that zone (another zone: 403). A Zone Manager names itself as the responsible (`responsibles` offers it only itself; another name: 400 `Plan responsible`), so its plan is approved at once and is its own to see and staff;
+  it changes only a plan it is responsible for, and a plan tied to a trader's purchase request (`purchaseRequestId`) stays the Owner's (403).
 - The employee linked to the caller's account (`Employee.AccountId`): `GET /api/me/workforce?from=&to=` (at most 62 days),
   `GET /api/me/attendance-qr`, `POST /api/me/leave-requests` (leave, or `type` MissedCheckIn / MissedCheckOut with `day` and
   `requestedTime`), `DELETE /api/me/leave-requests/{id}` (cancel while Awaiting review).
