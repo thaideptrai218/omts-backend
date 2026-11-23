@@ -39,6 +39,18 @@ x-api-environment: &api-environment
   # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy
   # password, so the value lives in .env; unset, the API connects to Zalo directly.
   Zalo__ProxyUrl: ${ZALO_PROXY_URL:-}
+  # Trader payments of the Zalo Mini App: Checkout SDK + payOS (decision of 21/11/2026). CHECKOUT_PROVIDER=PayOS needs every key below
+  # in .env; unset, every checkout answers MSG04 and no money is taken. The report to Zalo goes through ZALO_PROXY_URL like the other Zalo calls.
+  Checkout__Provider: ${CHECKOUT_PROVIDER:-}
+  Checkout__ZaloMiniAppId: ${ZALO_MINI_APP_ID:-}
+  Checkout__ZaloPrivateKey: ${ZALO_CHECKOUT_PRIVATE_KEY:-}
+  Checkout__ZaloCustomMethodId: ${ZALO_CUSTOM_METHOD_ID:-}
+  Checkout__PayOsClientId: ${PAYOS_CLIENT_ID:-}
+  Checkout__PayOsApiKey: ${PAYOS_API_KEY:-}
+  Checkout__PayOsChecksumKey: ${PAYOS_CHECKSUM_KEY:-}
+  # The bank account linked to the payOS channel; the Owner adds the same account to the cash book. Unset: the receiving bank account (DEBT-01).
+  Checkout__PayOsBankBin: ${PAYOS_BANK_BIN:-}
+  Checkout__PayOsAccountNumber: ${PAYOS_ACCOUNT_NUMBER:-}
   # Save Azure SQL serverless vCore: no 10 s Redis sweeper (sessions checked in SQL per request),
   # and every daily job in one 06:00-06:05 window so the database wakes once a day.
   Revocation__Mode: Sql

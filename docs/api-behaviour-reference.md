@@ -584,6 +584,38 @@ Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other 
     payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it back) is available, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
     `needsSettlement: true`), so it stays in the list; it can be cancelled.
 
+### Trader payments from the Zalo Mini App (Checkout SDK + payOS, decision of 21/11/2026)
+
+A trader pays one invoice still owed from the Mini App. Zalo requires its Checkout SDK for a payment inside a Mini App, and payOS is the third party (as
+`payment-sandbox` tried it). Only the Mini App uses this; the web keeps the VietQR sale and the bank notifications above. Every route is the trader's own
+(`[RequireTrader]`, another trader's invoice or checkout answers 404); `Checkout:Provider` unset answers 503 MSG04.
+
+- `POST /api/me/invoices/{invoiceId}/checkout`: what is left to pay on the invoice (`SalesInvoicePaidState.Unpaid`) becomes a customer payment
+  Pending transfer into the cash book Bank account of the payOS channel (`Checkout:PayOsBankBin` and `Checkout:PayOsAccountNumber`; unset, the receiving bank
+  account) (as `POST /api/customer-payments/pending-transfer`, the note "Thương lái trả qua Zalo Mini App (payOS)",
+  the trader as recorder), a payOS link of the same amount whose transfer content is the payment code (only the order code, the amount and that code are sent
+  to payOS), and the signed `CheckoutSDK.createOrder` parameters (`checkout`: `amount`, `desc`, `item`, `extradata`, `method` of the custom method,
+  `mac`). 201 with the checkout; 200 with the one still being paid (same amount, more than 2 minutes left of its 15); an older one that expired or asks
+  another amount is cancelled first (its payment never counted). 409 MSG-GEN-09 for an invoice paid or cancelled; 400 `Cash account` when the cash book has
+  no Bank account for it; 503 MSG04 when payOS refuses or does not answer (nothing is saved).
+- `POST /api/me/checkouts/{id}/zalo-order` `{ zaloOrderId }`: the order of the `PAY_BY_CUSTOM_METHOD` event; another one replaces it until Zalo accepted a
+  report (then 409 MSG-GEN-09).
+- `GET /api/me/checkouts/{id}`: polled by the QR screen. `paymentStatusCode` (PENDING_TRANSFER, COMPLETED, CANCELLED), `receivedAmount`, `paidInFull`
+  (Completed with at least the amount asked), `expired`, `qr` (the payOS VietQR text, bank, account, holder, amount, transfer content), `zaloReported`.
+  The client never decides that the money arrived.
+- `POST /api/integrations/payos` (the webhook of the payOS channel; anonymous, rate limited as API-13): 401 unless the signature of
+  `Checkout:PayOsChecksumKey` over `data` is right. A notification that is not a payment made (`code` other than "00") or names no checkout (the test payOS
+  sends when the webhook is registered) records nothing (200, `ignored`). Otherwise the transfer goes through API-13 with the payment code and the invoice
+  code as its content: the payment waiting for it is Completed with what arrived (a short transfer is a part payment), a bank reference already recorded
+  records nothing (`AlreadyRecorded`), and money for a payment already cancelled pays the invoice (`PaidInvoice`), so no money that arrived is lost.
+- Zalo is told (`custom-callback-payment`, `resultCode` 1, through `Zalo:ProxyUrl`) once the payment is Completed in full and the trader's Zalo order is
+  known: right after the notification or the link, then again by the poll and by a job every `Checkout:ReportRetrySeconds` (60) until Zalo accepts,
+  at most 30 times. A part payment is never reported as paid.
+- The payOS link must pay into that cash book account (a link that pays into another account only logs a warning). Money for a payment already cancelled
+  is recorded on the invoice only through the receiving bank account, as API-13 records it; without one it is logged and left to the Accountant.
+- Development: `Checkout:Provider` = `Fake` makes up the payOS links and keeps the Zalo reports in memory; the transfer is simulated with
+  `POST /api/dev/payment-notifications` and the payment code as `content`, or with a payOS notification signed with `Checkout:PayOsChecksumKey`.
+
 ### Settling a payment without a customer (DEBT-02.6)
 
 A transfer held `WithoutCustomer` (no customer, no saved invoice) is marked `needsSettlement: true` in the rows of
