@@ -111,6 +111,16 @@ public sealed class CustomerPaymentService(
         SaveAsync(request, CustomerPaymentKind.Payment, CustomerPaymentMode.WaitsForTransfer, cancellationToken);
 
     /// <summary>
+    /// The same payment waiting for its transfer, checked and added to the unit of work of the caller with its audit row, but not saved: a trader's Mini App checkout
+    /// saves it with its payOS order in one save (<see cref="OMTS.Application.Features.Sales.Checkout.TraderCheckoutService"/>). The deduplication key is not used.
+    /// </summary>
+    public async Task<Result<CustomerPayment>> StagePendingTransferAsync(RecordCustomerPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var staged = await StageAsync(request with { DeduplicationKey = null }, CustomerPaymentKind.Payment, CustomerPaymentMode.WaitsForTransfer, order: null, cancellationToken);
+        return staged.IsSuccess ? staged.Value!.Payment : staged.Error!;
+    }
+
+    /// <summary>
     /// An advance on an order for money that has arrived, saved at once: cash waits for the Accountant to confirm it (Awaiting confirmation), a transfer (with its bank reference) is Completed. The money is reserved
     /// for the order while it is open (<see cref="CustomerDebtAllocator"/>). The customer of the order is the payer; an advance carries no discount and names no invoice.
     /// </summary>

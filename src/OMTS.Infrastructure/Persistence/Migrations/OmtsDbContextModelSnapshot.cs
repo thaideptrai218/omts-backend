@@ -9188,6 +9188,119 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.TraderCheckout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("BankBin")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("PayOsOrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PayOsPaymentLinkId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("QrContent")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TransferContent")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ZaloLastAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ZaloLastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ZaloOrderId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset?>("ZaloOrderLinkedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ZaloReportAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ZaloReportedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("PayOsOrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId", "CreatedAt");
+
+                    b.HasIndex("ZaloReportedAt", "ZaloOrderId");
+
+                    b.ToTable("TraderCheckouts", t =>
+                        {
+                            t.HasCheckConstraint("CK_TraderCheckout_Amount", "[Amount] > 0 AND [ZaloReportAttempts] >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucher", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
@@ -11623,6 +11736,31 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("HarvestLot");
 
                     b.Navigation("Return");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.TraderCheckout", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.CustomerPayment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
