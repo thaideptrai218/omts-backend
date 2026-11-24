@@ -87,6 +87,8 @@ internal sealed class SalesInvoicePriceCutConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.Amount).HasPrecision(18, 0);
         builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
         builder.HasIndex(x => new { x.InvoiceId, x.CutDate });
+        // The after-sale report reads the price cuts of a period across all invoices.
+        builder.HasIndex(x => x.CutDate);
         builder.ToTable(t => t.HasCheckConstraint("CK_SalesInvoicePriceCut_Amount", "[Amount] > 0"));
     }
 }
@@ -134,6 +136,8 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.HasIndex(x => x.InvoiceId);
         builder.HasIndex(x => x.SalesOrderId);
         builder.HasIndex(x => new { x.StatusId, x.PaymentDate });
+        // The end-of-day report reads the money received in a period by the time it was paid.
+        builder.HasIndex(x => x.PaidAt);
         // Zero only when the payment is all discount.
         builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] >= 0 AND [DiscountAmount] >= 0 AND ([Amount] > 0 OR [DiscountAmount] > 0)"));
     }

@@ -31,6 +31,8 @@ internal sealed class WaterMeasurementConfiguration : IEntityTypeConfiguration<W
         }
 
         builder.HasIndex(x => new { x.ZoneId, x.MeasuredAt });
+        // The latest measurement still in force of a zone, one zone or all of them.
+        builder.HasIndex(x => new { x.ZoneId, x.StatusId, x.MeasuredAt, x.CreatedAt }).IsDescending(false, false, true, true);
         // Re-sends: one record per client operation of an account.
         builder.HasIndex(x => new { x.MeasuredByAccountId, x.ClientOperationId }).IsUnique();
         // Each measurement has a meter photo of its own (BR-WATER-02).
