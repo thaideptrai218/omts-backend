@@ -25,17 +25,36 @@ internal sealed partial class HarvestLotRepository
         {
             var figures = WithFigures(lots);
             var byRemaining = descending ? figures.OrderByDescending(r => r.RemainingKg) : figures.OrderBy(r => r.RemainingKg);
-            var ordered = descending ? byRemaining.ThenByDescending(r => r.LotCode) : byRemaining.ThenBy(r => r.LotCode);
+            var ordered = ThenByCode(byRemaining, descending, r => r.LotCode, r => EF.Functions.Collate(r.LotCode, OrdinalCollation));
             var ids = await ordered.Skip(skip).Take(take).Select(r => r.Id).ToListAsync(cancellationToken);
             var rows = ids.Count == 0 ? [] : await db.HarvestLots.AsNoTracking().Where(l => ids.Contains(l.Id)).Select(Row).ToListAsync(cancellationToken);
-            return [.. rows.OrderBy(r => ids.IndexOf(r.Id))];
+            var position = ids.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+            return [.. rows.OrderBy(r => position[r.Id])];
         }
 
+        Expression<Func<HarvestLot, string>> code = l => l.LotCode;
+        Expression<Func<HarvestLot, string>> ordinalCode = l => EF.Functions.Collate(l.LotCode, OrdinalCollation);
         var sorted = sort == HarvestLotSort.HarvestedAt
             ? (descending ? lots.OrderByDescending(l => l.HarvestedAt) : lots.OrderBy(l => l.HarvestedAt))
-            : (descending ? lots.OrderByDescending(l => l.LotCode) : lots.OrderBy(l => l.LotCode));
-        var page = descending ? sorted.ThenByDescending(l => l.LotCode) : sorted.ThenBy(l => l.LotCode);
+            : OrderByCode(lots, descending, code, ordinalCode);
+        var page = ThenByCode(sorted, descending, code, ordinalCode);
         return await page.Skip(skip).Take(take).Select(Row).ToListAsync(cancellationToken);
+    }
+
+    // The list has always ordered lot codes ordinally (KV1-B01-... before KV10-B01-...). A SQL Server column collation sorts nvarchar by word rules (hyphens nearly ignored, case folded), so on
+    // SQL Server the code is ordered by a binary collation; the in-memory provider has no collations and keeps the plain column.
+    private const string OrdinalCollation = "Latin1_General_100_BIN2";
+
+    private IOrderedQueryable<T> OrderByCode<T>(IQueryable<T> source, bool descending, Expression<Func<T, string>> code, Expression<Func<T, string>> ordinalCode)
+    {
+        var key = db.Database.IsSqlServer() ? ordinalCode : code;
+        return descending ? source.OrderByDescending(key) : source.OrderBy(key);
+    }
+
+    private IOrderedQueryable<T> ThenByCode<T>(IOrderedQueryable<T> source, bool descending, Expression<Func<T, string>> code, Expression<Func<T, string>> ordinalCode)
+    {
+        var key = db.Database.IsSqlServer() ? ordinalCode : code;
+        return descending ? source.ThenByDescending(key) : source.ThenBy(key);
     }
 
     public async Task<HarvestLotListSums> SumsAsync(HarvestLotFilter filter, CancellationToken cancellationToken)

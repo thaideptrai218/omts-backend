@@ -15,8 +15,8 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 internal sealed class RaftMaterialCostQuery(OmtsDbContext db) : IRaftMaterialCostQuery
 {
     /// <summary>
-    /// The total of each raft: the amounts of the usages with an issue are summed by SQL (each usage's amount rounded half up to the dong, as <see cref="Amount"/> does, so the quantity and the
-    /// cost, both never negative, give floor(x + 0.5)); the few usages without one come as narrow rows and take the ledger cost of their day.
+    /// The total of each raft: every usage comes as a narrow row (raft, quantity, cost) and its amount is rounded half up to the dong, as <see cref="Amount"/> does; a usage with an issue takes
+    /// the cost of its issue line, the few usages without one take the ledger cost of their day.
     /// </summary>
     public async Task<IReadOnlyDictionary<Guid, decimal>> GetTotalsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken)
     {
@@ -26,15 +26,23 @@ internal sealed class RaftMaterialCostQuery(OmtsDbContext db) : IRaftMaterialCos
             return new Dictionary<Guid, decimal>();
         }
 
+        // The cost per base unit is the same SQL expression UsagesAsync reads; the amount is worked out here, not in SQL: SQL Server cuts quantity x cost to 6 decimals before the rounding,
+        // which can move an amount that sits just under half a dong.
         var issueLines = db.InputIssueLines.AsNoTracking();
-        var issued = await (
-                from u in db.MaterialUsages.AsNoTracking()
-                where ids.Contains(u.RaftId) && u.IssueId != null
-                from l in issueLines.Where(l => l.IssueId == u.IssueId && l.ItemId == u.ItemId).OrderBy(l => l.LineNumber).Take(1).DefaultIfEmpty()
-                select new { u.RaftId, Cost = (decimal?)(l.UnitCost / l.UnitFactor), u.Quantity })
-            .GroupBy(x => x.RaftId)
-            .Select(g => new { RaftId = g.Key, Total = g.Sum(x => x.Cost == null ? 0m : Math.Floor(x.Quantity * x.Cost.Value + 0.5m)) })
-            .ToDictionaryAsync(x => x.RaftId, x => x.Total, cancellationToken);
+        var issuedRows = await db.MaterialUsages.AsNoTracking()
+            .Where(u => ids.Contains(u.RaftId) && u.IssueId != null)
+            .Select(u => new
+            {
+                u.RaftId,
+                u.Quantity,
+                Cost = issueLines
+                    .Where(l => l.IssueId == u.IssueId && l.ItemId == u.ItemId)
+                    .OrderBy(l => l.LineNumber)
+                    .Select(l => (decimal?)(l.UnitCost / l.UnitFactor))
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+        var issued = issuedRows.GroupBy(u => u.RaftId).ToDictionary(g => g.Key, g => g.Sum(u => PurchaseMoney.LineAmount(u.Quantity, u.Cost)));
 
         var legacy = await db.MaterialUsages.AsNoTracking()
             .Where(u => ids.Contains(u.RaftId) && u.IssueId == null)
