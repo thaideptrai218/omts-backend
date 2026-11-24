@@ -536,8 +536,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
-        var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot()).ToForm();
+        var lot = await owner.HarvestLotAsync(raft.RaftId);
+        var form = new HarvestCorrection(new HarvestFields { Lanes = lot.Numbers("laneNumbers").Select(n => n.ToString()).ToList(), Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot()).ToForm();
         form.Add(new StringContent("99"), "kgPerCage");
         form.Add(new StringContent("HACKED"), "lotCode");
         form.Add(new StringContent("2020-01-01"), "harvestDate");

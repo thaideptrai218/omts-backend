@@ -73,7 +73,7 @@ public class HarvestLotCorrectionFieldTests
             (new HarvestFields { Lanes = [] }, "Lanes"),
             (new HarvestFields { Lanes = ["1", "1"] }, "Lanes"),
             (new HarvestFields { Lanes = ["99"] }, "Lanes"),
-            (new HarvestFields { Finished = ["2"] }, "Finished lanes"),
+            (new HarvestFields { Lanes = ["1"], Finished = ["2"] }, "Finished lanes"),
         })
         {
             var refused = await (await api.SendCorrectionAsync(owner, lot.Id(), fields)).ReadAsync(HttpStatusCode.BadRequest);
@@ -91,7 +91,7 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
 
         api.Clock.At = InVietnam(10, 28);
-        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
+        var correction = new HarvestCorrection(new HarvestFields { Lanes = ["1", "2", "3", "4", "5"], Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
         var form = correction.ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T00:00:00+07:00"), "harvestedAt");

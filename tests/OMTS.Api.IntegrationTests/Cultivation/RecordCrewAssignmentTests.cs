@@ -100,7 +100,13 @@ public sealed class RecordCrewAssignmentTests
         var record = await api.QueryAsync(db => db.Attendances.SingleAsync(a => a.EmployeeId == hoa.Id));
         Assert.Null(record.CheckOutAt);
         Assert.NotNull(record.CheckInAt);
-        Assert.Equal(1, await api.QueryAsync(db => db.WorkAssignments.CountAsync(w => w.EmployeeId == hoa.Id)));
+        // A new job period starts now, so the gap between the two sessions is not counted as work (BR-LABOR-05): the first period ends at the check-out.
+        var periods = await api.QueryAsync(db => db.WorkAssignments.Where(w => w.EmployeeId == hoa.Id).OrderBy(w => w.StartsAt == null ? 0 : 1).ToListAsync());
+        Assert.Equal(2, periods.Count);
+        Assert.Null(periods[0].StartsAt);
+        Assert.NotNull(periods[0].EndsAt);
+        Assert.NotNull(periods[1].StartsAt);
+        Assert.Null(periods[1].EndsAt);
     }
 
     [Fact]
