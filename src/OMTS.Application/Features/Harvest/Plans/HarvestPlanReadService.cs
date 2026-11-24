@@ -82,14 +82,8 @@ public sealed class HarvestPlanReadService(
         }
 
         var found = await plans.ListInProgressAsync(zoneIds, cancellationToken);
-        var result = new List<HarvestPlanView>(found.Count);
-        foreach (var plan in found)
-        {
-            // Only the lines of the zones the caller harvests in: a plan spans several zones, each Zone Manager records its own.
-            result.Add(await views.ViewAsync(plan, cancellationToken, zoneIds));
-        }
-
-        return new HarvestPlansToHarvest(result);
+        // Only the lines of the zones the caller harvests in: a plan spans several zones, each Zone Manager records its own.
+        return new HarvestPlansToHarvest(await views.ViewManyAsync(found, cancellationToken, zoneIds));
     }
 
     /// <summary>
