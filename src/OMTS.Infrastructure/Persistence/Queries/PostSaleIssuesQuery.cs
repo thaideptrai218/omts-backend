@@ -14,13 +14,27 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 /// </summary>
 internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQuery
 {
-    public async Task<PostSaleFacts> FactsAsync(ReportFilter filter, CancellationToken cancellationToken)
+    public Task<PostSaleFacts> FactsAsync(ReportFilter filter, CancellationToken cancellationToken) => ReadAsync(filter, null, cancellationToken);
+
+    public Task<PostSaleFacts> FactsOfGroupAsync(ReportFilter filter, PostSaleGroupFilter group, CancellationToken cancellationToken) => ReadAsync(filter, group, cancellationToken);
+
+    private async Task<PostSaleFacts> ReadAsync(ReportFilter filter, PostSaleGroupFilter? group, CancellationToken cancellationToken)
     {
         var (firstDay, lastDay) = (filter.From, filter.To);
         // The instants of the first and the last business day, so the filter on them uses the index of the date.
         var start = new DateTimeOffset(firstDay.ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
         var end = new DateTimeOffset(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
-        var invoices = InvoicesOf(filter);
+        var returnInvoices = InvoicesOf(filter, group);
+        var invoices = returnInvoices;
+        var lotId = group?.Id ?? Guid.Empty;
+        var byLot = group?.Kind == PostSaleGroupKind.Lot;
+        // By lot, a return belongs to the group by the lots of its own return lines, and any other event by the lots on the lines of its invoice.
+        var returnsOf = db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing).Where(x => x.ReturnDate >= firstDay && x.ReturnDate <= lastDay);
+        if (byLot)
+        {
+            returnsOf = returnsOf.Where(x => x.Lines.Any(l => l.HarvestLotId == lotId));
+            invoices = returnInvoices.Where(i => i.Lines.Any(l => l.HarvestLotId == lotId));
+        }
 
         var claims = await (
                 from claim in db.QualityClaims.AsNoTracking().Where(x => x.SentAt >= start && x.SentAt < end)
@@ -32,8 +46,8 @@ internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQue
                 })
             .ToListAsync(cancellationToken);
         var returns = await (
-                from salesReturn in db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing).Where(x => x.ReturnDate >= firstDay && x.ReturnDate <= lastDay)
-                join i in invoices on salesReturn.InvoiceId equals i.Id
+                from salesReturn in returnsOf
+                join i in returnInvoices on salesReturn.InvoiceId equals i.Id
                 select new
                 {
                     salesReturn.Id, salesReturn.ReturnDate, salesReturn.Reason, salesReturn.Value, Invoice = i.Id, i.Code, i.ZoneId, ZoneName = i.Zone.Name, i.CustomerId,
@@ -70,8 +84,9 @@ internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQue
             PostSaleEventType.Cancellation, i.Id, BusinessClock.ToBusinessDate(i.At), i.Id, i.Code, i.ZoneId, i.ZoneName, i.CustomerId, i.CustomerName, i.CancelReason, i.Total, null)));
 
         // The lots they concern: of the lines of the invoices, and of the return lines of the returns (the kg that came back, and the kg thrown away).
-        var invoiceIds = events.Select(e => e.InvoiceId).Distinct().ToList();
-        var returnIds = returns.Select(r => r.Id).ToList();
+        // The lots of the invoices are read for a group of a lot only; a customer or a zone does not use them.
+        var invoiceIds = group is null || byLot ? events.Select(e => e.InvoiceId).Distinct().ToList() : [];
+        var returnIds = group is null || byLot ? returns.Select(r => r.Id).ToList() : [];
         var invoiceLots = new List<PostSaleInvoiceLot>();
         if (invoiceIds.Count > 0)
         {
@@ -91,8 +106,11 @@ internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQue
         return new PostSaleFacts(events, invoiceLots, returnLots);
     }
 
-    /// <summary>The invoices of the zones and the customers chosen, whatever their date or status: an event of a cancelled invoice still happened.</summary>
-    private IQueryable<SalesInvoice> InvoicesOf(ReportFilter filter)
+    /// <summary>
+    /// The invoices of the zones and the customers chosen, whatever their date or status: an event of a cancelled invoice still happened. Of one group when listing the events of a group
+    /// of customers or zones (the lots of a group of a lot are limited by the caller).
+    /// </summary>
+    private IQueryable<SalesInvoice> InvoicesOf(ReportFilter filter, PostSaleGroupFilter? group)
     {
         var invoices = db.SalesInvoices.AsNoTracking();
         if (filter.ZoneIds is { } zoneIds)
@@ -107,6 +125,13 @@ internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQue
             invoices = invoices.Where(i => i.CustomerId != null && customers.Contains(i.CustomerId.Value));
         }
 
-        return invoices;
+        var id = group?.Id ?? Guid.Empty;
+        return group?.Kind switch
+        {
+            PostSaleGroupKind.WalkIn => invoices.Where(i => i.CustomerId == null),
+            PostSaleGroupKind.Customer => invoices.Where(i => i.CustomerId == id),
+            PostSaleGroupKind.Zone => invoices.Where(i => i.ZoneId == id),
+            _ => invoices,
+        };
     }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Application.Common.Interfaces.Persistence;
 
 namespace OMTS.Application.Features.Reports.SalesPerformance;
@@ -9,7 +10,8 @@ public sealed record SalesPerformanceCalculation(IReadOnlyList<SalesPerformanceG
 /// BR-REPORT-01 as pure functions, so the figures are unit tested and one rule serves the report, its invoices and its file. Revenue is the total of the invoice (already lower by its
 /// price cuts, as the daily revenue of FARM-06); price cuts are shown on their own; sales returns are the values that stand, counted in the period of their invoice; net revenue is revenue
 /// minus sales returns; sold kg is invoiced kg minus returned kg (BR-HARVEST-07). Grouped by product, the rows of the products hold the line amounts, and the discounts, the other charges and
-/// the price cuts of the invoices have rows of their own, each with its part of the sales return, so that the rows add up to the revenue and to the net revenue.
+/// the price cuts of the invoices have rows of their own, each with its part of the sales return, so that the rows add up to the revenue and to the net revenue. The database adds the figures
+/// up per slice (<see cref="SalesPerformanceAggregates"/>); this names, merges (the week and the month are cut from the days) and orders the slices.
 /// </summary>
 public static class SalesPerformanceCalculator
 {
@@ -20,10 +22,8 @@ public static class SalesPerformanceCalculator
 
     private const string WalkInLabel = "Walk-in customers";
 
-    public static SalesPerformanceCalculation Build(SalesPerformanceFacts facts, SalesPerformanceGrouping grouping)
+    public static SalesPerformanceCalculation Build(SalesPerformanceAggregates aggregates, SalesPerformanceGrouping grouping)
     {
-        var linesOf = facts.Lines.ToLookup(l => l.InvoiceId);
-        var total = new Sums("total", "Total", 0);
         var rows = new Dictionary<string, Sums>();
 
         Sums Row(string key, string label, int rank = 0)
@@ -36,30 +36,18 @@ public static class SalesPerformanceCalculator
             return row;
         }
 
-        foreach (var invoice in facts.Invoices)
+        foreach (var slice in aggregates.Slices)
         {
-            var lines = linesOf[invoice.Id].ToList();
-            var kg = lines.Sum(l => l.Kg);
-            var returnedKg = lines.Sum(l => l.ReturnedKg);
-            total.Add(invoice.Id, kg, invoice.Total, invoice.PriceCuts, invoice.ReturnValue, kg - returnedKg);
-            if (grouping != SalesPerformanceGrouping.Product)
-            {
-                var (key, label) = KeyOf(invoice, grouping);
-                Row(key, label).Add(invoice.Id, kg, invoice.Total, invoice.PriceCuts, invoice.ReturnValue, kg - returnedKg);
-                continue;
-            }
+            var (key, label) = KeyOf(slice, grouping);
+            Row(key, label).Add(slice.Sums);
+        }
 
-            foreach (var product in lines.GroupBy(l => l.ProductId))
-            {
-                var amount = product.Sum(l => l.Amount);
-                Row(product.Key.ToString(), product.First().ProductName)
-                    .Add(invoice.Id, product.Sum(l => l.Kg), amount, 0m, invoice.HasReturn ? amount : 0m, product.Sum(l => l.Kg - l.ReturnedKg));
-            }
-
-            // The sales return takes back the whole invoice (BR-CLAIM-03), so each part of the invoice is returned with it.
-            AddPart(Row(DiscountsKey, "Discounts", 1), invoice, -invoice.Discount, 0m);
-            AddPart(Row(OtherChargesKey, "Other charges", 2), invoice, invoice.OtherCharges, 0m);
-            AddPart(Row(PriceCutsKey, "Price cuts", 3), invoice, -invoice.PriceCuts, invoice.PriceCuts);
+        if (grouping == SalesPerformanceGrouping.Product)
+        {
+            // The sales return takes back the whole invoice (BR-CLAIM-03), so each part of the invoice is returned with it; a part that is 0 on every invoice has no row.
+            AddPart(Row, DiscountsKey, "Discounts", 1, aggregates.Parts.Discounts);
+            AddPart(Row, OtherChargesKey, "Other charges", 2, aggregates.Parts.OtherCharges);
+            AddPart(Row, PriceCutsKey, "Price cuts", 3, aggregates.Parts.PriceCuts);
         }
 
         var groups = rows.Values
@@ -75,79 +63,104 @@ public static class SalesPerformanceCalculator
             groups = groups.OrderBy(g => g.Key, StringComparer.Ordinal).ToList();
         }
 
+        var total = aggregates.Total;
         return new SalesPerformanceCalculation(
             groups, new SalesPerformanceFigures(total.InvoiceCount, total.InvoicedKg, total.Revenue, total.PriceCuts, total.Returns, total.Revenue - total.Returns, total.SoldKg, null, null, null, null));
     }
 
-    /// <summary>The invoices of the group a report row names, newest first (REPORT-01.3). A key that names no group of this grouping gives none.</summary>
-    public static IReadOnlyList<SalesPerformanceInvoiceRow> InvoicesOf(SalesPerformanceFacts facts, SalesPerformanceGrouping grouping, string groupKey)
+    /// <summary>
+    /// What the invoices of the group a report row names have in common, for the database to read only them (REPORT-01.3); null when the key names no group of this grouping, which has
+    /// no invoice. Keys are compared as the report writes them: an id as its lower case hyphenated text (any letter case is accepted), the walk-in name in any letter case, the names of the
+    /// three product rows exactly, a period by the first day it starts on.
+    /// </summary>
+    public static SalesPerformanceGroupFilter? GroupOf(SalesPerformanceGrouping grouping, string groupKey)
     {
-        var linesOf = facts.Lines.ToLookup(l => l.InvoiceId);
-        bool InGroup(SalesPerformanceInvoice invoice) => grouping switch
+        switch (grouping)
         {
-            SalesPerformanceGrouping.Product => groupKey switch
-            {
-                DiscountsKey => invoice.Discount != 0m,
-                OtherChargesKey => invoice.OtherCharges != 0m,
-                PriceCutsKey => invoice.PriceCuts != 0m,
-                _ => linesOf[invoice.Id].Any(l => string.Equals(l.ProductId.ToString(), groupKey, StringComparison.OrdinalIgnoreCase)),
-            },
-            _ => string.Equals(KeyOf(invoice, grouping).Key, groupKey, StringComparison.OrdinalIgnoreCase),
-        };
+            case SalesPerformanceGrouping.Customer:
+                if (string.Equals(groupKey, WalkInKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.WalkIn);
+                }
 
-        return facts.Invoices
-            .Where(InGroup)
+                return Guid.TryParseExact(groupKey, "D", out var customerId) ? new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.Customer, customerId) : null;
+            case SalesPerformanceGrouping.Zone:
+                return Guid.TryParseExact(groupKey, "D", out var zoneId) ? new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.Zone, zoneId) : null;
+            case SalesPerformanceGrouping.Product:
+                return groupKey switch
+                {
+                    DiscountsKey => new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.Discounts),
+                    OtherChargesKey => new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.OtherCharges),
+                    PriceCutsKey => new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.PriceCuts),
+                    _ => Guid.TryParseExact(groupKey, "D", out var productId) ? new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.Product, productId) : null,
+                };
+            default:
+                var unit = UnitOf(grouping);
+                if (!DateOnly.TryParseExact(groupKey, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start)
+                    || !string.Equals(ReportPeriodBuckets.Key(start), groupKey, StringComparison.Ordinal)
+                    || ReportPeriodBuckets.StartOf(start, unit) != start)
+                {
+                    return null;
+                }
+
+                return new SalesPerformanceGroupFilter(SalesPerformanceGroupKind.DateRange, null, start, ReportPeriodBuckets.EndOf(start, unit));
+        }
+    }
+
+    /// <summary>The invoices of a group as report rows, newest first (REPORT-01.3).</summary>
+    public static IReadOnlyList<SalesPerformanceInvoiceRow> InvoiceRowsOf(IEnumerable<SalesPerformanceInvoice> invoices) =>
+        invoices
             .OrderByDescending(i => i.Date).ThenByDescending(i => i.Code, StringComparer.Ordinal)
             .Select(i => new SalesPerformanceInvoiceRow(
                 i.Id, i.Code, i.Date,
                 i.CustomerId is { } customerId ? new SalesPerformanceInvoiceCustomer(customerId, i.CustomerName ?? string.Empty) : null,
                 new SalesPerformanceInvoiceZone(i.ZoneId, i.ZoneCode, i.ZoneName), i.Total, i.ReturnValue, i.Total - i.ReturnValue))
             .ToList();
-    }
 
-    private static (string Key, string Label) KeyOf(SalesPerformanceInvoice invoice, SalesPerformanceGrouping grouping)
+    private static ReportPeriodUnit UnitOf(SalesPerformanceGrouping grouping) =>
+        grouping == SalesPerformanceGrouping.Day ? ReportPeriodUnit.Day : grouping == SalesPerformanceGrouping.Week ? ReportPeriodUnit.Week : ReportPeriodUnit.Month;
+
+    private static (string Key, string Label) KeyOf(SalesPerformanceSlice slice, SalesPerformanceGrouping grouping)
     {
         switch (grouping)
         {
             case SalesPerformanceGrouping.Customer:
                 // The invoices of walk-in customers have no profile and are one row of their own.
-                return invoice.CustomerId is { } customerId ? (customerId.ToString(), invoice.CustomerName ?? string.Empty) : (WalkInKey, WalkInLabel);
+                return slice.Id is { } customerId ? (customerId.ToString(), slice.Label ?? string.Empty) : (WalkInKey, WalkInLabel);
             case SalesPerformanceGrouping.Zone:
-                return (invoice.ZoneId.ToString(), invoice.ZoneName);
+            case SalesPerformanceGrouping.Product:
+                return (slice.Id!.Value.ToString(), slice.Label ?? string.Empty);
             default:
-                var unit = grouping == SalesPerformanceGrouping.Day ? ReportPeriodUnit.Day : grouping == SalesPerformanceGrouping.Week ? ReportPeriodUnit.Week : ReportPeriodUnit.Month;
-                var start = ReportPeriodBuckets.StartOf(invoice.Date, unit);
+                var unit = UnitOf(grouping);
+                var start = ReportPeriodBuckets.StartOf(slice.Date!.Value, unit);
                 return (ReportPeriodBuckets.Key(start), ReportPeriodBuckets.Label(start, unit));
         }
     }
 
-    // A part of the invoice that is not a product: it adds to the revenue (negative for a discount or a price cut) and, when the invoice was returned, to the sales returns.
-    private static void AddPart(Sums row, SalesPerformanceInvoice invoice, decimal amount, decimal priceCuts)
+    private static void AddPart(Func<string, string, int, Sums> row, string key, string label, int rank, SalesPerformanceSums part)
     {
-        if (amount != 0m)
+        if (part.InvoiceCount > 0)
         {
-            row.Add(invoice.Id, 0m, amount, priceCuts, invoice.HasReturn ? amount : 0m, 0m);
+            row(key, label, rank).Add(part);
         }
     }
 
     private sealed class Sums(string key, string label, int rank)
     {
-        private readonly HashSet<Guid> invoices = [];
-
         public string Key { get; } = key;
         public string Label { get; } = label;
         public int Rank { get; } = rank;
-        public int InvoiceCount => invoices.Count;
+        public int InvoiceCount { get; private set; }
         public decimal InvoicedKg { get; private set; }
         public decimal Revenue { get; private set; }
         public decimal PriceCuts { get; private set; }
         public decimal Returns { get; private set; }
         public decimal SoldKg { get; private set; }
 
-        public void Add(Guid invoiceId, decimal kg, decimal revenue, decimal priceCuts, decimal returns, decimal soldKg)
+        public void Add(SalesPerformanceSums sums)
         {
-            invoices.Add(invoiceId);
-            (InvoicedKg, Revenue, PriceCuts, Returns, SoldKg) = (InvoicedKg + kg, Revenue + revenue, PriceCuts + priceCuts, Returns + returns, SoldKg + soldKg);
+            InvoiceCount += sums.InvoiceCount;
+            (InvoicedKg, Revenue, PriceCuts, Returns, SoldKg) = (InvoicedKg + sums.InvoicedKg, Revenue + sums.Revenue, PriceCuts + sums.PriceCuts, Returns + sums.Returns, SoldKg + sums.SoldKg);
         }
     }
 }

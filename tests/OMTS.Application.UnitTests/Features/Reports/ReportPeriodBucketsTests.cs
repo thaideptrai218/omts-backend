@@ -45,6 +45,23 @@ public class ReportPeriodBucketsTests
     }
 
     [Theory]
+    [InlineData("2026-11-09", ReportPeriodUnit.Day, "2026-11-09")]
+    [InlineData("2026-11-09", ReportPeriodUnit.Week, "2026-11-15")]
+    [InlineData("2026-12-28", ReportPeriodUnit.Week, "2027-01-03")]
+    [InlineData("2026-11-01", ReportPeriodUnit.Month, "2026-11-30")]
+    [InlineData("2028-02-01", ReportPeriodUnit.Month, "2028-02-29")]
+    [InlineData("2026-12-01", ReportPeriodUnit.Month, "2026-12-31")]
+    public void A_bucket_ends_on_the_day_before_the_next_one_starts(string start, ReportPeriodUnit unit, string end) =>
+        Assert.Equal(DateOnly.Parse(end), ReportPeriodBuckets.EndOf(DateOnly.Parse(start), unit));
+
+    [Fact]
+    public void The_last_bucket_of_the_calendar_ends_with_the_calendar()
+    {
+        Assert.Equal(DateOnly.MaxValue, ReportPeriodBuckets.EndOf(ReportPeriodBuckets.StartOf(DateOnly.MaxValue, ReportPeriodUnit.Week), ReportPeriodUnit.Week));
+        Assert.Equal(DateOnly.MaxValue, ReportPeriodBuckets.EndOf(new DateOnly(9999, 12, 1), ReportPeriodUnit.Month));
+    }
+
+    [Theory]
     [InlineData("day", ReportPeriodUnit.Day)]
     [InlineData(" Week ", ReportPeriodUnit.Week)]
     [InlineData("MONTH", ReportPeriodUnit.Month)]
