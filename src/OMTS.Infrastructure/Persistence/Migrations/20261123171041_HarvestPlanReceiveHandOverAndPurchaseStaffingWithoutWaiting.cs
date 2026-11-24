@@ -12,6 +12,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.InsertData(
+                table: "Statuses",
+                columns: new[] { "Id", "Code", "DisplayColor", "DisplayName", "Group", "IsFinal", "IsInitial", "Meaning", "SortOrder" },
+                values: new object[,]
+                {
+                    { 4206, "RECEIVED", null, "Đã nhận", "HARVEST_PLAN", false, false, "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on.", 6 },
+                    { 4207, "HANDED_OVER", null, "Đã bàn giao", "HARVEST_PLAN", false, false, "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan.", 7 }
+                });
+
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
@@ -86,15 +95,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 keyValue: 4204,
                 column: "Meaning",
                 value: "The Owner closed a plan the Zone Manager handed over; removing a lot or putting a lane back opens it again.");
-
-            migrationBuilder.InsertData(
-                table: "Statuses",
-                columns: new[] { "Id", "Code", "DisplayColor", "DisplayName", "Group", "IsFinal", "IsInitial", "Meaning", "SortOrder" },
-                values: new object[,]
-                {
-                    { 4206, "RECEIVED", null, "Đã nhận", "HARVEST_PLAN", false, false, "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on.", 6 },
-                    { 4207, "HANDED_OVER", null, "Đã bàn giao", "HARVEST_PLAN", false, false, "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan.", 7 }
-                });
 
             migrationBuilder.InsertData(
                 table: "StatusTransitions",
