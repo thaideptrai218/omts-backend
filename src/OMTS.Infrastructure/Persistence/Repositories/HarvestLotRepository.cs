@@ -32,6 +32,17 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .Select(l => new LaneHarvest(cycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished, l.HarvestedPercent, l.Lot.HarvestedAt, l.LotId))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<LaneHarvest>> LaneHarvestsOfCyclesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
+    {
+        var ids = cycleIds.Distinct().ToList();
+        return ids.Count == 0
+            ? []
+            : await db.HarvestLotLanes.AsNoTracking()
+                .Where(l => ids.Contains(l.Lot.CycleId))
+                .Select(l => new LaneHarvest(l.Lot.CycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished, l.HarvestedPercent, l.Lot.HarvestedAt, l.LotId))
+                .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking().Include(l => l.Lot)
             .Where(l => l.LaneId == laneId && l.Lot.CycleId == cycleId)

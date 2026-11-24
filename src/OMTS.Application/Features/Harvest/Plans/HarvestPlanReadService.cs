@@ -137,21 +137,24 @@ public sealed class HarvestPlanReadService(
         var candidateZones = (await zones.ListAsync(includeDiscontinued: false, zoneId is { } one ? new PermittedZones(false, new HashSet<Guid> { one }) : permitted, cancellationToken))
             .Where(z => z.StatusId == StatusIds.Usage.InUse).OrderBy(z => z.Code).ToList();
         var today = timeProvider.Today();
-        var found = new List<(HarvestPlanZoneView Zone, Domain.Entities.Farming.Raft Raft, IReadOnlyDictionary<Guid, LaneState> States)>();
+        var candidates = new List<(HarvestPlanZoneView Zone, Domain.Entities.Farming.Raft Raft)>();
         foreach (var zone in candidateZones)
         {
-            foreach (var raft in await rafts.ListByZoneAsync(zone.Id, StatusIds.Usage.InUse, cancellationToken))
-            {
-                if (await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is null)
-                {
-                    continue;
-                }
+            var zoneView = new HarvestPlanZoneView(zone.Id, zone.Code, zone.Name);
+            candidates.AddRange((await rafts.ListByZoneAsync(zone.Id, StatusIds.Usage.InUse, cancellationToken)).Select(r => (zoneView, r)));
+        }
 
-                var states = (await laneStates.ReadAsync(raft, today, cancellationToken)).States;
-                if (raft.Lanes.Any(l => l.StatusId == StatusIds.Lane.InUse && LaneStateRules.CanBeHarvested(states[l.Id])))
-                {
-                    found.Add((new HarvestPlanZoneView(zone.Id, zone.Code, zone.Name), raft, states));
-                }
+        // One read of the open cycles and one of the lane states for all the rafts, not a few reads per raft.
+        var openCycles = await cycleQuery.OpenCyclesAsync(candidates.Select(c => c.Raft.Id).ToList(), cancellationToken);
+        var withCycle = candidates.Where(c => openCycles.ContainsKey(c.Raft.Id)).ToList();
+        var days = await laneStates.ReadManyAsync(withCycle.Select(c => c.Raft).ToList(), today, cancellationToken);
+        var found = new List<(HarvestPlanZoneView Zone, Domain.Entities.Farming.Raft Raft, IReadOnlyDictionary<Guid, LaneState> States)>();
+        foreach (var (zoneView, raft) in withCycle)
+        {
+            var states = days[raft.Id].States;
+            if (raft.Lanes.Any(l => l.StatusId == StatusIds.Lane.InUse && LaneStateRules.CanBeHarvested(states[l.Id])))
+            {
+                found.Add((zoneView, raft, states));
             }
         }
 

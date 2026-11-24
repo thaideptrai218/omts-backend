@@ -48,6 +48,9 @@ public interface IHarvestLotRepository
     /// <summary>Each lane of each lot of the cycle with its date: what the lane states are worked out from (BR-FARM-03).</summary>
     Task<IReadOnlyList<LaneHarvest>> LaneHarvestsAsync(Guid cycleId, CancellationToken cancellationToken);
 
+    /// <summary>The same for several cycles in one read; each row carries its cycle.</summary>
+    Task<IReadOnlyList<LaneHarvest>> LaneHarvestsOfCyclesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     /// <summary>The lots of the cycle that include the lane (CYCLE-05.0 step 3), each with its lot, read only, the latest harvest first.</summary>
     Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken);
 
