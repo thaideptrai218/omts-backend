@@ -17,7 +17,7 @@ public sealed class WaterMeterRecognizer(
     TimeProvider timeProvider,
     ILogger<WaterMeterRecognizer> logger)
 {
-    public async Task<OcrOutcome> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken)
+    public async Task<OcrOutcome> RecognizeAsync(Stream photo, string contentType, OcrCrop? crop, CancellationToken cancellationToken)
     {
         if (photo.CanSeek)
         {
@@ -31,7 +31,7 @@ public sealed class WaterMeterRecognizer(
         try
         {
             // WaitAsync also ends the wait for a provider that ignores the token.
-            result = await ocr.RecognizeAsync(photo, contentType, linked.Token).WaitAsync(timeout, timeProvider, cancellationToken);
+            result = await ocr.RecognizeAsync(photo, contentType, crop, linked.Token).WaitAsync(timeout, timeProvider, cancellationToken);
         }
         catch (Exception exception) when (exception is TimeoutException || (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {

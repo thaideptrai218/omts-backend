@@ -1,5 +1,6 @@
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Ocr;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -34,10 +35,20 @@ public sealed class WaterMeasurementRecordingService(
     public const string ZoneField = "Zone";
     public const string RaftField = "Raft";
     public const string ClientOperationField = "Client operation id";
+    public const string CropField = "Crop";
 
-    /// <summary>Stores the photo and reads it (steps 5–6). An OCR failure still answers the key: the user types the values in.</summary>
-    public async Task<Result<RecognitionResult>> RecognizeAsync(Guid zoneId, IncomingFile? photo, CancellationToken cancellationToken)
+    /// <summary>
+    /// Stores the photo and reads it (steps 5–6). An OCR failure still answers the key: the user types the values in.
+    /// <paramref name="crop"/> ("left,top,right,bottom" fractions, optional) is the display the user framed: only OCR
+    /// reads that part, the whole photo is stored.
+    /// </summary>
+    public async Task<Result<RecognitionResult>> RecognizeAsync(Guid zoneId, IncomingFile? photo, string? crop, CancellationToken cancellationToken)
     {
+        if (!OcrCrop.TryParse(crop, out var display))
+        {
+            return AppError.Invalid(CropField);
+        }
+
         var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
         if (zone is null)
         {
@@ -61,7 +72,7 @@ public sealed class WaterMeasurementRecordingService(
         }
 
         var (file, key) = stored.Value;
-        var outcome = await recognizer.RecognizeAsync(file.File.Content, file.ContentType, cancellationToken);
+        var outcome = await recognizer.RecognizeAsync(file.File.Content, file.ContentType, display, cancellationToken);
         var outside = WaterThresholdEvaluator.Evaluate(outcome.Ph?.Value, outcome.Salinity?.Value, outcome.Temperature?.Value, WaterThresholds.Of(zone));
         return new RecognitionResult(
             key,

@@ -82,7 +82,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             var day = firstSeedDay.AddDays(-daysAgo);
             var measuredAt = BusinessClock.FromLocal(day.ToDateTime(reading.Time));
             var what = $"water measurement of {zoneCode} on {day:yyyy-MM-dd}";
-            var photo = DemoSeedContext.Ensure(await recording.RecognizeAsync(zoneId, DemoFiles.MeterPhoto(), cancellationToken), what);
+            var photo = DemoSeedContext.Ensure(await recording.RecognizeAsync(zoneId, DemoFiles.MeterPhoto(), crop: null, cancellationToken), what);
             DemoSeedContext.Ensure(
                 await recording.RecordAsync(
                     zoneId,
