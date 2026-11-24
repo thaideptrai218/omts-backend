@@ -172,7 +172,7 @@ public sealed class PurchaseStaffingService(
         var plan = await plans.ForPurchaseAsync(row.Id, ct);
         if (plan is not null && !ownerIds.Contains(plan.ResponsibleAccountId))
             await notifications.NotifyAsync([plan.ResponsibleAccountId], "WORK_PLAN_STAFF_RESPONDED", "Nhân viên phản hồi ca làm", body,
-                nameof(WorkDayPlan), plan.Id.ToString(), false, ct);
+                nameof(WorkDayPlan), plan.Id.ToString(), false, ct, plan.Id);
         await uow.SaveChangesAsync(ct);
         return MyView(invite);
     }
