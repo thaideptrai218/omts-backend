@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Cultivation;
 using OMTS.Api.IntegrationTests.Farming;
@@ -119,7 +120,14 @@ public sealed record SeededRaft(Actor Owner, Guid ZoneId, Guid RaftId, Guid Cycl
 /// <summary>HARVEST-01 and HARVEST-03 calls and what they should have left behind.</summary>
 public static class HarvestTestKit
 {
-    public static async Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null)
+    public static async Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
+        (await PostAndFinishAsync(client, raftId, fields)).Answer;
+
+    /// <summary>
+    /// Posts the harvest, planned when the test names no line, and finishes the lanes the test marks finished: a lot harvests the raft and finishes no lane (owner decision of 18/11/2026), so
+    /// the kit finishes them by their own action, as a client does. The answer of that action is returned with the answer of the lot.
+    /// </summary>
+    private static async Task<(HttpResponseMessage Answer, JsonElement? Finished)> PostAndFinishAsync(HttpClient client, Guid raftId, HarvestFields? fields)
     {
         fields ??= new HarvestFields();
         // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): a test that sends none gets one, unless it asks to see the refusal (<see cref="HarvestFields.NoPhoto"/>).
@@ -128,31 +136,46 @@ public static class HarvestTestKit
             fields = fields with { Photos = [FarmingTestKit.Jpeg] };
         }
 
-        // A harvest is recorded only from a line of a harvest plan (MSG-HARVEST-06): a test that names no line gets a plan of the raft with the lanes it sent.
-        if (fields.PlanLineId is null && !fields.WithoutPlan)
-        {
-            if (await HarvestPlanTestKit.PlannedLineForAsync(raftId) is { } lineId)
-            {
-                fields = fields.FromPlanLine(lineId);
-            }
-        }
-
+        // A harvest is recorded only from a line of a harvest plan (MSG-HARVEST-06): a test that names no line gets a plan of the raft.
+        fields = await fields.PlannedAsync(raftId);
         var answer = await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
-        // A lot harvests the raft and finishes no lane (owner decision of 18/11/2026): the lanes a test marks finished are finished by their own action, as a client does.
-        if (answer.StatusCode == HttpStatusCode.Created && fields.Finished.Count > 0)
+        if (answer.StatusCode != HttpStatusCode.Created || fields.Finished.Count == 0)
         {
-            foreach (var lane in fields.Finished)
-            {
-                (await client.PostAsync($"/api/rafts/{raftId}/lanes/{lane}/finish-harvest", null)).EnsureSuccessStatusCode();
-            }
+            return (answer, null);
         }
 
-        return answer;
+        var finished = await client.FinishLanesAsync(raftId, fields.Finished.Select(int.Parse).ToArray());
+        return (answer, finished);
     }
 
+    /// <summary>
+    /// The fields with the line of a new plan of the raft, for a test that builds the multipart form itself and posts it (a lot is recorded only from a plan line, MSG-HARVEST-06);
+    /// they stay as they are when they already name a line or ask for none.
+    /// </summary>
+    public static async Task<HarvestFields> PlannedAsync(this HarvestFields fields, Guid raftId) =>
+        fields.PlanLineId is null && !fields.WithoutPlan && await HarvestPlanTestKit.PlannedLineForAsync(raftId) is { } lineId ? fields.FromPlanLine(lineId) : fields;
+
+    /// <summary>Finishes the harvest of the lanes by their own action (a lot finishes none), as a client does; the answer, which fails the test when the API refuses.</summary>
+    public static async Task<JsonElement> FinishLanesAsync(this HttpClient client, Guid raftId, params int[] lanes) =>
+        await (await client.PostAsJsonAsync($"/api/rafts/{raftId}/finish-harvest", new { laneNumbers = lanes })).ReadAsync(HttpStatusCode.OK);
+
     /// <summary>Records a harvest and returns the whole answer.</summary>
-    public static async Task<JsonElement> RecordHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
-        await (await client.PostHarvestAsync(raftId, fields)).ReadAsync(HttpStatusCode.Created);
+    public static async Task<JsonElement> RecordHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null)
+    {
+        var (answer, finished) = await PostAndFinishAsync(client, raftId, fields);
+        var saved = await answer.ReadAsync(HttpStatusCode.Created);
+        if (finished is not { } done)
+        {
+            return saved;
+        }
+
+        // The answer as the lanes finished by the test leave it: the lot as it now is (its version moved with the finish mark) and what the finish answered of the cycle.
+        var node = JsonNode.Parse(saved.GetRawText())!.AsObject();
+        node["lot"] = JsonNode.Parse((await client.GetHarvestLotAsync(saved.GetProperty("lot").Id())).GetRawText());
+        node["everySeededLaneHarvested"] = done.GetProperty("everySeededLaneHarvested").GetBoolean();
+        node["cycleRowVersion"] = done.Text("cycleRowVersion");
+        return JsonDocument.Parse(node.ToJsonString()).RootElement.Clone();
+    }
 
     /// <summary>
     /// Records a lot and returns it as it is saved: awaiting weighing, so not for sale yet, with no kg on the ledger, its figures counting from its estimated kg and its estimate and lines still corrected by a correction.

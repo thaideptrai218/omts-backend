@@ -15,7 +15,7 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task A_lot_recorded_from_a_line_holds_the_lanes_of_the_plan_whatever_lanes_were_sent_and_carries_the_plan()
+    public async Task A_lot_recorded_from_a_line_holds_every_harvestable_lane_of_the_raft_whatever_lanes_were_sent_and_carries_the_plan()
     {
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
@@ -24,7 +24,8 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var saved = await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(5).FromPlanLine(plan.LineId(0)));
 
         var lot = saved.GetProperty("lot");
-        Assert.Equal([1, 2], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
+        // A plan line is a raft (owner decision of 18/11/2026): the lanes of the plan and of the form are not read.
+        Assert.Equal([1, 2, 3, 4, 5], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
         Assert.Equal((plan.Id(), plan.Text("code")), (lot.GetProperty("harvestPlan").Id(), lot.GetProperty("harvestPlan").Text("code")));
         Assert.Matches("^.+-[0-9]{8}", lot.Text("lotCode"));
         var after = await raft.Owner.Client.GetPlanAsync(plan.Id());
@@ -54,7 +55,7 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     [Fact]
-    public async Task A_lane_left_out_is_not_in_the_lot()
+    public async Task A_lane_left_out_of_a_line_is_not_in_the_lot_and_the_lanes_beside_it_are()
     {
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
@@ -63,7 +64,7 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
 
         var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId()));
 
-        Assert.Equal([1, 3], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
+        Assert.Equal([1, 3, 4, 5], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
         var done = await raft.Owner.Client.GetPlanAsync(plan.Id());
         Assert.Equal(("Harvested", "Skipped", "Harvested"), (done.LaneState(0, 1), done.LaneState(0, 2), done.LaneState(0, 3)));
         Assert.Equal(StatusIds.HarvestPlan.Harvesting, done.StatusId());

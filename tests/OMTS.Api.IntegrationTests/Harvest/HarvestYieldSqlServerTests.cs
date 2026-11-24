@@ -35,7 +35,7 @@ public class HarvestYieldSqlServerTests
         var inPeriod = (await manager.Client.HarvestLotAsync(raftA, HarvestFields.OfLanes(1))).Id();
         var later = (await manager.Client.HarvestLotAsync(raftA, new HarvestFields { Lanes = ["2"], Cages = "3" })).Id();
         var otherZone = (await owner.HarvestLotAsync(raftB, HarvestFields.OfLanes(1))).Id();
-        await manager.Client.SellAsync(Invoice(customerId, [Line(productId, inPeriod, 123.456m)], Cash(3_703_680m), inPeriod));
+        await owner.SellAsync(Invoice(customerId, [Line(productId, inPeriod, 123.456m)], Cash(3_703_680m), inPeriod));
         var september = new DateOnly(2026, 9, 1);
         foreach (var (lot, date) in new[] { (inPeriod, september), (later, new DateOnly(2026, 10, 3)), (otherZone, september) })
         {

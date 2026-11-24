@@ -37,10 +37,11 @@ public class HarvestLotNotificationTests
         var code = lot.Text("lotCode");
         var raftCode = lot.Text("raftCode");
         var date = lot.Date("harvestDate");
+        var planCode = lot.GetProperty("harvestPlan").Text("code");
         Assert.All(rows, n =>
         {
             Assert.Equal((LotType, "MSG-HARVEST-01", false), (n.Type, n.MessageCode, n.IsMandatory));
-            Assert.Equal($"Raft {raftCode}: the harvest of {date:dd/MM/yyyy} is recorded as lot {code} (8 cages, about 385.5 kg).", n.Body);
+            Assert.Equal($"Raft {raftCode}: the harvest of {date:dd/MM/yyyy} is recorded as lot {code} (8 cages, about 385.5 kg) from harvest plan {planCode}.", n.Body);
             Assert.Equal(("HarvestLot", code), (n.RelatedRecordType, n.RelatedRecordCode));
             using var parameters = JsonDocument.Parse(n.MessageParams!);
             Assert.Equal((raftCode, date.ToString("yyyy-MM-dd"), code), (parameters.RootElement.Text("raft_code"), parameters.RootElement.Text("harvest_date"), parameters.RootElement.Text("lot_code")));
@@ -97,11 +98,11 @@ public class HarvestLotNotificationTests
         var elsewhere = await factory.ManagerAsync((await setup.Client.CreateZoneAsync()).Id());
         var accountant = await factory.StaffAsync(null, StaffRole.Accountant);
 
-        var nine = await manager.Client.RecordHarvestAsync(raft.Id(), HarvestFields.OfLanes(1, 2, 3, 4, 5, 6, 7, 8, 9).FinishedLanes(1, 2, 3, 4, 5, 6, 7, 8, 9));
+        var nine = await manager.Client.RecordHarvestAsync(raft.Id(), new HarvestFields().FinishedLanes(1, 2, 3, 4, 5, 6, 7, 8, 9));
         Assert.False(nine.GetProperty("everySeededLaneHarvested").GetBoolean());
         Assert.Empty(await factory.NoticesAsync(ReminderType, cycle.Id()));
 
-        var last = await manager.Client.RecordHarvestAsync(raft.Id(), HarvestFields.OfLanes(10).FinishedLanes(10));
+        var last = await manager.Client.FinishLanesAsync(raft.Id(), 10);
 
         Assert.True(last.GetProperty("everySeededLaneHarvested").GetBoolean());
         var rows = await factory.NoticesAsync(ReminderType, cycle.Id());
@@ -184,11 +185,11 @@ public class HarvestLotNotificationTests
         var raft = await factory.SeededRaftAsync(1, 2);
         var manager = await factory.ManagerAsync(raft.ZoneId);
 
-        await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
-        await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        await manager.Client.RecordHarvestAsync(raft.RaftId, new HarvestFields().FinishedLanes(1));
+        await manager.Client.RecordHarvestAsync(raft.RaftId);
         Assert.Empty(await factory.NoticesAsync(ReminderType, raft.CycleId));
 
-        await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
+        await manager.Client.FinishLanesAsync(raft.RaftId, 2);
         Assert.Single(await factory.NoticesAsync(ReminderType, raft.CycleId), n => n.RecipientAccountId == manager.Account.Id);
     }
 
@@ -203,7 +204,8 @@ public class HarvestLotNotificationTests
         var count = (await factory.NoticesAsync(ReminderType, raft.CycleId)).Count;
 
         await raft.Owner.Client.RecordSeedingAsync(raft.CycleId, raft.Lot.Session([2]));
-        var again = await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
+        await manager.Client.RecordHarvestAsync(raft.RaftId);
+        var again = await manager.Client.FinishLanesAsync(raft.RaftId, 2);
 
         Assert.True(again.GetProperty("everySeededLaneHarvested").GetBoolean());
         Assert.Equal(count, (await factory.NoticesAsync(ReminderType, raft.CycleId)).Count);

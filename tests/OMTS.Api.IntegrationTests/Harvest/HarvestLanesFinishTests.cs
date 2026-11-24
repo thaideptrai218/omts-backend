@@ -21,7 +21,7 @@ public class HarvestLanesFinishTests(AuthApiFactory factory) : IClassFixture<Aut
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        await owner.HarvestLotAsync(raft.RaftId);
         var before = await FinishedAuditCountAsync(raft.RaftId);
 
         var done = await (await FinishAsync(owner, raft.RaftId, 1, 2)).ReadAsync(HttpStatusCode.OK);
@@ -29,7 +29,7 @@ public class HarvestLanesFinishTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal([1, 2], done.Numbers("finished"));
         Assert.Empty(done.Numbers("alreadyFinished"));
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(["Harvested", "Harvested", "Growing"], [screen.HarvestStateOf(1), screen.HarvestStateOf(2), screen.HarvestStateOf(3)]);
+        Assert.Equal(["Harvested", "Harvested", "BeingHarvested"], [screen.HarvestStateOf(1), screen.HarvestStateOf(2), screen.HarvestStateOf(3)]);
         Assert.Equal(before + 2, await FinishedAuditCountAsync(raft.RaftId));
         Assert.Equal(1, await factory.QueryAsync(db => Task.FromResult(db.AuditEvents.Count(a => a.Action == "Raft.HarvestLanesFinished" && a.RecordId == raft.RaftId))));
 
@@ -42,9 +42,9 @@ public class HarvestLanesFinishTests(AuthApiFactory factory) : IClassFixture<Aut
     [Fact]
     public async Task One_lane_that_cannot_be_finished_refuses_the_whole_call_with_409_and_changes_nothing()
     {
-        var raft = await factory.SeededRaftAsync();
+        var raft = await factory.SeededRaftAsync(1);
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1)); // lane 2 has no lot, lane 99 does not exist
+        await owner.HarvestLotAsync(raft.RaftId); // lane 2 has no seed so no lot, lane 99 does not exist
 
         var refused = await (await FinishAsync(owner, raft.RaftId, 1, 2, 99)).ReadAsync(HttpStatusCode.Conflict);
 

@@ -117,8 +117,10 @@ public class HarvestLotPhotoTests
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
 
+        // The plan is made first: the fault is for the save of the lot, not for the save of the plan.
+        var planned = await new HarvestFields { Photos = [Jpeg] }.PlannedAsync(raft.RaftId);
         factory.Faults.FailNextSave(Conflict);
-        var answer = await manager.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg] });
+        var answer = await manager.Client.PostHarvestAsync(raft.RaftId, planned);
 
         Assert.Equal((HttpStatusCode.Conflict, "MSG06"), (answer.StatusCode, await answer.ErrorCodeAsync()));
         Assert.Empty(StoredKeys(factory, Category));
@@ -133,9 +135,10 @@ public class HarvestLotPhotoTests
         using var factory = new FileFaultApiFactory();
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
+        var planned = await new HarvestFields { Photos = [Jpeg] }.PlannedAsync(raft.RaftId);
         factory.Faults.FailNextSave(new DuplicateRecordException(new InvalidOperationException("Test: the code was taken.")));
 
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg] });
+        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, planned);
 
         Assert.Equal(KeysOf(lot), StoredKeys(factory, Category)!);
         Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));

@@ -22,7 +22,7 @@ public class HarvestLotCloseQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 12.345m)], Cash(370_350m), sale.LotId));
+        await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 12.345m)], Cash(370_350m), sale.LotId));
         var proposed = (await sale.Manager.Client.GetHarvestLotAsync(sale.LotId)).GetProperty("figures").Kg("remainingKg");
         Assert.Equal(387.655m, proposed);
 
@@ -84,7 +84,7 @@ public class HarvestLotCloseQaTests
 
         Assert.Equal(1, await sale.Owner.Client.ForSaleCountAsync());
         Assert.Equal([sale.OtherLotId.ToString()], (await manager.LotsForSaleAsync()).GetProperty("lots").EnumerateArray().Select(l => l.GetProperty("id").GetString()!).ToList());
-        var refused = await (await manager.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).ReadAsync(HttpStatusCode.Conflict);
+        var refused = await (await sale.Owner.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-GEN-09", refused.Text("code"));
         Assert.Contains("is Closed", refused.Text("detail"));
     }
