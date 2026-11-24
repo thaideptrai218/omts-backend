@@ -94,7 +94,7 @@ public sealed class HarvestPlanReadService(
 
     /// <summary>
     /// The form of a new plan made from an order, for the Owner: its pickup time as the planned time, and its products with the cages worked out (the cages of a Lồng line, or the kg of the line
-    /// over the kg of one Lồng of the product, rounded up; none when the product has no Lồng unit). The lines, rafts and lanes, are for the Owner to choose. 409 MSG-GEN-09 when the order is Completed or Cancelled.
+    /// over the kg of one Lồng of the product, rounded up; none when the product has no Lồng unit). The lines, one raft each, are for the Owner to choose. 409 MSG-GEN-09 when the order is Completed or Cancelled.
     /// </summary>
     public async Task<Result<HarvestPlanOrderDraft>> OrderDraftAsync(Guid orderId, CancellationToken cancellationToken)
     {
@@ -122,8 +122,8 @@ public sealed class HarvestPlanReadService(
     }
 
     /// <summary>
-    /// The rafts a plan can be made for, with their lanes (GET eligible-rafts): rafts In Use of a zone In Use (the rule of recording a harvest) with an Open cultivation cycle and at least one lane that can be harvested
-    /// (Growing or Being harvested). A lane is Free, waiting in another open plan (InAnotherPlan, with its code) or Harvested in the cycle; lanes with no seed are left out. The product is the one the cycle farms.
+    /// The rafts a plan can be made for (GET eligible-rafts): rafts In Use of a zone In Use (the rule of recording a harvest) with an Open cultivation cycle and at least one lane that can be harvested
+    /// (Growing or Being harvested). A plan line is the whole raft, so the lanes are not listed. The product is the one the cycle farms.
     /// Needs HARVEST_PLANS Create; <paramref name="zoneId"/> narrows it to one zone (403 for a zone the caller has no right in), else every zone the caller has the right in.
     /// </summary>
     public async Task<Result<EligibleRafts>> EligibleRaftsAsync(Guid? zoneId, CancellationToken cancellationToken)
@@ -137,7 +137,7 @@ public sealed class HarvestPlanReadService(
         var candidateZones = (await zones.ListAsync(includeDiscontinued: false, zoneId is { } one ? new PermittedZones(false, new HashSet<Guid> { one }) : permitted, cancellationToken))
             .Where(z => z.StatusId == StatusIds.Usage.InUse).OrderBy(z => z.Code).ToList();
         var today = timeProvider.Today();
-        var found = new List<(HarvestPlanZoneView Zone, Domain.Entities.Farming.Raft Raft, IReadOnlyDictionary<Guid, LaneState> States)>();
+        var found = new List<(HarvestPlanZoneView Zone, Domain.Entities.Farming.Raft Raft)>();
         foreach (var zone in candidateZones)
         {
             foreach (var raft in await rafts.ListByZoneAsync(zone.Id, StatusIds.Usage.InUse, cancellationToken))
@@ -150,13 +150,12 @@ public sealed class HarvestPlanReadService(
                 var states = (await laneStates.ReadAsync(raft, today, cancellationToken)).States;
                 if (raft.Lanes.Any(l => l.StatusId == StatusIds.Lane.InUse && LaneStateRules.CanBeHarvested(states[l.Id])))
                 {
-                    found.Add((new HarvestPlanZoneView(zone.Id, zone.Code, zone.Name), raft, states));
+                    found.Add((new HarvestPlanZoneView(zone.Id, zone.Code, zone.Name), raft));
                 }
             }
         }
 
         var raftIds = found.Select(f => f.Raft.Id).ToList();
-        var claims = (await plans.OpenLaneClaimsAsync(raftIds, null, cancellationToken)).GroupBy(c => c.LaneId).ToDictionary(g => g.Key, g => g.OrderBy(c => c.PlanCode).First().PlanCode);
         var cycleProducts = await plans.CycleProductsAsync(raftIds, cancellationToken);
         var catalogue = cycleProducts.Count == 0
             ? new Dictionary<Guid, Product>()
@@ -168,19 +167,10 @@ public sealed class HarvestPlanReadService(
             return new EligibleRaftView(
                 f.Raft.Id, f.Raft.Code, f.Zone,
                 cycleProducts.TryGetValue(f.Raft.Id, out var productId) && catalogue.TryGetValue(productId, out var product) ? new HarvestPlanProductView(product.Id, product.Code, product.Name, product.SizeMinCm, product.SizeMaxCm) : null,
-                f.Raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && f.States[l.Id] != LaneState.NotSeeded).OrderBy(l => l.LaneNumber)
-                    .Select(l => LaneOf(l, f.States[l.Id], claims)).ToList(),
                 cycle?.StartDate, cycle?.MaturityDays, cycle?.ExpectedHarvestDate);
         }).ToList();
         return new EligibleRafts(result);
     }
-
-    private static EligibleLaneView LaneOf(Domain.Entities.Farming.Lane lane, LaneState state, IReadOnlyDictionary<Guid, string> claims) =>
-        state == LaneState.Harvested
-            ? new EligibleLaneView(lane.Id, lane.LaneNumber, EligibleLaneState.Harvested, null)
-            : claims.TryGetValue(lane.Id, out var planCode)
-                ? new EligibleLaneView(lane.Id, lane.LaneNumber, EligibleLaneState.InAnotherPlan, planCode)
-                : new EligibleLaneView(lane.Id, lane.LaneNumber, EligibleLaneState.Free, null);
 
     /// <summary>Cages for a line of the order: its quantity when the line is in Lồng; else the kg of the line over the kg of one Lồng of the product, rounded up to a hundredth of a cage; null without a Lồng unit.</summary>
     internal static decimal? CagesOf(SalesOrderLine line, Product? product)

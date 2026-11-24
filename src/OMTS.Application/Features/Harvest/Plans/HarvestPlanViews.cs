@@ -9,7 +9,7 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
-/// Builds the answers: one plan with its lines, lanes, orders and buttons, and the rows of the list. The plan comes with its lines (raft and zone, lanes, product, lot) and orders. A Zone Manager gets only the lines of
+/// Builds the answers: one plan with its lines, orders and buttons, and the rows of the list. The plan comes with its lines (raft and zone, product, lot) and orders. A Zone Manager gets only the lines of
 /// its own zones, so the zones, the progress and the buttons are those of what it sees.
 /// </summary>
 public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog statusCatalog, HarvestPlanAccess access, IHarvestPlanRepository planRepository)
@@ -20,9 +20,8 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
         var scope = await access.ScopeAsync(PermissionAction.View, cancellationToken);
         var visible = HarvestPlanAccess.VisibleLines(plan, scope).Where(l => harvestZones is null || harvestZones.Contains(l.Raft.ZoneId)).ToList();
         var caller = await access.CallerAsync(HarvestPlanAccess.ZoneIdsOf(plan), cancellationToken);
-        var ids = new[] { plan.CreatedByAccountId, plan.AssignedByAccountId, plan.CancelledByAccountId }.OfType<Guid>()
-            .Concat(visible.SelectMany(l => l.Lanes).Select(l => l.SkippedByAccountId).OfType<Guid>()).Distinct().ToList();
-        var names = ids.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(ids, cancellationToken);
+        var ids = new[] { plan.CreatedByAccountId, plan.AssignedByAccountId, plan.CancelledByAccountId }.OfType<Guid>().Distinct().ToList();
+        var names = await accounts.GetDisplayNamesAsync(ids, cancellationToken);
         AccountRef? Ref(Guid? id) => id is { } value ? new AccountRef(value, names.GetValueOrDefault(value) ?? string.Empty) : null;
 
         var inProgress = HarvestPlanRules.AllowsHarvest(plan.StatusId);
@@ -41,10 +40,6 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
         foreach (var line in visible.OrderBy(l => l.LineNumber))
         {
             var fact = HarvestPlanRules.FactsOf(line);
-            var inLot = line.Lot?.Lanes.Select(l => l.LaneId).ToHashSet() ?? [];
-            var lanes = line.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestPlanLaneView(
-                l.LaneId, l.Lane.LaneNumber, HarvestPlanRules.LaneState(inLot.Contains(l.LaneId), l.IsSkipped), inLot.Contains(l.LaneId) ? line.Lot?.LotCode : null,
-                l.SkippedAt, Ref(l.SkippedByAccountId), l.SkipReason)).ToList();
             var canHarvest = inProgress && !HarvestPlanRules.LineDone(fact) && mayHarvest[line.Raft.ZoneId];
             canHarvestNow |= canHarvest;
             lineViews.Add(new HarvestPlanLineView(
@@ -52,7 +47,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
                 line.ExpectedProduct is { } p ? new HarvestPlanProductView(p.Id, p.Code, p.Name, p.SizeMinCm, p.SizeMaxCm) : null, line.ExpectedCageCount, line.Note,
                 HarvestPlanRules.LineState(fact),
                 line.Lot is { } lot ? new HarvestPlanLotView(lot.Id, lot.LotCode, lot.CageCount, lot.EstimatedKg, lot.HarvestedAt) : null,
-                lanes, canHarvest, HarvestPlanRules.LineLocked(fact),
+                canHarvest, HarvestPlanRules.LineLocked(fact),
                 line.Lot is null && maturity.TryGetValue(line.RaftId, out var cycle) ? cycle.ExpectedHarvestDate : null));
         }
 
@@ -97,7 +92,6 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
     private static HarvestPlanProgressView Progress(IReadOnlyCollection<HarvestPlanLine> lines)
     {
         var facts = lines.Select(HarvestPlanRules.FactsOf).ToList();
-        var lanesHarvested = lines.Where(l => l.Lot is not null).Sum(l => l.Lanes.Count(lane => l.Lot!.Lanes.Any(x => x.LaneId == lane.LaneId)));
-        return new HarvestPlanProgressView(facts.Count, facts.Count(HarvestPlanRules.LineDone), facts.Sum(f => f.LaneCount), lanesHarvested, facts.Sum(f => f.SkippedCount));
+        return new HarvestPlanProgressView(facts.Count, facts.Count(HarvestPlanRules.LineDone));
     }
 }

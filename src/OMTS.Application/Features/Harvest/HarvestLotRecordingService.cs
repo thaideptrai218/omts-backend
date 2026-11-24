@@ -91,7 +91,7 @@ public sealed class HarvestLotRecordingService(
 
         if (planned.Value is not null)
         {
-            request = WithPlannedLanes(request, raft, open!.States, planned.Value.Line);
+            request = WithPlannedLanes(request, raft, open!.States);
         }
 
         // A new lot needs 1 to 3 on-site photos; a lot recorded before the photos stays valid without.
@@ -205,7 +205,7 @@ public sealed class HarvestLotRecordingService(
 
         if (planned.Value is not null)
         {
-            request = WithPlannedLanes(request, raft, open!.States, planned.Value.Line);
+            request = WithPlannedLanes(request, raft, open!.States);
         }
 
         var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
@@ -288,7 +288,7 @@ public sealed class HarvestLotRecordingService(
         return new PreparedLot(lot, cycle, raft, everyHarvested, planned.Value?.Line.ExpectedCageCount, HarvestPlanCages.Warnings(planned.Value?.Line, fields.CageCount), crewAdded);
     }
 
-    /// <summary>The line of the plan the lot is recorded from (none when the form names none); the plan is read again on every attempt, so a line recorded or a lane left out meanwhile is told.</summary>
+    /// <summary>The line of the plan the lot is recorded from (none when the form names none); the plan is read again on every attempt, so a line recorded meanwhile is told.</summary>
     private async Task<Result<PlannedHarvest?>> ResolvePlanAsync(RecordHarvestRequest request, Guid raftId, CancellationToken cancellationToken)
     {
         if (request.HarvestPlanLineIsUnreadable)
@@ -306,20 +306,16 @@ public sealed class HarvestLotRecordingService(
     }
 
     /// <summary>
-    /// A lot recorded from a plan line harvests the raft, not chosen lanes (owner decision 18/11/2026): it holds every In Use lane of the raft that can be harvested now (seeded, not damaged or out of service),
-    /// whatever lanes the form sent, and finishes none of them (a lane is finished by its own action). The lanes the Zone Manager left out of the line (a plan made before a line was a raft) stay out of the lot.
+    /// A lot recorded from a plan line harvests the whole raft, not chosen lanes (BR-HARVEST-01): it holds every In Use lane of the raft that can be harvested when it is recorded (seeded, not damaged or out of service),
+    /// whatever lanes the form sent, and finishes none of them (a lane is finished by its own action). A plan holds no lanes.
     /// </summary>
-    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, HarvestPlanLine line)
+    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states) => request with
     {
-        var leftOut = line.Lanes.Where(l => l.IsSkipped).Select(l => l.LaneId).ToHashSet();
-        return request with
-        {
-            LaneNumbers = raft.Lanes
-                .Where(l => l.StatusId == StatusIds.Lane.InUse && !l.IsDamaged && !l.IsOutOfService && !leftOut.Contains(l.Id) && states.TryGetValue(l.Id, out var state) && LaneStateRules.CanBeHarvested(state))
-                .Select(l => l.LaneNumber).Order().ToList(),
-            FinishedLaneNumbers = [],
-        };
-    }
+        LaneNumbers = raft.Lanes
+            .Where(l => l.StatusId == StatusIds.Lane.InUse && !l.IsDamaged && !l.IsOutOfService && states.TryGetValue(l.Id, out var state) && LaneStateRules.CanBeHarvested(state))
+            .Select(l => l.LaneNumber).Order().ToList(),
+        FinishedLaneNumbers = [],
+    };
 
     /// <summary>
     /// The product lines of the form, checked against the catalogue. A lot holds one product, the one farmed in the Open cycle: a line sent without a product takes it, and when the cycle has a product and the form sends

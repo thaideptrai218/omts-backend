@@ -8,8 +8,6 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepository
 {
-    private static readonly int[] OpenStatuses = [StatusIds.HarvestPlan.Draft, StatusIds.HarvestPlan.Assigned, StatusIds.HarvestPlan.Received, StatusIds.HarvestPlan.Harvesting, StatusIds.HarvestPlan.HandedOver];
-
     public Task<HarvestPlan?> GetForEditAsync(Guid planId, CancellationToken cancellationToken) =>
         WithAll(db.HarvestPlans).FirstOrDefaultAsync(p => p.Id == planId, cancellationToken);
 
@@ -49,24 +47,6 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
         return ids.Count == 0
             ? []
             : (await WithAll(db.HarvestPlans.AsNoTracking()).Where(p => ids.Contains(p.Id)).ToListAsync(cancellationToken)).OrderBy(p => p.PlannedAt).ThenBy(p => p.Code).ToList();
-    }
-
-    public async Task<IReadOnlyList<OpenLaneClaim>> OpenLaneClaimsAsync(IReadOnlyCollection<Guid> raftIds, Guid? exceptPlanId, CancellationToken cancellationToken)
-    {
-        var rafts = raftIds.Distinct().ToList();
-        if (rafts.Count == 0)
-        {
-            return [];
-        }
-
-        return await db.HarvestPlanLanes.AsNoTracking()
-            .Where(l => l.SkippedAt == null
-                && rafts.Contains(l.Line.RaftId)
-                && !db.HarvestLots.Any(lot => lot.HarvestPlanLineId == l.LineId)
-                && OpenStatuses.Contains(l.Line.Plan.StatusId)
-                && l.Line.PlanId != exceptPlanId)
-            .Select(l => new OpenLaneClaim(l.Line.PlanId, l.Line.Plan.Code, l.Line.RaftId, l.Line.Raft.Code, l.LaneId, l.Lane.LaneNumber))
-            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, Guid>> CycleProductsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken)
@@ -136,18 +116,6 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
         return rows.Select(r => new PlanOfLot(r.LotId, r.PlanId, r.Code, links.Where(o => o.PlanId == r.PlanId).Select(o => o.OrderId).ToList())).ToList();
     }
 
-    public async Task<PlannedLanes?> PlannedLanesOfLineAsync(Guid lineId, CancellationToken cancellationToken)
-    {
-        var rows = await db.HarvestPlanLanes.AsNoTracking().Where(l => l.LineId == lineId).Select(l => new { l.LaneId, l.Line.Plan.Code }).ToListAsync(cancellationToken);
-        if (rows.Count > 0)
-        {
-            return new PlannedLanes(rows[0].Code, rows.Select(r => r.LaneId).ToHashSet());
-        }
-
-        // A line planned without lanes holds no lane check: the lot may hold any lane of the raft.
-        return null;
-    }
-
     public async Task<IReadOnlyList<PlanOfOrder>> PlansOfOrdersAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken)
     {
         var ids = orderIds.Distinct().ToList();
@@ -171,10 +139,6 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
     public void AddLine(HarvestPlanLine line) => db.HarvestPlanLines.Add(line);
 
     public void RemoveLine(HarvestPlanLine line) => db.HarvestPlanLines.Remove(line);
-
-    public void AddLane(HarvestPlanLane lane) => db.HarvestPlanLanes.Add(lane);
-
-    public void RemoveLane(HarvestPlanLane lane) => db.HarvestPlanLanes.Remove(lane);
 
     public void AddOrderLink(SalesOrderHarvestPlan link) => db.SalesOrderHarvestPlans.Add(link);
 
@@ -232,9 +196,8 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
 
     private static IQueryable<HarvestPlan> WithAll(IQueryable<HarvestPlan> plans) =>
         plans.Include(p => p.Lines).ThenInclude(l => l.Raft).ThenInclude(r => r.Zone)
-            .Include(p => p.Lines).ThenInclude(l => l.Lanes).ThenInclude(l => l.Lane)
             .Include(p => p.Lines).ThenInclude(l => l.ExpectedProduct)
-            .Include(p => p.Lines).ThenInclude(l => l.Lot).ThenInclude(l => l!.Lanes)
+            .Include(p => p.Lines).ThenInclude(l => l.Lot)
             .Include(p => p.Orders).ThenInclude(o => o.Order).ThenInclude(o => o.Customer)
             .AsSplitQuery();
 }

@@ -19,7 +19,7 @@ public class HarvestLotForm
     /// <summary>Cages, a number with a dot and at most 2 decimals (0.5 is half a cage).</summary>
     public string? CageCount { get; set; }
 
-    /// <summary>When recording: the line of a harvest plan (KHT) the lot is recorded from. The raft and lanes then come from the plan and <c>laneNumbers</c> is ignored. Not used by a correction.</summary>
+    /// <summary>When recording: the line of a harvest plan (KHT) the lot is recorded from. The lot then takes every harvestable lane of the raft when it is recorded and <c>laneNumbers</c> is ignored. Not used by a correction.</summary>
     public string? HarvestPlanLineId { get; set; }
 
     /// <summary>

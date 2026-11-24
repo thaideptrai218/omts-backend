@@ -13,7 +13,6 @@ public sealed record HarvestPlanStaffingLine(
     string RaftCode,
     Guid ZoneId,
     string ZoneCode,
-    IReadOnlyList<int> LaneNumbers,
     DateOnly PlannedDate,
     IReadOnlyList<HarvestPlanStaffingEmployee> Employees,
     bool CanEdit);

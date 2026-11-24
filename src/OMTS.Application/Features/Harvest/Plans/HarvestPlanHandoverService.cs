@@ -37,7 +37,7 @@ public sealed class HarvestPlanHandoverService(
         return await SaveAsync(opened.Value!, cancellationToken);
     }
 
-    /// <summary>"Bàn giao": every line of the plan has its lot or all its lanes left out; the plan becomes HandedOver and the Owners are told.</summary>
+    /// <summary>"Bàn giao": every line of the plan has its lot; the plan becomes HandedOver and the Owners are told.</summary>
     public async Task<Result<HarvestPlanSaved>> HandOverAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
         var opened = await OpenAsync(planId, request, HarvestPlanRules.AllowsHandOver, cancellationToken);

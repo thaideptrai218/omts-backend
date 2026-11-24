@@ -22,14 +22,14 @@ public class TraderWeighingTests(AuthApiFactory factory) : IClassFixture<AuthApi
     private static Task<HttpResponseMessage> AgreeAsync(HttpClient trader, Guid lotId, JsonElement sheet) =>
         trader.PostAsJsonAsync(Mine(lotId, "agree"), new { rowVersion = sheet.Text("rowVersion") });
 
-    /// <summary>A sale setup, a trader with an order of theirs, and the line of an assigned plan of the raft (lane 3) that serves the order.</summary>
+    /// <summary>A sale setup, a trader with an order of theirs, and the line of a received plan of the raft that serves the order.</summary>
     private async Task<(Sales.SaleSetup Sale, Sales.TraderActor Buyer, Guid LineId)> TraderPlanAsync(params Guid[] moreOrders)
     {
         var sale = await factory.SaleSetupAsync();
         var buyer = await Sales.PurchaseRequestTestKit.TraderAsync(factory);
         var owner = sale.Owner.Client;
         var order = (await owner.CreateOrderAsync(OrderBody(buyer.Profile.Id, sale.ProductId, await owner.BaseUnitIdAsync(sale.ProductId)))).GetProperty("order");
-        var plan = await owner.AssignedPlanAsync(PlanBody(PlanLine(sale.RaftId, [3])).WithPlanField("salesOrderIds", new[] { order.Id() }.Concat(moreOrders).ToArray()));
+        var plan = await owner.ReceivedPlanAsync(PlanBody(PlanLine(sale.RaftId)).WithPlanField("salesOrderIds", new[] { order.Id() }.Concat(moreOrders).ToArray()));
         return (sale, buyer, plan.LineId());
     }
 
@@ -134,7 +134,7 @@ public class TraderWeighingTests(AuthApiFactory factory) : IClassFixture<AuthApi
             (await owner.CreateOrderAsync(OrderBody(buyer.Profile.Id, sale.ProductId, unit))).GetProperty("order").Id(),
             (await owner.CreateOrderAsync(OrderBody(other.Profile.Id, sale.ProductId, unit))).GetProperty("order").Id(),
         };
-        var plan = await owner.AssignedPlanAsync(PlanBody(PlanLine(sale.RaftId, [3])).WithPlanField("salesOrderIds", orders));
+        var plan = await owner.ReceivedPlanAsync(PlanBody(PlanLine(sale.RaftId)).WithPlanField("salesOrderIds", orders));
         var lotId = (await owner.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).FromPlanLine(plan.LineId()))).Id();
 
         var staff = await SheetAsync(owner, $"/api/harvest-lots/{lotId}/cages");

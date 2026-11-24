@@ -91,7 +91,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<HarvestLotProductLine> HarvestLotProductLines => Set<HarvestLotProductLine>();
     public DbSet<HarvestPlan> HarvestPlans => Set<HarvestPlan>();
     public DbSet<HarvestPlanLine> HarvestPlanLines => Set<HarvestPlanLine>();
-    public DbSet<HarvestPlanLane> HarvestPlanLanes => Set<HarvestPlanLane>();
     public DbSet<SalesOrderHarvestPlan> SalesOrderHarvestPlans => Set<SalesOrderHarvestPlan>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();

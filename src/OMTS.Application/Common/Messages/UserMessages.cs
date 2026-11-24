@@ -1424,23 +1424,9 @@ public static class UserMessages
 
     // ---- MSG-PLAN ----
 
-    /// <summary>MSG-PLAN-01: lanes of a lot recorded from a harvest plan must be lanes of that plan's line.</summary>
-    public static UserMessage PlanLanesOutsidePlan(string planCode, string raftCode, IReadOnlyList<int> laneNumbers) => new(
-        Plan01, $"Luống {string.Join(", ", laneNumbers)} của bè {raftCode} không nằm trong kế hoạch thu hoạch {planCode}.")
-    {
-        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList() },
-    };
-
-    /// <summary>MSG-PLAN-02: a lane is already waiting to be harvested in another open plan.</summary>
-    public static UserMessage PlanLanesInAnotherPlan(string raftCode, IReadOnlyList<int> laneNumbers, string otherPlanCode) => new(
-        Plan02, $"Luống {string.Join(", ", laneNumbers)} của bè {raftCode} đã có trong kế hoạch thu hoạch {otherPlanCode} đang mở.")
-    {
-        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["other_plan_code"] = otherPlanCode },
-    };
-
-    /// <summary>MSG-PLAN-03: a line that has its lot, or a lane left out, can no longer be changed or recorded again.</summary>
+    /// <summary>MSG-PLAN-03: a line that has its lot can no longer be changed or recorded again.</summary>
     public static UserMessage PlanLineAlreadyHarvested(string planCode, string raftCode) => new(
-        Plan03, $"Dòng bè {raftCode} của kế hoạch thu hoạch {planCode} đã có lô thu hoạch hoặc đã có luống không thu nên không thể sửa hay ghi lô lần nữa.")
+        Plan03, $"Dòng bè {raftCode} của kế hoạch thu hoạch {planCode} đã có lô thu hoạch nên không thể sửa hay ghi lô lần nữa.")
     {
         Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode },
     };
@@ -1471,13 +1457,6 @@ public static class UserMessages
         {
             ["plan_code"] = planCode, ["zone_code"] = zoneCode, ["planned_at"] = plannedAt.ToOffset(BusinessClock.UtcOffset), ["line_count"] = lineCount,
         },
-    };
-
-    /// <summary>MSG-PLAN-06: lanes of a plan will not be harvested ("Không thu"), with the reason; to the Owners.</summary>
-    public static UserMessage PlanLanesSkippedNotice(string planCode, string raftCode, IReadOnlyList<int> laneNumbers, string reason) => new(
-        Plan06, $"Kế hoạch thu hoạch {planCode}, bè {raftCode}: luống {string.Join(", ", laneNumbers)} không thu. Lý do: {reason}.")
-    {
-        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["reason"] = reason },
     };
 
     /// <summary>MSG-GEN-09 in Vietnamese: the plan is over (Completed or Cancelled), so its crew is no longer chosen.</summary>

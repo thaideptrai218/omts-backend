@@ -41,21 +41,6 @@ internal sealed class HarvestPlanLineConfiguration : IEntityTypeConfiguration<Ha
     }
 }
 
-internal sealed class HarvestPlanLaneConfiguration : IEntityTypeConfiguration<HarvestPlanLane>
-{
-    public void Configure(EntityTypeBuilder<HarvestPlanLane> builder)
-    {
-        builder.HasKey(x => new { x.LineId, x.LaneId });
-        builder.HasOne(x => x.Line).WithMany(l => l.Lanes).HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.Lane).WithMany().HasForeignKey(x => x.LaneId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(x => x.LaneId);
-        builder.ReferencesAccount(nameof(HarvestPlanLane.SkippedByAccountId));
-        builder.Property(x => x.SkipReason).HasMaxLength(500);
-        builder.Ignore(x => x.IsSkipped);
-        builder.ToTable(t => t.HasCheckConstraint("CK_HarvestPlanLane_Skipped", "([SkippedAt] IS NULL AND [SkipReason] IS NULL AND [SkippedByAccountId] IS NULL) OR ([SkippedAt] IS NOT NULL AND [SkipReason] IS NOT NULL)"));
-    }
-}
-
 internal sealed class SalesOrderHarvestPlanConfiguration : IEntityTypeConfiguration<SalesOrderHarvestPlan>
 {
     public void Configure(EntityTypeBuilder<SalesOrderHarvestPlan> builder)
