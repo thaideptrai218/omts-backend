@@ -274,7 +274,8 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         var rows = await db.Database
             .SqlQueryRaw<UnpaidRow>(
                 oldestOnly ? CustomerUnpaidInvoicesSql.Oldest : CustomerUnpaidInvoicesSql.All,
-                new SqlParameter("ids", JsonSerializer.Serialize(ids)),
+                // nvarchar(max) whatever the length, so every call shares one plan (a size taken from the value gives one plan per length).
+                new SqlParameter("ids", System.Data.SqlDbType.NVarChar, -1) { Value = JsonSerializer.Serialize(ids) },
                 new SqlParameter("invoiceCancelled", StatusIds.SalesInvoice.Cancelled),
                 new SqlParameter("returnStands", StatusIds.SalesReturn.Recorded),
                 new SqlParameter("paymentCancelled", StatusIds.CustomerPayment.Cancelled),
