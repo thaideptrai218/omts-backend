@@ -42,12 +42,13 @@ public static class SalesPerformanceCalculator
             Row(key, label).Add(slice.Sums);
         }
 
-        if (grouping == SalesPerformanceGrouping.Product)
+        if (grouping == SalesPerformanceGrouping.Product && aggregates.Total.InvoiceCount > 0)
         {
-            // The sales return takes back the whole invoice (BR-CLAIM-03), so each part of the invoice is returned with it; a part that is 0 on every invoice has no row.
-            AddPart(Row, DiscountsKey, "Discounts", 1, aggregates.Parts.Discounts);
-            AddPart(Row, OtherChargesKey, "Other charges", 2, aggregates.Parts.OtherCharges);
-            AddPart(Row, PriceCutsKey, "Price cuts", 3, aggregates.Parts.PriceCuts);
+            // The sales return takes back the whole invoice (BR-CLAIM-03), so each part of the invoice is returned with it. The three rows are there whenever the selection has an
+            // invoice, also when a part is 0 on every invoice.
+            Row(DiscountsKey, "Discounts", 1).Add(aggregates.Parts.Discounts);
+            Row(OtherChargesKey, "Other charges", 2).Add(aggregates.Parts.OtherCharges);
+            Row(PriceCutsKey, "Price cuts", 3).Add(aggregates.Parts.PriceCuts);
         }
 
         var groups = rows.Values
@@ -134,14 +135,6 @@ public static class SalesPerformanceCalculator
                 var unit = UnitOf(grouping);
                 var start = ReportPeriodBuckets.StartOf(slice.Date!.Value, unit);
                 return (ReportPeriodBuckets.Key(start), ReportPeriodBuckets.Label(start, unit));
-        }
-    }
-
-    private static void AddPart(Func<string, string, int, Sums> row, string key, string label, int rank, SalesPerformanceSums part)
-    {
-        if (part.InvoiceCount > 0)
-        {
-            row(key, label, rank).Add(part);
         }
     }
 

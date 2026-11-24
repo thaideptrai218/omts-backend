@@ -110,6 +110,18 @@ public class SalesPerformanceCalculatorTests
     }
 
     [Fact]
+    public void Grouped_by_product_the_rows_of_the_parts_are_there_when_every_part_is_0()
+    {
+        var facts = new TestFacts([Three], [new(Three.Id, Oyster, "Oyster", 2m, 60_000m, 0m)]);
+
+        var groups = Build(facts, SalesPerformanceGrouping.Product).Groups;
+
+        Assert.Equal([Oyster.ToString(), SalesPerformanceCalculator.DiscountsKey, SalesPerformanceCalculator.OtherChargesKey, SalesPerformanceCalculator.PriceCutsKey], groups.Select(g => g.Key));
+        Assert.All(groups.Skip(1), g => Assert.Equal((0, 0m, 0m), (g.InvoiceCount, g.Revenue, g.SalesReturns)));
+        Assert.Empty(Build(new TestFacts([], []), SalesPerformanceGrouping.Product).Groups);
+    }
+
+    [Fact]
     public void Grouped_by_customer_the_walk_in_invoices_have_a_row_of_their_own()
     {
         var groups = Build(Facts, SalesPerformanceGrouping.Customer).Groups;
