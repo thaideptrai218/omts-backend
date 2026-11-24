@@ -13,7 +13,7 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
-        builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId), nameof(HarvestLot.WeighedByAccountId));
+        builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId), nameof(HarvestLot.WeighedByAccountId), nameof(HarvestLot.WeighingAgreedByAccountId));
         // The purchase request the trip harvested for (decision of 11/11/2026); the lots of a request are listed by it.
         builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
         // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
@@ -24,6 +24,7 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.Property(x => x.EstimatedKg).HasPrecision(18, 3);
         builder.Property(x => x.LeftoverKg).HasPrecision(18, 3);
         builder.Property(x => x.WeighedKg).HasPrecision(18, 3);
+        builder.Property(x => x.WeighingAgreedKg).HasPrecision(18, 3);
         builder.Property(x => x.WithdrawalReason).HasMaxLength(Lengths.Reason);
 
         // The unique index holds the lot code when two saves read the same last code; the loser takes the next one.
