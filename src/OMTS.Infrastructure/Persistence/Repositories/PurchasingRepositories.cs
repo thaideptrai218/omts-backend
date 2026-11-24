@@ -255,14 +255,19 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
 internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseReceiptRepository
 {
     public Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken) =>
-        db.PurchaseReceipts
+        WithGraph(db.PurchaseReceipts).FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
+
+    public Task<PurchaseReceipt?> GetForViewAsync(Guid receiptId, CancellationToken cancellationToken) =>
+        WithGraph(db.PurchaseReceipts.AsNoTracking()).FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
+
+    private static IQueryable<PurchaseReceipt> WithGraph(IQueryable<PurchaseReceipt> receipts) =>
+        receipts
             .Include(r => r.Supplier)
             .Include(r => r.Zone)
             .Include(r => r.Lines).ThenInclude(l => l.Item)
             .Include(r => r.Lines).ThenInclude(l => l.Raft!).ThenInclude(r => r.Zone)
             .Include(r => r.Returns).ThenInclude(rt => rt.Lines)
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
+            .AsSplitQuery();
 
     public void Add(PurchaseReceipt receipt) => db.PurchaseReceipts.Add(receipt);
 
