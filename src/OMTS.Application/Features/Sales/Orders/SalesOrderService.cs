@@ -24,7 +24,7 @@ namespace OMTS.Application.Features.Sales.Orders;
 /// <summary>
 /// The orders of goods (Đặt hàng, DH) that every sales invoice is made from. The Owner takes any order; a Zone Manager takes the orders of buyers at the port for its zones. An order is saved as a Draft with its lines,
 /// its discount and optionally the advance the customer pays (one save, so an order never exists without its advance); it moves along with its invoices (<see cref="SalesOrderProgress"/>) and is finished or cancelled here.
-/// An order made from a trader's purchase request (Owner only) turns the request into Ordered in the same save and tells the trader. The advance is reserved for the order while it is open (<see cref="Debts.CustomerDebtAllocator"/>).
+/// An order made from a trader's purchase request (Owner only), or the Draft order that such a request made when the Owner confirms it, turns the request into Ordered in the same save and tells the trader. The advance is reserved for the order while it is open (<see cref="Debts.CustomerDebtAllocator"/>).
 /// An order has no zone (the harvest plan decides which zones harvest for it; an invoice made from it takes the zone of its first lot), so the rights are the same for every order.
 /// </summary>
 public sealed class SalesOrderService(
@@ -153,11 +153,7 @@ public sealed class SalesOrderService(
         Notification? sending = null;
         if (plan.Request is { } sourceRequest)
         {
-            var from = sourceRequest.StatusId;
-            sourceRequest.StatusId = StatusIds.PurchaseRequest.Ordered;
-            unitOfWork.MarkChanged(sourceRequest);
-            audit.RecordStatusChange(nameof(PurchaseRequest), sourceRequest.Id, null, from, StatusIds.PurchaseRequest.Ordered);
-            sending = await requestNotifications.OrderedAsync(sourceRequest, order, cancellationToken);
+            sending = await MarkRequestOrderedAsync(sourceRequest, order, cancellationToken);
         }
 
         var outcome = await SaveAsync(order, plan.Request, key, cancellationToken);
@@ -284,13 +280,38 @@ public sealed class SalesOrderService(
             audit.Record(new AuditEntry("SalesOrder.Updated", RecordType) { RecordId = order.Id, RecordCode = order.Code, Before = changedBefore, After = changedAfter });
         }
 
-        var outcome = await SaveAsync(order, null, key: null, cancellationToken);
+        // Confirming the Draft order that a trader's request made answers the request: it becomes Ordered in the same save, as when the Owner makes the order from the request.
+        PurchaseRequest? confirmed = null;
+        Notification? sending = null;
+        if (order.PurchaseRequestId is { } requestId
+            && await requests.GetForEditAsync(requestId, cancellationToken) is { } waiting && SalesOrderRules.ConfirmationOrdersRequest(waiting.StatusId))
+        {
+            confirmed = waiting;
+            sending = await MarkRequestOrderedAsync(waiting, order, cancellationToken);
+        }
+
+        var outcome = await SaveAsync(order, confirmed, key: null, cancellationToken);
         if (outcome.Error is not null)
         {
             return outcome.Error;
         }
 
+        if (sending is not null)
+        {
+            await traderMessages.DeliverAsync(sending);
+        }
+
         return await SavedAsync(order.Id, advance is { StatusId: StatusIds.CustomerPayment.PendingTransfer } ? advance.Id : null, cancellationToken);
+    }
+
+    /// <summary>Sets the request Ordered with its status change in the audit log and queues the notice to the trader; the caller saves and then delivers the returned sending.</summary>
+    private async Task<Notification?> MarkRequestOrderedAsync(PurchaseRequest request, SalesOrder order, CancellationToken cancellationToken)
+    {
+        var from = request.StatusId;
+        request.StatusId = StatusIds.PurchaseRequest.Ordered;
+        unitOfWork.MarkChanged(request);
+        audit.RecordStatusChange(nameof(PurchaseRequest), request.Id, null, from, StatusIds.PurchaseRequest.Ordered);
+        return await requestNotifications.OrderedAsync(request, order, cancellationToken);
     }
 
     /// <summary>"Kết thúc": a Delivering order is Completed by hand; what is left of its advance becomes general credit of the customer.</summary>
@@ -670,7 +691,7 @@ public sealed class SalesOrderService(
                 return new SaveOutcome(duplicate, null);
             }
 
-            if (request is not null && await orders.FindByPurchaseRequestAsync(request.Id, cancellationToken) is { } existing)
+            if (request is not null && await orders.FindByPurchaseRequestAsync(request.Id, cancellationToken) is { } existing && existing.Id != order.Id)
             {
                 return new SaveOutcome(OrderExists(existing), null);
             }

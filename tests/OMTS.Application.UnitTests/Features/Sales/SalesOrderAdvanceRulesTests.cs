@@ -100,6 +100,10 @@ public class SalesOrderAdvanceRulesTests
     [InlineData(StatusIds.PurchaseRequest.Ordered, false)]
     public void Only_a_waiting_or_accepted_request_allows_an_order(int status, bool allowed) => Assert.Equal(allowed, PurchaseRequestRules.AllowsOrder(status));
 
+    [Fact]
+    public void A_request_waiting_for_the_owner_can_be_cancelled_and_answered() =>
+        Assert.True(PurchaseRequestRules.AllowsCancel(StatusIds.PurchaseRequest.AwaitingResponse) && PurchaseRequestRules.AllowsResponse(StatusIds.PurchaseRequest.AwaitingResponse));
+
     [Theory]
     [InlineData(StatusIds.PurchaseRequest.Ordered)]
     [InlineData(StatusIds.PurchaseRequest.Declined)]

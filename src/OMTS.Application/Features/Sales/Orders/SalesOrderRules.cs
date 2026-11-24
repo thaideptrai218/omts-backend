@@ -48,6 +48,9 @@ public static class SalesOrderRules
     public static bool RequestAllowsOrder(int requestStatusId, bool fulfilled) =>
         requestStatusId == StatusIds.PurchaseRequest.AwaitingResponse || (requestStatusId == StatusIds.PurchaseRequest.Accepted && !fulfilled);
 
+    /// <summary>The Owner confirming (saving) the Draft order that a request made answers the request, but only while it still waits for the answer: a request that was declined, cancelled or answered some other way keeps its status.</summary>
+    public static bool ConfirmationOrdersRequest(int requestStatusId) => requestStatusId == StatusIds.PurchaseRequest.AwaitingResponse;
+
     /// <summary>The amount of a line: quantity × price, rounded half up to the dong; false when it does not fit an amount of 18 digits.</summary>
     public static bool TryLineAmount(decimal quantity, decimal unitPrice, out decimal amount) => InvoiceMoney.TryLineAmount(quantity, unitPrice, out amount);
 

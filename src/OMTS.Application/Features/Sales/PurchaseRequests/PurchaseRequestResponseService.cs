@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.Requests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -24,6 +25,7 @@ public sealed class PurchaseRequestResponseService(
     PurchaseRequestViews views,
     IPurchaseRequestFulfilment fulfilment,
     PurchaseStaffingService staffing,
+    SalesOrderFromRequestService orderFromRequest,
     INotificationDispatcher dispatcher,
     TraderMessageService traderMessages,
     ICurrentUser currentUser,
@@ -88,7 +90,7 @@ public sealed class PurchaseRequestResponseService(
         return await SaveResponseAsync(request, StatusIds.PurchaseRequest.Accepted, note, "PurchaseRequest.Accepted", cancellationToken);
     }
 
-    /// <summary>SALE-03.1: only the note is checked. The shifts the staff agreed to are let go.</summary>
+    /// <summary>SALE-03.1: only the note is checked. The shifts the staff agreed to are let go, and the Draft order the request made is cancelled with the same reason in the same save.</summary>
     public async Task<Result<PurchaseRequestView>> DeclineAsync(Guid requestId, DeclinePurchaseRequest entry, CancellationToken cancellationToken)
     {
         var (request, refused) = await LoadAwaitingAsync(requestId, entry.RowVersion, cancellationToken);
@@ -104,6 +106,7 @@ public sealed class PurchaseRequestResponseService(
         }
 
         await staffing.ReleaseAsync(request!, cancellationToken);
+        await orderFromRequest.CancelDraftAsync(request!, currentUser.AccountId!.Value, note, cancellationToken);
         return await SaveResponseAsync(request!, StatusIds.PurchaseRequest.Declined, note, "PurchaseRequest.Declined", cancellationToken);
     }
 
