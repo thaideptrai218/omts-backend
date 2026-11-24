@@ -107,7 +107,7 @@ public sealed class HarvestLotRegisterService(
     /// <summary>The ledger rows of one lot, oldest first: the harvest at its weighed kg, the sales (with the order of their invoice) and disposals, the sales returns, what the close took off, and the reversals that undid any of them.</summary>
     public async Task<Result<IReadOnlyList<HarvestLotMovementView>>> MovementsAsync(Guid lotId, CancellationToken cancellationToken)
     {
-        var lot = await lots.GetAsync(lotId, cancellationToken);
+        var lot = await lots.GetHeaderAsync(lotId, cancellationToken);
         if (lot is null)
         {
             return AppError.NotFound;

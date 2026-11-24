@@ -42,6 +42,12 @@ public interface IHarvestLotRepository
     /// <summary>The same, read only.</summary>
     Task<HarvestLot?> GetAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>The lot itself with its raft and zone, read only, in one query: for a read that needs only the lot's own values, its raft or its zone.</summary>
+    Task<HarvestLot?> GetHeaderAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>The lot with its lanes, cycle, raft and zone, read only: what the trace of a lot is built from.</summary>
+    Task<HarvestLot?> GetForTraceAsync(Guid lotId, CancellationToken cancellationToken);
+
     /// <summary>The lots of a cycle with their lanes, read only, the latest harvest first.</summary>
     Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken);
 

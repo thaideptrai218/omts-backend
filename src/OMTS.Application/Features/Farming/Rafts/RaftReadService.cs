@@ -64,7 +64,7 @@ public sealed class RaftReadService(
     /// <summary>The lanes of a raft today with their status and the state worked out from the records of the cycle (BR-FARM-03).</summary>
     public async Task<Result<RaftLanesToday>> LanesTodayAsync(Guid raftId, CancellationToken cancellationToken)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
         if (raft is null)
         {
             return AppError.NotFound;

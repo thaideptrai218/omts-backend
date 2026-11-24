@@ -15,6 +15,12 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Include(r => r.Photos)
             .FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
 
+    public Task<Raft?> GetForReadAsync(Guid raftId, CancellationToken cancellationToken) =>
+        db.Rafts.AsNoTracking()
+            .Include(r => r.Zone)
+            .Include(r => r.Lanes)
+            .FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
+
     public async Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken) =>
         raftIds.Count == 0 ? [] : await db.Rafts.AsNoTracking().Include(r => r.Zone).Where(r => raftIds.Contains(r.Id)).ToListAsync(cancellationToken);
 

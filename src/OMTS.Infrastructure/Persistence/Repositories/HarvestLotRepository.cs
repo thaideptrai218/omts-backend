@@ -18,6 +18,17 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
     public Task<HarvestLot?> GetAsync(Guid lotId, CancellationToken cancellationToken) =>
         WithAll(db.HarvestLots.AsNoTracking()).FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
 
+    public Task<HarvestLot?> GetHeaderAsync(Guid lotId, CancellationToken cancellationToken) =>
+        db.HarvestLots.AsNoTracking().Include(l => l.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
+
+    public Task<HarvestLot?> GetForTraceAsync(Guid lotId, CancellationToken cancellationToken) =>
+        db.HarvestLots.AsNoTracking()
+            .Include(l => l.Lanes).ThenInclude(l => l.Lane)
+            .Include(l => l.Cycle)
+            .Include(l => l.Raft).ThenInclude(r => r.Zone)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
+
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)

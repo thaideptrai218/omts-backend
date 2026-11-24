@@ -116,7 +116,7 @@ public sealed class LotTraceService(
 
     private async Task<Result<LotTrace>> TraceAsync(Guid lotId, PermissionAction action, CancellationToken cancellationToken)
     {
-        var lot = await lots.GetAsync(lotId, cancellationToken);
+        var lot = await lots.GetForTraceAsync(lotId, cancellationToken);
         if (lot is null)
         {
             return AppError.NotFound;
