@@ -12,23 +12,15 @@ using OMTS.Application.Features.Verification.Dtos;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// ACS-06 – verification codes. Starting a request here is for registration only; logged-in flows start
-/// theirs from their own endpoints (phone verification, contact change, password change, recovery).
-/// Resend and verify work for any request the caller may use.
+/// ACS-06 – verification codes. A request is started by the endpoint of its own flow (phone verification, contact change,
+/// password change, recovery); resend and verify work here for any request the caller may use.
 /// </summary>
 [ApiController]
 [Route("api/verifications")]
 [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
 [AllowAnonymous]
-public sealed class VerificationsController(
-    RegistrationService registration, VerificationService verification, ICurrentUser currentUser) : ControllerBase
+public sealed class VerificationsController(VerificationService verification, ICurrentUser currentUser) : ControllerBase
 {
-    /// <summary>Registration (ACS-01): checks the identifier is free, then sends the code.</summary>
-    [HttpPost]
-    [ProducesResponseType<VerificationStarted>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Start(StartVerificationRequest request, CancellationToken cancellationToken) =>
-        (await registration.StartVerificationAsync(request, cancellationToken)).ToActionResult(v => StatusCode(StatusCodes.Status201Created, v));
-
     [HttpPost("{id:guid}/resend")]
     [AllowWhenPasswordChangeRequired]
     [AllowWhenPhoneUnverified]

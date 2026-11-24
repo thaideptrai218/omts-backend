@@ -115,48 +115,6 @@ public class SalesCatalogueQaSqlServerTests
         await (await owner.PutAsJsonAsync($"/api/customers/{customer.Id()}", new { body.name, body.phoneNumber, address = new string('a', 500), note = new string('b', 1000), rowVersion = customer.RowVersion() })).ReadAsync(HttpStatusCode.OK);
     }
 
-    // BR-SALE-04: rows written by registration and linking against the filtered index, through the real routes.
-    [SqlServerFact]
-    public async Task A_linked_profile_keeps_working_with_the_index_after_registration_and_a_new_number()
-    {
-        await using var host = await FarmingHost.StartAsync();
-        var owner = host.Owner.Client;
-        var oldNumber = NewPhone();
-        var offline = await owner.CreateCustomerAsync(phone: oldNumber);
-        var anonymous = host.Api.CreateClient();
-        var password = NewPassword();
-
-        var token = await SmsTokenAsync(host, anonymous, "/api/verifications", new { channel = "Sms", target = oldNumber }, oldNumber);
-        await (await anonymous.PostAsJsonAsync("/api/auth/register", new { channel = "Sms", identifier = oldNumber, password, passwordConfirmation = password, verificationToken = token })).ReadAsync(HttpStatusCode.Created);
-        var linked = await owner.CustomerAsync(offline.Id());
-        Assert.True(linked.GetProperty("phoneLocked").GetBoolean());
-        Assert.True(await host.QueryAsync(db => db.Customers.Where(c => c.Id == offline.Id()).Select(c => c.PhoneCheckedByStaff).SingleAsync()));
-        var edited = await (await owner.PutAsJsonAsync($"/api/customers/{offline.Id()}", new { name = "Edited", rowVersion = linked.RowVersion() })).ReadAsync(HttpStatusCode.OK);
-
-        var trader = host.Api.CreateClient();
-        var tokens = await LoginTokensAsync(trader, oldNumber, password);
-        trader.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokens.GetProperty("accessToken").GetString());
-        var newNumber = NewPhone();
-        var change = await SmsTokenAsync(host, trader, "/api/me/contact-changes", new { channel = "Sms", target = newNumber, currentPassword = password }, newNumber);
-        await (await trader.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = change })).ReadAsync(HttpStatusCode.OK);
-
-        Assert.False(await host.QueryAsync(db => db.Customers.Where(c => c.Id == offline.Id()).Select(c => c.PhoneCheckedByStaff).SingleAsync()));
-        var moved = await owner.CustomerAsync(offline.Id());
-        Assert.Equal(newNumber, moved.Text("phoneNumber"));
-        Assert.NotEqual(edited.GetProperty("customer").RowVersion(), moved.RowVersion());
-        var again = await owner.CreateCustomerAsync(phone: oldNumber);
-        Assert.NotEqual(offline.Id(), again.Id());
-        await (await owner.PutAsJsonAsync($"/api/customers/{offline.Id()}", new { name = "Edited again", rowVersion = moved.RowVersion() })).ReadAsync(HttpStatusCode.OK);
-    }
-
-    private static async Task<string> SmsTokenAsync(FarmingHost host, HttpClient client, string url, object body, string phone)
-    {
-        var started = await client.PostAsJsonAsync(url, body);
-        var id = await VerificationIdAsync(started);
-        var text = host.Api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone)[0].Text;
-        return await VerifyAsync(client, id, Regex.Match(text, @"\d{6}").Value);
-    }
-
     [SqlServerFact]
     public async Task Versions_on_sql_server_move_with_every_save_and_a_blank_or_wrong_length_one_is_refused()
     {

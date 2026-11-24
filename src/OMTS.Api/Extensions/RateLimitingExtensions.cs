@@ -14,7 +14,7 @@ public sealed class RateLimitOptions
 {
     public const string SectionName = "RateLimits";
 
-    /// <summary>Endpoints that send a code or check one (registration, recovery, resend, verify).</summary>
+    /// <summary>Endpoints that send a code or check one (recovery, resend, verify).</summary>
     public int CodeRequestsPerMinute { get; set; } = 10;
 
     public int LoginsPerMinute { get; set; } = 30;

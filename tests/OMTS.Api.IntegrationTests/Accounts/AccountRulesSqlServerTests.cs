@@ -59,87 +59,6 @@ public class AccountRulesSqlServerTests
         await Assert.ThrowsAnyAsync<Exception>(duplicate);
     }
 
-    // The times of the codes survive the database: a new host still counts them, and the 4th code waits for the oldest.
-    [SqlServerFact]
-    public async Task The_send_times_of_the_codes_are_stored_and_counted_across_requests_and_accounts()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        var client = api.CreateClient();
-        var phone = NewPhone();
-
-        var first = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-        await AgeAsync(database, first);
-        var resent = await client.PostAsync($"/api/verifications/{first}/resend", null);
-        Assert.Equal(HttpStatusCode.OK, resent.StatusCode);
-        await AgeAsync(database, first);
-        var second = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-        await AgeAsync(database, second);
-
-        var fourth = await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone });
-        var body = await fourth.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal(HttpStatusCode.TooManyRequests, fourth.StatusCode);
-        Assert.Equal("MSG-ACCOUNT-18", body.GetProperty("code").GetString());
-        // The oldest code was aged twice: it was sent 4 minutes ago.
-        Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 3600 - 240 - 10, 3600 - 240);
-        Assert.Equal(3, api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count);
-        await using var db = database.CreateContext();
-        Assert.Equal(2, (await db.VerificationCodes.AsNoTracking().SingleAsync(c => c.Id == first)).SendTimes.Count);
-    }
-
-    // Parallel resends and new requests of one number: never more than 3 codes for the purpose and the number.
-    [SqlServerFact]
-    public async Task Parallel_requests_never_send_more_than_3_codes()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        var client = api.CreateClient();
-        var phone = NewPhone();
-        var seen = new List<int>();
-
-        for (var round = 0; round < 6; round++)
-        {
-            var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
-            Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
-            seen.AddRange(responses.Select(r => (int)r.StatusCode));
-            await using var db = database.CreateContext();
-            foreach (var request in await db.VerificationCodes.Where(c => c.Target == phone).ToListAsync())
-            {
-                request.AgeBy(TimeSpan.FromMinutes(2));
-            }
-
-            await db.SaveChangesAsync();
-        }
-
-        var sent = api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count;
-        Assert.True(sent is >= 1 and <= VerificationCode.MaxCodesPerHour, $"{sent} codes sent; answers {string.Join(",", seen)}");
-    }
-
-    // Simultaneous first requests of one number: one sends its code, and the others are told to wait for it. They used to see
-    // each other's saved rows, all refuse with "too many codes" and leave the user with no code at all.
-    [SqlServerFact]
-    public async Task Simultaneous_first_requests_of_a_number_send_exactly_one_code()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        var client = api.CreateClient();
-        var phone = NewPhone();
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
-
-        Assert.Single(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone));
-        Assert.Single(responses, r => r.IsSuccessStatusCode);
-        foreach (var refused in responses.Where(r => !r.IsSuccessStatusCode))
-        {
-            Assert.Equal((HttpStatusCode)429, refused.StatusCode);
-            Assert.Equal(2, (await refused.BodyAsync()).GetProperty("sendsLeft").GetInt32());
-        }
-    }
-
     [SqlServerFact]
     public async Task A_staff_create_that_loses_the_race_answers_msg_account_09_naming_the_field()
     {
@@ -411,13 +330,6 @@ public class AccountRulesSqlServerTests
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();
         return zone.Id;
-    }
-
-    private static async Task AgeAsync(SqlServerTestDatabase database, Guid id)
-    {
-        await using var db = database.CreateContext();
-        (await db.VerificationCodes.SingleAsync(c => c.Id == id)).AgeBy(TimeSpan.FromMinutes(2));
-        await db.SaveChangesAsync();
     }
 
     private static Task InsertAccountAsync(DbContext db, Guid id, string username, string email, bool verified, int daysOld)

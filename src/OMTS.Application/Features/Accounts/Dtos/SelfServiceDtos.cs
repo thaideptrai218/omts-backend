@@ -2,19 +2,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts.Dtos;
 
-/// <param name="Channel">Must be Sms: a phone number is the only way to register.</param>
-public sealed record RegisterTraderRequest(
-    VerificationChannel Channel,
-    string Identifier,
-    string Password,
-    string PasswordConfirmation,
-    string VerificationToken);
-
-/// <param name="LinkedExistingCustomer">The account was linked to the one customer profile with this phone number (BR-ACCOUNT-04).</param>
-/// <param name="Notice">MSG-ACCOUNT-01 when <paramref name="LinkedExistingCustomer"/>, otherwise MSG-ACCOUNT-02.</param>
-/// <param name="NoticeCode">The code of <paramref name="Notice"/>.</param>
-public sealed record TraderRegistered(Guid AccountId, string Username, bool LinkedExistingCustomer, string Notice, string NoticeCode);
-
 public sealed record StartRecoveryRequest(string Identifier);
 
 /// <summary>Always the same answer (MSG-ACCOUNT-20), whether or not a code was sent.</summary>

@@ -8,7 +8,7 @@
 
 | ID | Nội dung khác SRS v8 (backend) | Trạng thái backend |
 |---|---|---|
-| AC-01 | Đăng nhập bằng số điện thoại hoặc tên đăng nhập; email không phải định danh. Đăng ký từ chối email (`RegistrationService`). Nhật ký 11/11 ghi module tài khoản chưa làm, cần kiểm tra lại trên `develop` (Q18) | Đã làm (đăng ký); cần xác nhận |
+| AC-01 | Đăng nhập bằng số điện thoại hoặc tên đăng nhập; email không phải định danh. Không còn tự đăng ký bằng SMS (đã gỡ `POST api/auth/register`, `POST api/verifications`): trader gửi yêu cầu từ Zalo Mini App, Chủ HTX duyệt (ACCOUNT-11). Nhật ký 11/11 ghi module tài khoản chưa làm, cần kiểm tra lại trên `develop` (Q18) | Đã làm; cần xác nhận |
 | AC-02 | Ba vai trò cố định (`FixedRoles`): Cooperative Owner, Zone Manager (`ZONE_MANAGER`), Accountant (`ACCOUNTANT`); quyền là ma trận tĩnh, không lưu; Owner cấp cặp vai trò–vùng; cặp không có hiệu lực thì không đăng nhập được | Đã làm |
 | AC-04 | Không có actor System Administrator trong `develop` (Q14) | Chờ xác nhận |
 | AC-06 | Phiên theo thiết bị, refresh xoay vòng với ân hạn 30 giây, thu hồi phiên qua Redis tùy chọn; không có trong SRS | Đã làm |

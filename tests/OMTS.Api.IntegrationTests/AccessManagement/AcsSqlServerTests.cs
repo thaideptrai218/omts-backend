@@ -51,76 +51,6 @@ public class AcsSqlServerTests
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.Username == username)));
     }
 
-    // Two traders register one number with two valid codes: one account, the other refused with 409, no 500.
-    [SqlServerFact]
-    public async Task Parallel_registrations_with_one_phone_create_one_trader()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        await SeedCooperativeAsync(database);
-        var phone = NewPhone();
-        var anonymous = api.CreateClient();
-        var first = await VerifiedTokenAsync(api, anonymous, phone);
-        // The send budget allows one code per minute: age the first request by two minutes instead of waiting.
-        await BackdateRequestAsync(database, first.VerificationId);
-        var second = await VerifiedTokenAsync(api, anonymous, phone);
-
-        var responses = await Task.WhenAll(new[] { first.Token, second.Token }
-            .Select(token => RegisterAsync(anonymous, phone, token)));
-
-        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
-        var refused = responses.Single(r => r.StatusCode != HttpStatusCode.Created);
-        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        Assert.Equal("MSG-ACCOUNT-03", await refused.ErrorCodeAsync());
-        Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.PhoneNumber == phone)));
-    }
-
-    // Parallel "send me a code" requests of one subject (double tap, script): one SMS goes out, the others
-    // back off with 429; none is a 500.
-    [SqlServerFact]
-    public async Task Parallel_code_requests_of_one_subject_send_one_sms()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        var phone = NewPhone();
-        var anonymous = api.CreateClient();
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 5)
-            .Select(_ => anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
-
-        Assert.True(responses.Count(r => r.StatusCode == HttpStatusCode.Created) <= 1);
-        Assert.All(responses.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.TooManyRequests, r.StatusCode));
-        Assert.True(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count <= 1);
-        Assert.Equal(
-            api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count,
-            await ReadAsync(database, db => db.VerificationCodes.CountAsync(c => c.Target == phone)));
-    }
-
-    // One token, three parallel registrations: at most one consumes it; the others are refused, none is a 500.
-    [SqlServerFact]
-    public async Task Parallel_use_of_one_verification_token_registers_once()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        await SeedCooperativeAsync(database);
-        var phone = NewPhone();
-        var anonymous = api.CreateClient();
-        var verified = await VerifiedTokenAsync(api, anonymous, phone);
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => RegisterAsync(anonymous, phone, verified.Token)));
-
-        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
-        foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
-        {
-            Assert.InRange((int)refused.StatusCode, 400, 499);
-        }
-
-        Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.PhoneNumber == phone)));
-    }
-
     // The same owner saves a staff account from a stale version: refused with MSG06, also when two saves race.
     [SqlServerFact]
     public async Task Stale_staff_edit_is_refused_with_msg06_at_database_level()
@@ -179,39 +109,6 @@ public class AcsSqlServerTests
         return account.GetProperty("rowVersion").GetString()!;
     }
 
-    private static async Task<HttpResponseMessage> RegisterAsync(HttpClient anonymous, string phone, string token) =>
-        await anonymous.PostAsJsonAsync("/api/auth/register", new
-        {
-            channel = "Sms",
-            identifier = phone,
-            password = TraderPassword,
-            passwordConfirmation = TraderPassword,
-            verificationToken = token,
-        });
-
-    /// <summary>Starts a registration for the number, reads the SMS code and verifies it, returning the token.</summary>
-    private static async Task<(Guid VerificationId, string Token)> VerifiedTokenAsync(
-        SqlServerApiFactory api, HttpClient anonymous, string phone)
-    {
-        var verificationId = await VerificationIdAsync(await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-        var token = await VerifyAsync(anonymous, verificationId, SmsCode(api, phone));
-        return (verificationId, token);
-    }
-
-    private static string SmsCode(SqlServerApiFactory api, string phone) =>
-        Regex.Match(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone)[0].Text, @"\d{6}").Value;
-
-    private static string WrongCodeFor(string code) => ((int.Parse(code) + 1) % 1_000_000).ToString("D6");
-
-    /// <summary>Moves a request two minutes into the past, as if that much time had passed.</summary>
-    private static async Task BackdateRequestAsync(SqlServerTestDatabase database, Guid id)
-    {
-        await using var db = database.CreateContext();
-        var request = await db.VerificationCodes.SingleAsync(c => c.Id == id);
-        request.AgeBy(TimeSpan.FromMinutes(2));
-        await db.SaveChangesAsync();
-    }
-
     private static async Task<HttpClient> LoginAsync(SqlServerApiFactory api, string username)
     {
         var client = api.CreateClient();
@@ -229,43 +126,12 @@ public class AcsSqlServerTests
         return (zone.Id, (await api.RoleAsync(StaffRole.ZoneManager)).Id);
     }
 
-    private static async Task SeedCooperativeAsync(SqlServerTestDatabase database)
-    {
-        await using var db = database.CreateContext();
-        db.Cooperatives.Add(new Cooperative { FullName = "HTX Trung Nam" });
-        await db.SaveChangesAsync();
-    }
-
     private static async Task<T> ReadAsync<T>(SqlServerTestDatabase database, Func<OmtsDbContext, Task<T>> query)
     {
         await using var db = database.CreateContext();
         return await query(db);
     }
 
-
-    // Ten parallel wrong entries on one code: every wrong entry must count, so the request locks and the
-    // right code is refused afterwards.
-    [SqlServerFact]
-    public async Task Parallel_wrong_entries_are_not_lost_and_lock_the_request()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        var anonymous = api.CreateClient();
-        var phone = NewPhone();
-        var verificationId = await VerificationIdAsync(await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-        var code = SmsCode(api, phone);
-        var wrong = WrongCodeFor(code);
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 10)
-            .Select(_ => anonymous.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code = wrong })));
-
-        Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
-        var persisted = await ReadAsync(database, db => db.VerificationCodes.Where(c => c.Id == verificationId).Select(c => c.FailedAttempts).SingleAsync());
-        Assert.True(persisted >= VerificationCode.MaxFailedAttempts, $"only {persisted} of 10 wrong entries were saved");
-        var right = await anonymous.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code });
-        Assert.Equal(HttpStatusCode.BadRequest, right.StatusCode);
-    }
 
 
     [SqlServerFact]
@@ -284,25 +150,5 @@ public class AcsSqlServerTests
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         Assert.DoesNotContain(api.Logs.Lines, line => line.Contains(username));
-    }
-
-    [SqlServerFact]
-    public async Task Parallel_registrations_do_not_log_the_duplicate_phone()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateToLatestAsync();
-        await using var api = new SqlServerApiFactory(database);
-        await SeedCooperativeAsync(database);
-        var phone = NewPhone();
-        var anonymous = api.CreateClient();
-        var first = await VerifiedTokenAsync(api, anonymous, phone);
-        await BackdateRequestAsync(database, first.VerificationId);
-        var second = await VerifiedTokenAsync(api, anonymous, phone);
-
-        var responses = await Task.WhenAll(new[] { first.Token, second.Token }
-            .Select(token => RegisterAsync(anonymous, phone, token)));
-
-        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
-        Assert.DoesNotContain(api.Logs.Lines, line => line.Contains(phone));
     }
 }

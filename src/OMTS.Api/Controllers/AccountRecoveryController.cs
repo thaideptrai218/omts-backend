@@ -9,19 +9,13 @@ using OMTS.Application.Features.Accounts.Dtos;
 
 namespace OMTS.Api.Controllers;
 
-/// <summary>Trader registration (ACS-01) and password recovery (ACS-03); both before login.</summary>
+/// <summary>Password recovery (ACS-03), before login. A trader does not register here: the Owner makes the account from a trader account request (ACCOUNT-11).</summary>
 [ApiController]
 [Route("api/auth")]
 [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
 [AllowAnonymous]
-public sealed class AccountRecoveryController(RegistrationService registration, PasswordRecoveryService recovery) : ControllerBase
+public sealed class AccountRecoveryController(PasswordRecoveryService recovery) : ControllerBase
 {
-    /// <summary>ACS-01 – creates a trader account from a verified phone number (<c>channel</c> must be Sms; an email cannot register).</summary>
-    [HttpPost("register")]
-    [ProducesResponseType<TraderRegistered>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Register(RegisterTraderRequest request, CancellationToken cancellationToken) =>
-        (await registration.RegisterAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
-
     /// <summary>ACS-03 – always 202 with MSG-ACCOUNT-20; an SMS code is sent only to the verified phone number of an Active account. An email identifier gets the same answer and no code.</summary>
     [HttpPost("recovery")]
     [ProducesResponseType<RecoveryStarted>(StatusCodes.Status202Accepted)]
