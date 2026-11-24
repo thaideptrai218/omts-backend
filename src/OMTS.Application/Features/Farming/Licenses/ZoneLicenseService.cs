@@ -18,7 +18,7 @@ namespace OMTS.Application.Features.Farming.Licenses;
 /// <summary>
 /// FARM-03 – zone licenses (Cooperative Owner only, checked by the API filter): create, view, edit and replace; never
 /// deleted. A license belongs to one zone, and is added, edited or replaced only while that zone is In Use (GBR-01,
-/// MSG-GEN-09); a Replaced license is kept as it is (MSG-GEN-09). The file is uploaded first, so a storage failure saves
+/// MSG-GEN-09); a Replaced license is kept as it is (MSG-GEN-09). The file is optional; when there is one it is uploaded first, so a storage failure saves
 /// nothing; an upload whose database save fails is removed again, and a file replaced by an edit is removed once the edit
 /// is saved (<see cref="UploadedFileSaver"/>).
 /// </summary>
@@ -80,14 +80,14 @@ public sealed class ZoneLicenseService(
             fields.Add("Zone");
         }
 
-        var checkedFile = CheckFile(fields, file, fileRequired: true);
+        var checkedFile = CheckFile(fields, file);
         if (fields.Count > 0)
         {
             return AppError.InvalidFields(fields);
         }
 
-        var uploaded = await UploadAsync(checkedFile!, cancellationToken);
-        if (uploaded is null)
+        string? uploaded = null;
+        if (checkedFile is not null && (uploaded = await UploadAsync(checkedFile, cancellationToken)) is null)
         {
             return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
@@ -129,7 +129,7 @@ public sealed class ZoneLicenseService(
 
         var (input, invalid) = ZoneLicenseInput.Read(request, document.ZoneId);
         var fields = invalid.ToList();
-        var checkedFile = CheckFile(fields, file, fileRequired: false);
+        var checkedFile = CheckFile(fields, file);
         if (fields.Count > 0)
         {
             return AppError.InvalidFields(fields);
@@ -190,14 +190,14 @@ public sealed class ZoneLicenseService(
 
         var (input, invalid) = ZoneLicenseInput.Read(request, old.ZoneId, old.DocumentType);
         var fields = invalid.ToList();
-        var checkedFile = CheckFile(fields, file, fileRequired: true);
+        var checkedFile = CheckFile(fields, file);
         if (fields.Count > 0)
         {
             return AppError.InvalidFields(fields);
         }
 
-        var uploaded = await UploadAsync(checkedFile!, cancellationToken);
-        if (uploaded is null)
+        string? uploaded = null;
+        if (checkedFile is not null && (uploaded = await UploadAsync(checkedFile, cancellationToken)) is null)
         {
             return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
@@ -232,16 +232,16 @@ public sealed class ZoneLicenseService(
         return null;
     }
 
-    /// <summary>Adds "File" to <paramref name="fields"/> unless the file is a PDF, JPEG or PNG of at most 10 MB.</summary>
-    private static ValidatedFile? CheckFile(List<string> fields, IncomingFile? file, bool fileRequired)
+    /// <summary>The file is optional (FARM-03): null when none was sent. Adds "File" to <paramref name="fields"/> when one was sent that is not a PDF, JPEG or PNG of at most 10 MB.</summary>
+    internal static ValidatedFile? CheckFile(List<string> fields, IncomingFile? file)
     {
-        if (file is null && !fileRequired)
+        if (file is null)
         {
             return null;
         }
 
-        var result = file is null ? null : FileValidator.Validate([file], FileRules.Documents);
-        if (result is not { IsValid: true })
+        var result = FileValidator.Validate([file], FileRules.Documents);
+        if (!result.IsValid)
         {
             fields.Add("File");
             return null;

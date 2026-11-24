@@ -194,7 +194,7 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` .
   The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
-  the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
+  the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
 
 ### Notifications
