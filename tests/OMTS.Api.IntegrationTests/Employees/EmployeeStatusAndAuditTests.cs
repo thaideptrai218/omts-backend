@@ -239,7 +239,8 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal((phone, username, "Active", "Employed"), (row.GetProperty("phoneNumber").GetString(),
             row.GetProperty("account").GetProperty("username").GetString(), row.GetProperty("account").GetProperty("status").GetString(), row.GetProperty("status").GetString()));
         Assert.Equal(zone.Code, row.GetProperty("workingZones")[0].GetProperty("code").GetString());
-        Assert.Equal(JsonValueKind.Null, asManager.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == a).GetProperty("account").ValueKind);
+        // The list shows the linked account's basic identity to whoever sees the employee (the full profile keeps it for the Owner).
+        Assert.Equal(username, asManager.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == a).GetProperty("account").GetProperty("username").GetString());
     }
 
     private Task<int> StatusOfAsync(Guid id) => factory.QueryAsync(db => db.Employees.Where(e => e.Id == id).Select(e => e.StatusId).SingleAsync());

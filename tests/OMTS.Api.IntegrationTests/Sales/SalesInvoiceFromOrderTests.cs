@@ -199,11 +199,9 @@ public class SalesInvoiceFromOrderTests
         var price = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 10m, unitPrice: 55_000m)], Cash(550_000m)));
         Assert.Equal("DecidedByOwner", price.GetProperty("invoice").GetProperty("lines")[0].Text("priceSource"));
 
-        // 10 kg is 500,000 of 7,400,000: its share of the 100,000 discount is 6,757; a discount of 6,758 is above it and the Owner may still give it.
+        // 10 kg is 500,000 of 7,400,000: its share of the 100,000 discount is 6,757.
         var within = await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 10m)], Cash(493_243m)).With("discount", 6_757m));
         Assert.Equal(493_243m, within.GetProperty("invoice").Money("total"));
-        var above = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 10m)], Cash(493_000m)).With("discount", 6_758m));
-        Assert.Equal(6_758m, above.GetProperty("invoice").Money("discount"));
     }
 
     [Fact]

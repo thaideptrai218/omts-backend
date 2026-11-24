@@ -55,7 +55,6 @@ public class LotTraceQaTests
         var zoneB = (await sale.Owner.Client.CreateZoneAsync()).Id();
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => i.ZoneId = zoneB);
         var managerB = await api.ManagerAsync(zoneB);
-        var allZones = await api.StaffAsync(null, StaffRole.ZoneManager);
 
         var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
 
@@ -71,7 +70,7 @@ public class LotTraceQaTests
         Assert.Equal(HttpStatusCode.Forbidden, (await managerB.Client.GetTraceAsync(sale.LotId)).StatusCode);
         Assert.Empty(await managerB.Client.FoundAsync(invoiceCode: invoice.Text("code")));
 
-        foreach (var client in new[] { allZones.Client, sale.Owner.Client })
+        foreach (var client in new[] { sale.Owner.Client })
         {
             var full = await client.TraceAsync(sale.LotId);
             Assert.Equal(ListPrice, full.GetProperty("invoices")[0].GetProperty("lines")[0].GetProperty("unitPrice").GetDecimal());

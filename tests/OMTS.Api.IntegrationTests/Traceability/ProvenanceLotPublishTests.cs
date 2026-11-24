@@ -51,7 +51,7 @@ public class ProvenanceLotPublishTests
         Assert.Contains("\"SalesInvoiceCode\":null", audit.After);
 
         // BR-TRACE-02: published once. The Owner too is refused, and nothing is written again.
-        foreach (var client in new[] { sale.Accountant.Client, sale.Owner.Client })
+        foreach (var client in new[] { sale.Manager.Client, sale.Owner.Client })
         {
             var again = await (await client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.Conflict);
             Assert.Equal(("MSG-GEN-09", $"Harvest lot {code} is Published and cannot be used for this action."), (again.Text("code"), again.Text("detail")));

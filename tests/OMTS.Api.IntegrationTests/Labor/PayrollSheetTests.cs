@@ -195,7 +195,7 @@ public class PayrollSheetTests
 
         var problem = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal((HttpStatusCode.BadRequest, "MSG-LABOR-28"), (refused.StatusCode, problem.GetProperty("code").GetString()));
-        Assert.Contains("incomplete", problem.Detail());
+        Assert.Contains("thiếu giờ", problem.Detail());
         Assert.Equal("Provisional", (await s.Owner.SheetAsync(incomplete.GuidOf())).Str("status"));
 
         var thisMonth = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);

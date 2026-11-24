@@ -174,12 +174,12 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
 
         // The same lanes and cages: with every key the preview changes nothing; without the list every photo goes.
         var keepAll = await (await raft.Owner.Client.PreviewLotAsync(lot.Id(),
-            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, keepPhotoKeys = keys, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
+            new { laneNumbers = new[] { 1, 2, 3, 4, 5 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, keepPhotoKeys = keys, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(keepAll.Strings("changedFields"));
         Assert.Empty(keepAll.GetProperty("affectedLots").EnumerateArray());
 
         var preview = await (await raft.Owner.Client.PreviewLotAsync(lot.Id(),
-            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
+            new { laneNumbers = new[] { 1, 2, 3, 4, 5 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(["photos"], preview.Strings("changedFields"));
         Assert.Equal(keys.Order(), preview.GetProperty("before").Strings("photos").Order());
         Assert.Empty(preview.GetProperty("after").Strings("photos"));

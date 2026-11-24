@@ -45,11 +45,13 @@ public class LotTraceTests
         Assert.Equal((sale.ZoneId, "Open", "NotPublished", true), (invoices[0].GetProperty("zoneId").GetGuid(), trace.Text("status"), trace.Text("originState"),
             trace.GetProperty("canPublish").GetBoolean()));
 
-        // Step 1: the lot through any invoice that sells it, the cancelled one too (it keeps its lines), or by its code.
-        foreach (var invoice in new[] { first, cancelled, last })
+        // Step 1: the lot through any invoice that sells it, or by its code. A cancelled invoice no longer sells the lot, so searching by it finds nothing (it would open a lot with an empty forward trace).
+        foreach (var invoice in new[] { first, last })
         {
-            Assert.Equal([sale.LotId], await sale.Accountant.Client.FoundAsync(invoiceCode: invoice.Text("code")));
+            Assert.Equal([sale.LotId], await sale.Owner.Client.FoundAsync(invoiceCode: invoice.Text("code")));
         }
+
+        Assert.Empty(await sale.Owner.Client.FoundAsync(invoiceCode: cancelled.Text("code")));
 
         // The other lot of the day has the code with a suffix (-2): it starts with this code, and comes after the lot of exactly this code.
         Assert.Equal([sale.LotId, sale.OtherLotId], await sale.Accountant.Client.FoundAsync(lotCode: trace.Text("lotCode")));

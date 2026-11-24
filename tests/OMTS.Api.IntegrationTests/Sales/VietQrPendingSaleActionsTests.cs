@@ -126,7 +126,7 @@ public class VietQrPendingSaleActionsTests
         using var anonymous = api.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PollAsync(code)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await sale.Owner.Client.PollAsync("HD999999")).StatusCode);
-        Assert.Empty((await otherZone.Client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending"))!);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherZone.Client.GetAsync("/api/sales-invoices/pending")).StatusCode);
         Assert.Equal([code], (await sale.Owner.Client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending"))!.Select(p => p.Code()));
         Assert.Equal("Awaiting", (await sale.Owner.Client.PolledAsync(code)).Text("status"));
         Assert.Equal(PendingSaleStatus.Awaiting, (await api.PendingRowAsync(code)).Status);

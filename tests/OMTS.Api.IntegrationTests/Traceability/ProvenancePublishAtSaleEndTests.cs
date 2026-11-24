@@ -56,7 +56,7 @@ public class ProvenancePublishAtSaleEndTests
         Assert.Equal(HarvestLotOriginState.Published, (await api.LotRowAsync(sale.LotId)).OriginState);
         Assert.Equal(HarvestLotOriginState.NotPublished, (await api.LotRowAsync(sale.OtherLotId)).OriginState);
         var audit = Assert.Single(await api.PublishAuditAsync(sale.LotId));
-        Assert.Equal((ProvenancePublishTestKit.PublishedAction, code, (Guid?)sale.Manager.Account.Id), (audit.Action, audit.RecordCode, audit.ActorAccountId));
+        Assert.Equal((ProvenancePublishTestKit.PublishedAction, code, (Guid?)sale.Owner.Account.Id), (audit.Action, audit.RecordCode, audit.ActorAccountId));
         Assert.Contains($"\"SalesInvoiceCode\":\"{invoice.Text("code")}\"", audit.After);
         Assert.Empty(await api.PublishAuditAsync(sale.OtherLotId));
         var finishAudit = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.RecordId == invoice.Id() && e.Action == "SalesInvoice.SaleFinished"));

@@ -118,7 +118,8 @@ public class SalesInvoiceCancellationTests
 
         Assert.Equal(StatusIds.CustomerPayment.AwaitingConfirmation, Assert.Single(await api.PaymentsOfAsync(sold.Id())).StatusId);
         Assert.Equal(-300_000m, await owner.CustomerDebtAsync(sale.CustomerId));
-        Assert.Single(await api.OwedBackNoticesAsync(sold.Id()));
+        // The Accountant of the zone is told, and the Owner.
+        Assert.Equal(2, (await api.OwedBackNoticesAsync(sold.Id())).Count);
         Assert.Contains("We will pay back the 300,000 VND you paid", api.SmsTo(await api.PhoneOfAsync(sale.CustomerId))[0].Text);
     }
 

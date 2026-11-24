@@ -57,9 +57,10 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal((false, "LaneDamaged", true, "Growing"), (lane.Flag("canHarvest"), lane.Text("reasonCode"), lane.Flag("isDamaged"), lane.Text("state")));
         Assert.True(LaneOf(screen, 1).Flag("canHarvest"));
 
-        var refused = await (await owner.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1, 2))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Lanes", refused.Text("field"));
-        Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
+        // A lot harvests the lanes of the raft that can be harvested (owner decision of 18/11/2026), so the damaged lane stays out of it.
+        var lot = await owner.HarvestLotAsync(raft.RaftId);
+        Assert.Equal([1, 3, 4, 5], lot.Numbers("laneNumbers"));
+        Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
 
         var history = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/2/incidents");
         var entry = Assert.Single(history.GetProperty("incidents").EnumerateArray());
