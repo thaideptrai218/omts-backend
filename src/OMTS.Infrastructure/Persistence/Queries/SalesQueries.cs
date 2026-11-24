@@ -258,6 +258,19 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
             return [];
         }
 
+        if (!db.Database.IsRelational())
+        {
+            // A provider without SQL (the in-memory one of the tests): the allocator over the ledger, which is what the SQL command computes.
+            var ledger = await LedgerAsync(ids, cancellationToken);
+            return ids.SelectMany(id =>
+            {
+                var unpaid = CustomerDebtAllocator.Allocate(
+                    ledger.Invoices.Where(i => i.CustomerId == id), ledger.Payments.Where(p => p.CustomerId == id), DateOnly.MinValue, ledger.Adjustments.Where(a => a.CustomerId == id)).UnpaidInvoices
+                    .Select(u => new CustomerUnpaidInvoiceRow(id, u.Id, u.Code, u.InvoiceDate, u.Total, u.Unpaid));
+                return oldestOnly ? unpaid.Take(1) : unpaid;
+            }).ToList();
+        }
+
         var rows = await db.Database
             .SqlQueryRaw<UnpaidRow>(
                 oldestOnly ? CustomerUnpaidInvoicesSql.Oldest : CustomerUnpaidInvoicesSql.All,
