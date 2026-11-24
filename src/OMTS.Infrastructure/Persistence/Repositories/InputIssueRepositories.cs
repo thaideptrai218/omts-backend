@@ -256,14 +256,14 @@ internal sealed class InputMovementReader(OmtsDbContext db) : IInputMovementQuer
 
     /// <summary>
     /// Without reversals: leaves out the reversal rows, the rows they undo, and the cost adjustments those rows caused. A reversal and the row it undoes cancel each other, so leaving both
-    /// out keeps the running balance whole.
+    /// out keeps the running balance whole. The rows looked for are of the same item, so each look-up seeks the index of the item instead of reading the whole ledger.
     /// </summary>
     private IQueryable<InputStockMovement> Visible(IQueryable<InputStockMovement> rows, bool includeReversals) => includeReversals
         ? rows
         : rows.Where(m => m.Kind != InputStockMovementKind.Reversal
-            && !db.InputStockMovements.Any(r => r.ReversesMovementId == m.Id)
-            && !(m.CausedByMovementId != null && db.InputStockMovements.Any(c => c.Id == m.CausedByMovementId
-                && (c.Kind == InputStockMovementKind.Reversal || db.InputStockMovements.Any(r => r.ReversesMovementId == c.Id)))));
+            && !db.InputStockMovements.Any(r => r.ItemId == m.ItemId && r.ReversesMovementId == m.Id)
+            && !(m.CausedByMovementId != null && db.InputStockMovements.Any(c => c.Id == m.CausedByMovementId && c.ItemId == m.ItemId
+                && (c.Kind == InputStockMovementKind.Reversal || db.InputStockMovements.Any(r => r.ItemId == c.ItemId && r.ReversesMovementId == c.Id)))));
 
     public async Task<IReadOnlyList<InputSeedLotRow>> SeedLotsAsync(Guid itemId, CancellationToken cancellationToken)
     {
