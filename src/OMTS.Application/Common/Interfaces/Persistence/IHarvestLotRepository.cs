@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Publishing;
@@ -114,4 +115,17 @@ public interface IHarvestLotRepository
     void AddCage(HarvestLotCage cage);
 
     void RemoveCage(HarvestLotCage cage);
+
+    void AddTraderCage(HarvestLotTraderCage cage);
+
+    void RemoveTraderCage(HarvestLotTraderCage cage);
+
+    /// <summary>The orders (not cancelled) each lot's harvest plan serves and their trader accounts; every id asked has an entry, empty for a lot outside a plan.</summary>
+    Task<IReadOnlyDictionary<Guid, HarvestLotOrders>> OrdersOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The lots whose trader is this account (<see cref="HarvestLotOrders.Trader"/>): their plan serves an order of it that is not cancelled, and no such order of another trader account. Read only,
+    /// with the product lines and the cages of both sides, the latest harvest first.
+    /// </summary>
+    Task<IReadOnlyList<HarvestLot>> ListOfTraderAsync(Guid traderAccountId, CancellationToken cancellationToken);
 }

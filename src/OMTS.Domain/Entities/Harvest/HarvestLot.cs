@@ -55,6 +55,21 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>Who weighed the lot last.</summary>
     public Guid? WeighedByAccountId { get; set; }
 
+    /// <summary>
+    /// When the trader of the lot agreed to its weighing (owner decision of 24/11/2026); null until then. The agreement holds only for the weighing it was given to: <see cref="WeighingAgreedKg"/> and
+    /// <see cref="WeighingAgreedFor"/> must still be the lot's <see cref="WeighedKg"/> and <see cref="WeighedAt"/> (<see cref="IsWeighingAgreed"/>), so a weighing completed again needs a new agreement.
+    /// </summary>
+    public DateTimeOffset? WeighingAgreedAt { get; set; }
+
+    /// <summary>The trader account that agreed.</summary>
+    public Guid? WeighingAgreedByAccountId { get; set; }
+
+    /// <summary>The weighed kg the trader agreed to.</summary>
+    public decimal? WeighingAgreedKg { get; set; }
+
+    /// <summary>The <see cref="WeighedAt"/> of the weighing the trader agreed to.</summary>
+    public DateTimeOffset? WeighingAgreedFor { get; set; }
+
     /// <summary>Why the cycle harvested kg went above its target yield, when the Zone Manager confirmed it (over 110 % of the target); null otherwise.</summary>
     public string? OverPlanReason { get; set; }
 
@@ -105,8 +120,15 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The cages weighed at the port, one by one; the weighing of the lot is completed from them (owner decision of 24/11/2026).</summary>
     public ICollection<HarvestLotCage> Cages { get; set; } = [];
 
+    /// <summary>The cages as the trader of the lot weighed them beside the cooperative; compared with <see cref="Cages"/>, never counted.</summary>
+    public ICollection<HarvestLotTraderCage> TraderCages { get; set; } = [];
+
     /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
     public ICollection<HarvestRecordEmployee> Crew { get; set; } = [];
+
+    /// <summary>The trader agreed to the weighing the lot has now: the same kg and the same completion.</summary>
+    public bool IsWeighingAgreed =>
+        WeighingAgreedAt is not null && WeighedKg is { } kg && WeighingAgreedKg == kg && WeighingAgreedFor is { } agreedFor && WeighedAt is { } weighedAt && agreedFor == weighedAt;
 
     /// <summary>Open and Reopened lots can be chosen on a sales invoice (BR-HARVEST-04).</summary>
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;

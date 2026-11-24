@@ -1,4 +1,3 @@
-using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -21,6 +20,7 @@ namespace OMTS.Application.Features.Harvest;
 public sealed class HarvestLotCageService(
     IHarvestLotRepository lots,
     HarvestLotViews views,
+    LotWeighingSheetBuilder sheets,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     IUnitOfWork unitOfWork,
@@ -200,40 +200,6 @@ public sealed class HarvestLotCageService(
     private async Task<LotWeighingSheet> SheetOfAsync(HarvestLot lot, CancellationToken cancellationToken)
     {
         var access = await views.AccessAsync(cancellationToken);
-        var cages = lot.Cages.OrderBy(c => c.Number).ToList();
-        var products = lot.ProductLines.OrderBy(l => l.LineNumber).Select(line =>
-        {
-            var mine = cages.Where(c => c.ProductId == line.ProductId).ToList();
-            return new LotCageProductTotal(
-                line.LineNumber, line.ProductId, line.Product?.Code ?? string.Empty, line.Product?.Name ?? string.Empty, line.CageCount, mine.Count, mine.Sum(c => c.Kg), line.WeighedKg);
-        }).ToList();
-
-        return new LotWeighingSheet(
-            lot.Id, lot.LotCode, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), RowVersionGuard.Encode(lot.RowVersion), lot.CageCount, lot.EstimatedKg,
-            [.. cages.Select(c => new LotCageView(c.Id, c.Number, c.ProductId, c.Kg, c.WeighedAt))],
-            products, cages.Sum(c => c.Kg), lot.WeighedKg, lot.WeighedAt, NeedsCompleting(lot, cages), HarvestLotViews.MayWeigh(access, lot, lot.Raft.ZoneId));
-    }
-
-    /// <summary>The cages differ from the last completed weighing; a lot with no cage (weighed before cages, or not started) has nothing to complete.</summary>
-    private static bool NeedsCompleting(HarvestLot lot, IReadOnlyList<HarvestLotCage> cages)
-    {
-        if (cages.Count == 0)
-        {
-            return false;
-        }
-
-        if (lot.WeighedKg is null)
-        {
-            return true;
-        }
-
-        if (lot.ProductLines.Count == 0)
-        {
-            return cages.Sum(c => c.Kg) != lot.WeighedKg;
-        }
-
-        var products = lot.ProductLines.Select(l => l.ProductId).ToHashSet();
-        return cages.Any(c => c.ProductId is not { } id || !products.Contains(id))
-            || lot.ProductLines.Any(l => cages.Where(c => c.ProductId == l.ProductId).Sum(c => c.Kg) != l.WeighedKg);
+        return await sheets.BuildAsync(lot, HarvestLotViews.MayWeigh(access, lot, lot.Raft.ZoneId), traderView: false, cancellationToken);
     }
 }

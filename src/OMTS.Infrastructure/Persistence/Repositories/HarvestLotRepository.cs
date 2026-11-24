@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Purchasing;
@@ -223,6 +224,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         db.HarvestLotProductLines.RemoveRange(lot.ProductLines);
         db.HarvestRecordEmployees.RemoveRange(lot.Crew);
         db.HarvestLotCages.RemoveRange(lot.Cages);
+        db.HarvestLotTraderCages.RemoveRange(lot.TraderCages);
         db.HarvestLots.Remove(lot);
     }
 
@@ -242,6 +244,50 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void RemoveCage(HarvestLotCage cage) => db.HarvestLotCages.Remove(cage);
 
+    public void AddTraderCage(HarvestLotTraderCage cage) => db.HarvestLotTraderCages.Add(cage);
+
+    public void RemoveTraderCage(HarvestLotTraderCage cage) => db.HarvestLotTraderCages.Remove(cage);
+
+    public async Task<IReadOnlyDictionary<Guid, HarvestLotOrders>> OrdersOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var rows = await db.HarvestLots.AsNoTracking()
+            .Where(l => lotIds.Contains(l.Id) && l.HarvestPlanLineId != null)
+            .SelectMany(l => l.HarvestPlanLine!.Plan.Orders
+                .Where(o => o.Order.StatusId != StatusIds.SalesOrder.Cancelled)
+                .Select(o => new
+                {
+                    LotId = l.Id,
+                    o.Order.Code,
+                    AccountId = o.Order.Customer == null ? null : o.Order.Customer.AccountId,
+                    Name = o.Order.Customer == null ? null : o.Order.Customer.Name,
+                }))
+            .ToListAsync(cancellationToken);
+
+        return lotIds.Distinct().ToDictionary(id => id, id =>
+        {
+            var mine = rows.Where(r => r.LotId == id).ToList();
+            return mine.Count == 0
+                ? HarvestLotOrders.None(id)
+                : new HarvestLotOrders(
+                    id,
+                    [.. mine.Select(r => r.Code).Distinct().Order(StringComparer.Ordinal)],
+                    [.. mine.Where(r => r.AccountId is not null).GroupBy(r => r.AccountId!.Value).Select(g => new HarvestLotTrader(g.Key, g.First().Name ?? string.Empty))]);
+        });
+    }
+
+    public async Task<IReadOnlyList<HarvestLot>> ListOfTraderAsync(Guid traderAccountId, CancellationToken cancellationToken) =>
+        await db.HarvestLots.AsNoTracking()
+            .Where(l => l.HarvestPlanLineId != null
+                && l.HarvestPlanLine!.Plan.Orders.Any(o => o.Order.StatusId != StatusIds.SalesOrder.Cancelled && o.Order.Customer != null && o.Order.Customer.AccountId == traderAccountId)
+                && !l.HarvestPlanLine!.Plan.Orders.Any(o => o.Order.StatusId != StatusIds.SalesOrder.Cancelled && o.Order.Customer != null
+                    && o.Order.Customer.AccountId != null && o.Order.Customer.AccountId != traderAccountId))
+            .Include(l => l.ProductLines).ThenInclude(p => p.Product)
+            .Include(l => l.Cages)
+            .Include(l => l.TraderCages)
+            .OrderByDescending(l => l.HarvestedAt)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);
 
@@ -253,6 +299,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .Include(l => l.PurchaseRequest)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Include(l => l.Cages)
+            .Include(l => l.TraderCages)
             .Include(l => l.Raft).ThenInclude(r => r.Zone)
             .AsSplitQuery();
 }

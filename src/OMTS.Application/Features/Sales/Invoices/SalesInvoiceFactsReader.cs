@@ -49,6 +49,7 @@ public sealed class SalesInvoiceFactsReader(
     IHarvestLotRepository lots,
     IFarmingZoneRepository zones,
     HarvestLotStatusService lotStatuses,
+    HarvestLotAgreementGuard agreements,
     ZoneAccessGuard zoneAccess,
     CustomerDebtReader debts,
     CustomerDebtStandings standings,
@@ -121,6 +122,12 @@ public sealed class SalesInvoiceFactsReader(
         if (lotStatuses.EnsureForSale(lineLots.Value!) is { } closed)
         {
             return closed;
+        }
+
+        // A lot that has a trader is invoiced only with the trader's agreement to its weighing (owner decision of 24/11/2026).
+        if (await agreements.EnsureAgreedAsync(lineLots.Value!, cancellationToken) is { } notAgreed)
+        {
+            return notAgreed;
         }
 
         var byOwner = await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
