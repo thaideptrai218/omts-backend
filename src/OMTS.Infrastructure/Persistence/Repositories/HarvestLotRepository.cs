@@ -60,6 +60,25 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .OrderByDescending(l => l.Lot.HarvestedAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<HarvestLotLane>> ListOfLanesAsync(Guid cycleId, IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken)
+    {
+        var ids = laneIds.Distinct().ToList();
+        return ids.Count == 0
+            ? []
+            : await db.HarvestLotLanes.AsNoTracking().Include(l => l.Lot)
+                .Where(l => ids.Contains(l.LaneId) && l.Lot.CycleId == cycleId)
+                .OrderByDescending(l => l.Lot.HarvestedAt)
+                .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, HarvestLot>> ListWithLanesForEditAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var ids = lotIds.Distinct().ToList();
+        return ids.Count == 0
+            ? new Dictionary<Guid, HarvestLot>()
+            : await db.HarvestLots.Include(l => l.Lanes).Where(l => ids.Contains(l.Id)).ToDictionaryAsync(l => l.Id, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<OMTS.Application.Features.Workforce.CrewDay>> ListCrewDaysAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
         lotIds.Count == 0
             ? []
@@ -143,7 +162,7 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
         return rows;
     }
 
-    public async Task<IReadOnlyList<HarvestLot>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HarvestYieldLotRow>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken)
     {
         var inZones = db.HarvestLots.AsNoTracking();
         if (zoneIds is not null)
@@ -155,7 +174,11 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
         var inPeriod = inZones.Where(l => l.HarvestDate >= from && l.HarvestDate <= to);
         // A cycle belongs to one raft, so all of its lots are in the zones of the lot found in the period.
         var chosen = wholeCycles ? inZones.Where(l => inPeriod.Select(p => p.CycleId).Contains(l.CycleId)) : inPeriod;
-        return await chosen.Include(l => l.Raft).ThenInclude(r => r.Zone).Include(l => l.Cycle).ToListAsync(cancellationToken);
+        return await chosen
+            .Select(l => new HarvestYieldLotRow(
+                l.Id, l.LotCode, l.HarvestedAt, l.HarvestDate, l.RaftId, l.Raft.Code, l.Raft.ZoneId, l.Raft.Zone.Code, l.Raft.Zone.Name, l.StatusId, l.EstimatedKg, l.CageCount, l.WeighedKg, l.LeftoverKg,
+                new HarvestYieldCycleRow(l.CycleId, l.Cycle.StartDate, l.Cycle.CloseDate, l.Cycle.StatusId, l.Cycle.TargetYieldKg)))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, decimal>> KgByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)

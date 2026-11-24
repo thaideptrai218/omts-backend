@@ -17,7 +17,11 @@ public sealed record LotSalesFigures(decimal InvoicedKg, decimal ReturnedKg, dec
 /// </summary>
 public sealed record HarvestLotFigures(decimal InvoicedKg, decimal ReturnedKg, decimal SoldKg, decimal RemainingKg, decimal LostKg, decimal DifferenceKg, bool NotFinal)
 {
-    public static HarvestLotFigures Of(HarvestLot lot, LotSalesFigures sales) => Of(lot.EstimatedKg, lot.WeighedKg, lot.LeftoverKg, lot.StatusId != StatusIds.HarvestLot.Closed, sales);
+    public static HarvestLotFigures Of(HarvestLot lot, LotSalesFigures sales) => Of(lot.StatusId, lot.EstimatedKg, lot.WeighedKg, lot.LeftoverKg, sales);
+
+    /// <summary>The figures of a lot read as a few columns: not final until the lot is Closed.</summary>
+    public static HarvestLotFigures Of(int statusId, decimal estimatedKg, decimal? weighedKg, decimal? leftoverKg, LotSalesFigures sales) =>
+        Of(estimatedKg, weighedKg, leftoverKg, statusId != StatusIds.HarvestLot.Closed, sales);
 
     /// <summary>
     /// The figures a screen shows for a lot. A lot still waiting for its port weighing has nothing to sell and nothing left: its estimate (cages times kg per cage) is never shown as a remaining or a difference,
