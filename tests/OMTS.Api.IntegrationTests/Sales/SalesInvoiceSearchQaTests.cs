@@ -43,13 +43,13 @@ public class SalesInvoiceSearchQaTests
         Assert.Equal(a.ZoneId, mixed.GetProperty("zone").Id());
         var accountantB = (await api.StaffAsync(await api.ZoneEntityAsync(b.ZoneId), StaffRole.Accountant)).Client;
 
-        var seenInA = await a.Manager.Client.InvoiceListAsync(Query(("harvestLotId", b.LotId)));
+        var seenInA = await a.Accountant.Client.InvoiceListAsync(Query(("harvestLotId", b.LotId)));
         Assert.Equal<string?>([mixed.Text("code")], seenInA.Codes());
         Assert.Equal(60_000m, seenInA.Money("completedTotal"));
-        var lineZones = (await a.Manager.Client.InvoiceAsync(mixed.Id())).GetProperty("lines").EnumerateArray().Count();
+        var lineZones = (await a.Accountant.Client.InvoiceAsync(mixed.Id())).GetProperty("lines").EnumerateArray().Count();
         Assert.Equal(2, lineZones);
 
-        foreach (var client in new[] { b.Manager.Client, accountantB })
+        foreach (var client in new[] { b.Accountant.Client, accountantB })
         {
             var ofB = await client.InvoiceListAsync();
             Assert.Equal((0, 0m, "MSG-GEN-10"), (ofB.Rows().Count, ofB.Money("completedTotal"), ofB.Text("messageCode")));
@@ -58,8 +58,8 @@ public class SalesInvoiceSearchQaTests
             Assert.Equal(HttpStatusCode.Forbidden, (await client.GetInvoiceAsync(mixed.Id())).StatusCode);
         }
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await b.Manager.Client.PrintInvoiceAsync(mixed.Id())).StatusCode);
-        Assert.Equal(2, await SheetRowsAsync(await b.Manager.Client.ExportInvoicesAsync()));
+        Assert.Equal(HttpStatusCode.Forbidden, (await b.Accountant.Client.PrintInvoiceAsync(mixed.Id())).StatusCode);
+        Assert.Equal(2, await SheetRowsAsync(await b.Accountant.Client.ExportInvoicesAsync()));
     }
 
     // BR-FARM-08: pairs in two zones open both, a zone filter narrows, and a pair of a third zone adds nothing.
@@ -70,11 +70,11 @@ public class SalesInvoiceSearchQaTests
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
         var c = await api.SaleSetupAsync();
-        var inA = await a.Manager.Client.SoldAsync(a, a.LotId, 1m);
-        var inB = await b.Manager.Client.SoldAsync(b, b.LotId, 2m);
-        await c.Manager.Client.SoldAsync(c, c.LotId, 4m);
-        var (account, _) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId));
-        await api.GrantAsync(account, StaffRole.ZoneManager, await api.ZoneEntityAsync(b.ZoneId));
+        var inA = await a.Owner.Client.SoldAsync(a, a.LotId, 1m);
+        var inB = await b.Owner.Client.SoldAsync(b, b.LotId, 2m);
+        await c.Owner.Client.SoldAsync(c, c.LotId, 4m);
+        var (account, _) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId), StaffRole.Accountant);
+        await api.GrantAsync(account, StaffRole.Accountant, await api.ZoneEntityAsync(b.ZoneId));
         var client = await api.LoginAsync(account.Username);
 
         var list = await client.InvoiceListAsync();
@@ -93,10 +93,10 @@ public class SalesInvoiceSearchQaTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var inA = await a.Manager.Client.SoldAsync(a, a.LotId);
-        var inB = await b.Manager.Client.SoldAsync(b, b.LotId);
-        var (account, pairA) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId));
-        await api.GrantAsync(account, StaffRole.ZoneManager, await api.ZoneEntityAsync(b.ZoneId));
+        var inA = await a.Owner.Client.SoldAsync(a, a.LotId);
+        var inB = await b.Owner.Client.SoldAsync(b, b.LotId);
+        var (account, pairA) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId), StaffRole.Accountant);
+        await api.GrantAsync(account, StaffRole.Accountant, await api.ZoneEntityAsync(b.ZoneId));
         var client = await api.LoginAsync(account.Username);
         Assert.Equal(2, (await client.InvoiceListAsync()).Rows().Count);
 
@@ -120,24 +120,24 @@ public class SalesInvoiceSearchQaTests
         var sale = await api.SaleSetupAsync();
         var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<FarmingZone>(sale.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
-        var manager = await api.LoginAsync(sale.Manager.Account.Username);
+        var manager = await api.LoginAsync(sale.Accountant.Account.Username);
 
         Assert.Equal<string?>([invoice.Text("code")], (await manager.InvoiceListAsync()).Codes());
         Assert.Equal(HttpStatusCode.OK, (await manager.GetInvoiceAsync(invoice.Id())).StatusCode);
     }
 
-    // Mixed pairs: the Zone Manager pair and the Accountant pair both view and export (the Accountant exports since the PM answer of 12/11/2026), so the file holds the same invoices as the screen.
+    // Pairs of two zones: the Accountant views and exports (the PM answer of 12/11/2026), so the file holds the same invoices as the screen. A Zone Manager pair adds nothing since 20/11/2026.
     [Fact]
-    public async Task With_a_zone_manager_pair_and_an_accountant_pair_the_list_and_the_file_show_both_zones_and_a_third_zone_is_refused()
+    public async Task With_accountant_pairs_in_two_zones_the_list_and_the_file_show_both_zones_and_a_third_zone_is_refused()
     {
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
         var c = await api.SaleSetupAsync();
-        await a.Manager.Client.SoldAsync(a, a.LotId, 1m);
-        await b.Manager.Client.SoldAsync(b, b.LotId, 2m);
-        await c.Manager.Client.SoldAsync(c, c.LotId, 4m);
-        var (account, _) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId));
+        await a.Owner.Client.SoldAsync(a, a.LotId, 1m);
+        await b.Owner.Client.SoldAsync(b, b.LotId, 2m);
+        await c.Owner.Client.SoldAsync(c, c.LotId, 4m);
+        var (account, _) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId), StaffRole.Accountant);
         await api.GrantAsync(account, StaffRole.Accountant, await api.ZoneEntityAsync(b.ZoneId));
         var client = await api.LoginAsync(account.Username);
 
@@ -178,7 +178,7 @@ public class SalesInvoiceSearchQaTests
         var sale = await api.SaleSetupAsync();
         await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
-        var list = await sale.Manager.Client.InvoiceListAsync("?from=&to=&zoneId=&customerId=&harvestLotId=&raftId=&statusId=&paid=&code=");
+        var list = await sale.Accountant.Client.InvoiceListAsync("?from=&to=&zoneId=&customerId=&harvestLotId=&raftId=&statusId=&paid=&code=");
 
         Assert.Single(list.Rows());
     }
@@ -224,11 +224,11 @@ public class SalesInvoiceSearchQaTests
         var b = await api.SaleSetupAsync();
         var owner = a.Owner.Client;
         var other = (await owner.CreateCustomerAsync()).Id();
-        var wanted = (await a.Manager.Client.SellAsync(a.PayLater(a.OtherLotId, 1m))).GetProperty("invoice");
-        await a.Manager.Client.SellAsync(a.PayLater(a.LotId, 1m));
-        await a.Manager.Client.SoldAsync(a, a.OtherLotId, 1m);
-        await a.Manager.Client.SellAsync(a.PayLater(a.OtherLotId, 1m, customerId: other));
-        await b.Manager.Client.SellAsync(b.PayLater(b.LotId, 1m, customerId: a.CustomerId));
+        var wanted = (await a.Owner.Client.SellAsync(a.PayLater(a.OtherLotId, 1m))).GetProperty("invoice");
+        await a.Owner.Client.SellAsync(a.PayLater(a.LotId, 1m));
+        await a.Owner.Client.SoldAsync(a, a.OtherLotId, 1m);
+        await a.Owner.Client.SellAsync(a.PayLater(a.OtherLotId, 1m, customerId: other));
+        await b.Owner.Client.SellAsync(b.PayLater(b.LotId, 1m, customerId: a.CustomerId));
 
         var list = await owner.InvoiceListAsync(Query(
             ("from", Today), ("to", Today), ("zoneId", a.ZoneId), ("customerId", a.CustomerId), ("harvestLotId", a.OtherLotId), ("raftId", a.RaftId),
@@ -303,14 +303,14 @@ public class SalesInvoiceSearchQaTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var first = (await a.Manager.Client.SellAsync(a.PayLater(a.LotId, 1m))).GetProperty("invoice");
-        await a.Manager.Client.SellAsync(a.PayLater(a.LotId, 2m));
-        await a.Manager.Client.SoldAsync(a, a.LotId, 4m, customerId: (await a.Owner.Client.CreateCustomerAsync()).Id());
-        var cancelled = await a.Manager.Client.SoldAsync(a, a.LotId, 8m, walkIn: true);
+        var first = (await a.Owner.Client.SellAsync(a.PayLater(a.LotId, 1m))).GetProperty("invoice");
+        await a.Owner.Client.SellAsync(a.PayLater(a.LotId, 2m));
+        await a.Owner.Client.SoldAsync(a, a.LotId, 4m, customerId: (await a.Owner.Client.CreateCustomerAsync()).Id());
+        var cancelled = await a.Owner.Client.SoldAsync(a, a.LotId, 8m, walkIn: true);
         await api.UpdateAsync<SalesInvoice>(cancelled.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
-        await b.Manager.Client.SoldAsync(b, b.LotId, 16m);
+        await b.Owner.Client.SoldAsync(b, b.LotId, 16m);
         Assert.NotNull(first.Text("code"));
-        var manager = a.Manager.Client;
+        var manager = a.Accountant.Client;
 
         Assert.Equal((4, 210_000m), Figures(await manager.InvoiceListAsync("?pageSize=1")));
         Assert.Equal((2, 90_000m), Figures(await manager.InvoiceListAsync("?paid=false&pageSize=1")));
@@ -329,7 +329,7 @@ public class SalesInvoiceSearchQaTests
         var sale = await api.SaleSetupAsync();
         await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
-        var row = (await sale.Manager.Client.InvoiceListAsync()).Rows()[0];
+        var row = (await sale.Accountant.Client.InvoiceListAsync()).Rows()[0];
 
         var names = row.EnumerateObject().Select(p => p.Name).ToHashSet();
         foreach (var expected in new[] { "code", "invoicedAt", "zone", "customer", "total", "status", "paymentTerm", "isPaid", "deliveryStatus" })

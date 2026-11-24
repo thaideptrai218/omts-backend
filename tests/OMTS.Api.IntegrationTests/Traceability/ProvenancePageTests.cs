@@ -111,7 +111,7 @@ public class ProvenancePageTests
         var owner = raft.Owner.Client;
         var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         var sale = new SaleSetup(raft.Owner, raft.Owner, raft.ZoneId, raft.RaftId, lot.Id(), lot.Id(),
-            (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id(), (await Catalogue.CreateCustomerAsync(owner)).Id());
+            (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id(), (await Catalogue.CreateCustomerAsync(owner)).Id(), raft.Owner);
         var (_, token) = await sale.SoldWithQrCodeAsync((lot.Id(), 10m));
         var item = await api.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == raft.Lot.ItemId).Select(i => i.Name).SingleAsync());
 

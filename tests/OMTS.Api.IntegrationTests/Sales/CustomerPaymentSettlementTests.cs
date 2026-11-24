@@ -215,10 +215,10 @@ public class CustomerPaymentSettlementTests
         var code = (await sale.Owner.Client.AwaitTransferAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(), sale.LotId))).Code();
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 100_000m)).Outcome());
         var held = await api.PaymentOfCodeAsync(code);
-        Assert.Equal(100_000m, (await sale.Manager.Client.PolledAsync(code)).Money("receivedAmount"));
+        Assert.Equal(100_000m, (await sale.Owner.Client.PolledAsync(code)).Money("receivedAmount"));
 
         await (await accountant.SettleAsync(ToCustomer(held.Id, sale.CustomerId))).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(0m, (await sale.Manager.Client.PolledAsync(code)).Money("receivedAmount"));
+        Assert.Equal(0m, (await sale.Owner.Client.PolledAsync(code)).Money("receivedAmount"));
     }
 }

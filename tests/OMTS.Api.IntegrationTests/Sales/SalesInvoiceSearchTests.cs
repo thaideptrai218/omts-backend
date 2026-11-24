@@ -26,7 +26,7 @@ public class SalesInvoiceSearchTests
         await api.BackDateAsync(old.Id(), 3);
         var other = await b.Owner.Client.SoldAsync(b, b.LotId, 5m);
 
-        var mine = await a.Manager.Client.InvoiceListAsync();
+        var mine = await a.Accountant.Client.InvoiceListAsync();
         Assert.Equal<string?>([later.Text("code"), cash.Text("code")], mine.Codes());
         Assert.Equal((2, 900_000m), (mine.GetProperty("page").GetProperty("total").GetInt32(), mine.Money("completedTotal")));
         Assert.Equal((Today, Today), (DateOnly.Parse(mine.Text("from")!), DateOnly.Parse(mine.Text("to")!)));
@@ -47,7 +47,7 @@ public class SalesInvoiceSearchTests
 
     // BR-SALE-08: the zone of the invoice decides who sees it.
     [Fact]
-    public async Task A_zone_manager_sees_only_the_invoices_of_their_zone_and_every_other_role_of_their_pairs()
+    public async Task An_accountant_sees_only_the_invoices_of_the_zones_of_their_pairs_and_a_zone_manager_none()
     {
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
@@ -59,14 +59,15 @@ public class SalesInvoiceSearchTests
         var accountantAll = (await api.StaffAsync(null, StaffRole.Accountant)).Client;
         var managerAll = (await api.StaffAsync(null, StaffRole.ZoneManager)).Client;
 
-        Assert.Equal<string?>([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync()).Codes());
+        Assert.Equal<string?>([inA.Text("code")], (await a.Accountant.Client.InvoiceListAsync()).Codes());
         Assert.Equal<string?>([inA.Text("code")], (await accountantA.InvoiceListAsync()).Codes());
         Assert.Equal(2, (await accountantAll.InvoiceListAsync()).Rows().Count);
-        Assert.Equal(2, (await managerAll.InvoiceListAsync()).Rows().Count);
+        // The Zone Manager has no sales (decision of 20/11/2026), even at all zones.
+        Assert.Equal(HttpStatusCode.Forbidden, (await managerAll.GetInvoicesAsync()).StatusCode);
 
         foreach (var response in new[]
                  {
-                     await a.Manager.Client.GetInvoicesAsync($"?zoneId={b.ZoneId}"), await a.Manager.Client.GetInvoiceAsync(inB.Id()),
+                     await a.Accountant.Client.GetInvoicesAsync($"?zoneId={b.ZoneId}"), await a.Accountant.Client.GetInvoiceAsync(inB.Id()),
                      await accountantA.GetInvoicesAsync($"?zoneId={b.ZoneId}"), await accountantA.GetInvoiceAsync(inB.Id()),
                  })
         {
@@ -74,7 +75,7 @@ public class SalesInvoiceSearchTests
             Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
-        Assert.Equal<string?>([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync($"?zoneId={a.ZoneId}")).Codes());
+        Assert.Equal<string?>([inA.Text("code")], (await a.Accountant.Client.InvoiceListAsync($"?zoneId={a.ZoneId}")).Codes());
         Assert.Equal(HttpStatusCode.OK, (await accountantA.GetInvoiceAsync(inA.Id())).StatusCode);
     }
 
@@ -100,7 +101,7 @@ public class SalesInvoiceSearchTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var manager = a.Manager.Client;
+        var manager = a.Accountant.Client;
         var other = await a.Owner.Client.CreateCustomerAsync();
         var first = await a.Owner.Client.SoldAsync(a, a.LotId);
         var second = await a.Owner.Client.SoldAsync(a, a.OtherLotId, customerId: other.Id());
@@ -130,7 +131,7 @@ public class SalesInvoiceSearchTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         var older = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 2);
         var newer = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m))).GetProperty("invoice");
@@ -154,7 +155,7 @@ public class SalesInvoiceSearchTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         await sale.Owner.Client.SoldAsync(sale, sale.LotId, 1m);
         await sale.Owner.Client.SoldAsync(sale, sale.LotId, 2m);
         var third = await sale.Owner.Client.SoldAsync(sale, sale.LotId, 3m);
@@ -178,8 +179,9 @@ public class SalesInvoiceSearchTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
-        var other = (await api.ManagerAsync(sale.ZoneId)).Client;
+        // Only Owners sell (decision of 20/11/2026): "mine" is the cash this Owner collected, "other" the cash of another Owner.
+        var manager = sale.Owner.Client;
+        var other = (await api.OwnerAsync()).Client;
         var mine = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var confirmed = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var byOther = await other.SoldAsync(sale, sale.LotId);
@@ -192,7 +194,7 @@ public class SalesInvoiceSearchTests
         Assert.Equal<string?>([mine.Text("code")], list.Codes());
         Assert.Equal(300_000m, list.Rows()[0].Money("cashAwaitingConfirmation"));
         Assert.Equal<string?>([byOther.Text("code")], (await other.InvoiceListAsync("?cashCollectedByMe=true")).Codes());
-        Assert.Empty((await sale.Owner.Client.InvoiceListAsync("?cashCollectedByMe=true")).Rows());
+        Assert.Empty((await sale.Accountant.Client.InvoiceListAsync("?cashCollectedByMe=true")).Rows());
         Assert.Contains(payLater.Text("code"), (await manager.InvoiceListAsync()).Codes());
     }
 
@@ -202,7 +204,7 @@ public class SalesInvoiceSearchTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await sale.Owner.Client.SoldAsync(sale, sale.LotId);
-        var client = sale.Manager.Client;
+        var client = sale.Accountant.Client;
 
         var wrong = await client.GetInvoicesAsync(Query(("from", Today), ("to", Today.AddDays(-1))));
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
@@ -220,7 +222,7 @@ public class SalesInvoiceSearchTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
-        var client = sale.Manager.Client;
+        var client = sale.Accountant.Client;
 
         foreach (var text in new[] { "HD%", "HD_", "[H]D" })
         {

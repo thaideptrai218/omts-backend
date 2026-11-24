@@ -126,7 +126,7 @@ public class CustomerPaymentQaTests
         var sale = await api.SaleSetupAsync();
         await sale.PayLaterAsync(sale.CustomerId, 10m);
         var accountant = await api.AllZonesAccountantAsync();
-        var cash = (await accountant.Client.PaidAsync(MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Manager.Account.Id).With("note", "Handed over at the office"))).Payment();
+        var cash = (await accountant.Client.PaidAsync(MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Owner.Account.Id).With("note", "Handed over at the office"))).Payment();
         (await accountant.Client.CancelAsync(cash.Id(), "Counted twice")).EnsureSuccessStatusCode();
 
         var entry = (await accountant.Client.StatementAsync(sale.CustomerId)).GetProperty("entries").EnumerateArray().Single(e => e.Id() == cash.Id());
@@ -134,7 +134,7 @@ public class CustomerPaymentQaTests
         Assert.True(entry.TryGetProperty("cancelReason", out var reason), $"statement entry without the cancel reason: {entry}");
         Assert.Equal("Counted twice", reason.GetString());
         Assert.True(entry.TryGetProperty("note", out var note) && note.GetString() == "Handed over at the office", $"statement entry without the note: {entry}");
-        Assert.True(entry.TryGetProperty("collectedBy", out var collector) && collector.ValueKind == JsonValueKind.Object && collector.Id() == sale.Manager.Account.Id,
+        Assert.True(entry.TryGetProperty("collectedBy", out var collector) && collector.ValueKind == JsonValueKind.Object && collector.Id() == sale.Owner.Account.Id,
             $"statement entry without the Zone Manager who collected the cash: {entry}");
         Assert.True(entry.TryGetProperty("recordedBy", out var recorder) && recorder.ValueKind == JsonValueKind.Object && recorder.Id() == accountant.Account.Id,
             $"statement entry without who recorded it: {entry}");

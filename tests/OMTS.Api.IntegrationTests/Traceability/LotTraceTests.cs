@@ -30,7 +30,8 @@ public class LotTraceTests
         await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, kg: 5m);
         await api.CancelInvoiceAsync(cancelled.Id());
 
-        var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
+        // The Owner reads the traders and prices; the Zone Manager reads the invoices without them (decision of 20/11/2026).
+        var trace = await sale.Owner.Client.TraceAsync(sale.LotId);
 
         Assert.Equal([first.Text("code"), walkIn.Text("code"), last.Text("code")], trace.InvoiceCodes());
         var invoices = trace.GetProperty("invoices").EnumerateArray().ToList();
@@ -47,11 +48,11 @@ public class LotTraceTests
         // Step 1: the lot through any invoice that sells it, the cancelled one too (it keeps its lines), or by its code.
         foreach (var invoice in new[] { first, cancelled, last })
         {
-            Assert.Equal([sale.LotId], await sale.Manager.Client.FoundAsync(invoiceCode: invoice.Text("code")));
+            Assert.Equal([sale.LotId], await sale.Accountant.Client.FoundAsync(invoiceCode: invoice.Text("code")));
         }
 
         // The other lot of the day has the code with a suffix (-2): it starts with this code, and comes after the lot of exactly this code.
-        Assert.Equal([sale.LotId, sale.OtherLotId], await sale.Manager.Client.FoundAsync(lotCode: trace.Text("lotCode")));
+        Assert.Equal([sale.LotId, sale.OtherLotId], await sale.Accountant.Client.FoundAsync(lotCode: trace.Text("lotCode")));
     }
 
     // BR-TRACE-03 with TRACE-02.1: lane 2 hung again shows both seed lots with their receipts and suppliers; lane 3 lost its session, so the trace names it (MSG-TRACE-02) and

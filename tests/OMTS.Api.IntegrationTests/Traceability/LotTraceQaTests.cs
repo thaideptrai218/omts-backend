@@ -60,8 +60,9 @@ public class LotTraceQaTests
         var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
 
         var listed = Assert.Single(trace.GetProperty("invoices").EnumerateArray());
-        Assert.Equal((invoice.Text("code"), zoneB, sale.CustomerId, 10m), (listed.Text("invoiceCode"), listed.GetProperty("zoneId").GetGuid(),
-            listed.GetProperty("customerId").GetGuid(), listed.GetProperty("kg").GetDecimal()));
+        // The Zone Manager reads the invoice (code, zone, kg) but not its trader or its prices (decision of 20/11/2026).
+        Assert.Equal((invoice.Text("code"), zoneB, 10m), (listed.Text("invoiceCode"), listed.GetProperty("zoneId").GetGuid(), listed.GetProperty("kg").GetDecimal()));
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("customerId").ValueKind);
         var line = Assert.Single(listed.GetProperty("lines").EnumerateArray());
         Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (line.GetProperty("unitPrice").ValueKind, line.GetProperty("amount").ValueKind));
         var forward = (await (await sale.Manager.Client.GetTraceExportAsync(sale.LotId)).SheetsAsync())["Forward"];
@@ -90,7 +91,7 @@ public class LotTraceQaTests
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => l.LotCode = "KV/01 B:01*\"x");
         await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 2.5m);
 
-        var export = await sale.Manager.Client.GetTraceExportAsync(sale.LotId);
+        var export = await sale.Owner.Client.GetTraceExportAsync(sale.LotId);
 
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
         var name = export.Content.Headers.ContentDisposition?.FileNameStar ?? export.Content.Headers.ContentDisposition?.FileName?.Trim('"');

@@ -58,8 +58,8 @@ public class PurchaseRequestQaAccessTests(AuthApiFactory factory) : IClassFixtur
     // "200" a reader of SALE-03 (Owner Full, Zone Manager R); "403" the §I.4.4 No; "401" no token.
     [Theory]
     [InlineData(Caller.Owner, 200, 200, 403)]
-    [InlineData(Caller.ManagerOfOneZone, 200, 403, 403)]
-    [InlineData(Caller.ManagerOfAllZones, 200, 403, 403)]
+    [InlineData(Caller.ManagerOfOneZone, 403, 403, 403)]
+    [InlineData(Caller.ManagerOfAllZones, 403, 403, 403)]
     [InlineData(Caller.AccountantOfOneZone, 403, 403, 403)]
     [InlineData(Caller.AccountantOfAllZones, 403, 403, 403)]
     [InlineData(Caller.StaffWhosePairWasRevoked, 403, 403, 403)]
@@ -100,9 +100,9 @@ public class PurchaseRequestQaAccessTests(AuthApiFactory factory) : IClassFixtur
         }
     }
 
-    // Mixed pairs: the Zone Manager pair opens the read, the Accountant pair adds nothing, and nobody but the Owner answers.
+    // Mixed pairs: purchase requests are the Owner's alone (decision of 20/11/2026), so neither the Zone Manager pair nor the Accountant pair opens the read or the answer.
     [Fact]
-    public async Task A_manager_of_one_zone_who_is_accountant_of_another_reads_and_still_cannot_answer()
+    public async Task A_manager_of_one_zone_who_is_accountant_of_another_reads_and_answers_nothing()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var trader = await factory.TraderAsync();
@@ -112,7 +112,7 @@ public class PurchaseRequestQaAccessTests(AuthApiFactory factory) : IClassFixtur
         await factory.GrantAsync(staff, StaffRole.Accountant, null);
         var client = await factory.LoginAsync(staff.Username);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/purchase-requests/{request.Id()}")).StatusCode);
+        await (await client.GetAsync($"/api/purchase-requests/{request.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await client.AcceptAsync(request)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await client.DeclineAsync(request)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }

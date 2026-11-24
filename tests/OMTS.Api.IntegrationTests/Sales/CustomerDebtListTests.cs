@@ -48,7 +48,7 @@ public class CustomerDebtListTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var owner = sale.Owner.Client;
         var oldInvoice = (await client.SellAsync(PayLater(sale, sale.LotId, 10m, cash: 100_000m))).GetProperty("invoice");
         await api.BackDateAsync(oldInvoice.Id(), 12);

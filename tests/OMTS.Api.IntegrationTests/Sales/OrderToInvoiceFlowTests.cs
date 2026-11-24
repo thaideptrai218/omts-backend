@@ -28,7 +28,7 @@ public class OrderToInvoiceFlowTests
         Assert.Empty(empty.GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal("MSG-GEN-11", empty.Text("messageCode"));
 
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.GetAsync("/api/me/invoices")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.GetAsync("/api/me/invoices")).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync("/api/me/invoices")).StatusCode);
     }

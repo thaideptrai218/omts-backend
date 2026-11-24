@@ -22,7 +22,7 @@ public class SalesInvoiceRulesTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var (orderId, _) = await client.OrderOfAsync(sale.CustomerId, (sale.ProductId, 5m));
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => (l.StatusId, l.CloseDate, l.LeftoverKg) = (StatusIds.HarvestLot.Closed, FarmingTestKit.Today, 0m));
         var code = (await sale.Owner.Client.GetHarvestLotAsync(sale.LotId)).Text("lotCode");

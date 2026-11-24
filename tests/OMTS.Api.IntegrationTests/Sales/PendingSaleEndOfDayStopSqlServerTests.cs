@@ -45,7 +45,7 @@ public class PendingSaleEndOfDayStopSqlServerTests
     }
 
     private static async Task<string> AwaitingAsync(Setup setup, int lane) =>
-        (await setup.Manager.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, (await setup.Host.Owner.Client.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(lane))).Id(), 10m)], VietQr())))
+        (await setup.Host.Owner.Client.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, (await setup.Host.Owner.Client.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(lane))).Id(), 10m)], VietQr())))
         .Code();
 
     private static async Task<HttpResponseMessage> TransferAsync(Setup setup, string code, decimal amount, string reference)

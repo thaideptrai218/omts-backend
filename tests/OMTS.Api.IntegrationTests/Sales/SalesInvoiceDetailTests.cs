@@ -21,7 +21,7 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var sold = (await client.SellAsync(sale.PayLater(sale.LotId, 10m, cash: 100_000m))).GetProperty("invoice");
         await client.FinishedAsync(sold.Id(), wantsQrCode: false);
         await api.UseDbAsync(db => db.Set<SalesInvoicePriceCut>().Add(new SalesInvoicePriceCut
@@ -49,7 +49,7 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var walkIn = await client.SoldAsync(sale, sale.LotId, walkIn: true);
         var cancelled = await client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<SalesInvoice>(cancelled.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
@@ -74,9 +74,9 @@ public class SalesInvoiceDetailTests
         var managerAll = await api.StaffAsync(null, StaffRole.ZoneManager);
 
         Assert.Equal(["Resend", "CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(invoice.Id())).Actions());
-        Assert.Equal(["Resend", "CreateReturn", "Print"], (await sale.Manager.Client.InvoiceAsync(invoice.Id())).Actions());
-        Assert.Equal(["Resend", "CreateReturn", "Print"], (await managerAll.Client.InvoiceAsync(invoice.Id())).Actions());
-        // The Accountant views and prints (PM answer 12/11/2026) but resends, returns, corrects and cancels nothing.
+        // The Accountant views and prints (PM answer 12/11/2026) but resends, returns, corrects and cancels nothing; the Zone Manager has no sales at all (decision of 20/11/2026).
+        Assert.Equal(["Print"], (await sale.Accountant.Client.InvoiceAsync(invoice.Id())).Actions());
+        Assert.Equal(HttpStatusCode.Forbidden, (await managerAll.Client.GetInvoiceAsync(invoice.Id())).StatusCode);
         Assert.Equal(["Print"], (await accountant.Client.InvoiceAsync(invoice.Id())).Actions());
     }
 
@@ -87,17 +87,17 @@ public class SalesInvoiceDetailTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var inA = await a.Manager.Client.SoldAsync(a, a.LotId);
-        var inB = await b.Manager.Client.SoldAsync(b, b.LotId);
-        await a.Manager.Client.FinishedAsync(inA.Id(), wantsQrCode: false);
-        await b.Manager.Client.FinishedAsync(inB.Id(), wantsQrCode: false);
+        var inA = await a.Owner.Client.SoldAsync(a, a.LotId);
+        var inB = await b.Owner.Client.SoldAsync(b, b.LotId);
+        await a.Owner.Client.FinishedAsync(inA.Id(), wantsQrCode: false);
+        await b.Owner.Client.FinishedAsync(inB.Id(), wantsQrCode: false);
         var zoneA = await api.ZoneEntityAsync(a.ZoneId);
         var (account, _) = await api.StaffAccountAsync(zoneA, StaffRole.ZoneManager);
         await api.GrantAsync(account, StaffRole.Accountant, null);
         var client = await api.LoginAsync(account.Username);
 
-        Assert.Equal(["Resend", "CreateReturn", "Print"], (await client.InvoiceAsync(inA.Id())).Actions());
-        // The Accountant pair (All zones) opens zone B: it prints there and does nothing else.
+        // The Zone Manager pair of zone A adds nothing to the invoices of that zone (decision of 20/11/2026): the Accountant pair (All zones) opens both zones, to print and nothing else.
+        Assert.Equal(["Print"], (await client.InvoiceAsync(inA.Id())).Actions());
         Assert.Equal(["Print"], (await client.InvoiceAsync(inB.Id())).Actions());
     }
 
@@ -106,13 +106,13 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var unfinished = await client.SoldAsync(sale, sale.LotId);
         var cancelled = await client.SoldAsync(sale, sale.LotId);
         await client.FinishedAsync(cancelled.Id(), wantsQrCode: false);
         await api.UpdateAsync<SalesInvoice>(cancelled.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
 
-        Assert.Equal(["CreateReturn", "Print"], (await client.InvoiceAsync(unfinished.Id())).Actions());
+        Assert.Equal(["CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await client.InvoiceAsync(unfinished.Id())).Actions());
         Assert.Equal(["Print"], (await client.InvoiceAsync(cancelled.Id())).Actions());
         Assert.Equal(["Print"], (await sale.Owner.Client.InvoiceAsync(cancelled.Id())).Actions());
     }
@@ -123,7 +123,7 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var invoice = await client.SoldAsync(sale, sale.LotId);
         await client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         var row = new Notification
@@ -135,12 +135,12 @@ public class SalesInvoiceDetailTests
         await api.UseDbAsync(db => db.Notifications.Add(row));
 
         var sending = await client.InvoiceAsync(invoice.Id());
-        Assert.Equal(["CreateReturn", "Print"], sending.Actions());
+        Assert.Equal(["CreateReturn", "Edit", "Correct", "Cancel", "Print"], sending.Actions());
         Assert.Equal(StatusIds.MessageDelivery.Sending, sending.GetProperty("deliveryStatusId").GetInt32());
 
         await api.UpdateAsync<Notification>(row.Id, n => n.DeliveryStatusAt = DateTimeOffset.UtcNow.AddMinutes(-3));
 
-        Assert.Equal(["Resend", "CreateReturn", "Print"], (await client.InvoiceAsync(invoice.Id())).Actions());
+        Assert.Equal(["Resend", "CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await client.InvoiceAsync(invoice.Id())).Actions());
     }
 
     // A command that is offered works, and one that is not answers no 500: Resend follows the same rule as its endpoint.
@@ -149,7 +149,7 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var invoice = await client.SoldAsync(sale, sale.LotId);
 
         Assert.DoesNotContain("Resend", (await client.InvoiceAsync(invoice.Id())).Actions());

@@ -59,7 +59,7 @@ public class SalesInvoiceSqlServerTests
             var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(round % 5 + 1));
             var body = Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 50m)], Cash(1_500_000m));
 
-            var answers = await Task.WhenAll(setup.Manager.PostInvoiceAsync(body), setup.Owner.PostInvoiceAsync(body));
+            var answers = await Task.WhenAll(setup.Owner.PostInvoiceAsync(body), setup.Owner.PostInvoiceAsync(body));
 
             await AssertAnsweredAsync(answers);
             var won = Assert.Single(answers, a => a.StatusCode == HttpStatusCode.Created);
@@ -113,7 +113,7 @@ public class SalesInvoiceSqlServerTests
             var correction = new HarvestCorrection(new HarvestFields { Lanes = lanes, Cages = "9" }, "Wrong count", lot.Text("rowVersion"), lot.PhotoKeysOfLot());
 
             var answers = await Task.WhenAll(
-                setup.Manager.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 20m)], Cash(600_000m))),
+                setup.Owner.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 20m)], Cash(600_000m))),
                 setup.Owner.PutHarvestLotAsync(lot.Id(), correction));
 
             await AssertAnsweredAsync(answers);
@@ -136,7 +136,7 @@ public class SalesInvoiceSqlServerTests
             var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(round % 5 + 1));
 
             var answers = await Task.WhenAll(
-                setup.Manager.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 20m)], Cash(600_000m), lot.Id())),
+                setup.Owner.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 20m)], Cash(600_000m), lot.Id())),
                 setup.Owner.PostRemoveLotAsync(lot.Id(), "Recorded by mistake", lot.Text("rowVersion")));
 
             // The sale that runs again after the removal finds no lot: MSG-GEN-01 on the line, as for a lot that never existed.
@@ -176,7 +176,7 @@ public class SalesInvoiceSqlServerTests
         var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1));
         var body = Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 10m)], Cash(300_000m), lot.Id()).With("deduplicationKey", $"key-{Guid.NewGuid():N}");
 
-        var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => setup.Manager.PostInvoiceAsync(body)));
+        var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => setup.Owner.PostInvoiceAsync(body)));
 
         var ids = new List<Guid>();
         foreach (var answer in answers)

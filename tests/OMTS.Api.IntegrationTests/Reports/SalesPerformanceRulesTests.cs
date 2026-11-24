@@ -31,7 +31,7 @@ public class SalesPerformanceRulesTests
         };
         var refused = new[]
         {
-            sale.Manager.Client,
+            sale.Accountant.Client,
             (await api.StaffAsync(null, StaffRole.ZoneManager)).Client,
             (await PurchaseRequestTestKit.TraderAsync(api)).Client,
         };
@@ -80,7 +80,7 @@ public class SalesPerformanceRulesTests
         Assert.Equal(["From date"], await (await owner.GetGroupInvoicesAsync("from=2026-11-10&to=2026-11-01&groupBy=customer&groupKey=walk-in")).InvalidFieldsAsync());
         Assert.Equal(["From date"], await (await owner.GetExportAsync("from=2026-11-10&to=2026-11-01")).InvalidFieldsAsync());
         // An unknown id of a user who may not read any zone is still the right's answer first.
-        Assert.Equal(HttpStatusCode.Forbidden, (await sale.Manager.Client.GetReportAsync($"zoneIds={unknown}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await sale.Accountant.Client.GetReportAsync($"zoneIds={unknown}")).StatusCode);
     }
 
     // REPORT-01.4: the figures shown, with the period and the choices. Text is never a formula; the figures are numbers.

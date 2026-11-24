@@ -20,11 +20,11 @@ public class LotTraceQaTestsSqlServer
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
         var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(Today.AddDays(-10)))).Id();
         await owner.SeedingRecordAsync(cycleId, (await owner.SeedLotAsync()).Session([1, 2, 3, 4, 5]));
-        var lotId = (await factory.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1))).Id();
+        var lotId = (await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1))).Id();
         var productId = (await Sales.SalesCatalogueTestKit.CreateProductAsync(owner, unitPrice: ListPrice)).Id();
         var manager = (await host.StaffInZoneAsync(zoneId)).Client;
         var stranger = (await host.StaffInZoneAsync((await owner.CreateZoneAsync()).Id())).Client;
-        var invoiceCode = (await manager.SellAsync(Invoice(null, [Line(productId, lotId, 1m)], Cash(ListPrice), lotId))).GetProperty("invoice").Text("code");
+        var invoiceCode = (await owner.SellAsync(Invoice(null, [Line(productId, lotId, 1m)], Cash(ListPrice), lotId))).GetProperty("invoice").Text("code");
         var code = (await manager.TraceAsync(lotId)).Text("lotCode");
 
         Assert.Equal([lotId], await manager.FoundAsync(lotCode: code.ToLowerInvariant()));

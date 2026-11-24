@@ -47,11 +47,12 @@ public class SalesCatalogueQaAccessTests(AuthApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task A_locked_zone_manager_gets_401_on_every_route_from_the_next_action()
+    public async Task A_locked_accountant_gets_401_on_every_route_from_the_next_action()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (product, customer, other) = (await owner.CreateProductAsync(), await owner.CreateCustomerAsync(), await owner.CreateCustomerAsync());
-        var (manager, account, _) = await StaffAsync(StaffRole.ZoneManager, await ZoneAsync());
+        // The Zone Manager has no customers any more (decision of 20/11/2026): the Accountant is the staff member who reads them.
+        var (manager, account, _) = await StaffAsync(StaffRole.Accountant, await ZoneAsync());
         await (await manager.GetAsync("/api/customers")).ReadAsync(HttpStatusCode.OK);
 
         await (await owner.PostAsJsonAsync($"/api/accounts/{account.Id}/lock", new { reason = "QA" })).ReadAsync(HttpStatusCode.OK);

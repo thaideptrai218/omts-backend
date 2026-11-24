@@ -53,10 +53,10 @@ public class SalesInvoiceEditTests
         // 300,000 were paid in cash: an invoice of 150,000 leaves 150,000 owed back, which is confirmed.
         var edit = Edit(sold, [Line(sale.ProductId, sale.LotId, 5m)], sale.LotId).With("confirmOwedBack", true);
 
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.EditAsync(sold.Id(), edit)).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.EditAsync(sold.Id(), edit)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await accountant.Client.EditAsync(sold.Id(), edit)).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
-        Assert.DoesNotContain("Edit", (await sale.Manager.Client.InvoiceAsync(sold.Id())).Actions());
+        Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
+        Assert.DoesNotContain("Edit", (await sale.Accountant.Client.InvoiceAsync(sold.Id())).Actions());
 
         var edited = (await sale.Owner.Client.EditedAsync(sold.Id(), edit)).GetProperty("invoice");
         Assert.Equal(150_000m, edited.Money("total"));
@@ -174,7 +174,7 @@ public class SalesInvoiceEditTests
         Assert.Equal(("Completed", 0m), (completed.Text("status"), completed.Money("advanceLeft")));
         Assert.Equal(0m, await owner.CustomerDebtAsync(sale.CustomerId));
 
-        Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
         await owner.CancelledAsync(sold.Id(), Cancellation(sold));
 
         var reopened = await owner.GetOrderAsync(orderId);

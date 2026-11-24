@@ -33,7 +33,7 @@ public class CustomerPaymentConfirmationTests
         // Oldest first, each with its customer (none for the walk-in), invoice, amount and the Zone Manager who collected it.
         var rows = await client.AwaitingRowsAsync();
         Assert.Equal([first, second, third], rows.Select(r => r.Id()));
-        Assert.Equal((older.Text("code"), sale.Manager.Account.Id, "Cash"), (rows[0].GetProperty("invoice").Text("code"), rows[0].GetProperty("collectedBy").Id(), rows[0].Text("method")));
+        Assert.Equal((older.Text("code"), sale.Owner.Account.Id, "Cash"), (rows[0].GetProperty("invoice").Text("code"), rows[0].GetProperty("collectedBy").Id(), rows[0].Text("method")));
         Assert.Equal(JsonValueKind.Null, rows[2].GetProperty("customer").ValueKind);
         Assert.Equal(430_000m, (await (await client.GetAwaitingAsync()).ReadAsync(HttpStatusCode.OK)).Money("totalAmount"));
         Assert.Equal((500_000m, 500_000m, 500_000m), await sale.Owner.Client.DebtsEverywhereAsync(sale.CustomerId));

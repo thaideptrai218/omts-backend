@@ -24,7 +24,7 @@ public class ProvenancePageAccessTests
 
         var anonymous = await api.CreateClient().GetProvenanceAsync(token);
         var asOwner = await sale.Owner.Client.GetProvenanceAsync(token);
-        var asManager = await sale.Manager.Client.GetProvenanceAsync(token);
+        var asManager = await sale.Accountant.Client.GetProvenanceAsync(token);
 
         Assert.Equal(HttpStatusCode.OK, anonymous.StatusCode);
         // The signed photo links carry the expiry second of each request: only that part may differ.

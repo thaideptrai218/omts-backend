@@ -35,7 +35,7 @@ public class TracePublishQaTests
         var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
 
-        var answer = await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id());
+        var answer = await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id());
 
         // What a Yes really does now: nothing (the end of the sale was made).
         var yes = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
@@ -62,7 +62,7 @@ public class TracePublishQaTests
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, awayLot, 1m)], Cash(60_000m), sale.LotId, awayLot).With("zoneId", sale.ZoneId);
         var invoice = (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice");
 
-        var check = (await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).LotsById();
+        var check = (await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).LotsById();
         var finished = (await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true)).LotsById();
 
         Assert.Equal(check[awayLot].Missing(), finished[awayLot].Missing());
@@ -80,7 +80,7 @@ public class TracePublishQaTests
         var product = (await SalesCatalogue.CreateProductAsync(raft.Owner.Client, unitPrice: ListPrice)).Id();
         var customer = (await SalesCatalogue.CreateCustomerAsync(raft.Owner.Client)).Id();
         var manager = await api.ManagerAsync(raft.ZoneId);
-        await manager.Client.SellAsync(Invoice(customer, [Line(product, lot, 1m)], Cash(ListPrice), lot));
+        await raft.Owner.Client.SellAsync(Invoice(customer, [Line(product, lot, 1m)], Cash(ListPrice), lot));
         await api.CloseCycleAsync(raft.CycleId);
         await api.UpdateAsync<Lane>(await api.QueryAsync(db => db.Lanes.Where(l => l.RaftId == raft.RaftId && l.LaneNumber == 1).Select(l => l.Id).SingleAsync()),
             l => l.StatusId = StatusIds.Lane.Removed);
@@ -166,8 +166,8 @@ public class TracePublishQaTests
         var product = (await SalesCatalogue.CreateProductAsync(raft.Owner.Client, unitPrice: ListPrice)).Id();
         var customer = (await SalesCatalogue.CreateCustomerAsync(raft.Owner.Client)).Id();
         var manager = await api.ManagerAsync(raft.ZoneId);
-        var invoice = (await manager.Client.SellAsync(Invoice(customer, [Line(product, lot, 1m)], Cash(ListPrice), lot))).GetProperty("invoice");
-        await manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var invoice = (await raft.Owner.Client.SellAsync(Invoice(customer, [Line(product, lot, 1m)], Cash(ListPrice), lot))).GetProperty("invoice");
+        await raft.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
         var publishedAt = (await api.LotRowAsync(lot)).PublishedAt;
         Assert.NotNull(publishedAt);
         var other = await raft.Owner.Client.SeedLotAsync();

@@ -72,7 +72,7 @@ public class CustomerDebtQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.SetReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var older = (await client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 3);
         await api.RecordPaymentAsync(sale.CustomerId, 400_000m, PurchaseRequestTestKit.Today.AddDays(-2));
@@ -95,7 +95,7 @@ public class CustomerDebtQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.SetReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var older = (await client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 2);
         await client.FinishedAsync(older.Id(), wantsQrCode: false);

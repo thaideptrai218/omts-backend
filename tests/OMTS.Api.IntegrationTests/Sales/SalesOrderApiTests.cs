@@ -98,46 +98,49 @@ public class SalesOrderApiTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task An_order_has_no_zone_a_zone_manager_takes_a_buyer_at_the_port_and_a_zone_sent_is_ignored()
+    public async Task An_order_has_no_zone_the_owner_takes_a_buyer_at_the_port_and_a_zone_sent_is_ignored()
     {
         var sale = await factory.SaleSetupAsync();
         var unit = await sale.Owner.Client.BaseUnitIdAsync(sale.ProductId);
         var otherZone = (await Farming.FarmingTestKit.CreateZoneAsync(sale.Owner.Client)).Id();
 
-        var created = await sale.Manager.Client.CreateOrderAsync(OrderBody(null, sale.ProductId, unit, source: "AtPort").WithField("zoneId", otherZone));
+        var created = await sale.Owner.Client.CreateOrderAsync(OrderBody(null, sale.ProductId, unit, source: "AtPort").WithField("zoneId", otherZone));
 
         var order = created.GetProperty("order");
         Assert.Equal("AtPort", order.Text("source"));
         Assert.False(order.TryGetProperty("zone", out _));
         var orderId = order.Id();
         Assert.Null(await factory.QueryAsync(db => db.SalesOrders.AsNoTracking().Where(o => o.Id == orderId).Select(o => o.ZoneId).SingleAsync()));
-        var list = await sale.Manager.Client.GetFromJsonAsync<JsonElement>($"{Route}?pageSize=50&zoneId={otherZone}");
+        var list = await sale.Owner.Client.GetFromJsonAsync<JsonElement>($"{Route}?pageSize=50&zoneId={otherZone}");
         Assert.Contains(order.Id(), list.GetProperty("items").EnumerateArray().Select(i => i.Id()));
     }
 
     [Fact]
-    public async Task A_zone_manager_takes_the_buyers_at_the_port_only()
+    public async Task Staff_of_the_zone_take_no_order_at_the_port_or_by_phone()
     {
         var sale = await factory.SaleSetupAsync();
         var unit = await sale.Owner.Client.BaseUnitIdAsync(sale.ProductId);
 
-        var response = await sale.Manager.Client.PostOrderAsync(OrderBody(sale.CustomerId, sale.ProductId, unit, source: "Phone"));
-
-        Assert.Equal("Source", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        // Sales orders are the Owner's alone (decision of 20/11/2026): the staff of the zone are refused whatever the source.
+        foreach (var source in new[] { "AtPort", "Phone" })
+        {
+            var response = await sale.Accountant.Client.PostOrderAsync(OrderBody(sale.CustomerId, sale.ProductId, unit, source: source));
+            await response.ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        }
     }
 
     [Fact]
-    public async Task A_price_other_than_the_list_price_asks_the_owner_of_a_zone_manager_and_then_goes_through()
+    public async Task A_price_other_than_the_list_price_is_the_owners_to_set_and_staff_cannot_set_it()
     {
         var sale = await factory.SaleSetupAsync();
         var unit = await sale.Owner.Client.BaseUnitIdAsync(sale.ProductId);
         var body = OrderBody(null, sale.ProductId, unit, source: "AtPort", unitPrice: ListPrice - 5_000m);
-
-        var question = await (await sale.Manager.Client.PostOrderAsync(body)).QuestionAsync();
         body["lines"] = new object[] { new { productId = sale.ProductId, unitId = unit, quantity = 20m, unitPrice = ListPrice - 5_000m, priceDecidedByOwner = true } };
-        var created = await sale.Manager.Client.CreateOrderAsync(body);
 
-        Assert.Equal(("MSG-SALE-10", "lines[0].priceDecidedByOwner"), (question.Code, question.Field));
+        var refused = await sale.Accountant.Client.PostOrderAsync(body);
+        var created = await sale.Owner.Client.CreateOrderAsync(body);
+
+        await refused.ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(500_000m, created.GetProperty("order").Money("total"));
     }
 
@@ -192,20 +195,20 @@ public class SalesOrderApiTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task A_cancel_needs_a_reason_and_is_the_owners_a_zone_manager_may_finish_and_change_but_not_cancel()
+    public async Task A_cancel_needs_a_reason_and_is_the_owners_and_staff_are_offered_neither_cancel_nor_edit()
     {
         var sale = await factory.SaleSetupAsync();
         var unit = await sale.Owner.Client.BaseUnitIdAsync(sale.ProductId);
         var order = (await sale.Owner.Client.CreateOrderAsync(OrderBody(null, sale.ProductId, unit, source: "AtPort"))).GetProperty("order");
 
-        var byManager = await sale.Manager.Client.PostAsJsonAsync($"{Route}/{order.Id()}/cancel", new { reason = "no" });
+        var byManager = await sale.Accountant.Client.PostAsJsonAsync($"{Route}/{order.Id()}/cancel", new { reason = "no" });
         var noReason = await sale.Owner.Client.PostAsJsonAsync($"{Route}/{order.Id()}/cancel", new { reason = " " });
 
         await byManager.ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal("Reason", await noReason.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        var seenByManager = await sale.Manager.Client.GetOrderAsync(order.Id());
+        var seenByManager = await sale.Accountant.Client.GetOrderAsync(order.Id());
         Assert.DoesNotContain("Cancel", seenByManager.AllowedActions());
-        Assert.Contains("Edit", seenByManager.AllowedActions());
+        Assert.DoesNotContain("Edit", seenByManager.AllowedActions());
     }
 
     [Fact]

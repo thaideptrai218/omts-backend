@@ -45,7 +45,7 @@ public class PurchaseRequestQaMergeTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal((3, 1), (CountOf(after, "Purchase requests"), CountOf(after, "Merged customer profiles")));
 
         // A Zone Manager is asked with the same count (MSG-SALE-04).
-        var manager = await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
+        var manager = await factory.AccountantAsync(await factory.AddZoneAsync(NewCode()));
         var asked = await (await manager.MergeAsync(kept.Id, middle.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-SALE-04");
         Assert.Equal(3, CountOf(asked, "Purchase requests"));
     }

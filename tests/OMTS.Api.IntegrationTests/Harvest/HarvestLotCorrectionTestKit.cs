@@ -123,6 +123,21 @@ public static class HarvestLotCorrectionTestKit
     public static async Task<JsonElement> HarvestLotOfLanesAsync(this AuthApiFactory factory, HttpClient client, Guid raftId, HarvestFields fields) =>
         await client.WeighAtEstimateAsync(await factory.RecordLotOfLanesAsync(client, raftId, fields));
 
+    /// <summary>
+    /// <see cref="RecordLotOfLanesAsync(AuthApiFactory, HttpClient, Guid, HarvestFields)"/> for a host with a real database (SQL Server), where the lot view carries its own version: the version
+    /// the correction needs is read from it. A correction keeps the photos the lot has.
+    /// </summary>
+    public static async Task<JsonElement> RecordLotOfLanesAsync(this HttpClient client, Guid raftId, HarvestFields fields)
+    {
+        var recorded = (await client.RecordHarvestAsync(raftId, fields with { Lanes = null, Finished = [] })).GetProperty("lot");
+        var correction = new HarvestCorrection(fields, "Wrong count at sea", recorded.Text("rowVersion"), recorded.PhotoKeysOfLot());
+        return (await (await client.PutHarvestLotAsync(recorded.Id(), correction)).ReadAsync(HttpStatusCode.OK)).GetProperty("lot");
+    }
+
+    /// <summary>The lot of <see cref="RecordLotOfLanesAsync(HttpClient, Guid, HarvestFields)"/> weighed at its estimate, so it is Open and for sale.</summary>
+    public static async Task<JsonElement> HarvestLotOfLanesAsync(this HttpClient client, Guid raftId, HarvestFields fields) =>
+        await client.WeighAtEstimateAsync(await client.RecordLotOfLanesAsync(raftId, fields));
+
     public static async Task<HttpResponseMessage> SendRemovalAsync(this AuthApiFactory factory, HttpClient client, Guid lotId, string? reason = "Recorded by mistake") =>
         await client.PostRemoveLotAsync(lotId, reason, await factory.LotVersionAsync(lotId));
 

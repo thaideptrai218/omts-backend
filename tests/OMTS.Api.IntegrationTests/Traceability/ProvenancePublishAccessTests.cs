@@ -45,6 +45,6 @@ public class ProvenancePublishAccessTests
 
         var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.CancelInvoiceAsync(invoice.Id());
-        Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ErrorCodeAsync());
     }
 }

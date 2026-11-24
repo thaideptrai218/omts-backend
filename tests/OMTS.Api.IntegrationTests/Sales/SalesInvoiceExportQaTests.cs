@@ -64,7 +64,7 @@ public class SalesInvoiceExportQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         var other = (await sale.Owner.Client.CreateCustomerAsync()).Id();
         var unpaid = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 1m))).GetProperty("invoice");
         var paid = await sale.Owner.Client.SoldAsync(sale, sale.LotId, 2m, customerId: other);
@@ -174,7 +174,7 @@ public class SalesInvoiceExportQaTests
         var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => (i.PriceCutTotal, i.Total) = (100_000m, 200_000m));
 
-        using var file = await WorkbookAsync(await sale.Manager.Client.PrintInvoiceAsync(invoice.Id()));
+        using var file = await WorkbookAsync(await sale.Accountant.Client.PrintInvoiceAsync(invoice.Id()));
 
         Assert.Equal(100_000m, TotalRowCell(file, "Price cuts").GetValue<decimal>());
         Assert.Equal(200_000m, file.Worksheet(SalesInvoiceExportSheets.LinesSheet).Column(7).CellsUsed().Last().GetValue<decimal>());

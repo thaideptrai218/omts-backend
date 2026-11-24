@@ -24,7 +24,7 @@ public class TraceCorrectionSqlServerTests
         var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(Today.AddDays(-5)))).Id();
         var seedLot = await owner.SeedLotAsync(received: Today.AddDays(-5));
         var session = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2]));
-        var lot = await factory.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1));
+        var lot = await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1));
         return (raftId, cycleId, session, lot);
     }
 

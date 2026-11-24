@@ -58,7 +58,7 @@ public class SalesInvoiceCorrectionTests
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
 
-        Assert.Equal("MSG-GEN-08", (await (await sale.Manager.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
+        Assert.Equal("MSG-GEN-08", (await (await sale.Accountant.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
         Assert.Equal("MSG-GEN-08", (await (await accountant.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
 
         await sale.Owner.Client.CancelledAsync(sold.Id(), Cancellation(sold));

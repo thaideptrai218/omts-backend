@@ -56,21 +56,20 @@ public class SalesReturnTests
     }
 
     [Fact]
-    public async Task A_zone_manager_confirms_the_owner_agreed_and_the_owner_is_not_asked()
+    public async Task The_owner_is_not_asked_and_staff_of_the_zone_cannot_return_a_sale()
     {
         var (api, sale) = await StartAsync();
         using var _ = api;
         var invoice = await OnDebtAsync(sale, sale.LotId, 10m);
-        var manager = sale.Manager.Client;
 
-        var question = await (await sale.Owner.Client.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).QuestionAsync();
-        Assert.Equal(("MSG-CLAIM-04", "ownerAgreed"), (question.Code, question.Field));
+        // Returns are the Owner's alone (decision of 20/11/2026): the staff of the zone are refused, and the Owner has no one to ask for agreement.
+        await (await sale.Accountant.Client.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Empty(await api.ReturnsOfAsync(invoice.Id()));
 
-        var saved = await sale.Owner.Client.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale").With("ownerAgreed", true));
+        var saved = await sale.Owner.Client.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"));
 
         Assert.Equal("TL", saved.GetProperty("return").Text("code")![..2]);
-        Assert.Equal(sale.Manager.Account.Id, saved.GetProperty("return").GetProperty("recordedBy").Id());
+        Assert.Equal(sale.Owner.Account.Id, saved.GetProperty("return").GetProperty("recordedBy").Id());
         Assert.Single(await api.InvoiceAuditAsync(saved.GetProperty("return").Id(), SalesReturnService.RecordedAction));
     }
 
@@ -131,7 +130,7 @@ public class SalesReturnTests
         var toOwner = Assert.Single(notices, n => n.Type == NotificationTypes.SalesReturnRecorded);
         Assert.Equal(sale.Owner.Account.Id, toOwner.RecipientAccountId);
         Assert.Equal("MSG-CLAIM-05", toOwner.MessageCode);
-        var toAccountant = Assert.Single(notices, n => n.Type == NotificationTypes.CustomerMoneyOwedBack);
+        var toAccountant = Assert.Single(notices, n => n.Type == NotificationTypes.CustomerMoneyOwedBack && n.RecipientAccountId == accountant.Account.Id);
         Assert.Equal(accountant.Account.Id, toAccountant.RecipientAccountId);
         Assert.Equal("MSG-CLAIM-05", toAccountant.MessageCode);
         Assert.Contains("Please pay the money back", toAccountant.Body);
@@ -203,7 +202,7 @@ public class SalesReturnTests
         var invoice = await OnDebtAsync(sale, sale.LotId, 10m, closeLot: true);
         var saved = await owner.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"));
         var returned = saved.GetProperty("return");
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
 
         await (await manager.CancelSalesReturnAsync(returned.Id(), CancelBody(returned))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await owner.CancelSalesReturnAsync(returned.Id(), CancelBody(returned, reason: " "))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
@@ -354,11 +353,11 @@ public class SalesReturnTests
         var owner = sale.Owner.Client;
         var invoice = await OnDebtAsync(sale, sale.LotId, 10m);
 
-        var preview = await (await sale.Manager.Client.PreviewReturnAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var preview = await (await owner.PreviewReturnAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal((300_000m, 300_000m, 0m, false), (preview.Money("value"), preview.Money("customerDebt"), preview.Money("debtAfter"), preview.GetProperty("requiresCustomer").GetBoolean()));
-        Assert.True(preview.GetProperty("ownerMustAgree").GetBoolean());
-        Assert.False((await (await owner.PreviewReturnAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).GetProperty("ownerMustAgree").GetBoolean());
+        Assert.False(preview.GetProperty("ownerMustAgree").GetBoolean());
+        await (await sale.Accountant.Client.PreviewReturnAsync(invoice.Id())).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(invoice.Text("rowVersion"), preview.Text("rowVersion"));
     }
 }

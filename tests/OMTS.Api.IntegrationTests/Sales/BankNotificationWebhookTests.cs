@@ -83,7 +83,7 @@ public class BankNotificationWebhookTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var code = (await client.AwaitTransferAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
 
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 100_000m)).Outcome());
@@ -144,13 +144,13 @@ public class BankNotificationWebhookTests
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
         var invoice = await sale.PayLaterAsync(sale.CustomerId, 10m);
-        Assert.Equal(300_000m, await sale.Manager.Client.CustomerDebtAsync(sale.CustomerId));
+        Assert.Equal(300_000m, await sale.Accountant.Client.CustomerDebtAsync(sale.CustomerId));
 
         var reference = NewReference();
         Assert.Equal("PaidInvoice", (await api.TransferAsync(invoice.Text("code"), 300_000m, reference)).Outcome());
 
         var payment = Assert.Single(await api.VietQrPaymentsAsync(reference));
         Assert.Equal((invoice.Id(), sale.CustomerId), (payment.InvoiceId!.Value, payment.CustomerId!.Value));
-        Assert.Equal(0m, await sale.Manager.Client.CustomerDebtAsync(sale.CustomerId));
+        Assert.Equal(0m, await sale.Accountant.Client.CustomerDebtAsync(sale.CustomerId));
     }
 }

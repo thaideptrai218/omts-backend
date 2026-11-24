@@ -113,7 +113,7 @@ public class CustomerPaymentSqlServerTests
     /// <summary>A Pay later invoice of 30,000 VND/kg with cash at the port; the id of that cash, Awaiting confirmation.</summary>
     private static async Task<Guid> PortCashAsync(World w, decimal kg, decimal cash)
     {
-        var invoice = (await w.Manager.SellAsync(Invoice(w.CustomerId, [Line(w.ProductId, w.LotId, kg)], Cash(cash, "PayLater", payLaterOwnerAgreed: true), w.LotId))).GetProperty("invoice");
+        var invoice = (await w.Owner.SellAsync(Invoice(w.CustomerId, [Line(w.ProductId, w.LotId, kg)], Cash(cash, "PayLater", payLaterOwnerAgreed: true), w.LotId))).GetProperty("invoice");
         return await w.Host.QueryAsync(db => db.CustomerPayments.Where(p => p.InvoiceId == invoice.Id()).Select(p => p.Id).SingleAsync());
     }
 

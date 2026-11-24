@@ -53,7 +53,7 @@ public class SalesInvoiceCancellationTests
         var sold = await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice);
 
         Assert.Equal(["Reason"], await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("reason", " "))).InvalidFieldsAsync());
-        Assert.Equal("MSG-GEN-08", (await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
+        Assert.Equal("MSG-GEN-08", (await (await sale.Accountant.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
         Assert.Equal(300_000m, await sale.Owner.Client.CustomerDebtAsync(sale.CustomerId));
     }
 

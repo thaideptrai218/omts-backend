@@ -38,7 +38,7 @@ public class SalesInvoicesQaTestsUnusedCodes
             Failures = 1,
             Meanwhile = () => api.UpdateAsync<HarvestLot>(sale.LotId, l => (l.StatusId, l.CloseDate, l.LeftoverKg) = (StatusIds.HarvestLot.Closed, FarmingTestKit.Today, 0m)),
         };
-        var (host, client) = Losing(api, sale.Manager, races);
+        var (host, client) = Losing(api, sale.Owner, races);
         await using var _ = host;
 
         var answer = await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId));
@@ -46,7 +46,7 @@ public class SalesInvoicesQaTestsUnusedCodes
         Assert.Equal((HttpStatusCode.Conflict, "MSG-GEN-09"), (answer.StatusCode, await answer.ErrorCodeAsync()));
         var (invoiceCode, paymentCode) = await LastCodesAsync(api);
         var row = Assert.Single(await UnusedRowsAsync(api));
-        Assert.Equal((invoiceCode, sale.ZoneId, sale.Manager.Account.Id), (row.RecordCode, row.ZoneId, row.ActorAccountId));
+        Assert.Equal((invoiceCode, sale.ZoneId, sale.Owner.Account.Id), (row.RecordCode, row.ZoneId, row.ActorAccountId));
         Assert.Contains(invoiceCode, row.After!);
         Assert.Contains(paymentCode, row.After!);
         Assert.Contains("MSG-GEN-09", row.Reason!);
@@ -59,7 +59,7 @@ public class SalesInvoicesQaTestsUnusedCodes
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var (host, client) = Losing(api, sale.Manager, new LostRaces { Failures = int.MaxValue });
+        var (host, client) = Losing(api, sale.Owner, new LostRaces { Failures = int.MaxValue });
         await using var _ = host;
 
         var answer = await client.PostInvoiceAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId));
@@ -82,7 +82,7 @@ public class SalesInvoicesQaTestsUnusedCodes
         var sale = await api.SaleSetupAsync();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId).With("deduplicationKey", "tap-twice");
         var races = new LostRaces { Failures = 1, Meanwhile = async () => (await sale.Owner.Client.PostInvoiceAsync(body)).EnsureSuccessStatusCode() };
-        var (host, client) = Losing(api, sale.Manager, races);
+        var (host, client) = Losing(api, sale.Owner, races);
         await using var _ = host;
 
         var saved = (await client.SellAsync(body)).GetProperty("invoice");

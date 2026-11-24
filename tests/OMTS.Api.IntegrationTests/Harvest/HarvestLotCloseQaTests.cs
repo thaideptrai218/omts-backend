@@ -77,7 +77,7 @@ public class HarvestLotCloseQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         Assert.Equal(2, await sale.Owner.Client.ForSaleCountAsync());
 
         await api.CloseLotAsync(manager, sale.LotId, 450m, "Spoiled");

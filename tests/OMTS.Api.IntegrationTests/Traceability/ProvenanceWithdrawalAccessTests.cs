@@ -21,7 +21,7 @@ public class ProvenanceWithdrawalAccessTests
         var accountant = await api.StaffAsync(null, StaffRole.Accountant);
         var trader = await api.TraderAsync();
 
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client, trader })
+        foreach (var client in new[] { sale.Accountant.Client, accountant.Client, trader })
         {
             foreach (var answer in new[] { await client.GetWithdrawPreviewAsync(sale.LotId), await client.PostWithdrawAsync(sale.LotId) })
             {
@@ -30,7 +30,7 @@ public class ProvenanceWithdrawalAccessTests
         }
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().PostWithdrawAsync(sale.LotId)).StatusCode);
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client })
+        foreach (var client in new[] { sale.Accountant.Client, accountant.Client })
         {
             Assert.False((await client.TraceAsync(sale.LotId)).GetProperty("canWithdraw").GetBoolean());
         }
@@ -42,7 +42,7 @@ public class ProvenanceWithdrawalAccessTests
         await sale.Owner.Client.WithdrawnAsync(sale.LotId);
 
         // The notices of the withdrawal, read again: the Owner only, like the withdrawal.
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client, trader })
+        foreach (var client in new[] { sale.Accountant.Client, accountant.Client, trader })
         {
             var notices = await client.GetWithdrawalNoticesAsync(sale.LotId);
             Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (notices.StatusCode, await notices.ErrorCodeAsync()));

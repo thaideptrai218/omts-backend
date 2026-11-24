@@ -310,7 +310,7 @@ public class SalesInvoiceCancellationQaTests
         var allZonesAccountant = await api.StaffAsync(null, StaffRole.Accountant);
         var allZonesManager = await api.StaffAsync(null, StaffRole.ZoneManager);
         var trader = await api.TraderAsync();
-        HttpClient[] refused = [sale.Manager.Client, zoneAccountant.Client, allZonesAccountant.Client, allZonesManager.Client, trader.Client];
+        HttpClient[] refused = [sale.Accountant.Client, zoneAccountant.Client, allZonesAccountant.Client, allZonesManager.Client, trader.Client];
 
         foreach (var client in refused)
         {
@@ -343,7 +343,7 @@ public class SalesInvoiceCancellationQaTests
         await owner.CancelledAsync(cancelled.Id(), Cancellation(cancelled));
 
         Assert.Equal([true, true], [(await owner.InvoiceAsync(open.Id())).Actions().Contains("Correct"), (await owner.InvoiceAsync(open.Id())).Actions().Contains("Cancel")]);
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client })
+        foreach (var client in new[] { sale.Accountant.Client, accountant.Client })
         {
             var actions = (await client.InvoiceAsync(open.Id())).Actions();
             Assert.DoesNotContain("Correct", actions);
@@ -409,8 +409,10 @@ public class SalesInvoiceCancellationQaTests
         await owner.CancelledAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", GivenBack(payment.Id, false)).With("confirmOwedBack", true));
 
         var notices = await api.OwedBackNoticesAsync(sold.Id());
-        Assert.Equal(2, notices.Count);
+        // Every Accountant of the zone is told, the one of the zone of the sale too (the Zone Manager has no sales and is told nothing).
+        Assert.Equal(3, notices.Count);
         Assert.DoesNotContain(notices, n => n.RecipientAccountId == sale.Manager.Account.Id);
+        Assert.Contains(notices, n => n.RecipientAccountId == sale.Accountant.Account.Id);
         Assert.All(notices, n => Assert.Contains("300,000", n.Body));
         Assert.All(notices, n => Assert.Equal("MSG-SALE-18", n.MessageCode));
         Assert.Contains(notices, n => n.RecipientAccountId == accountant.Account.Id && n.Body!.Contains("Please pay the money back"));

@@ -158,7 +158,7 @@ public class VietQrWebhookQaTests
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var shortReference = NewReference();
 
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 299_999m, shortReference)).Outcome());
@@ -188,7 +188,7 @@ public class VietQrWebhookQaTests
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 150_000m)).Outcome());
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 150_000m)).Outcome());
 
-        var polled = await sale.Manager.Client.PolledAsync(code);
+        var polled = await sale.Owner.Client.PolledAsync(code);
         Assert.Equal(("Awaiting", 300_000m, 300_000m), (polled.Text("status"), polled.Money("receivedAmount"), polled.Money("toPayAmount")));
     }
 
@@ -228,12 +228,12 @@ public class VietQrWebhookQaTests
         var accountant = await api.AllZonesAccountantAsync();
         var reference = NewReference();
         await accountant.Client.PaidAsync(CustomerPaymentTestKit.MoneyBody(sale.CustomerId, 300_000m).With("bankReference", reference));
-        Assert.Equal(0m, await sale.Manager.Client.CustomerDebtAsync(sale.CustomerId));
+        Assert.Equal(0m, await sale.Accountant.Client.CustomerDebtAsync(sale.CustomerId));
 
         var late = await api.TransferAsync(invoice.Text("code"), 300_000m, reference);
 
         Assert.Equal("AlreadyRecorded", late.Outcome());
-        Assert.Equal(0m, await sale.Manager.Client.CustomerDebtAsync(sale.CustomerId));
+        Assert.Equal(0m, await sale.Accountant.Client.CustomerDebtAsync(sale.CustomerId));
         Assert.Single(await api.VietQrPaymentsAsync(reference));
     }
 
@@ -261,7 +261,7 @@ public class VietQrWebhookQaTests
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
-        await (await sale.Manager.Client.StopAsync(code, confirmed: true)).ReadAsync(HttpStatusCode.OK);
+        await (await sale.Owner.Client.StopAsync(code, confirmed: true)).ReadAsync(HttpStatusCode.OK);
         var reference = NewReference();
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 300_000m, reference)).Outcome());
         var payment = Assert.Single(await api.VietQrPaymentsAsync(reference));
@@ -376,7 +376,7 @@ public class VietQrWebhookQaTests
                 new CountingPayments((ICustomerPaymentRepository)ActivatorUtilities.CreateInstance(provider, real.ImplementationType!)));
         }));
         using var client = counted.CreateClient();
-        client.DefaultRequestHeaders.Authorization = sale.Manager.Client.DefaultRequestHeaders.Authorization;
+        client.DefaultRequestHeaders.Authorization = sale.Owner.Client.DefaultRequestHeaders.Authorization;
         Interlocked.Exchange(ref CountingPayments.ReceivedReads, 0);
 
         var list = await client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending");

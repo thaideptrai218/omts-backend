@@ -83,13 +83,13 @@ public class SalesInvoiceResendTests
 
         Assert.Equal(("MSG-GEN-09", $"Sales invoice {invoice.Text("code")} is Sending and cannot be used for this action."), (blocked.Text("code"), blocked.Text("detail")));
         Assert.Equal(2, (await api.InvoiceSendingsAsync(invoice.Id())).Count);
-        var view = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Sending", view.Text("deliveryStatus"));
 
         var stale = DateTimeOffset.UtcNow - TraderMessageService.StaleSendingAfter - TimeSpan.FromMinutes(1);
         await api.UpdateAsync<Notification>(row.Id, n => (n.CreatedAt, n.DeliveryStatusAt) = (stale.AddSeconds(30), stale));
         await api.UpdateAsync<Notification>(firstId, n => n.CreatedAt = stale);
-        Assert.Equal("Not sent", (await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
+        Assert.Equal("Not sent", (await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
         Assert.Equal("Sent", (await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
     }
 
@@ -108,7 +108,7 @@ public class SalesInvoiceResendTests
             DeliveryStatusAt = DateTimeOffset.UtcNow,
         }));
 
-        var view = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Sent", 1), (view.Text("deliveryStatus"), view.GetProperty("sendings").GetArrayLength()));
         Assert.Equal("Sent", (await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));

@@ -7,11 +7,12 @@ using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Harvest;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
-/// <summary>A zone with a raft in an Open cycle and two lots for sale, a product at 30,000 VND/kg (AC-06), a customer profile and the Zone Manager of the zone.</summary>
-public sealed record SaleSetup(Actor Owner, Actor Manager, Guid ZoneId, Guid RaftId, Guid LotId, Guid OtherLotId, Guid ProductId, Guid CustomerId);
+/// <summary>A zone with a raft in an Open cycle and two lots for sale, a product at 30,000 VND/kg (AC-06), a customer profile the Accountant of the zone (only the Owner sells; the Accountant reads and exports invoices) and the Zone Manager of the zone (lots, tracing and provenance).</summary>
+public sealed record SaleSetup(Actor Owner, Actor Accountant, Guid ZoneId, Guid RaftId, Guid LotId, Guid OtherLotId, Guid ProductId, Guid CustomerId, Actor Manager);
 
 /// <summary>SALE-05 calls: the body as the clients send it, and what a sale leaves behind.</summary>
 public static class SalesInvoiceTestKit
@@ -27,8 +28,10 @@ public static class SalesInvoiceTestKit
         var other = await api.HarvestLotOfLanesAsync(owner.Client, raft.RaftId, HarvestFields.OfLanes(2));
         var product = await owner.Client.CreateProductAsync(unitPrice: ListPrice);
         var customer = await owner.Client.CreateCustomerAsync();
+        // Sales are the Owner's alone (decision of 20/11/2026); the Accountant of the zone reads and exports its invoices, so it is the staff member a test reads them with.
+        var accountant = await api.StaffAsync(await api.ZoneEntityAsync(raft.ZoneId), StaffRole.Accountant);
         var manager = await api.ManagerAsync(raft.ZoneId);
-        return new SaleSetup(owner, manager, raft.ZoneId, raft.RaftId, lot.Id(), other.Id(), product.Id(), customer.Id());
+        return new SaleSetup(owner, accountant, raft.ZoneId, raft.RaftId, lot.Id(), other.Id(), product.Id(), customer.Id(), manager);
     }
 
     public static object Line(Guid productId, Guid lotId, decimal? kg, decimal? unitPrice = null, bool priceDecidedByOwner = false) =>

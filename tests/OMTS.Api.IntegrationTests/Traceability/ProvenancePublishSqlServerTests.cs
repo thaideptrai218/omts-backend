@@ -41,8 +41,8 @@ public class ProvenancePublishSqlServerTests
     /// <summary>A new lot of lane 1, sold by the Zone Manager on an invoice of 1 kg.</summary>
     private static async Task<(Guid LotId, JsonElement Invoice)> SoldLotAsync(Setup setup)
     {
-        var lot = await factory.HarvestLotOfLanesAsync(setup.Owner, setup.RaftId, HarvestFields.OfLanes(1));
-        var invoice = (await setup.Manager.SellAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 1m)], Cash(ListPrice), lot.Id()))).GetProperty("invoice");
+        var lot = await setup.Owner.HarvestLotOfLanesAsync(setup.RaftId, HarvestFields.OfLanes(1));
+        var invoice = (await setup.Owner.SellAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 1m)], Cash(ListPrice), lot.Id()))).GetProperty("invoice");
         return (lot.Id(), invoice);
     }
 
@@ -77,7 +77,7 @@ public class ProvenancePublishSqlServerTests
         {
             var (lotId, invoice) = await SoldLotAsync(setup);
 
-            var answers = await Task.WhenAll(setup.Owner.PostPublishAsync(lotId), setup.Manager.FinishAsync(invoice.Id(), true));
+            var answers = await Task.WhenAll(setup.Owner.PostPublishAsync(lotId), setup.Owner.FinishAsync(invoice.Id(), true));
 
             var publish = answers[0];
             Assert.True(publish.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict, $"Publish answered {publish.StatusCode}.");

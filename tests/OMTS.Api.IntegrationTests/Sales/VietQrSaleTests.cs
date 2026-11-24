@@ -22,7 +22,7 @@ public class VietQrSaleTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
 
         var pending = await client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 400m)], VietQr(4_000_000m)));
 
@@ -51,20 +51,20 @@ public class VietQrSaleTests
         var saved = done.GetProperty("invoice");
         Assert.Equal(($"Invoice {code} is completed: 8,000,000 VND received by VietQR; 4,000,000 VND collected in cash.", "MSG-SALE-06"), (saved.Text("message"), saved.Text("messageCode")));
         var invoice = saved.GetProperty("invoice");
-        Assert.Equal((code, "PayNow", 12_000_000m, sale.Manager.Account.Id), (invoice.Text("code"), invoice.Text("paymentTerm"), invoice.Money("total"), invoice.GetProperty("createdBy").Id()));
+        Assert.Equal((code, "PayNow", 12_000_000m, sale.Owner.Account.Id), (invoice.Text("code"), invoice.Text("paymentTerm"), invoice.Money("total"), invoice.GetProperty("createdBy").Id()));
         var payments = invoice.GetProperty("payments").EnumerateArray().Select(p => (p.Text("method"), p.Money("amount"), p.GetProperty("statusId").GetInt32())).Order().ToList();
         Assert.Equal([("Cash", 4_000_000m, StatusIds.CustomerPayment.AwaitingConfirmation), ("VietQrInvoice", 8_000_000m, StatusIds.CustomerPayment.Completed)], payments);
         var invoiceId = invoice.Id();
         var transfer = Assert.Single(await api.VietQrPaymentsAsync(reference));
         Assert.Equal((invoiceId, sale.CustomerId, (Guid?)null, (string?)null), (transfer.InvoiceId!.Value, transfer.CustomerId!.Value, transfer.RecordedByAccountId, transfer.TransferInvoiceCode));
         var cash = Assert.Single(await api.PaymentsOfAsync(invoiceId), p => p.Method == Domain.Enums.CustomerPaymentMethod.Cash);
-        Assert.Equal(sale.Manager.Account.Id, cash.CollectedByAccountId);
+        Assert.Equal(sale.Owner.Account.Id, cash.CollectedByAccountId);
         Assert.Equal(invoiceId, await api.QueryAsync(db => db.HarvestLots.Where(l => l.Id == sale.LotId).Select(l => l.ClosedBySalesInvoiceId).SingleAsync()));
         Assert.Equal(0m, await client.CustomerDebtAsync(sale.CustomerId));
 
         // GBR-02: the invoice as the Zone Manager's sale, the transfer with the system as the actor (POST-6); one notice to the Owner (MSG-SALE-08).
         var audit = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().Where(e => e.RecordCode == code || e.RecordId == transfer.Id).Select(e => new { e.Action, e.ActorAccountId }).ToListAsync());
-        Assert.Contains(audit, e => e.Action == "SalesInvoice.Created" && e.ActorAccountId == sale.Manager.Account.Id);
+        Assert.Contains(audit, e => e.Action == "SalesInvoice.Created" && e.ActorAccountId == sale.Owner.Account.Id);
         Assert.Contains(audit, e => e.Action == "CustomerPayment.Recorded" && e.ActorAccountId == null);
         Assert.Equal(1, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == NotificationTypes.SaleCompleted && n.RelatedRecordId == invoiceId)));
 
@@ -111,7 +111,7 @@ public class VietQrSaleTests
         Assert.Equal((first.Code(), true, 300_000m), (again.Code(), again.GetProperty("walkInCustomer").GetBoolean(), again.Money("toPayAmount")));
         Assert.Equal(1, await api.QueryAsync(db => db.PendingSales.CountAsync()));
         Assert.Equal("CompletedSale", (await api.TransferAsync(first.Code(), 300_000m)).Outcome());
-        var invoice = (await sale.Manager.Client.PolledAsync(first.Code())).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.PolledAsync(first.Code())).GetProperty("invoice");
         Assert.Equal($"Invoice {first.Code()} is completed: 300,000 VND received by VietQR.", invoice.Text("message"));
         Assert.Equal(JsonValueKind.Null, invoice.GetProperty("invoice").GetProperty("customer").ValueKind);
         // The same key once saved answers the invoice (201).

@@ -31,7 +31,7 @@ public class PriceTrendsRulesTests
         };
         var refused = new[]
         {
-            sale.Manager.Client,
+            sale.Accountant.Client,
             (await api.StaffAsync(null, StaffRole.ZoneManager)).Client,
             (await PurchaseRequestTestKit.TraderAsync(api)).Client,
         };
@@ -89,7 +89,7 @@ public class PriceTrendsRulesTests
         Assert.Equal(["Time unit"], await (await owner.GetPriceTrendLinesAsync($"{key}&unit=year")).InvalidFieldsAsync());
         Assert.Equal(["From date"], await (await owner.GetPriceTrendLinesAsync($"{key}&from=2026-11-10&to=2026-11-01")).InvalidFieldsAsync());
         // An unknown id of a user who may not read any zone is still the right's answer first.
-        Assert.Equal(HttpStatusCode.Forbidden, (await sale.Manager.Client.GetPriceTrendsAsync($"zoneIds={unknown}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await sale.Accountant.Client.GetPriceTrendsAsync($"zoneIds={unknown}")).StatusCode);
     }
 
     // REPORT-02.3: the figures shown, with the period and the choices. Text is never a formula; the figures are numbers.

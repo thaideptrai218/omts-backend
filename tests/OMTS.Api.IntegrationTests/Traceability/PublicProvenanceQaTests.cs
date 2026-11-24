@@ -166,7 +166,7 @@ public class PublicProvenanceQaTests
         var hidden = new[]
             {
                 Path.GetFileNameWithoutExtension(logPhoto), Path.GetFileNameWithoutExtension(withdrawnPhoto), FileCategories.CultivationLogPhotos, "DEMO internal log note",
-                sale.Owner.Account.Username, sale.Manager.Account.Username, sale.Owner.Account.Id.ToString(), sale.Manager.Account.Id.ToString(),
+                sale.Owner.Account.Username, sale.Accountant.Account.Username, sale.Owner.Account.Id.ToString(), sale.Accountant.Account.Id.ToString(),
                 sale.ProductId.ToString(), sale.CustomerId.ToString(), invoice.Id().ToString(), cycleId.ToString(),
             }
             .Concat(receiptCodes).Concat(seedLotCodes);

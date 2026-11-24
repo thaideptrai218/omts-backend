@@ -27,7 +27,7 @@ public class SalesInvoiceFinishTests
         var invoice = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(450_000m))))
             .GetProperty("invoice");
 
-        var asked = await (await sale.Manager.Client.FinishAsync(invoice.Id(), null)).QuestionAsync();
+        var asked = await (await sale.Owner.Client.FinishAsync(invoice.Id(), null)).QuestionAsync();
         Assert.Equal(("MSG-SALE-07", "wantsQrCode"), (asked.Code, asked.Field));
         Assert.Equal($"Does the trader want the QR code of invoice {invoice.Text("code")}, to see where the oysters come from?", asked.Body.Text("detail"));
         Assert.Empty(await api.InvoiceSendingsAsync(invoice.Id()));
@@ -62,7 +62,7 @@ public class SalesInvoiceFinishTests
         Assert.Contains("\"QrCodeCreated\":true", audit.After);
         Assert.Equal(sale.ZoneId, audit.ZoneId);
         // Read by the same caller: allowedActions is what this caller is offered (SALE-09.1 step 3).
-        var read = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var read = await (await sale.Owner.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(view.GetRawText(), read.GetRawText());
     }
 

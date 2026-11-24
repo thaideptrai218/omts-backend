@@ -164,14 +164,13 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
         var other = await factory.TraderAsync();
         var request = await trader.Client.PlaceAsync(productId);
         await other.Client.PlaceAsync(productId);
-        var manager = await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
         var answered = await owner.AcceptAsync(request);
 
         var answers = new[]
         {
             answered,
-            await manager.GetAsync($"/api/purchase-requests/{request.Id()}"),
-            await manager.GetAsync($"/api/purchase-requests?customerId={trader.Profile.Id}"),
+            await owner.GetAsync($"/api/purchase-requests/{request.Id()}"),
+            await owner.GetAsync($"/api/purchase-requests?customerId={trader.Profile.Id}"),
         };
         foreach (var answer in answers)
         {

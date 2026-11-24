@@ -32,7 +32,7 @@ public class ProvenancePublishAtSaleEndTests
         const string missing = "lane 2 has no seeding session in the cycle of the lot";
 
         // TRACE-01.0 steps 1-2: the ready lot and what the other misses.
-        var check = await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var check = await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((invoice.Text("code"), true), (check.Text("invoiceCode"), check.GetProperty("getsQrCode").GetBoolean()));
         var checkedLots = check.LotsById();
         Assert.Equal(("NotPublished", 0, JsonValueKind.Null), (checkedLots[sale.LotId].Text("originState"), checkedLots[sale.LotId].GetProperty("missing").GetArrayLength(),
@@ -89,7 +89,7 @@ public class ProvenancePublishAtSaleEndTests
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
         var invoice = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(60_000m))))
             .GetProperty("invoice");
-        var check = await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var check = await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
         Assert.False(check.GetProperty("getsQrCode").GetBoolean());
 
         var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
@@ -123,10 +123,9 @@ public class ProvenancePublishAtSaleEndTests
         Assert.Empty(await api.PublishAuditAsync(sale.LotId));
     }
 
-    // The invoice zone may differ from the lot's zone (BR-SALE-08): a Zone Manager ends the sale of their zone, but a lot of a zone where they do not publish stays Not published
-    // and says who can publish it.
+    // The invoice zone may differ from the lot's zone (BR-SALE-08): the Owner ends the sale (a Zone Manager has no sales since 20/11/2026) and publishes in every zone, so a lot of another zone is published too.
     [Fact]
-    public async Task A_lot_of_another_zone_is_not_published_by_a_zone_manager_who_does_not_publish_there()
+    public async Task A_lot_of_another_zone_is_published_at_the_end_of_the_sale_by_the_owner_who_publishes_everywhere()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -138,10 +137,8 @@ public class ProvenancePublishAtSaleEndTests
         var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         var lots = finished.LotsById();
-        Assert.Equal(("Published", "NotPublished"), (lots[sale.LotId].Text("originState"), lots[awayLot.Id()].Text("originState")));
-        var zoneCode = awayLot.Text("zoneCode");
-        Assert.Equal([$"NotPublisherOfZone {zoneCode}"], lots[awayLot.Id()].Missing());
-        Assert.Equal(NotReady(awayLot.Text("lotCode"), $"only a Zone Manager of zone {zoneCode} or the Cooperative Owner can publish it"), lots[awayLot.Id()].Text("message"));
-        Assert.Empty(await api.PublishAuditAsync(awayLot.Id()));
+        Assert.Equal(("Published", "Published"), (lots[sale.LotId].Text("originState"), lots[awayLot.Id()].Text("originState")));
+        Assert.Empty(lots[awayLot.Id()].Missing());
+        Assert.Single(await api.PublishAuditAsync(awayLot.Id()));
     }
 }

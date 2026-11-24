@@ -119,12 +119,10 @@ public class CustomerModuleTests
         Assert.Equal(0, byType.GetProperty("total").GetInt32());
         Assert.Contains(idle.Id(), (await GetAsync(sale.Owner.Client, "/api/customers?search=" + Uri.EscapeDataString(idle.Text("name")!))).GetProperty("items").EnumerateArray().Select(i => i.Id()));
 
-        // The Zone Manager reads no figure and may not filter or sort by one.
-        var asManager = await GetAsync(sale.Manager.Client, "/api/customers?pageSize=100");
-        Assert.All(asManager.GetProperty("items").EnumerateArray(), i => Assert.All(new[] { "currentDebt", "totalSales", "netSales" }, p => Assert.Equal(JsonValueKind.Null, i.GetProperty(p).ValueKind)));
-        Assert.Equal(JsonValueKind.Null, asManager.GetProperty("summary").ValueKind);
-        await (await sale.Manager.Client.GetAsync("/api/customers?currentDebtFrom=1")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await sale.Manager.Client.GetAsync("/api/customers?sortBy=totalSales")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // The Zone Manager has no customers at all (decision of 20/11/2026). The Accountant of the zone reads the debts, so it reads and filters the figures like the Owner.
+        await (await sale.Manager.Client.GetAsync("/api/customers?pageSize=100")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        var asAccountant = await GetAsync(sale.Accountant.Client, "/api/customers?currentDebtFrom=1&pageSize=100");
+        Assert.Equal((900_000m, 900_000m), (Assert.Single(asAccountant.GetProperty("items").EnumerateArray()).Money("currentDebt"), asAccountant.GetProperty("summary").Money("debt")));
 
         // The export carries the figures for the Owner, never the identity number.
         var export = await sale.Owner.Client.GetAsync("/api/customers/export");

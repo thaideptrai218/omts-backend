@@ -23,7 +23,7 @@ public class CustomerPaymentSettlementRefusalTests
         Assert.Equal(HttpStatusCode.BadRequest, (await accountant.SettleAsync(new { id = orphan.Id, customerId = sale.CustomerId, payBack = new { method = "Cash" } })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await accountant.SettleAsync(new { id = orphan.Id, allocations = Array.Empty<object>(), payBack = new { method = "Cash" } })).StatusCode);
         Assert.Equal(["Customer"], await (await accountant.SettleAsync(ToCustomer(orphan.Id, Guid.NewGuid()))).InvalidFieldsAsync());
-        Assert.Equal(["Customer"], await (await accountant.SettleAsync(ToCustomer(orphan.Id, sale.Manager.Account.Id))).InvalidFieldsAsync());
+        Assert.Equal(["Customer"], await (await accountant.SettleAsync(ToCustomer(orphan.Id, sale.Accountant.Account.Id))).InvalidFieldsAsync());
 
         var mergedAway = (await sale.Owner.Client.CreateCustomerAsync()).Id();
         await api.UseDbAsync(db => db.Customers.Single(c => c.Id == mergedAway).MergedIntoCustomerId = sale.CustomerId);

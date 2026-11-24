@@ -41,12 +41,12 @@ public class TracePublishQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper o
     /// <summary>A new lot of lane 1 on one invoice of 1 kg that leaves it for sale.</summary>
     private static async Task<(Guid LotId, JsonElement Invoice)> SoldLotAsync(Setup setup)
     {
-        var lot = await factory.HarvestLotOfLanesAsync(setup.Owner, setup.RaftId, HarvestFields.OfLanes(1));
+        var lot = await setup.Owner.HarvestLotOfLanesAsync(setup.RaftId, HarvestFields.OfLanes(1));
         return (lot.Id(), await SellAsync(setup, lot.Id(), leaveForSale: true));
     }
 
     private static async Task<JsonElement> SellAsync(Setup setup, Guid lotId, bool leaveForSale) =>
-        (await setup.Manager.SellAsync(leaveForSale
+        (await setup.Owner.SellAsync(leaveForSale
             ? Invoice(setup.CustomerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice), lotId)
             : Invoice(setup.CustomerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice)))).GetProperty("invoice");
 
@@ -73,7 +73,7 @@ public class TracePublishQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper o
             var (lotId, first) = await SoldLotAsync(setup);
             var second = await SellAsync(setup, lotId, leaveForSale: true);
 
-            var answers = await Task.WhenAll(setup.Manager.FinishAsync(first.Id(), true), setup.Owner.FinishAsync(second.Id(), true));
+            var answers = await Task.WhenAll(setup.Owner.FinishAsync(first.Id(), true), setup.Owner.FinishAsync(second.Id(), true));
 
             foreach (var answer in answers)
             {
@@ -97,7 +97,7 @@ public class TracePublishQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper o
             var (lotId, _) = await SoldLotAsync(setup);
 
             var publish = setup.Owner.PostPublishAsync(lotId);
-            var sale = setup.Manager.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice)));
+            var sale = setup.Owner.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice)));
             await Task.WhenAll(publish, sale);
 
             await AssertStatusAsync(round, "sale", await sale, HttpStatusCode.Created);
