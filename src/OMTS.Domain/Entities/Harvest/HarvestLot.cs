@@ -76,12 +76,6 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>Who recorded it: a Zone Manager corrects or removes only the lots they recorded (BR-HARVEST-05).</summary>
     public Guid RecordedByAccountId { get; set; }
 
-    /// <summary>
-    /// Kept for the lots that already carry a purchase request. A new lot does not set it and nothing requires it: the lot is tied to the harvest plan line it was recorded from.
-    /// </summary>
-    public Guid? PurchaseRequestId { get; set; }
-    public PurchaseRequest? PurchaseRequest { get; set; }
-
     public int StatusId { get; set; } = StatusIds.HarvestLot.AwaitingWeighing;
     public Status Status { get; set; } = null!;
 

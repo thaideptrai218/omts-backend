@@ -142,7 +142,7 @@ public sealed class BankAccountQaTestsAccess
             .Distinct()
             .ToList();
         Assert.Contains("/api/cooperative/profile", routes);
-        Assert.Contains("/api/public/cooperative/logo", routes);
+        Assert.Contains("/api/public/cooperative-brand", routes);
         Assert.Contains(Route, routes);
         Assert.True(routes.Count > 15, $"only {routes.Count} routes");
 

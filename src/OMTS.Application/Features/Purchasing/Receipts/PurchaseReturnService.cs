@@ -170,7 +170,7 @@ public sealed class PurchaseReturnService(
             return await EditRecordedAsync(purchaseReturn, request, cancellationToken);
         }
 
-        if (await EditableDraftAsync(purchaseReturn, request.RowVersion, requireRowVersion: true, cancellationToken) is { } refusedDraft)
+        if (await EditableDraftAsync(purchaseReturn, request.RowVersion, cancellationToken) is { } refusedDraft)
         {
             return refusedDraft;
         }
@@ -215,45 +215,6 @@ public sealed class PurchaseReturnService(
             await MarkRecordedAsync(purchaseReturn, sources!, request.Refund, cancellationToken);
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await queries.ViewAsync(purchaseReturn.Id, cancellationToken);
-    }
-
-    /// <summary>Records a saved Draft at its stored lines and prices, at the time sent or now.</summary>
-    public async Task<Result<PurchaseReturnView>> CompleteAsync(Guid returnId, CompletePurchaseReturnRequest request, CancellationToken cancellationToken)
-    {
-        var purchaseReturn = await receipts.GetReturnForEditAsync(returnId, cancellationToken);
-        if (purchaseReturn is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (await EditableDraftAsync(purchaseReturn, request.RowVersion, requireRowVersion: false, cancellationToken) is { } refusedDraft)
-        {
-            return refusedDraft;
-        }
-
-        var now = timeProvider.GetUtcNow();
-        if (!PurchaseReturnRules.ReturnedAtAllowed(request.ReturnedAt, now))
-        {
-            return AppError.Invalid("Returned at");
-        }
-
-        PurchaseReturnRules.SetReturned(purchaseReturn, request.ReturnedAt ?? now);
-
-        var (sources, invalid) = await StoredSourcesAsync(purchaseReturn, cancellationToken);
-        if (invalid is not null)
-        {
-            return invalid;
-        }
-
-        var isOwner = await access.IsCooperativeOwnerAsync(cancellationToken);
-        if (await CompletionErrorAsync(purchaseReturn, sources!, request.OwnerApproved, isOwner, request.Refund, cancellationToken) is { } refused)
-        {
-            return refused;
-        }
-
-        await MarkRecordedAsync(purchaseReturn, sources!, request.Refund, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await queries.ViewAsync(purchaseReturn.Id, cancellationToken);
     }
@@ -645,45 +606,6 @@ public sealed class PurchaseReturnService(
             : (new ReturnSources(receipt, supplier!, zone, found), null);
     }
 
-    /// <summary>The same, for a Draft being completed as stored: it may have gone stale since it was saved.</summary>
-    private async Task<(ReturnSources? Sources, AppError? Error)> StoredSourcesAsync(PurchaseReturn purchaseReturn, CancellationToken cancellationToken)
-    {
-        var receipt = purchaseReturn.ReceiptId is { } receiptId ? await receipts.GetForEditAsync(receiptId, cancellationToken) : null;
-        if (receipt is { StatusId: not StatusIds.PurchaseReceipt.Completed })
-        {
-            return (null, WrongReceiptStatus(receipt));
-        }
-
-        var invalid = new List<string>();
-        var supplier = receipt?.Supplier ?? await suppliers.GetForEditAsync(purchaseReturn.SupplierId, cancellationToken);
-        if (receipt is null && supplier is not { StatusId: StatusIds.Usage.InUse })
-        {
-            invalid.Add("Supplier");
-        }
-
-        var zone = purchaseReturn.ZoneId is { } zoneId ? (await zones.GetByIdsAsync([zoneId], cancellationToken)).FirstOrDefault() : null;
-        if (purchaseReturn.ZoneId is not null && zone is not { StatusId: StatusIds.Usage.InUse })
-        {
-            invalid.Add("Zone");
-        }
-
-        var found = (await items.GetByIdsAsync(purchaseReturn.Lines.Select(l => l.ItemId).Distinct().ToList(), cancellationToken)).ToDictionary(i => i.Id);
-        if (receipt is null)
-        {
-            var position = 0;
-            foreach (var line in purchaseReturn.Lines)
-            {
-                position++;
-                if (found.GetValueOrDefault(line.ItemId) is not { StatusId: StatusIds.Usage.InUse })
-                {
-                    invalid.Add($"Line {position}");
-                }
-            }
-        }
-
-        return invalid.Count > 0 ? (null, AppError.InvalidFields(invalid)) : (new ReturnSources(receipt, supplier!, zone, found), null);
-    }
-
     private void Apply(PurchaseReturn purchaseReturn, SavePurchaseReturnRequest request, ReturnSources sources)
     {
         purchaseReturn.ReceiptId = sources.Receipt?.Id;
@@ -797,7 +719,7 @@ public sealed class PurchaseReturnService(
     }
 
     /// <summary>A Draft that the caller recorded (or any, for the Owner); MSG-GEN-09 for another status.</summary>
-    private async Task<AppError?> EditableDraftAsync(PurchaseReturn purchaseReturn, string? rowVersion, bool requireRowVersion, CancellationToken cancellationToken)
+    private async Task<AppError?> EditableDraftAsync(PurchaseReturn purchaseReturn, string? rowVersion, CancellationToken cancellationToken)
     {
         if (!await access.MayChangeAsync(purchaseReturn, cancellationToken))
         {
@@ -809,7 +731,7 @@ public sealed class PurchaseReturnService(
             return WrongStatus(purchaseReturn);
         }
 
-        return rowVersion is null && !requireRowVersion ? null : await rowVersions.CheckAsync(purchaseReturn, rowVersion, cancellationToken);
+        return await rowVersions.CheckAsync(purchaseReturn, rowVersion, cancellationToken);
     }
 
     private void RecordCreated(PurchaseReturn purchaseReturn, bool ownerApprovalConfirmed) => audit.Record(new AuditEntry("PurchaseReturn.Created", RecordType)
@@ -838,5 +760,3 @@ public sealed class PurchaseReturnService(
     private AppError WrongReceiptStatus(PurchaseReceipt receipt) =>
         AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
 }
-
-

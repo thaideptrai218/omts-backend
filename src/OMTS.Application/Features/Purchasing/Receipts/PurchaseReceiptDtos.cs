@@ -49,12 +49,6 @@ public sealed record CompleteReceiptRequest(string? RowVersion);
 /// <summary>PURCHASE-06: the reason is required; payments are never cancelled with the receipt.</summary>
 public sealed record CancelReceiptRequest(string? Reason, string? RowVersion = null);
 
-/// <summary>A line to correct; a value left out (null) keeps the line's value. An empty lot code clears it.</summary>
-public sealed record CorrectionLineInput(Guid? LineId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null);
-
-/// <summary>PURCHASE-06.2: the Owner corrects lines of a receipt that can no longer be cancelled, with a reason (an edit through PUT can do more).</summary>
-public sealed record CorrectReceiptRequest(string? Reason, IReadOnlyList<CorrectionLineInput>? Lines, string? RowVersion = null);
-
 /// <param name="Code">The supplier code: links to the supplier list search by it, never by the name.</param>
 public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber, string? Code = null);
 
@@ -173,4 +167,3 @@ public sealed record CancelBlock(string Kind, string Code, string Message, strin
 /// </summary>
 public sealed record CancelPreview(
     bool CanCancel, CancelBlock? Blocked, decimal DebtBefore, decimal DebtAfter, decimal AdvanceAfter, string? Warning, string? WarningCode);
-

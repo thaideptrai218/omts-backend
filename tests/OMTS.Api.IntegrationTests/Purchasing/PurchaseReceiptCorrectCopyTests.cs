@@ -11,83 +11,10 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
-/// PURCHASE-06.2: the Owner corrects a receipt that can no longer be cancelled (quantity not below seeded + returned,
-/// MSG-PURCHASE-10), with the values before and after in the audit log; PURCHASE-01.4: Copy fills a new receipt, saves
-/// nothing and leaves out what is no longer In Use.
+/// PURCHASE-01.4: Copy fills a new receipt, saves nothing and leaves out what is no longer In Use.
 /// </summary>
 public class PurchaseReceiptCorrectCopyTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    private static Task<HttpResponseMessage> CorrectAsync(HttpClient client, Guid receiptId, string? reason, params object[] lines) =>
-        client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/correct", new { reason, lines });
-
-    [Fact]
-    public async Task The_owner_corrects_a_seeded_receipt_never_below_seeded_plus_returned_and_the_audit_keeps_before_and_after()
-    {
-        var world = await factory.WorldAsync();
-        // A seed receipt holds seed items only: its second line is a second seed item.
-        var secondSeed = await world.Owner.CreateItemAsync("Seed", "kg");
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 9_000, "LOT-1"), new LineBody(secondSeed, 4, 25_000));
-        var (seedLine, otherLine) = (receipt.LineOf(world.Seed), receipt.LineOf(secondSeed));
-        await factory.SeedAsync(world.Raft.Id, seedLine, 30);
-        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(seedLine, 10)] }))
-            .ReadAsync(HttpStatusCode.Created);
-
-        var below = await (await CorrectAsync(world.Owner, receipt.Id(), "Counted again", new { lineId = seedLine, quantity = 39.5m }))
-            .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        var itemName = await factory.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Seed).Select(i => i.Name).SingleAsync());
-        Assert.Equal($"{itemName}: the quantity cannot be less than 40 kg (30 seeded, 10 returned).", below.GetProperty("detail").GetString());
-        Assert.Equal(("Line 1", 40m, 30m, 10m), (below.GetProperty("field").GetString(), below.Money("minQuantity"), below.Money("seededQuantity"), below.Money("returnedQuantity")));
-        Assert.Equal("Reason", await (await CorrectAsync(world.Owner, receipt.Id(), " ", new { lineId = seedLine, quantity = 40 })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("Lines", await (await CorrectAsync(world.Owner, receipt.Id(), "x", new { lineId = Guid.NewGuid(), quantity = 40 })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("Line 2", await (await CorrectAsync(world.Owner, receipt.Id(), "x", new { lineId = otherLine, unitPrice = 1.5m })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-
-        var corrected = await (await CorrectAsync(world.Owner, receipt.Id(), "Supplier invoice checked",
-            new { lineId = seedLine, quantity = 40, unitPrice = 8_500, supplierLotCode = "LOT-2" }, new { lineId = otherLine, unitPrice = 24_000 }))
-            .ReadAsync(HttpStatusCode.OK);
-
-        var seed = corrected.LineViewOf(world.Seed);
-        Assert.Equal((40m, 8_500m, 340_000m, "LOT-2"), (seed.Money("quantity"), seed.Money("unitPrice"), seed.Money("lineAmount"), seed.GetProperty("supplierLotCode").GetString()));
-        Assert.Equal(96_000m, corrected.LineViewOf(secondSeed).Money("lineAmount"));
-        Assert.Equal(436_000m, corrected.Money("total"));
-        Assert.Equal(receipt.SeedLotCodeOf(world.Seed), corrected.SeedLotCodeOf(world.Seed));
-        // The supplier debt follows the new line amounts (BR-PURCHASE-04); the return keeps its 90,000 of 10 × 9,000 (PM 03/11).
-        Assert.Equal(436_000m - 90_000m, await world.DebtAsync());
-        var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Corrected"));
-        Assert.Equal("Supplier invoice checked", audit.Reason);
-        Assert.Contains("9000", audit.Before);
-        Assert.Contains("8500", audit.After);
-        Assert.Contains("LOT-1", audit.Before);
-        // A correction sends no notification (BR-PURCHASE-05): only the completion one.
-        Assert.Equal(
-            await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RelatedRecordId == receipt.Id() && n.Type == NotificationTypes.PurchaseReceiptCompleted)),
-            await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RelatedRecordId == receipt.Id())));
-
-        // A supplier lot code belongs to a seed lot: a supply line (of a receipt that can no longer be cancelled, so it is corrected) takes none.
-        var supply = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
-        await world.ReturnAsync(supply.Id(), supply.LineOf(world.Other), 1);
-        Assert.Equal("Line 1 supplier lot code", await (await CorrectAsync(world.Owner, supply.Id(), "x", new { lineId = supply.LineOf(world.Other), supplierLotCode = "L" }))
-            .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-    }
-
-    [Fact]
-    public async Task Only_the_owner_corrects_and_only_a_completed_receipt_that_can_no_longer_be_cancelled()
-    {
-        var world = await factory.WorldAsync();
-        var cancellable = await world.CompletedAsync(new LineBody(world.Other, 1, 10_000));
-        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
-        var line = new { lineId = cancellable.LineOf(world.Other), unitPrice = 9_000 };
-
-        var hint = await (await CorrectAsync(world.Owner, cancellable.Id(), "Price", line)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        Assert.Contains("cancel it and copy it", hint.GetProperty("hint").GetString());
-        await (await CorrectAsync(world.Owner, draft.Id(), "Price", new { lineId = draft.LineOf(world.Other), unitPrice = 9_000 })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-
-        var seeded = await world.CompletedAsync(new LineBody(world.Seed, 10, 9_000));
-        await factory.SeedAsync(world.Raft.Id, seeded.LineOf(world.Seed), 2);
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        await (await CorrectAsync(manager, seeded.Id(), "Price", new { lineId = seeded.LineOf(world.Seed), unitPrice = 8_000 })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await CorrectAsync(world.Owner, seeded.Id(), "Price", new { lineId = seeded.LineOf(world.Seed), unitPrice = 8_000 })).ReadAsync(HttpStatusCode.OK);
-    }
-
     [Fact]
     public async Task Copy_fills_a_new_receipt_without_saving_and_leaves_out_what_is_no_longer_in_use()
     {

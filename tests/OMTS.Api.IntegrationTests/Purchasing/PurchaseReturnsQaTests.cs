@@ -102,41 +102,6 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
             (over.GetProperty("field").GetString(), over.GetProperty("receiptLineId").GetGuid(), over.Money("maxQuantity"), over.Money("received"), over.Money("seeded"), over.Money("returned"),
                 over.GetProperty("unit").GetString(), over.GetProperty("legacyCode").GetString()));
         Assert.False(over.TryGetProperty("limit", out _));
-
-        var below = await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 49.99m })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        Assert.Equal((50m, 30m, 20m), (below.Money("minQuantity"), below.Money("seededQuantity"), below.Money("returnedQuantity")));
-        var corrected = await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 50 })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal((0m, 30m, 20m), (corrected.LineViewOf(world.Seed).Money("returnable"), corrected.LineViewOf(world.Seed).Money("seeded"), corrected.LineViewOf(world.Seed).Money("returnedQuantity")));
-    }
-
-    // GBR-04: seeding does not compare with what is left, so seeded + returned can pass the quantity received. The Owner can still correct the unit price.
-    [Fact]
-    public async Task A_price_correction_is_not_refused_for_a_quantity_it_does_not_change_after_seeding_passed_what_is_left()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
-        var line = receipt.LineOf(world.Seed);
-        await world.ReturnAsync(receipt.Id(), line, 4);
-        await factory.SeedAsync(world.Raft.Id, line, 8);
-
-        var corrected = await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 900 })).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal(9_000m, corrected.Money("total"));
-    }
-
-    // The same rule, with a session that holds no quantity: it counts as all seeded, so the minimum is always above the quantity.
-    [Fact]
-    public async Task A_price_correction_is_not_refused_when_seeded_and_returned_pass_the_quantity_of_the_line()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
-        var line = receipt.LineOf(world.Seed);
-        await world.ReturnAsync(receipt.Id(), line, 4);
-        await factory.SeedAsync(world.Raft.Id, line, 8);
-
-        var corrected = await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 900 })).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal(9_000m, corrected.Money("total"));
     }
 
     // §I.4.4 PURCHASE-02 Owner Full, Zone Manager Full* (no zone: role only, BR-FARM-08), others No; PURCHASE-03 adds Accountant R; the cancel is the Owner's.
@@ -155,14 +120,12 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         var receipt = await world.CompletedAsync(new LineBody(world.Material, 100, 1_000, RaftId: otherRaft.Id));
         var line = receipt.LineOf(world.Material);
         var returnId = Newest(await world.ReturnAsync(receipt.Id(), line, 1));
-        var returnsUrl = $"/api/purchase-receipts/{receipt.Id()}/returns";
         var returnUrl = $"/api/purchase-returns/{returnId}";
 
         await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ReadAsync(HttpStatusCode.Created);
         await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ReadAsync(HttpStatusCode.Created);
         foreach (var reader in new[] { world.Owner, manager, otherManager, accountant })
         {
-            await (await reader.GetAsync(returnsUrl)).ReadAsync(HttpStatusCode.OK);
             await (await reader.GetAsync(returnUrl)).ReadAsync(HttpStatusCode.OK);
         }
 
@@ -171,7 +134,6 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
             await (await refused.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
 
-        await (await trader.GetAsync(returnsUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await trader.GetAsync(returnUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // The refusal comes before the body is read, so a body that could not be saved tells a non-Owner nothing.
@@ -182,7 +144,6 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         }
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(returnsUrl)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(returnUrl)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.CancelReturnAsync(returnId, "Nobody")).StatusCode);
 
@@ -208,7 +169,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         // Asked at 25,000; the Owner corrects the price; the same request is saved at 5,000 with no new question.
         var asked = await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1))).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-02");
         Assert.Equal(25_000m, asked.Money("returnAmount"));
-        await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 5_000 })).ReadAsync(HttpStatusCode.OK);
+        await (await world.Owner.EditLineAsync(receipt.Id(), line, unitPrice: 5_000)).ReadAsync(HttpStatusCode.OK);
         var saved = await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ReadAsync(HttpStatusCode.Created);
         Assert.Equal(5_000m, saved.GetProperty("returns").EnumerateArray().Single(r => r.Id() == Newest(saved)).Money("returnValue"));
     }
@@ -246,7 +207,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         var newer = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 80_000)) with { ReceiptDate = Today.AddDays(-1), Complete = true });
         var line = corrected.LineOf(world.Material);
         var returned = await world.ReturnAsync(corrected.Id(), line, 10);
-        await (await world.Owner.CorrectAsync(corrected.Id(), "Invoice price", new { lineId = line, unitPrice = 5_000 })).ReadAsync(HttpStatusCode.OK);
+        await (await world.Owner.EditLineAsync(corrected.Id(), line, unitPrice: 5_000)).ReadAsync(HttpStatusCode.OK);
         await world.PayAsync(10_000);
 
         // 40,000 + 50,000 + 80,000 − 100,000 − 10,000 = 60,000; held: 10,000 paid + 50,000 above the corrected receipt.

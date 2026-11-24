@@ -166,7 +166,6 @@ public class DemoDataSeedTests
         Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
         Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
         // The plan has no expected harvest date any more (owner decision of 12/11/2026): the demo sets none.
-        Assert.Equal(0, cycles.Count(c => c.ExpectedHarvestDate is not null));
         Assert.Equal(11, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
         Assert.Equal(11, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
@@ -234,9 +233,6 @@ public class DemoDataSeedTests
         // The demo also gives job types to the employees of the employee app (OMTS-227), so not only the seasonal workers have them.
         Assert.True(await db.EmployeeJobTypes.AnyAsync(j => seasonal.Contains(j.EmployeeId)));
         Assert.Equal(2, await db.AttendanceSettingsVersions.CountAsync());
-
-        var cooperative = await db.Cooperatives.SingleAsync();
-        Assert.Equal((1, false), (cooperative.PayPeriodStartDay, cooperative.AutomaticPayroll));
 
         var payrolls = await db.Payrolls.OrderBy(p => p.PeriodStart).ToListAsync();
         Assert.Equal([StatusIds.Payroll.Finalized, StatusIds.Payroll.Provisional], payrolls.Select(p => p.StatusId));

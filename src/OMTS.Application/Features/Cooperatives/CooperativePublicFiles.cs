@@ -13,9 +13,6 @@ public static partial class CooperativePublicFiles
     /// <summary>Every logo file, current or replaced (old logos are kept).</summary>
     public const string LogoFilesPath = "/api/public/cooperative/logos";
 
-    /// <summary>The current logo, whatever it is when the page is opened.</summary>
-    public const string CurrentLogoPath = "/api/public/cooperative/logo";
-
     /// <summary>The current cover photo only: a replaced or removed one is deleted.</summary>
     public const string CoverPhotoFilesPath = "/api/public/cooperative/cover-photos";
 

@@ -98,10 +98,4 @@ public sealed class NurseryBatchesController(
     [ProducesResponseType<NurseryBatchSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Close(Guid batchId, CloseNurseryRequest request, CancellationToken cancellationToken) =>
         (await completions.CloseAsync(batchId, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>The transfer of shares between rafts is gone since v2 (13/11/2026): the pool is drawn from by every cycle through its seeding records. 410.</summary>
-    [HttpPost("api/nursery-batches/{batchId:guid}/allocations")]
-    [ProducesResponseType(StatusCodes.Status410Gone)]
-    public IActionResult ChangeAllocations(Guid batchId) =>
-        StatusCode(StatusCodes.Status410Gone, new { status = StatusCodes.Status410Gone, reasonCode = NurseryReasonCodes.AllocationsRemoved, message = "Đã bỏ việc chia số mảnh ươm cho từng bè: đợt ươm là kho chung, mỗi chu kỳ lấy giống khi thả." });
 }

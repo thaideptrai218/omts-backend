@@ -60,9 +60,6 @@ public class PurchaseReturnSavedViewTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(("Recorded", 1901, JsonValueKind.Null), (listed.GetProperty("status").GetString(), listed.GetProperty("statusId").GetInt32(), listed.GetProperty("cancelReason").ValueKind));
         Assert.False(string.IsNullOrEmpty(listed.GetProperty("recordedBy").GetProperty("name").GetString()));
 
-        var list = await (await world.Owner.GetAsync($"/api/purchase-receipts/{receipt.Id()}/returns")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(listed.Id(), Assert.Single(list.EnumerateArray()).Id());
-
         var detail = await (await world.Owner.GetAsync($"/api/purchase-returns/{listed.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((receipt.Id(), receipt.GetProperty("code").GetString(), 90_000m, "Recorded"),
             (detail.GetProperty("receiptId").GetGuid(), detail.GetProperty("receiptCode").GetString(), detail.Money("returnValue"), detail.GetProperty("status").GetString()));

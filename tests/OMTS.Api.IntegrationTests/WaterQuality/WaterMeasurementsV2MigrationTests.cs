@@ -74,13 +74,10 @@ public class WaterMeasurementsV2MigrationTests
         Assert.Equal(1, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID(N'WaterMeasurements') AND name = N'IX_WaterMeasurements_PhotoUrl' AND is_unique = 1"));
         Assert.Equal(1, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE name = N'FK_WaterMeasurements_Rafts_RaftId'"));
         Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [Statuses] WHERE [Id] BETWEEN 701 AND 704 OR [Group] = N'WATER_MEASUREMENT'"));
-        Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [StatusTransitions] WHERE [Id] IN (10, 11, 55, 56)"));
         var statuses = await db.Statuses.AsNoTracking().Where(s => s.Group == StatusGroups.WaterMeasurement).OrderBy(s => s.Id).ToListAsync();
         Assert.Equal(
-            [(StatusIds.WaterMeasurement.Active, "ACTIVE", true, false), (StatusIds.WaterMeasurement.Voided, "VOIDED", false, true)],
-            statuses.Select(s => (s.Id, s.Code, s.IsInitial, s.IsFinal)));
-        var transition = await db.StatusTransitions.AsNoTracking().SingleAsync(t => t.Id == 80);
-        Assert.Equal((StatusIds.WaterMeasurement.Active, StatusIds.WaterMeasurement.Voided, true), (transition.FromStatusId, transition.ToStatusId, transition.ReasonRequired));
+            [(StatusIds.WaterMeasurement.Active, "ACTIVE", false), (StatusIds.WaterMeasurement.Voided, "VOIDED", true)],
+            statuses.Select(s => (s.Id, s.Code, s.IsFinal)));
     }
 
     private static Task InsertOldRowAsync(OmtsDbContext db, Guid id, Guid zone, Guid account, int status, Guid? correctedFrom) =>

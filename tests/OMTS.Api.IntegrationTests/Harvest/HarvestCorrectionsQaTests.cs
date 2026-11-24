@@ -140,7 +140,6 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         anonymous.DefaultRequestHeaders.Authorization = null;
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostRemoveLotAsync(lot.Id(), "x", "x")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/harvest-lots/for-sale/count")).StatusCode);
     }
 
     // GFR-02 asks again at the save: the correction looks at the rows after its uploads, the access among them.

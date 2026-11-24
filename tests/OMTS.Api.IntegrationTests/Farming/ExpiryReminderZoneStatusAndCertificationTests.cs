@@ -48,7 +48,7 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
         await Job.RunOnceAsync(Today.AddDays(12));
         Assert.Equal(owners, (await NoticesAsync(license.Id())).Count);
 
-        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         await Job.RunOnceAsync(Today.AddDays(12));
         await Job.RunOnceAsync(Today.AddDays(12));
         await Job.RunOnceAsync(Today.AddDays(13));
@@ -228,7 +228,7 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
         await (await owner.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
 
     private static async Task ResumeAsync(HttpClient owner, System.Text.Json.JsonElement zone, System.Text.Json.JsonElement discontinued) =>
-        await (await owner.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
 
     private Task<List<Guid>> ActiveOwnersAsync() => factory.QueryAsync(db => db.Accounts
         .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active).Select(a => a.Id).ToListAsync());

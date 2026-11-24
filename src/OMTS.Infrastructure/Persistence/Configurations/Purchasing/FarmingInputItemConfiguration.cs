@@ -16,7 +16,6 @@ internal sealed class FarmingInputItemConfiguration : IEntityTypeConfiguration<F
         builder.Property(x => x.Unit).HasMaxLength(30);
         builder.Property(x => x.Description).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.Notes).HasMaxLength(Lengths.LongText);
-        builder.Property(x => x.IllustrationUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.MinQuantity).HasPrecision(18, 3);
         builder.Property(x => x.MaxQuantity).HasPrecision(18, 3);
         builder.Property(x => x.CostPrice).HasPrecision(18, 4);

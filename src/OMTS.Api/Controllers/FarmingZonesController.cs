@@ -65,8 +65,7 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Discontinue(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken) =>
         (await zones.DiscontinueAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Resume (FARM-02.3). <c>/reactivate</c> is the older route of the same action, kept for one release.</summary>
-    [HttpPost("{zoneId:guid}/resume")]
+    /// <summary>Resume (FARM-02.3).</summary>
     [HttpPost("{zoneId:guid}/reactivate")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]

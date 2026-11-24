@@ -234,7 +234,7 @@ public class RaftsV2QaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         // A lane change of a Discontinued raft is refused even with an out-of-range number, with no audit row.
         var refused = await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with { LaneCount = 999, RowVersion = off.Text("rowVersion") })).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG-GEN-09", "MSG61"), (refused.Text("code"), refused.Text("legacyCode")));
-        Assert.Equal([1, 2], (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).GetProperty("lanes").EnumerateArray()
+        Assert.Equal([1, 2], (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).GetProperty("lanes").EnumerateArray()
             .Where(l => l.GetProperty("statusId").GetInt32() == InUse).Select(l => l.GetProperty("laneNumber").GetInt32()));
 
         // A resume without a version is the field, not a 500.

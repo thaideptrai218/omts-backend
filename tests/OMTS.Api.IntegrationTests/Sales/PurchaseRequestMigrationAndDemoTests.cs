@@ -34,7 +34,6 @@ public class PurchaseRequestMigrationAndDemoTests
         await ExecuteAsync(database, $"INSERT INTO Customers (Id, CooperativeId, Name, PhoneCheckedByStaff, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000002', '{cooperative}', N'A', 0, SYSDATETIMEOFFSET());");
         await ExecuteAsync(database, "INSERT INTO PurchaseRequests (Id, CustomerId, ProductId, RequestedCages, PickupDate, SentAt, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1.5, '2026-11-05', SYSDATETIMEOFFSET(), 3201, SYSDATETIMEOFFSET());");
         Assert.Equal(6, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
-        Assert.Equal(4, await db.StatusTransitions.CountAsync(t => t.Id >= 180 && t.Id <= 183));
 
         await migrator.MigrateAsync(MigrationBefore);
         Assert.Equal(0, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));

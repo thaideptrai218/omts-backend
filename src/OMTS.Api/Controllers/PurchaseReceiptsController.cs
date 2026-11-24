@@ -22,7 +22,6 @@ namespace OMTS.Api.Controllers;
 public sealed class PurchaseReceiptsController(
     PurchaseReceiptService receipts,
     PurchaseReceiptCancellationService cancellations,
-    PurchaseReceiptCorrectionService corrections,
     PurchaseReceiptCopyService copies,
     PurchaseReturnService returns,
     PurchaseReturnQueryService returnQueries,
@@ -122,13 +121,6 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Cancel(Guid id, CancelReceiptRequest request, CancellationToken cancellationToken) =>
         (await cancellations.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>PURCHASE-06.2: the Owner corrects a Completed receipt that can no longer be cancelled.</summary>
-    [HttpPost(Receipts + "/{id:guid}/correct")]
-    [RequireCooperativeOwner]
-    [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Correct(Guid id, CorrectReceiptRequest request, CancellationToken cancellationToken) =>
-        (await corrections.CorrectAsync(id, request, cancellationToken)).ToActionResult(Ok);
-
     /// <summary>PURCHASE-01.4: a new receipt filled from this one, not saved; save it with <c>POST api/purchase-receipts</c>.</summary>
     [HttpGet(Receipts + "/{id:guid}/copy")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
@@ -183,13 +175,6 @@ public sealed class PurchaseReceiptsController(
     [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateReturn(Guid id, SavePurchaseReturnRequest request, CancellationToken cancellationToken) =>
         (await returns.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>Records an own Draft (the Owner: any) at <c>returnedAt</c> or now; a Zone Manager answers MSG-PURCHASE-02 with <c>ownerApproved: true</c>.</summary>
-    [HttpPost(ReturnsRoute + "/{id:guid}/complete")]
-    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.NoZone)]
-    [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> CompleteReturn(Guid id, CompletePurchaseReturnRequest? request, CancellationToken cancellationToken) =>
-        (await returns.CompleteAsync(id, request ?? new CompletePurchaseReturnRequest(), cancellationToken)).ToActionResult(Ok);
 
     /// <summary>Removes an own Draft (the Owner: any) with its lines.</summary>
     [HttpDelete(ReturnsRoute + "/{id:guid}")]

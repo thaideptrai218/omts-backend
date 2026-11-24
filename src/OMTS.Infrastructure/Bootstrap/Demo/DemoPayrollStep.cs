@@ -14,7 +14,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// full by transfer (each with its cash voucher in the cash book), one advance to the worker paid in full, and last month's sheet Provisional,
 /// whose payslip previews that advance. Demo data only, run by <c>seed --bootstrap --demo</c>, never by the production seed. Idempotent: when
 /// any payroll sheet has payslips the step leaves everything alone, so a sheet a person made, or a rerun, is never doubled. The two empty
-/// headers older demo seeds made (Finalized or Awaiting finalization, no payslips) are replaced by these sheets.
+/// headers older demo seeds made (Finalized, no payslips) are replaced by these sheets.
 /// </summary>
 internal sealed class DemoPayrollStep : IDemoSeedStep
 {
@@ -75,11 +75,11 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
         return created + 1;
     }
 
-    /// <summary>Removes the headers without payslips that earlier demo seeds made; no endpoint can make a Finalized or Awaiting finalization sheet without payslips.</summary>
+    /// <summary>Removes the headers without payslips that earlier demo seeds made; no endpoint can make a Finalized sheet without payslips.</summary>
     private static async Task<int> RemoveEmptyHeadersAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var empty = await context.Db.Payrolls
-            .Where(p => !p.Lines.Any() && (p.StatusId == StatusIds.Payroll.Finalized || p.StatusId == StatusIds.Payroll.AwaitingFinalization))
+            .Where(p => !p.Lines.Any() && p.StatusId == StatusIds.Payroll.Finalized)
             .ToListAsync(cancellationToken);
         context.Db.Payrolls.RemoveRange(empty);
         await context.Db.SaveChangesAsync(cancellationToken);

@@ -33,7 +33,6 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         yield return (HttpMethod.Get, Receipts, () => null, false);
         yield return (HttpMethod.Get, $"{Receipts}/raft-material-costs", () => null, false);
         yield return (HttpMethod.Get, $"{Receipts}/{completed}", () => null, false);
-        yield return (HttpMethod.Get, $"{Receipts}/{completed}/returns", () => null, false);
         yield return (HttpMethod.Get, $"/api/purchase-returns/{returnId}", () => null, false);
         yield return (HttpMethod.Get, $"{Receipts}/export", () => null, false);
         yield return (HttpMethod.Post, Receipts, () => Json(world.Body(new LineBody(world.Other, 1, 1_000)) with { Complete = true }), true);
@@ -42,7 +41,6 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         yield return (HttpMethod.Delete, $"{Receipts}/{draft}", () => null, true);
         yield return (HttpMethod.Get, $"{Receipts}/{completed}/cancel-preview", () => null, true);
         yield return (HttpMethod.Post, $"{Receipts}/{completed}/cancel", () => Json(new { reason = "QA" }), true);
-        yield return (HttpMethod.Post, $"{Receipts}/{completed}/correct", () => Json(new { reason = "QA", lines = Array.Empty<object>() }), true);
         yield return (HttpMethod.Get, $"{Receipts}/{completed}/copy", () => null, true);
         yield return (HttpMethod.Post, $"{Receipts}/{completed}/returns", () => Json(new ReturnBody { Lines = [] }), true);
         yield return (HttpMethod.Post, $"/api/purchase-returns/{returnId}/cancel", () => Json(new { reason = "QA" }), true);

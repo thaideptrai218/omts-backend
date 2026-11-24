@@ -13,7 +13,6 @@ namespace OMTS.Application.Features.Notifications;
 public static class NotificationTypes
 {
     public const string WorkAssignment = "WORK_ASSIGNMENT";
-    public const string PayrollSentBack = "PAYROLL_SENT_BACK";
     public const string NewOrder = "NEW_ORDER";
     public const string TraceQrSent = "TRACE_QR_SENT";
     public const string TraderAccessRequested = "TRADER_ACCESS_REQUESTED";
@@ -141,7 +140,6 @@ public static class NotificationTypes
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new("WORK_ASSIGNMENT", "work assignment", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("PAYROLL_SENT_BACK", "payroll sent back", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new("NEW_ORDER", "new order", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new("TRACE_QR_SENT", "trace qr sent", NeverPush, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         new("WORK_PLAN_REQUESTED", "work plan requested", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
@@ -268,7 +266,6 @@ public static class NotificationTypes
         ["PURCHASE_SHIFT_CONFIRMED"] = NotificationCategories.Work,
         ["EMPLOYEE_LEAVE_REQUESTED"] = NotificationCategories.Work,
         ["EMPLOYEE_LEAVE_REVIEWED"] = NotificationCategories.Work,
-        [PayrollSentBack] = NotificationCategories.Work,
         [NewOrder] = NotificationCategories.Orders,
         ["PURCHASE_REQUEST_RESPONDED"] = NotificationCategories.Orders,
         ["PURCHASE_REQUEST_CANCELLED"] = NotificationCategories.Orders,

@@ -61,7 +61,6 @@ public class RaftsV2MigrationTests
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         await AssertUpAsync(db, withPhoto, blankPhoto);
         Assert.Equal(["IN_USE", "REMOVED"], await db.Statuses.AsNoTracking().Where(s => s.Group == StatusGroups.Lane).OrderBy(s => s.Id).Select(s => s.Code).ToListAsync());
-        Assert.Equal(2, await db.StatusTransitions.AsNoTracking().CountAsync(t => t.FromStatusId == StatusIds.Lane.InUse || t.FromStatusId == StatusIds.Lane.Removed));
 
         // What only the new model can hold: a second photo and a Removed lane.
         db.RaftPhotos.Add(new RaftPhoto { RaftId = withPhoto, SortOrder = 2, FileKey = SecondPhoto });

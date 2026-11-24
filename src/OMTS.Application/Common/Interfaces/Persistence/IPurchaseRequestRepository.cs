@@ -32,15 +32,6 @@ public interface IPurchaseRequestRepository
     /// <summary>The request a profile sent with this client operation, if any: a retry of the same send.</summary>
     Task<PurchaseRequest?> FindOperationAsync(Guid customerId, Guid operationId, CancellationToken cancellationToken);
 
-    /// <summary>The Accepted requests of a profile whose agreed pickup date is not before <paramref name="earliestPickup"/>, with their products, the earliest pickup first (SALE-05.3).</summary>
-    Task<IReadOnlyList<PurchaseRequest>> ListAcceptedOfCustomerAsync(Guid customerId, DateOnly earliestPickup, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// The Accepted requests whose harvest is not marked done, with their customer profile and work plan, read only, the earliest agreed pickup first: what a harvest lot can be
-    /// recorded for (decision of 11/11/2026).
-    /// </summary>
-    Task<IReadOnlyList<PurchaseRequest>> ListOpenForHarvestAsync(CancellationToken cancellationToken);
-
     /// <param name="zoneIds">Only the employees with a working zone among these zones; null: every employee.</param>
     Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(IReadOnlyCollection<Guid>? zoneIds, CancellationToken ct);
     Task<IReadOnlyList<PurchaseShiftInvitation>> EmployeeInvitationsAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken ct);

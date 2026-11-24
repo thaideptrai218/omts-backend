@@ -105,7 +105,11 @@ public class PurchaseReturnDocumentTests(AuthApiFactory factory) : IClassFixture
         await world.ReturnAsync(receipt.Id(), line, 3);
 
         var draft = await SaveAsync(world, DraftOf(world, receipt.Id(), line, 2));
-        var refused = await world.Owner.PostAsJsonAsync($"/api/purchase-returns/{draft.Id()}/complete", new { reason = "x" });
+        var refused = await world.Owner.PutAsJsonAsync($"/api/purchase-returns/{draft.Id()}", new
+        {
+            receiptId = receipt.Id(), zoneId = world.Zone.Id, reason = (string?)null, complete = true, rowVersion = draft.GetProperty("rowVersion").GetString(),
+            lines = new[] { new { receiptLineId = (Guid?)line, quantity = 2m } },
+        });
         await refused.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
 
         var edited = await (await world.Owner.PutAsJsonAsync($"/api/purchase-returns/{draft.Id()}", new
@@ -113,8 +117,11 @@ public class PurchaseReturnDocumentTests(AuthApiFactory factory) : IClassFixture
             receiptId = receipt.Id(), zoneId = world.Zone.Id, reason = "Weak seed", rowVersion = draft.GetProperty("rowVersion").GetString(),
             lines = new[] { new { receiptLineId = (Guid?)line, quantity = 2m } },
         })).ReadAsync(HttpStatusCode.OK);
-        await (await world.Owner.PostAsJsonAsync($"/api/purchase-returns/{edited.Id()}/complete", new { }))
-            .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
+        await (await world.Owner.PutAsJsonAsync($"/api/purchase-returns/{edited.Id()}", new
+        {
+            receiptId = receipt.Id(), zoneId = world.Zone.Id, reason = "Weak seed", complete = true, rowVersion = edited.GetProperty("rowVersion").GetString(),
+            lines = new[] { new { receiptLineId = (Guid?)line, quantity = 2m } },
+        })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
     }
 
     [Fact]

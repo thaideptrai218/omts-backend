@@ -21,7 +21,7 @@ public class Payroll : AuditableEntity, IHasStatus
     public DateOnly PeriodStart { get; set; }
     public DateOnly PeriodEnd { get; set; }
 
-    /// <summary>Provisional (Draft) or Finalized; Creating and Cancelled are the web contract's other two. Awaiting finalization and Sent back are SRS v8 states no endpoint reaches.</summary>
+    /// <summary>Provisional (Draft) or Finalized; Creating and Cancelled are the web contract's other two.</summary>
     public int StatusId { get; set; } = StatusIds.Payroll.Draft;
     public Status Status { get; set; } = null!;
 
@@ -29,16 +29,6 @@ public class Payroll : AuditableEntity, IHasStatus
     public string? ExpenseMonth { get; set; }
 
     public string? Note { get; set; }
-
-    /// <summary>Created by the daily check of automatic payroll (GFR-07); otherwise by the user in CreatedBy.</summary>
-    public bool CreatedBySystem { get; set; }
-
-    public DateTimeOffset? SentAt { get; set; }
-    public Guid? SentByAccountId { get; set; }
-
-    public string? SendBackNote { get; set; }
-    public DateTimeOffset? SentBackAt { get; set; }
-    public Guid? SentBackByAccountId { get; set; }
 
     public DateTimeOffset? FinalizedAt { get; set; }
     public Guid? FinalizedByAccountId { get; set; }
@@ -52,10 +42,10 @@ public class Payroll : AuditableEntity, IHasStatus
     public ICollection<PayrollSelectedEmployee> SelectedEmployees { get; set; } = [];
 
     /// <summary>The records of the period can no longer change (BR-LABOR-13).</summary>
-    public bool IsLocked => StatusId is StatusIds.Payroll.AwaitingFinalization or StatusIds.Payroll.Finalized;
+    public bool IsLocked => StatusId == StatusIds.Payroll.Finalized;
 
-    /// <summary>Provisional (or Creating, or a state of SRS v8 no endpoint reaches): lines may be reloaded and the sheet finalized or cancelled.</summary>
-    public bool IsOpen => StatusId is StatusIds.Payroll.Draft or StatusIds.Payroll.Creating or StatusIds.Payroll.AwaitingFinalization or StatusIds.Payroll.SentBack;
+    /// <summary>Provisional (or Creating): lines may be reloaded and the sheet finalized or cancelled.</summary>
+    public bool IsOpen => StatusId is StatusIds.Payroll.Draft or StatusIds.Payroll.Creating;
 }
 
 public class PayrollSelectedEmployee

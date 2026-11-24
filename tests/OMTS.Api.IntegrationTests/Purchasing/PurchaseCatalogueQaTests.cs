@@ -33,7 +33,6 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         yield return (HttpMethod.Post, Suppliers, () => Json(SupplierBody()));
         yield return (HttpMethod.Put, $"{Suppliers}/{supplierId}", () => Json(SupplierBody()));
         yield return (HttpMethod.Post, $"{Suppliers}/{supplierId}/discontinue", () => null);
-        yield return (HttpMethod.Post, $"{Suppliers}/{supplierId}/resume", () => null);
         yield return (HttpMethod.Post, $"{Suppliers}/{supplierId}/reactivate", () => null);
         yield return (HttpMethod.Post, $"{Suppliers}/{supplierId}/certificates", () => Form("vietgap.pdf"));
         yield return (HttpMethod.Delete, $"{Suppliers}/{supplierId}/certificates/0", () => null);

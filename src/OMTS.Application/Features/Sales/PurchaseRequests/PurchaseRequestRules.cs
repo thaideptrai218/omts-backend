@@ -16,14 +16,8 @@ internal static class PurchaseRequestRules
     public const string ObjectName = "Purchase request";
     public const string FulfilledStatus = "Fulfilled";
 
-    /// <summary>The harvest is marked done (decision of 11/11/2026): no lot is added any more.</summary>
+    /// <summary>The harvest was marked done (a mark that requests of before 25/11/2026 may carry): the request is closed to changes.</summary>
     public const string HarvestDoneStatus = "marked harvest done";
-
-    /// <summary>The harvest is not marked done yet.</summary>
-    public const string HarvestNotDoneStatus = "not marked harvest done";
-
-    /// <summary>No lot was recorded for the request: its harvest cannot be done.</summary>
-    public const string NoHarvestLotStatus = "without a harvest lot";
 
     // PM default: the SRS gives no limit for the note and the reason.
     public const int MaxTextLength = 1000;

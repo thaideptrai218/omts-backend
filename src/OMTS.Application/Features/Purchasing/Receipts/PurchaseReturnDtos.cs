@@ -51,12 +51,6 @@ public sealed record SavePurchaseReturnRequest(
     DateTimeOffset? ReturnedAt = null,
     string? Code = null);
 
-/// <summary>
-/// Records a saved Draft at its stored prices; the row version is optional because the status guards a second complete.
-/// <see cref="ReturnedAt"/> as on a save: never later than now, now when left out.
-/// </summary>
-public sealed record CompletePurchaseReturnRequest(string? RowVersion = null, bool OwnerApproved = false, ReturnRefundInput? Refund = null, DateTimeOffset? ReturnedAt = null);
-
 /// <summary>PURCHASE-02.1: the reason is required.</summary>
 public sealed record CancelPurchaseReturnRequest(string? Reason, string? RowVersion = null);
 
@@ -127,4 +121,3 @@ public sealed record PurchaseReturnRow(
 /// <param name="Message">MSG-GEN-10 when no return matches.</param>
 public sealed record PurchaseReturnSearchResult(
     Paged<PurchaseReturnRow> Page, decimal TotalValue, DateOnly From, DateOnly To, string? Message, string? MessageCode);
-

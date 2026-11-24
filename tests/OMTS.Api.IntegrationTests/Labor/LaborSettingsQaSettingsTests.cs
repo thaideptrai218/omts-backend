@@ -114,40 +114,6 @@ public class LaborSettingsQaInputTests(AuthApiFactory factory) : IClassFixture<A
         await refused.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
     }
 
-    [Theory]
-    [InlineData("{\"payPeriodStartDay\":1.5,\"automaticPayroll\":false,\"rowVersion\":\"\"}")]
-    [InlineData("{\"payPeriodStartDay\":2147483648,\"automaticPayroll\":false,\"rowVersion\":\"\"}")]
-    [InlineData("{\"payPeriodStartDay\":true,\"automaticPayroll\":false,\"rowVersion\":\"\"}")]
-    [InlineData("{\"payPeriodStartDay\":26,\"automaticPayroll\":\"yes\",\"rowVersion\":\"\"}")]
-    [InlineData("{\"payPeriodStartDay\":26,\"automaticPayroll\":1,\"rowVersion\":\"\"}")]
-    [InlineData("{\"payPeriodStartDay\":26,\"automaticPayroll\":false,\"rowVersion\":5}")]
-    [InlineData("{not json")]
-    [InlineData("[]")]
-    public async Task A_payroll_setting_that_cannot_be_read_is_msg_gen_01_and_changes_nothing(string json)
-    {
-        var owner = await OwnerAsync(factory);
-        var before = (await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).GetProperty("payPeriodStartDay").GetInt32();
-
-        var refused = await owner.PutRawAsync(PayrollSettings, json);
-
-        await refused.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
-        Assert.Equal(before, (await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).GetProperty("payPeriodStartDay").GetInt32());
-    }
-
-    [Theory]
-    [InlineData("startDay=abc")]
-    [InlineData("startDay=99999999999")]
-    [InlineData("startDay=1.5")]
-    [InlineData("automaticPayroll=maybe")]
-    public async Task A_preview_that_cannot_be_read_is_msg_gen_01_never_500(string query)
-    {
-        var owner = await OwnerAsync(factory);
-
-        var refused = await owner.GetAsync($"{PayrollSettings}/preview?{query}");
-
-        await refused.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
-    }
-
     [Fact]
     public async Task An_empty_body_is_msg_gen_01_on_every_write()
     {
@@ -161,119 +127,12 @@ public class LaborSettingsQaInputTests(AuthApiFactory factory) : IClassFixture<A
             await owner.PutRawAsync($"{JobTypes}/{jobType.IdOf()}/name", ""),
             await owner.PostRawAsync($"{JobTypes}/{jobType.IdOf()}/discontinue", ""),
             await owner.PostRawAsync(AttendanceSettings, ""),
-            await owner.PutRawAsync(PayrollSettings, ""),
         };
 
         foreach (var response in responses)
         {
             await response.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
         }
-    }
-}
-
-/// <summary>QA of OMTS-227, LABOR-16 steps 2 and 3, each test on its own cooperative: every start day in the preview, against a walk over the calendar.</summary>
-public class LaborSettingsQaPayrollSettingsTests
-{
-    private static (string Start, string End, string Name) Walk(ref DateOnly start, int startDay)
-    {
-        var first = start;
-        var next = start.AddDays(1);
-        while (next.Day != startDay)
-        {
-            next = next.AddDays(1);
-        }
-
-        var end = next.AddDays(-1);
-        start = next;
-        return (first.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"), $"{end.Month:00}/{end.Year}");
-    }
-
-    private static (string, string, string) PeriodOf(JsonElement period) => (period.Str("start")!, period.Str("end")!, period.Str("name")!);
-
-    [Theory]
-    [InlineData("2026-10-31")]
-    [InlineData("2028-01-31")]
-    [InlineData("2026-12-27")]
-    public async Task The_preview_of_every_start_day_gives_the_two_periods_of_a_walk_and_a_save_gives_the_same(string lastEnd)
-    {
-        await using var factory = new AuthApiFactory();
-        var owner = await OwnerAsync(factory);
-        await factory.AddPayrollAsync("2020-01-01", lastEnd, StatusIds.Payroll.Draft);
-
-        for (var day = 1; day <= 28; day++)
-        {
-            var start = DateOnly.Parse(lastEnd).AddDays(1);
-            var first = Walk(ref start, day);
-            var second = Walk(ref start, day);
-
-            var preview = await owner.GetFromJsonAsync<JsonElement>($"{PayrollSettings}/preview?startDay={day}");
-
-            Assert.Equal(day, preview.GetProperty("payPeriodStartDay").GetInt32());
-            Assert.Equal(first, PeriodOf(preview.GetProperty("nextPeriods")[0]));
-            Assert.Equal(second, PeriodOf(preview.GetProperty("nextPeriods")[1]));
-
-            var read = await owner.GetFromJsonAsync<JsonElement>(PayrollSettings);
-            var saved = await (await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = day, automaticPayroll = false, rowVersion = read.VersionOf() })).BodyAsync(HttpStatusCode.OK);
-            Assert.Equal(first, PeriodOf(saved.GetProperty("settings").GetProperty("nextPeriods")[0]));
-        }
-    }
-
-    // Part V: "With these settings, the next pay periods are {period_1} and {period_2}{auto_note}. Do you want to save?"
-    [Theory]
-    [InlineData("startDay=26", "With these settings, the next pay periods are 11/2026 (01/11/2026 to 25/11/2026) and 12/2026 (26/11/2026 to 25/12/2026). Do you want to save?")]
-    [InlineData("startDay=26&automaticPayroll=false", "With these settings, the next pay periods are 11/2026 (01/11/2026 to 25/11/2026) and 12/2026 (26/11/2026 to 25/12/2026). Do you want to save?")]
-    [InlineData("startDay=1&automaticPayroll=true", "With these settings, the next pay periods are 11/2026 (01/11/2026 to 30/11/2026) and 12/2026 (01/12/2026 to 31/12/2026), and OMTS creates the payroll of each new pay period at its start. Do you want to save?")]
-    [InlineData("", "With these settings, the next pay periods are 11/2026 (01/11/2026 to 30/11/2026) and 12/2026 (01/12/2026 to 31/12/2026). Do you want to save?")]
-    public async Task The_question_is_the_text_of_part_v_and_nothing_is_saved_or_audited(string query, string expected)
-    {
-        await using var factory = new AuthApiFactory();
-        var owner = await OwnerAsync(factory);
-        await factory.AddPayrollAsync("2026-10-01", "2026-10-31", StatusIds.Payroll.Finalized);
-        var audits = await factory.QueryAsync(db => db.AuditEvents.CountAsync());
-
-        var preview = await owner.GetFromJsonAsync<JsonElement>($"{PayrollSettings}/preview?{query}");
-
-        Assert.Equal(("MSG-LABOR-36", expected), (preview.Str("messageCode"), preview.Str("message")));
-        var read = await owner.GetFromJsonAsync<JsonElement>(PayrollSettings);
-        Assert.Equal((1, false), (read.GetProperty("payPeriodStartDay").GetInt32(), read.GetProperty("automaticPayroll").GetBoolean()));
-        Assert.Equal(audits, await factory.QueryAsync(db => db.AuditEvents.CountAsync()));
-    }
-
-    // BR-LABOR-13 reads "the last pay period that has a payroll", in any status, also a later one than today.
-    [Theory]
-    [InlineData(StatusIds.Payroll.Draft)]
-    [InlineData(StatusIds.Payroll.AwaitingFinalization)]
-    [InlineData(StatusIds.Payroll.SentBack)]
-    [InlineData(StatusIds.Payroll.Finalized)]
-    public async Task The_next_periods_follow_the_last_payroll_whatever_its_status(int statusId)
-    {
-        await using var factory = new AuthApiFactory();
-        var owner = await OwnerAsync(factory);
-        await factory.AddPayrollAsync("2020-01-01", "2020-01-31", StatusIds.Payroll.Finalized);
-        await factory.AddPayrollAsync("2030-03-01", "2030-03-31", statusId);
-
-        var preview = await owner.GetFromJsonAsync<JsonElement>($"{PayrollSettings}/preview");
-
-        Assert.Equal("2030-04-01", preview.GetProperty("nextPeriods")[0].Str("start"));
-    }
-
-    [Fact]
-    public async Task A_saved_change_writes_only_what_changed_to_the_audit_with_the_owner()
-    {
-        await using var factory = new AuthApiFactory();
-        var password = NewPassword();
-        await factory.EnsureCooperativeAsync();
-        var account = await factory.AddAccountAsync(NewCode(), password);
-        var owner = await factory.LoginAsync(account.Username, password);
-        var read = await owner.GetFromJsonAsync<JsonElement>(PayrollSettings);
-
-        await (await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = false, rowVersion = read.VersionOf() })).BodyAsync(HttpStatusCode.OK);
-
-        var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.Action == "PayrollSettings.Changed"));
-        Assert.Equal((account.Id, "Cooperative"), (audit.ActorAccountId, audit.RecordType));
-        Assert.Contains("PayPeriodStartDay", audit.Before);
-        Assert.Contains("26", audit.After);
-        Assert.DoesNotContain("AutomaticPayroll", audit.After);
     }
 }
 
@@ -284,9 +143,9 @@ public class LaborSettingsQaSharedVersionTests
 
     private static async Task<string> AttendanceVersionAsync(HttpClient owner) => (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
 
-    // The client list says so and the SRS keeps the settings on the Cooperative (LABOR-15 step 1, LABOR-16 step 1): not a defect. A test keeps it known.
+    // The client list says so and the SRS keeps the settings on the Cooperative (LABOR-15 step 1): not a defect. A test keeps it known.
     [SqlServerFact]
-    public async Task A_save_of_one_form_makes_the_other_two_stale_and_each_retries_with_the_version_it_is_given()
+    public async Task A_save_of_one_form_makes_the_other_stale_and_each_retries_with_the_version_it_is_given()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -297,11 +156,9 @@ public class LaborSettingsQaSharedVersionTests
         await (await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = stale })).BodyAsync(HttpStatusCode.OK);
 
         var profile = await owner.PutAsJsonAsync("/api/cooperative/profile", CooperativeProfileRequests.Valid(stale));
-        var payroll = await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = false, rowVersion = stale });
-        var payrollProblem = await payroll.SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
-        await profile.SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
+        var profileProblem = await profile.SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
 
-        var retried = await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = false, rowVersion = payrollProblem.Str("currentRowVersion") });
+        var retried = await owner.PutAsJsonAsync("/api/cooperative/profile", CooperativeProfileRequests.Valid(profileProblem.Str("currentRowVersion")));
         Assert.Equal(HttpStatusCode.OK, retried.StatusCode);
 
         var staleAgain = await AttendanceVersionAsync(owner);
@@ -320,10 +177,8 @@ public class LaborSettingsQaSharedVersionTests
         var version = await AttendanceVersionAsync(owner);
         var zone = await AddZoneAsync(api, cooperative.Id);
 
-        await owner.GetAsync($"{PayrollSettings}/preview?startDay=26&automaticPayroll=true");
         await AddJobTypeAsync(owner);
         await EmployeeRequests.CreateAsync(owner, EmployeeRequests.Profile($"Khác {NewCode()}", NewPhone(), zone.Id));
-        await (await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 1, automaticPayroll = false, rowVersion = version })).BodyAsync(HttpStatusCode.OK); // the same values
 
         Assert.Equal(version, await AttendanceVersionAsync(owner));
     }

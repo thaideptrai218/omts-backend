@@ -16,12 +16,6 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class MeSessionsController(SessionManagementService sessionManagement, ICurrentUser currentUser) : ControllerBase
 {
-    /// <summary>Open sessions of the caller, newest first, with the address masked (<c>203.0.*.*</c>). <c>isCurrent</c> marks this request's session.</summary>
-    [HttpGet("sessions")]
-    [ProducesResponseType<IReadOnlyList<SessionView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListSessions(CancellationToken cancellationToken) =>
-        Ok(await sessionManagement.ListSessionsAsync(currentUser.AccountId!.Value, currentUser.SessionId, cancellationToken));
-
     /// <summary>Ends one session, this one included (the next request is 401). 204 also when it had already ended; 404 when it is not the caller's.</summary>
     [HttpDelete("sessions/{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

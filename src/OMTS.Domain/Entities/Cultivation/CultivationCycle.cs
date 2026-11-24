@@ -23,9 +23,6 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     /// <summary>Plan estimate, greater than 0.</summary>
     public decimal? ExpectedSeedQuantity { get; set; }
 
-    /// <summary>Kept in the table but no longer read or written (owner decision of 12/11/2026: the plan has no expected harvest date).</summary>
-    public DateOnly? ExpectedHarvestDate { get; set; }
-
     /// <summary>The nursery batch the cycle takes its seed from (chosen when the cycle is started, v2 13/11/2026; changeable until the first seeding record); null on a cycle started the old way, which keeps its old rules.</summary>
     public Guid? NurseryBatchId { get; set; }
 
@@ -33,9 +30,6 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     /// Null on a cycle started before: it keeps no check.</summary>
     public Guid? ProductId { get; set; }
     public Product? Product { get; set; }
-
-    /// <summary>Legacy (cycles completed from a nursery before v2): the share given to this cycle. Kept, no longer read or written.</summary>
-    public decimal? NurseryAllocatedQuantity { get; set; }
 
     /// <summary>Free note of the plan (v2), at most 1000 characters.</summary>
     public string? Note { get; set; }

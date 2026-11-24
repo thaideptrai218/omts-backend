@@ -79,9 +79,9 @@ public class SupplierSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         await (await owner.PostAsync($"{Suppliers}/{id}/certificates", form)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         Assert.NotEqual("Renamed", (await factory.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == id))).Name);
 
-        var resumed = await (await owner.PostAsync($"{Suppliers}/{id}/resume", null)).ReadAsync(HttpStatusCode.OK);
+        var resumed = await (await owner.PostAsync($"{Suppliers}/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("In Use", resumed.GetProperty("status").GetString());
-        await (await owner.PostAsync($"{Suppliers}/{id}/resume", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        await (await owner.PostAsync($"{Suppliers}/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         await (await owner.PutAsJsonAsync($"{Suppliers}/{id}", Body("Renamed"))).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(["Supplier.Created", "Supplier.Discontinued", "Supplier.Reactivated", "Supplier.Updated"], await factory.AuditActionsAsync(id));
     }
@@ -106,7 +106,7 @@ public class SupplierSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
             rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
         await (await managerB.PostAsync($"{Suppliers}/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        await (await managerA.PostAsync($"{Suppliers}/{id}/resume", null)).ReadAsync(HttpStatusCode.OK);
+        await (await managerA.PostAsync($"{Suppliers}/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
 
         // The Accountant views suppliers (payee of a supplier payment) and maintains none.
         Assert.Contains(
@@ -116,7 +116,7 @@ public class SupplierSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         await (await accountant.PostAsJsonAsync(Suppliers, new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PutAsJsonAsync($"{Suppliers}/{id}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PostAsync($"{Suppliers}/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await accountant.PostAsync($"{Suppliers}/{id}/resume", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.PostAsync($"{Suppliers}/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // Farming input items: the Cooperative Owner only (PURCHASE-08), the staff read them for their pickers.
         foreach (var staff in new[] { managerA, accountant })

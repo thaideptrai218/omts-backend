@@ -19,7 +19,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         WithAll(db.HarvestLots.AsNoTracking()).FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
+        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Where(l => l.CycleId == cycleId)
             .OrderByDescending(l => l.HarvestedAt)
@@ -168,22 +168,6 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .Select(l => l.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<HarvestLot>> ListOfPurchaseRequestAsync(Guid purchaseRequestId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Raft).ThenInclude(r => r.Zone)
-            .Where(l => l.PurchaseRequestId == purchaseRequestId)
-            .OrderBy(l => l.HarvestedAt).ThenBy(l => l.LotCode)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken)
-    {
-        var ids = purchaseRequestIds.Distinct().ToList();
-        return await db.HarvestLots.AsNoTracking()
-            .Where(l => l.PurchaseRequestId != null && ids.Contains(l.PurchaseRequestId.Value))
-            .GroupBy(l => l.PurchaseRequestId!.Value)
-            .Select(g => new { Id = g.Key, Cages = g.Sum(l => l.CageCount) })
-            .ToDictionaryAsync(g => g.Id, g => g.Cages, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<HarvestLotListRow>> SearchAsync(HarvestLotFilter filter, CancellationToken cancellationToken)
     {
         var search = filter.Search?.Trim();
@@ -296,7 +280,6 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .Include(l => l.Photos)
             .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
-            .Include(l => l.PurchaseRequest)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Include(l => l.Cages)
             .Include(l => l.TraderCages)

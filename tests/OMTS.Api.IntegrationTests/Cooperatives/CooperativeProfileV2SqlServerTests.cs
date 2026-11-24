@@ -36,7 +36,6 @@ public class CooperativeProfileV2SqlServerTests
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('Cooperatives') AND name = 'StatusId'"));
         Assert.False(await db.Statuses.AnyAsync(s => s.Id == 201 || s.Id == 202 || s.Group == "COOPERATIVE"));
-        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id == 3));
         Assert.Equal(["HTX A", "HTX B"], await db.Cooperatives.OrderBy(c => c.FullName).Select(c => c.FullName).ToListAsync());
         Assert.Equal(0, await db.CooperativeCertifications.CountAsync());
 

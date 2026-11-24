@@ -29,8 +29,6 @@ public sealed class PayrollRulesTests
 
     [Theory]
     [InlineData(StatusIds.Payroll.Draft, PayrollSheetStatus.Provisional)]
-    [InlineData(StatusIds.Payroll.AwaitingFinalization, PayrollSheetStatus.Provisional)]
-    [InlineData(StatusIds.Payroll.SentBack, PayrollSheetStatus.Provisional)]
     [InlineData(StatusIds.Payroll.Creating, PayrollSheetStatus.Creating)]
     [InlineData(StatusIds.Payroll.Finalized, PayrollSheetStatus.Finalized)]
     [InlineData(StatusIds.Payroll.Cancelled, PayrollSheetStatus.Cancelled)]
@@ -38,9 +36,9 @@ public sealed class PayrollRulesTests
         Assert.Equal(expected, PayrollRules.StatusOf(statusId));
 
     [Fact]
-    public void Provisional_covers_the_draft_and_the_states_of_srs_v8()
+    public void Provisional_is_the_draft()
     {
-        Assert.Equal([StatusIds.Payroll.Draft, StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.SentBack, StatusIds.Payroll.Finalized],
+        Assert.Equal([StatusIds.Payroll.Draft, StatusIds.Payroll.Finalized],
             PayrollRules.StatusIdsOf([PayrollSheetStatus.Provisional, PayrollSheetStatus.Finalized]));
     }
 

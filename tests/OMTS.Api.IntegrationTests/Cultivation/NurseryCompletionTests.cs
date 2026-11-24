@@ -38,9 +38,8 @@ public sealed class NurseryCompletionTests
         Assert.False(done.TryGetProperty("allocations", out _));
         Assert.Equal(JsonValueKind.Null, done.GetProperty("closedOn").ValueKind);
 
-        // No cycle and no allocation row: the old completion made one per raft.
+        // No cycle: the old completion made one per raft.
         Assert.Equal(0, await api.QueryAsync(db => db.CultivationCycles.CountAsync()));
-        Assert.Equal(0, await api.QueryAsync(db => db.NurseryBatchAllocations.CountAsync()));
 
         // One audit row for the completion, the history shows the survivors from nothing to 9 500 with the new label.
         var history = await client.NurseryHistoryAsync(batch.Id());
@@ -240,19 +239,6 @@ public sealed class NurseryCompletionTests
         var usage = view.GetProperty("usage").EnumerateArray().ToList();
         Assert.Equal([(world.Raft2, 4000m), (world.Raft1, 1500m)], usage.Select(u => (u.GetProperty("raftId").GetGuid(), u.Pieces("seeded"))).ToList());
         Assert.All(usage, u => Assert.Equal(("Open", Today), (u.Text("cycleStatus"), u.Date("lastSeedingOn"))));
-    }
-
-    [Fact]
-    public async Task The_transfer_of_shares_between_rafts_is_gone()
-    {
-        using var api = new AuthApiFactory();
-        var world = await api.NurseryWorldAsync();
-        var batch = await world.Owner.Client.ReadyNurseryAsync(api, world.ZoneId, world.Lot, "1000", "900");
-
-        var gone = await world.Owner.Client.PostAsJsonAsync($"/api/nursery-batches/{batch.Id()}/allocations", new { allocations = new[] { new { raftId = world.Raft1, quantity = 900 } }, reason = "x", rowVersion = "" });
-
-        Assert.Equal(HttpStatusCode.Gone, gone.StatusCode);
-        Assert.Equal("NURSERY_ALLOCATIONS_REMOVED", (await gone.Content.ReadFromJsonAsync<JsonElement>()).Text("reasonCode"));
     }
 
     [Fact]

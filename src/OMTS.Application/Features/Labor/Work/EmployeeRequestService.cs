@@ -239,8 +239,8 @@ public sealed class EmployeeRequestService(
     }
 
     /// <summary>
-    /// LABOR-05 steps 5 and 6: nothing of the request is applied while the payroll of the pay period of a day is Awaiting finalization or
-    /// Finalized, or when the times would be out of order (MSG-LABOR-16). A missed time replaces the one in the attendance of the day, with
+    /// LABOR-05 steps 5 and 6: nothing of the request is applied while the payroll of the pay period of a day is Finalized, or when the
+    /// times would be out of order (MSG-LABOR-16). A missed time replaces the one in the attendance of the day, with
     /// the method Request; a seasonal worker with no work that day gets the job type and raft the Owner chooses (LABOR-05.3). Leave is only recorded.
     /// </summary>
     private async Task<AppError?> ApplyAsync(EmployeeRequest request, ReviewEmployeeRequest review, Guid account, CancellationToken cancellationToken)
@@ -332,7 +332,7 @@ public sealed class EmployeeRequestService(
         return null;
     }
 
-    /// <summary>A payroll Awaiting finalization or Finalized whose period holds a day of the range, if any; the open payrolls after it are touched, so a send of one and this approval meet (see <see cref="PayPeriodLock"/>).</summary>
+    /// <summary>A Finalized payroll whose period holds a day of the range, if any; the open payrolls after it are touched, so a finalization of one and this approval meet (see <see cref="PayPeriodLock"/>).</summary>
     private async Task<Payroll?> LockedPayrollAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var affected = await payrolls.ListEndingOnOrAfterAsync(from, cancellationToken);

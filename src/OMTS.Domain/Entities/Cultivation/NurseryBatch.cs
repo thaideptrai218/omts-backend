@@ -61,28 +61,10 @@ public class NurseryBatch : AuditableEntity, IHasStatus
     public Guid? ClosedByAccountId { get; set; }
     public string? CloseReason { get; set; }
 
-    /// <summary>Kept in the database for the cycles completed before v2 (13/11/2026) but neither read nor written any more: the pool is the seeding records of the batch.</summary>
-    public ICollection<NurseryBatchAllocation> Allocations { get; set; } = [];
     public ICollection<NurseryBatchPhoto> Photos { get; set; } = [];
 
     /// <summary>The employees who worked on the batch (decision of 17/11/2026): optional, for the record only.</summary>
     public ICollection<NurseryRecordEmployee> Crew { get; set; } = [];
-}
-
-/// <summary>Legacy (before v2, 13/11/2026): the share of the survivors of a batch given to one raft, and the cycle created for it. Kept as rows, never written or read by the code any more.</summary>
-public class NurseryBatchAllocation : AuditableEntity
-{
-    public Guid NurseryBatchId { get; set; }
-    public NurseryBatch NurseryBatch { get; set; } = null!;
-
-    public Guid RaftId { get; set; }
-    public Raft Raft { get; set; } = null!;
-
-    public Guid CycleId { get; set; }
-    public CultivationCycle Cycle { get; set; } = null!;
-
-    /// <summary>Pieces, greater than 0. Seeding from the nursery is limited to it (hard cap).</summary>
-    public decimal Quantity { get; set; }
 }
 
 /// <summary>Which step of the nursery a photo belongs to.</summary>

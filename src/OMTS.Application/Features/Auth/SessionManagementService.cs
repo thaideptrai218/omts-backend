@@ -16,13 +16,6 @@ public sealed class SessionManagementService(ILoginSessionRepository sessions, I
 {
     private const int MaxSaveAttempts = 3;
 
-    /// <summary>Open sessions that can still be refreshed, newest first.</summary>
-    public async Task<IReadOnlyList<SessionView>> ListSessionsAsync(Guid accountId, Guid? currentSessionId, CancellationToken cancellationToken)
-    {
-        var open = await ListOpenAsync(accountId, cancellationToken);
-        return open.Select(s => ToView(s, currentSessionId)).ToList();
-    }
-
     /// <summary>Ends one session of the caller, the current one included. 404 for a session that is not the caller's; an own session that already ended is a success.</summary>
     public async Task<Result<Done>> RevokeSessionAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken)
     {
@@ -109,19 +102,6 @@ public sealed class SessionManagementService(ILoginSessionRepository sessions, I
             }
         }
     }
-
-    private static SessionView ToView(LoginSession session, Guid? currentSessionId) => new(
-        session.Id,
-        session.ClientType,
-        session.AuthMethod,
-        session.DeviceKey,
-        session.DeviceName,
-        session.UserAgent,
-        MaskedIp(session),
-        session.CreatedAt,
-        session.LastRefreshedAt ?? session.CreatedAt,
-        session.RefreshTokenExpiresAt,
-        session.Id == currentSessionId);
 
     private static DeviceView ToDeviceView(string? deviceKey, IReadOnlyList<LoginSession> group, Guid? currentSessionId)
     {

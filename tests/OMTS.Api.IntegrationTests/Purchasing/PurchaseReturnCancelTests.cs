@@ -138,7 +138,7 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
         var line = receipt.LineOf(world.Material);
         var first = FirstReturn(await world.ReturnAsync(receipt.Id(), line, 2));
 
-        var corrected = await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 5_000 })).ReadAsync(HttpStatusCode.OK);
+        var corrected = await (await world.Owner.EditLineAsync(receipt.Id(), line, unitPrice: 5_000)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal((50_000m, 20_000m), (corrected.Money("total"), corrected.Money("returned")));
         Assert.Equal(20_000m, Assert.Single(corrected.GetProperty("returns").EnumerateArray()).Money("returnValue"));
@@ -159,22 +159,4 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(45_000, await world.DebtAsync());
     }
 
-    [Fact]
-    public async Task The_owners_correction_counts_only_returns_not_cancelled_and_refuses_a_receipt_left_with_none()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
-        var line = receipt.LineOf(world.Other);
-        var mistaken = FirstReturn(await world.ReturnAsync(receipt.Id(), line, 2));
-        await (await world.Owner.CancelReturnAsync(mistaken, "Not sent back")).ReadAsync(HttpStatusCode.OK);
-        var standing = (await world.ReturnAsync(receipt.Id(), line, 1)).GetProperty("returns").EnumerateArray().Single(r => r.Id() != mistaken).Id();
-
-        var below = await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 0.5m })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        Assert.Equal(1m, below.Money("returnedQuantity"));
-        await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 1 })).ReadAsync(HttpStatusCode.OK);
-
-        // With no return left that counts, the receipt can be cancelled again, so it is no longer corrected (BR-PURCHASE-09).
-        await (await world.Owner.CancelReturnAsync(standing, "Not sent back either")).ReadAsync(HttpStatusCode.OK);
-        await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 2 })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-    }
 }

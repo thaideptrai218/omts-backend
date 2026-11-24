@@ -46,7 +46,4 @@ public interface IPayrollRepository
 {
     /// <summary>The payrolls that are not Cancelled whose last day is <paramref name="date"/> or later, tracked, so a change dated before them can touch them.</summary>
     Task<IReadOnlyList<Payroll>> ListEndingOnOrAfterAsync(DateOnly date, CancellationToken cancellationToken);
-
-    /// <summary>The last day of the latest pay period that has a payroll; null when there is none.</summary>
-    Task<DateOnly?> LastPeriodEndAsync(CancellationToken cancellationToken);
 }

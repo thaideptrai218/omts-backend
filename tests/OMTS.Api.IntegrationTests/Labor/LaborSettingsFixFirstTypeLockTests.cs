@@ -74,13 +74,13 @@ public class LaborSettingsFixFirstTypeLockTests
     {
         await using var factory = new AuthApiFactory();
         var employee = await SeasonalAsync(factory, "2020-11-01");
-        await factory.AddAwaitingPayrollAsync("2020-10-01", "2020-10-31");
+        await factory.AddFinalizedPayrollAsync("2020-10-01", "2020-10-31");
 
         var refused = await employee.PutTypeAsync(Staff, "2020-11-01");
 
         var problem = await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null);
         Assert.Equal(
-            "The payroll of 10/2020 is Awaiting finalization, so this change cannot apply to 31/10/2020. Choose a date after 01/11/2020, or ask the Cooperative Owner to send the payroll back first.",
+            "The payroll of 10/2020 is Finalized, so this change cannot apply to 31/10/2020. Choose a date after 01/11/2020.",
             problem.Detail());
         Assert.Equal(EmployeeType.SeasonalWorker, await employee.TypeOnAsync(new DateOnly(2020, 11, 1)));
         Assert.Equal(HttpStatusCode.OK, (await employee.PutTypeAsync(Staff, "2020-11-02")).StatusCode);
@@ -112,7 +112,7 @@ public class LaborSettingsFixFirstTypeLockTests
 
     [Theory]
     [InlineData(StatusIds.Payroll.Draft)]
-    [InlineData(StatusIds.Payroll.SentBack)]
+    [InlineData(StatusIds.Payroll.Creating)]
     public async Task A_payroll_that_is_not_locked_lets_it_through_and_is_touched_as_its_days_move(int statusId)
     {
         await using var factory = new AuthApiFactory();

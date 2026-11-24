@@ -156,13 +156,4 @@ public sealed class SalesInvoicesController(
     [HttpGet("next-code")]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
     public async Task<IActionResult> NextCode(CancellationToken cancellationToken) => Ok(new { code = await codes.PeekAsync(cancellationToken) });
-
-    /// <summary>
-    /// Deprecated: an invoice is made from an order, not from a purchase request, so this answers an empty list (the route stays so an older web does not get 404). The request becomes an order with
-    /// <c>POST api/sales-orders</c> and <c>purchaseRequestId</c>.
-    /// </summary>
-    [HttpGet("open-purchase-requests")]
-    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
-    [ProducesResponseType<IReadOnlyList<OpenPurchaseRequestView>>(StatusCodes.Status200OK)]
-    public IActionResult OpenPurchaseRequests(Guid customerId) => Ok(Array.Empty<OpenPurchaseRequestView>());
 }

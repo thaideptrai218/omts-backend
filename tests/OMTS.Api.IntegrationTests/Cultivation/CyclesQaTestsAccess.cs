@@ -27,7 +27,6 @@ public class CyclesQaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthApi
         () => client.GetAsync($"/api/rafts/{raftId}/cultivation-cycles"),
         () => client.GetAsync($"/api/rafts/{raftId}/progress"),
         () => client.GetAsync($"/api/rafts/{raftId}/progress?cycleId={cycleId}"),
-        () => client.GetAsync($"/api/rafts/{raftId}/lanes/today"),
         () => client.GetAsync($"/api/cultivation-cycles/{cycleId}"),
         () => client.PutCycleAsync(cycleId, new CycleBody(Today, RowVersion: "")),
         () => client.CancelCycleAsync(cycleId, ""),
@@ -104,7 +103,7 @@ public class CyclesQaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthApi
 
         await AssertRefusedAsync(both, zoneB, raftB, cycleB.Id());
         Assert.Equal(HttpStatusCode.OK, (await both.GetAsync($"/api/zones/{zoneA}/cultivation-cycles")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await both.GetAsync($"/api/rafts/{raftA}/lanes/today")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await both.GetAsync($"/api/rafts/{raftA}/progress")).StatusCode);
         var freshRaft = (await owner.CreateRaftAsync(zoneA)).Id();
         var started = await both.StartCycleAsync(freshRaft);
         var edited = await both.EditCycleAsync(started.Id(), new CycleBody(Today, 1m, RowVersion: started.Text("rowVersion")));
@@ -119,7 +118,7 @@ public class CyclesQaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthApi
         foreach (var path in new[]
         {
             $"/api/zones/{zoneId}/cultivation-cycles", $"/api/rafts/{raftId}/cultivation-cycles", $"/api/rafts/{raftId}/progress",
-            $"/api/rafts/{raftId}/lanes/today", $"/api/cultivation-cycles/{cycle.Id()}",
+            $"/api/rafts/{raftId}/progress", $"/api/cultivation-cycles/{cycle.Id()}",
         })
         {
             Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(path)).StatusCode);
