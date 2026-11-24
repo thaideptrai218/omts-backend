@@ -53,6 +53,8 @@ public sealed class HeldStorage(IFileStorage inner, UploadHold hold) : IFileStor
 
     public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default) => inner.OpenReadAsync(key, cancellationToken);
 
+    public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => inner.ExistsAsync(key, cancellationToken);
+
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) => inner.GetReadUrlAsync(key, lifetime, cancellationToken);
 
     public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => inner.DeleteAsync(key, cancellationToken);

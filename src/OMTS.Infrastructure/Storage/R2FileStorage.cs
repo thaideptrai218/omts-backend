@@ -83,6 +83,29 @@ internal sealed class R2FileStorage(
         }
     }
 
+    public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (!StorageKeys.IsValid(key))
+        {
+            return false;
+        }
+
+        try
+        {
+            await Client.GetObjectMetadataAsync(Settings.Bucket, key, cancellationToken);
+            return true;
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(exception, "R2 existence check of {Key} failed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
+    }
+
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default)
     {
         try

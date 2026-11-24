@@ -56,6 +56,19 @@ internal sealed class LocalFileStorage(
         }
     }
 
+    public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Task.FromResult(StorageKeys.IsValid(key) && File.Exists(PathOf(key)));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(exception, "Local storage existence check of {Key} failed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
+    }
+
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(signer.CreateUrl(key, timeProvider.GetUtcNow() + (lifetime ?? DefaultLifetime)));
 
