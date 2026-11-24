@@ -102,7 +102,7 @@ public class CustomerDebtStatementTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m, cash: 50_000m))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m, cash: 50_000m))).GetProperty("invoice");
         var accountant = await api.StaffAsync(null, OMTS.Domain.Enums.StaffRole.Accountant);
         var statement = await accountant.Client.StatementAsync(sale.CustomerId);
 
@@ -131,7 +131,7 @@ public class CustomerDebtStatementTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
+        await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
         var accountant = await api.AllZonesAccountantAsync();
         var cash = (await accountant.Client.PaidAsync(
             CustomerPaymentTestKit.MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Manager.Account.Id).With("note", "Handed over at the office"))).Payment();

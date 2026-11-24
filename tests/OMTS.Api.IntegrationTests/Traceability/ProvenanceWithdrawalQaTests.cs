@@ -47,8 +47,8 @@ public class ProvenanceWithdrawalQaTests
         await SetCooperativeAsync(api);
         var kept = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO QA kept");
         var merged = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO QA merged");
-        var first = await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: kept.Id());
-        var second = await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: merged.Id());
+        var first = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: kept.Id());
+        var second = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: merged.Id());
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         await (await Catalogue.MergeAsync(sale.Owner.Client, kept.Id(), merged.Id())).ReadAsync(HttpStatusCode.OK);
 
@@ -71,8 +71,8 @@ public class ProvenanceWithdrawalQaTests
         await SetCooperativeAsync(api);
         var (locked, profile) = await Catalogue.LinkedProfileAsync(api, "DEMO QA locked trader");
         var bystander = await api.TraderAsync("DEMO QA bystander");
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: profile.Id);
-        await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, customerId: bystander.Profile.Id);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: profile.Id);
+        await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, customerId: bystander.Profile.Id);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         await api.UpdateAsync<Account>(locked.Id, a => a.StatusId = StatusIds.Account.Locked);
 
@@ -97,7 +97,7 @@ public class ProvenanceWithdrawalQaTests
         var trader = await api.TraderAsync("DEMO QA quiet trader");
         var off = await trader.Client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = NotificationTypes.ProvenanceWithdrawn, push = false } } });
         Assert.Equal(HttpStatusCode.OK, off.StatusCode);
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: trader.Profile.Id);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: trader.Profile.Id);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
 
         var answer = await sale.Owner.Client.WithdrawnAsync(sale.LotId);
@@ -124,7 +124,7 @@ public class ProvenanceWithdrawalQaTests
         for (var i = 0; i < Traders; i++)
         {
             var customer = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: $"DEMO QA slow {i}");
-            await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: customer.Id());
+            await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: customer.Id());
         }
 
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);

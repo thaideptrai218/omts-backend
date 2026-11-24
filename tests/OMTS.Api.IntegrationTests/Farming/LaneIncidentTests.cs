@@ -406,7 +406,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2));
         await (await ReportAsync(owner, raft.RaftId, 2)).ReadAsync(HttpStatusCode.OK);
 
         var corrected = await factory.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Lanes = ["1", "2"], Cages = "9" });

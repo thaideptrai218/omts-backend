@@ -20,7 +20,7 @@ public class SalesInvoicesQaTestsDeduplicationZone
         var otherZone = (await sale.Owner.Client.CreateZoneAsync()).Id();
         var outsider = await api.ManagerAsync(otherZone);
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId).With("deduplicationKey", "tap-zone-1");
-        var first = (await sale.Manager.Client.SellAsync(body)).GetProperty("invoice");
+        var first = (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice");
         var customerName = first.GetProperty("customer").Text("name");
 
         var answer = await outsider.Client.PostInvoiceAsync(body);
@@ -37,7 +37,7 @@ public class SalesInvoicesQaTestsDeduplicationZone
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (read.StatusCode, await read.ErrorCodeAsync()));
 
         // The Zone Manager of the zone still gets the first invoice back, and nothing was sold twice.
-        Assert.Equal(first.Id(), (await sale.Manager.Client.SellAsync(body)).GetProperty("invoice").Id());
+        Assert.Equal(first.Id(), (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice").Id());
         Assert.Equal((1, 1), (await api.QueryAsync(db => db.SalesInvoices.CountAsync()), await api.QueryAsync(db => db.CustomerPayments.CountAsync())));
     }
 }

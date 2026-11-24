@@ -23,11 +23,11 @@ public class LotTraceTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var second = await Sales.SalesCatalogueTestKit.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader two");
-        var first = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 10m);
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 4m, walkIn: true);
-        var cancelled = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 3m, customerId: second.Id());
-        var last = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 2m, customerId: second.Id());
-        await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, kg: 5m);
+        var first = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 10m);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 4m, walkIn: true);
+        var cancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 3m, customerId: second.Id());
+        var last = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 2m, customerId: second.Id());
+        await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, kg: 5m);
         await api.CancelInvoiceAsync(cancelled.Id());
 
         var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
@@ -65,7 +65,7 @@ public class LotTraceTests
         var again = await owner.SeedLotAsync();
         await owner.HalveLaneAsync(raft.Session, 2);
         var rehung = await owner.SeedingRecordAsync(raft.CycleId, again.Session([2], date: Today).Percents(50m, 2));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2, 3).FinishedLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2, 3).FinishedLanes(1));
         await api.LeaveLaneWithoutSeedLotAsync(raft.RaftId, 3);
         await api.UpdateAsync<PurchaseReceipt>(again.ReceiptId, r => r.StatusId = StatusIds.PurchaseReceipt.Cancelled);
 
@@ -88,7 +88,7 @@ public class LotTraceTests
         Assert.False(trace.GetProperty("canPublish").GetBoolean());
 
         // A complete trace has no message.
-        var complete = await owner.TraceAsync((await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(4))).Id());
+        var complete = await owner.TraceAsync((await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(4))).Id());
         Assert.Equal((JsonValueKind.Null, 0), (complete.GetProperty("message").ValueKind, complete.GetProperty("missing").GetArrayLength()));
     }
 
@@ -98,8 +98,8 @@ public class LotTraceTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 10m);
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 4m, walkIn: true);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 10m);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 4m, walkIn: true);
         var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
         var code = trace.Text("lotCode");
 

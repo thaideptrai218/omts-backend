@@ -67,8 +67,8 @@ public class SalesInvoiceDetailTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
         var managerAll = await api.StaffAsync(null, StaffRole.ZoneManager);

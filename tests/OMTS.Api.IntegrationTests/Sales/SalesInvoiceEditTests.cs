@@ -48,14 +48,14 @@ public class SalesInvoiceEditTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var accountant = await api.StaffAsync(await api.ZoneEntityAsync(sale.ZoneId), StaffRole.Accountant);
         // 300,000 were paid in cash: an invoice of 150,000 leaves 150,000 owed back, which is confirmed.
         var edit = Edit(sold, [Line(sale.ProductId, sale.LotId, 5m)], sale.LotId).With("confirmOwedBack", true);
 
         Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.EditAsync(sold.Id(), edit)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await accountant.Client.EditAsync(sold.Id(), edit)).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
         Assert.DoesNotContain("Edit", (await sale.Manager.Client.InvoiceAsync(sold.Id())).Actions());
 
         var edited = (await sale.Owner.Client.EditedAsync(sold.Id(), edit)).GetProperty("invoice");
@@ -110,8 +110,8 @@ public class SalesInvoiceEditTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
-        var other = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("code", "KEEP-1"))).GetProperty("invoice");
+        var sold = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
+        var other = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("code", "KEEP-1"))).GetProperty("invoice");
         Assert.Equal(0m, await owner.CustomerDebtAsync(sale.CustomerId));
 
         var body = Edit(sold, [Line(sale.ProductId, sale.LotId, 8m)], sale.LotId);
@@ -174,7 +174,7 @@ public class SalesInvoiceEditTests
         Assert.Equal(("Completed", 0m), (completed.Text("status"), completed.Money("advanceLeft")));
         Assert.Equal(0m, await owner.CustomerDebtAsync(sale.CustomerId));
 
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ErrorCodeAsync());
         await owner.CancelledAsync(sold.Id(), Cancellation(sold));
 
         var reopened = await owner.GetOrderAsync(orderId);

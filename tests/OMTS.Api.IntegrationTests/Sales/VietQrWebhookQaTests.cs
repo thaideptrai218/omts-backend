@@ -31,7 +31,7 @@ public class VietQrWebhookQaTests
     {
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var code = (await sale.Manager.Client.AwaitTransferAsync(Invoice(customer ?? sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr(cash)))).Code();
+        var code = (await sale.Owner.Client.AwaitTransferAsync(Invoice(customer ?? sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr(cash)))).Code();
         return (sale, code);
     }
 
@@ -248,7 +248,7 @@ public class VietQrWebhookQaTests
         (await sale.Owner.Client.MergeAsync(trader.Profile.Id, sale.CustomerId, ownerApproved: true)).EnsureSuccessStatusCode();
         Assert.Equal(trader.Profile.Id, (await api.PendingRowAsync(code)).CustomerId);
 
-        var changed = await sale.Manager.Client.ChangePaymentAsync(code, Cash(300_000m));
+        var changed = await sale.Owner.Client.ChangePaymentAsync(code, Cash(300_000m));
 
         var saved = await changed.ReadAsync(HttpStatusCode.Created);
         Assert.Equal(trader.Profile.Id, saved.GetProperty("invoice").GetProperty("customer").Id());
@@ -365,7 +365,7 @@ public class VietQrWebhookQaTests
         await api.UseReceivingAccountAsync();
         for (var i = 0; i < 3; i++)
         {
-            await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], VietQr()));
+            await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], VietQr()));
         }
 
         await using var counted = api.WithWebHostBuilder(b => b.ConfigureTestServices(services =>

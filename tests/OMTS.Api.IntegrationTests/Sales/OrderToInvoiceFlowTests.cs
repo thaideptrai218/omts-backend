@@ -18,7 +18,7 @@ public class OrderToInvoiceFlowTests
         var sale = await api.SaleSetupAsync();
         var buyer = await api.TraderAsync();
         var other = await api.TraderAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
 
         Assert.Equal(HttpStatusCode.OK, (await buyer.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).StatusCode);

@@ -32,13 +32,13 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
 
         var answer = await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id());
 
         // What a Yes really does now: nothing (the end of the sale was made).
-        var yes = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var yes = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
         Assert.Equal((JsonValueKind.Null, HarvestLotOriginState.NotPublished), (yes.GetProperty("qrUrl").ValueKind, (await api.LotRowAsync(sale.LotId)).OriginState));
         if (answer.StatusCode == HttpStatusCode.OK)
         {
@@ -58,12 +58,12 @@ public class TracePublishQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var away = await api.SeededRaftAsync();
-        var awayLot = (await away.Owner.Client.HarvestLotAsync(away.RaftId, HarvestFields.OfLanes(1))).Id();
+        var awayLot = (await api.HarvestLotOfLanesAsync(away.Owner.Client, away.RaftId, HarvestFields.OfLanes(1))).Id();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, awayLot, 1m)], Cash(60_000m), sale.LotId, awayLot).With("zoneId", sale.ZoneId);
         var invoice = (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice");
 
         var check = (await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).LotsById();
-        var finished = (await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true)).LotsById();
+        var finished = (await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true)).LotsById();
 
         Assert.Equal(check[awayLot].Missing(), finished[awayLot].Missing());
         Assert.Equal(check[awayLot].Text("message"), finished[awayLot].Text("message"));
@@ -76,7 +76,7 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
-        var lot = (await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1))).Id();
+        var lot = (await api.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1))).Id();
         var product = (await SalesCatalogue.CreateProductAsync(raft.Owner.Client, unitPrice: ListPrice)).Id();
         var customer = (await SalesCatalogue.CreateCustomerAsync(raft.Owner.Client)).Id();
         var manager = await api.ManagerAsync(raft.ZoneId);
@@ -98,7 +98,7 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var away = await api.CycleAsync();
         var session = await api.QueryAsync(db => db.SeedingRecords.Where(s => s.Cycle.RaftId == sale.RaftId).Select(s => s.Id).SingleAsync());
         await api.UpdateAsync<SeedingRecord>(session, s => s.CycleId = away.CycleId);
@@ -116,15 +116,15 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var first = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
-        var second = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
+        var first = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
+        var second = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
         foreach (var id in new[] { sale.LotId, sale.OtherLotId })
         {
             Assert.Equal(StatusIds.HarvestLot.Closed, (await api.LotRowAsync(id)).StatusId);
         }
 
-        var finished = await sale.Manager.Client.FinishedAsync(first.Id(), wantsQrCode: true);
-        await sale.Manager.Client.FinishedAsync(second.Id(), wantsQrCode: false);
+        var finished = await sale.Owner.Client.FinishedAsync(first.Id(), wantsQrCode: true);
+        await sale.Owner.Client.FinishedAsync(second.Id(), wantsQrCode: false);
         var published = await (await sale.Manager.Client.PostPublishAsync(sale.OtherLotId)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Published", "Published"), (finished.LotsById()[sale.LotId].Text("originState"), published.GetProperty("lot").Text("originState")));
@@ -138,8 +138,8 @@ public class TracePublishQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.CancelSeedReceiptAsync(sale.RaftId);
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        var first = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        var first = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
         Assert.Equal((JsonValueKind.Null, "MSG-TRACE-01"), (first.GetProperty("qrUrl").ValueKind, first.LotsById()[sale.LotId].Text("messageCode")));
         await api.DbAsync(async db =>
         {
@@ -148,7 +148,7 @@ public class TracePublishQaTests
             return await db.SaveChangesAsync();
         });
 
-        var second = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var second = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         Assert.Equal((JsonValueKind.Null, 0), (second.GetProperty("qrUrl").ValueKind, second.GetProperty("lots").GetArrayLength()));
         Assert.Equal(HarvestLotOriginState.NotPublished, (await api.LotRowAsync(sale.LotId)).OriginState);
@@ -162,7 +162,7 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
-        var lot = (await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1))).Id();
+        var lot = (await api.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1))).Id();
         var product = (await SalesCatalogue.CreateProductAsync(raft.Owner.Client, unitPrice: ListPrice)).Id();
         var customer = (await SalesCatalogue.CreateCustomerAsync(raft.Owner.Client)).Id();
         var manager = await api.ManagerAsync(raft.ZoneId);
@@ -186,7 +186,7 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.CancelInvoiceAsync(invoice.Id());
         await api.WithdrawAsync(sale.LotId);
 
@@ -202,7 +202,7 @@ public class TracePublishQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var trader = await api.TraderAsync();
         var anonymous = api.CreateClient();
 

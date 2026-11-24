@@ -132,8 +132,8 @@ public class TraceCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<Aut
     {
         var raft = await factory.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
-        var first = (await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2))).Text("lotCode");
-        var second = (await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(3))).Text("lotCode");
+        var first = (await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2))).Text("lotCode");
+        var second = (await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(3))).Text("lotCode");
 
         // TRACE-03.0.E3: "names the lanes and harvest lots that would have no seed lot".
         var refused = await (await owner.PutSeedingTraceAsync(raft.Session.Id(), raft.Session.SeedingCorrection(lanes: [1]))).ReadAsync(HttpStatusCode.BadRequest);

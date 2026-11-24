@@ -41,7 +41,7 @@ public class ProvenancePublishSqlServerTests
     /// <summary>A new lot of lane 1, sold by the Zone Manager on an invoice of 1 kg.</summary>
     private static async Task<(Guid LotId, JsonElement Invoice)> SoldLotAsync(Setup setup)
     {
-        var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(setup.Owner, setup.RaftId, HarvestFields.OfLanes(1));
         var invoice = (await setup.Manager.SellAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 1m)], Cash(ListPrice), lot.Id()))).GetProperty("invoice");
         return (lot.Id(), invoice);
     }

@@ -42,7 +42,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var first = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
         var second = await AddInvoicePaymentAsync(api, sold.Id(), sale.CustomerId, 40_000m, CustomerPaymentMethod.Cash, StatusIds.CustomerPayment.AwaitingConfirmation);
 
@@ -69,7 +69,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var answer = await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", new object?[] { null }));
 
@@ -202,11 +202,11 @@ public class SalesInvoiceCancellationQaTests
         var owner = sale.Owner.Client;
         var profile = await NewCustomerAsync(sale);
 
-        var fullCustomer = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var fullCustomer = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var answered = Cancellation(fullCustomer).With("cashGivenBack", GivenBack(Assert.Single(await api.PaymentsOfAsync(fullCustomer.Id())).Id, true));
         Assert.Equal(["Customer"], await (await owner.CancelInvoiceAsync(fullCustomer.Id(), answered.With("customerId", profile))).InvalidFieldsAsync());
 
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
         var walkInPayment = Assert.Single(await api.PaymentsOfAsync(walkIn.Id()));
         var givenBack = Cancellation(walkIn).With("cashGivenBack", GivenBack(walkInPayment.Id, true));
         Assert.Equal(["Customer"], await (await owner.CancelInvoiceAsync(walkIn.Id(), givenBack.With("customerId", profile))).InvalidFieldsAsync());
@@ -271,7 +271,7 @@ public class SalesInvoiceCancellationQaTests
         Assert.Equal(2, sendings.Count);
         Assert.Equal(StatusIds.MessageDelivery.Sent, sendings[^1].DeliveryStatusId);
 
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
         await owner.FinishedAsync(walkIn.Id(), wantsQrCode: false);
         var walkInCurrent = await owner.InvoiceAsync(walkIn.Id());
         var answer = await owner.CorrectedAsync(walkIn.Id(), DataEntry(walkInCurrent, [Line(sale.ProductId, sale.OtherLotId, 10m, ListPrice)], sale.OtherLotId));
@@ -382,7 +382,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         Assert.Equal(["Reason"], await (await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("reason", new string('r', 1001)))).InvalidFieldsAsync());
         Assert.Equal(["RowVersion"], await (await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("rowVersion", null))).InvalidFieldsAsync());
@@ -403,7 +403,7 @@ public class SalesInvoiceCancellationQaTests
         var owner = sale.Owner.Client;
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
 
         await owner.CancelledAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", GivenBack(payment.Id, false)).With("confirmOwedBack", true));

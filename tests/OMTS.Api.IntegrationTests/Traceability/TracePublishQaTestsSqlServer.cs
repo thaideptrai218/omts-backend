@@ -41,7 +41,7 @@ public class TracePublishQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper o
     /// <summary>A new lot of lane 1 on one invoice of 1 kg that leaves it for sale.</summary>
     private static async Task<(Guid LotId, JsonElement Invoice)> SoldLotAsync(Setup setup)
     {
-        var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(setup.Owner, setup.RaftId, HarvestFields.OfLanes(1));
         return (lot.Id(), await SellAsync(setup, lot.Id(), leaveForSale: true));
     }
 

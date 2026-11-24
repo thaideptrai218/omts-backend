@@ -196,7 +196,7 @@ public class SalesReturnQaTests
         using var _ = api;
         var owner = sale.Owner.Client;
         var invoice = await owner.InvoiceAsync((await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice)).Id());
-        var saved = await sale.Manager.Client.ReturnedAsync(
+        var saved = await sale.Owner.Client.ReturnedAsync(
             invoice.Id(), ReturnBody(invoice, "ThrownAway").With("ownerAgreed", true).With("thrownAwayLots", new[] { new { harvestLotId = sale.LotId, stillForSale = false, leftoverKg = 0m } }));
         var returned = saved.GetProperty("return");
         Assert.Equal(10m, (await owner.GetHarvestLotAsync(sale.LotId)).GetProperty("figures").Kg("lostKg"));
@@ -218,7 +218,7 @@ public class SalesReturnQaTests
         var owner = sale.Owner.Client;
         await api.AllZonesAccountantAsync();
         var invoice = await owner.InvoiceAsync((await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice)).Id());
-        await (await sale.Manager.Client.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).QuestionAsync();
+        await (await sale.Owner.Client.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).QuestionAsync();
         await (await owner.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "ThrownAway"))).QuestionAsync();
 
         var returned = (await owner.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).GetProperty("return");

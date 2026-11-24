@@ -63,11 +63,11 @@ public class SalesReturnTests
         var invoice = await OnDebtAsync(sale, sale.LotId, 10m);
         var manager = sale.Manager.Client;
 
-        var question = await (await manager.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).QuestionAsync();
+        var question = await (await sale.Owner.Client.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"))).QuestionAsync();
         Assert.Equal(("MSG-CLAIM-04", "ownerAgreed"), (question.Code, question.Field));
         Assert.Empty(await api.ReturnsOfAsync(invoice.Id()));
 
-        var saved = await manager.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale").With("ownerAgreed", true));
+        var saved = await sale.Owner.Client.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale").With("ownerAgreed", true));
 
         Assert.Equal("TL", saved.GetProperty("return").Text("code")![..2]);
         Assert.Equal(sale.Manager.Account.Id, saved.GetProperty("return").GetProperty("recordedBy").Id());

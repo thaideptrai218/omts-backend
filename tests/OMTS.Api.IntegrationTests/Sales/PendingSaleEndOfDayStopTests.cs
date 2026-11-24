@@ -25,7 +25,7 @@ public class PendingSaleEndOfDayStopTests
     private static readonly DateOnly Today = FarmingTestKit.Today;
 
     private static async Task<string> AwaitAsync(SaleSetup sale, decimal kg = 10m) =>
-        (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr()))).Code();
+        (await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr()))).Code();
 
     // The cut is the start of the business day in UTC+7: 13/11 begins at 17:00 UTC on 12/11.
     [Fact]
@@ -45,7 +45,7 @@ public class PendingSaleEndOfDayStopTests
         var transferred = await AwaitAsync(sale);
         var byHand = await AwaitAsync(sale);
         var changed = await AwaitAsync(sale);
-        await (await sale.Manager.Client.ChangePaymentAsync(changed, Cash(300_000m))).ReadAsync(HttpStatusCode.Created);
+        await (await sale.Owner.Client.ChangePaymentAsync(changed, Cash(300_000m))).ReadAsync(HttpStatusCode.Created);
         await (await sale.Manager.Client.StopAsync(byHand, confirmed: true)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("CompletedSale", (await api.TransferAsync(transferred, 300_000m)).Outcome());
         var job = api.Services.GetRequiredService<PendingSaleEndOfDayStopJob>();

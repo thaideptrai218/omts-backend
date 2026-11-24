@@ -87,13 +87,13 @@ public class VietQrSaleTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
 
-        var refused = await (await sale.Manager.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).ReadAsync(HttpStatusCode.Conflict);
+        var refused = await (await sale.Owner.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).ReadAsync(HttpStatusCode.Conflict);
 
         Assert.Equal("MSG-SALE-13", refused.Text("code"));
         Assert.StartsWith("VietQR cannot be used yet: the cooperative has no receiving bank account.", refused.Text("detail"));
         Assert.Equal((0, 0), await api.QueryAsync(async db => (await db.PendingSales.CountAsync(), await db.SalesInvoices.CountAsync())));
         // Cash that covers the total with VietQR chosen needs no transfer: a cash sale.
-        await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(300_000m)));
+        await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(300_000m)));
     }
 
     // SALE-05.2: a walk-in customer pays all with the VietQR code; a repeated deduplication key answers the same sale.
@@ -105,8 +105,8 @@ public class VietQrSaleTests
         await api.UseReceivingAccountAsync();
         var body = Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()).With("deduplicationKey", "key-" + AcsTestKit.NewCode());
 
-        var first = await sale.Manager.Client.AwaitTransferAsync(body);
-        var again = await sale.Manager.Client.AwaitTransferAsync(body);
+        var first = await sale.Owner.Client.AwaitTransferAsync(body);
+        var again = await sale.Owner.Client.AwaitTransferAsync(body);
 
         Assert.Equal((first.Code(), true, 300_000m), (again.Code(), again.GetProperty("walkInCustomer").GetBoolean(), again.Money("toPayAmount")));
         Assert.Equal(1, await api.QueryAsync(db => db.PendingSales.CountAsync()));
@@ -115,7 +115,7 @@ public class VietQrSaleTests
         Assert.Equal($"Invoice {first.Code()} is completed: 300,000 VND received by VietQR.", invoice.Text("message"));
         Assert.Equal(JsonValueKind.Null, invoice.GetProperty("invoice").GetProperty("customer").ValueKind);
         // The same key once saved answers the invoice (201).
-        var saved = await (await sale.Manager.Client.PostInvoiceAsync(body)).ReadAsync(HttpStatusCode.Created);
+        var saved = await (await sale.Owner.Client.PostInvoiceAsync(body)).ReadAsync(HttpStatusCode.Created);
         Assert.Equal(first.Code(), saved.GetProperty("invoice").Text("code"));
     }
 }

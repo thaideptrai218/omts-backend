@@ -110,7 +110,7 @@ public class VietQrPendingSaleActionsTests
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr());
-        var code = (await sale.Manager.Client.AwaitTransferAsync(body)).Code();
+        var code = (await sale.Owner.Client.AwaitTransferAsync(body)).Code();
         var otherZone = await api.ManagerAsync((await sale.Owner.Client.CreateZoneAsync()).Id());
         var accountant = await api.AllZonesAccountantAsync();
         var trader = await api.TraderAsync();

@@ -46,7 +46,7 @@ public class PublicProvenanceQaTests
         var cycle = await owner.StartCycleAsync(otherRaft.Id(), new CycleBody(Today.AddDays(-10)));
         var seed = await owner.SeedLotAsync();
         await owner.SeedingRecordAsync(cycle.Id(), seed.Session([1, 2, 3, 4, 5]));
-        var otherLot = await owner.HarvestLotAsync(otherRaft.Id(), HarvestFields.OfLanes(1));
+        var otherLot = await api.HarvestLotOfLanesAsync(owner, otherRaft.Id(), HarvestFields.OfLanes(1));
 
         var (_, token) = await sale.SoldWithQrCodeAsync((sale.LotId, 10m), (otherLot.Id(), 5m));
 

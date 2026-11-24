@@ -22,8 +22,9 @@ public static class SalesInvoiceTestKit
     {
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner;
-        var lot = await owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var other = await owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        // Two lots on different lanes: a lot holds the whole raft, so the lanes are chosen by a correction of the lanes.
+        var lot = await api.HarvestLotOfLanesAsync(owner.Client, raft.RaftId, HarvestFields.OfLanes(1));
+        var other = await api.HarvestLotOfLanesAsync(owner.Client, raft.RaftId, HarvestFields.OfLanes(2));
         var product = await owner.Client.CreateProductAsync(unitPrice: ListPrice);
         var customer = await owner.Client.CreateCustomerAsync();
         var manager = await api.ManagerAsync(raft.ZoneId);

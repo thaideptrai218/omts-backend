@@ -85,7 +85,7 @@ public class SalesInvoiceCorrectionQaTests
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
         var customer = await NewCustomerAsync(sale);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: customer);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: customer);
         await api.RecordPaymentAsync(customer, 0m + 50_000m);
         Assert.Equal(-50_000m, await owner.CustomerDebtAsync(customer));
 
@@ -403,7 +403,7 @@ public class SalesInvoiceCorrectionQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
+        var sold = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
 
         var corrected = (await owner.CorrectedAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.OtherLotId, 3m, 40_000m)], sale.OtherLotId))).GetProperty("invoice");
 

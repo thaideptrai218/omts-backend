@@ -66,9 +66,9 @@ public class SalesInvoiceExportQaTests
         var sale = await api.SaleSetupAsync();
         var manager = sale.Manager.Client;
         var other = (await sale.Owner.Client.CreateCustomerAsync()).Id();
-        var unpaid = (await manager.SellAsync(sale.PayLater(sale.LotId, 1m))).GetProperty("invoice");
-        var paid = await manager.SoldAsync(sale, sale.LotId, 2m, customerId: other);
-        var cancelled = await manager.SoldAsync(sale, sale.LotId, 4m, walkIn: true);
+        var unpaid = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 1m))).GetProperty("invoice");
+        var paid = await sale.Owner.Client.SoldAsync(sale, sale.LotId, 2m, customerId: other);
+        var cancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, 4m, walkIn: true);
         await api.UpdateAsync<SalesInvoice>(cancelled.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
 
         foreach (var (query, codes, total) in new (string Query, string?[] Codes, decimal Total)[]
@@ -110,8 +110,8 @@ public class SalesInvoiceExportQaTests
         await api.UpdateAsync<FarmingZone>(sale.ZoneId, z => z.Name = text);
         await api.UpdateAsync<Product>(sale.ProductId, p => p.Name = text);
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => l.LotCode = text);
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
 
         foreach (var response in new[] { await sale.Owner.Client.ExportInvoicesAsync(), await sale.Owner.Client.PrintInvoiceAsync(invoice.Id()) })
         {
@@ -140,7 +140,7 @@ public class SalesInvoiceExportQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = "DEMO\u0001\u0008\u000BNAME");
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         using var list = await WorkbookAsync(await sale.Owner.Client.ExportInvoicesAsync());
         using var print = await WorkbookAsync(await sale.Owner.Client.PrintInvoiceAsync(invoice.Id()));
@@ -154,7 +154,7 @@ public class SalesInvoiceExportQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var list = await sale.Owner.Client.ExportInvoicesAsync();
         var print = await sale.Owner.Client.PrintInvoiceAsync(invoice.Id());
@@ -171,7 +171,7 @@ public class SalesInvoiceExportQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => (i.PriceCutTotal, i.Total) = (100_000m, 200_000m));
 
         using var file = await WorkbookAsync(await sale.Manager.Client.PrintInvoiceAsync(invoice.Id()));
@@ -186,7 +186,7 @@ public class SalesInvoiceExportQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
 
         using var file = await WorkbookAsync(await sale.Owner.Client.PrintInvoiceAsync(invoice.Id()));

@@ -20,7 +20,7 @@ public class BankNotificationWebhookTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var code = (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
+        var code = (await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
         var secret = NewSecret();
         var body = NotificationBody(NewReference(), 300_000m, code);
         using var hooked = api.WithWebhookSecret(secret);
@@ -106,8 +106,8 @@ public class BankNotificationWebhookTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var broken = (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
-        var fine = (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 10m)], VietQr()))).Code();
+        var broken = (await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
+        var fine = (await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 10m)], VietQr()))).Code();
         await api.UseDbAsync(db => db.HarvestLots.Remove(db.HarvestLots.Single(l => l.Id == sale.LotId)));
         var secret = NewSecret();
         using var hooked = api.WithWebhookSecret(secret);

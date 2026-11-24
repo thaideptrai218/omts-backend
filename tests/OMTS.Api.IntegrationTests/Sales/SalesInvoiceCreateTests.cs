@@ -22,7 +22,7 @@ public class SalesInvoiceCreateTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
 
-        var saved = await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 200m)], Cash(6_000_000m)));
+        var saved = await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 200m)], Cash(6_000_000m)));
 
         var invoice = saved.GetProperty("invoice");
         Assert.Matches("^HD[0-9]{6}$", invoice.Text("code"));
@@ -123,11 +123,11 @@ public class SalesInvoiceCreateTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var first = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
+        var first = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
         var product = await sale.Owner.Client.GetFromJsonAsync<JsonElement>($"/api/products/{sale.ProductId}");
         (await sale.Owner.Client.PutAsJsonAsync($"/api/products/{sale.ProductId}", new { name = product.Text("name"), unitPrice = 35_000m, rowVersion = product.RowVersion() })).EnsureSuccessStatusCode();
 
-        var second = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(350_000m)))).GetProperty("invoice");
+        var second = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(350_000m)))).GetProperty("invoice");
 
         Assert.Equal(30_000m, (await sale.Manager.Client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/{first.Id()}")).GetProperty("lines")[0].Money("unitPrice"));
         Assert.Equal(("OrderPrice", 35_000m), (second.GetProperty("lines")[0].Text("priceSource"), second.GetProperty("lines")[0].Money("unitPrice")));
@@ -140,7 +140,7 @@ public class SalesInvoiceCreateTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
 
-        var byManager = (await sale.Manager.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 12.5m)], Cash(375_000m), sale.LotId))).GetProperty("invoice");
+        var byManager = (await sale.Owner.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 12.5m)], Cash(375_000m), sale.LotId))).GetProperty("invoice");
         var byOwner = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 2m)], Cash(60_000m)))).GetProperty("invoice");
 
         var notices = await api.QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.Type == "SALE_COMPLETED" && n.RecipientAccountId == sale.Owner.Account.Id).ToListAsync());

@@ -20,7 +20,7 @@ public class LotTraceQaTestsSqlServer
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
         var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(Today.AddDays(-10)))).Id();
         await owner.SeedingRecordAsync(cycleId, (await owner.SeedLotAsync()).Session([1, 2, 3, 4, 5]));
-        var lotId = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1))).Id();
+        var lotId = (await factory.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1))).Id();
         var productId = (await Sales.SalesCatalogueTestKit.CreateProductAsync(owner, unitPrice: ListPrice)).Id();
         var manager = (await host.StaffInZoneAsync(zoneId)).Client;
         var stranger = (await host.StaffInZoneAsync((await owner.CreateZoneAsync()).Id())).Client;

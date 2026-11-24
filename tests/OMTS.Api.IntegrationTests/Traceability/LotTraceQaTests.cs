@@ -33,7 +33,7 @@ public class LotTraceQaTests
         var again = await owner.SeedLotAsync();
         await owner.HalveLaneAsync(raft.Session, 2);
         await owner.SeedingRecordAsync(raft.CycleId, again.Session([2], date: Today).Percents(50m, 2));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2));
         await api.UpdateAsync<PurchaseReceipt>(again.ReceiptId, r => r.StatusId = StatusIds.PurchaseReceipt.Cancelled);
 
         var trace = await owner.TraceAsync(lot.Id());
@@ -51,7 +51,7 @@ public class LotTraceQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 10m);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 10m);
         var zoneB = (await sale.Owner.Client.CreateZoneAsync()).Id();
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => i.ZoneId = zoneB);
         var managerB = await api.ManagerAsync(zoneB);
@@ -88,7 +88,7 @@ public class LotTraceQaTests
         var sale = await api.SaleSetupAsync();
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = "=1+2");
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => l.LotCode = "KV/01 B:01*\"x");
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 2.5m);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 2.5m);
 
         var export = await sale.Manager.Client.GetTraceExportAsync(sale.LotId);
 
@@ -114,7 +114,7 @@ public class LotTraceQaTests
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(4, 5));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(4, 5));
         await api.UpdateAsync<CultivationCycle>(raft.CycleId, c => (c.StatusId, c.CloseDate) = (StatusIds.CultivationCycle.Closed, Today.AddDays(-2)));
         var lane5 = await api.QueryAsync(db => db.Lanes.Where(l => l.RaftId == raft.RaftId && l.LaneNumber == 5).Select(l => l.Id).SingleAsync());
         await api.UpdateAsync<Lane>(lane5, l => l.StatusId = StatusIds.Lane.Removed);
@@ -137,7 +137,7 @@ public class LotTraceQaTests
     {
         using var api = new AuthApiFactory();
         var t = await api.TracedRaftAsync();
-        var second = (await t.Owner.Client.HarvestLotAsync(t.RaftId, HarvestFields.OfLanes(2))).Id();
+        var second = (await api.HarvestLotOfLanesAsync(t.Owner.Client, t.RaftId, HarvestFields.OfLanes(2))).Id();
         await t.Owner.Client.RecordLogAsync(t.CycleId, new LogFields { Notes = "Buoys fine" });
         await t.Owner.Client.CloseCycleAsync(t.CycleId);
         (await api.SendLotTraceAsync(t.Owner.Client, second, HarvestFields.OfLanes(2) with { Cages = "7" }, reason: "DEMO cages recounted")).EnsureSuccessStatusCode();

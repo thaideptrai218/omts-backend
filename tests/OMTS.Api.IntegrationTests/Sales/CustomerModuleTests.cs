@@ -26,9 +26,9 @@ public class CustomerModuleTests
     /// <summary>Two pay-later invoices of the sale's customer: 300,000 (older) and 600,000.</summary>
     private static async Task<(JsonElement Older, JsonElement Newer)> TwoInvoicesAsync(AuthApiFactory api, SaleSetup sale)
     {
-        var older = (await sale.Manager.Client.SellAsync(PayLater(sale, 10m))).GetProperty("invoice");
+        var older = (await sale.Owner.Client.SellAsync(PayLater(sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 20);
-        var newer = (await sale.Manager.Client.SellAsync(PayLater(sale, 20m))).GetProperty("invoice");
+        var newer = (await sale.Owner.Client.SellAsync(PayLater(sale, 20m))).GetProperty("invoice");
         return (older, newer);
     }
 
@@ -80,7 +80,7 @@ public class CustomerModuleTests
         // An unused profile is deleted; one with an invoice is not, and the answer says to stop it instead.
         await (await owner.DeleteAsync($"/api/customers/{typed.Id()}")).ReadAsync(HttpStatusCode.NoContent);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/customers/{typed.Id()}")).StatusCode);
-        await sale.Manager.Client.SellAsync(PayLater(sale, 10m));
+        await sale.Owner.Client.SellAsync(PayLater(sale, 10m));
         var used = await (await owner.DeleteAsync($"/api/customers/{sale.CustomerId}")).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-06");
         Assert.True(used.GetProperty("canDiscontinue").GetBoolean());
         Assert.True((await owner.CustomerAsync(sale.CustomerId)).GetProperty("isUsed").GetBoolean());
@@ -383,7 +383,7 @@ public class CustomerModuleTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m, "None"), sale.LotId))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m, "None"), sale.LotId))).GetProperty("invoice");
         var accountant = await api.AllZonesAccountantAsync();
         var paymentId = await api.PortCashOfAsync(invoice);
         var code = (await GetAsync(accountant.Client, $"/api/customer-payments/{paymentId}")).Text("code");

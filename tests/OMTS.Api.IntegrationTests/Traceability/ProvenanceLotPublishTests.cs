@@ -29,7 +29,7 @@ public class ProvenanceLotPublishTests
         Assert.Equal(("MSG-GEN-09", $"Harvest lot {code} is on no sales invoice and cannot be used for this action."), (refused.Text("code"), refused.Text("detail")));
         Assert.False((await sale.Manager.Client.GetHarvestLotAsync(sale.LotId)).GetProperty("canPublish").GetBoolean());
 
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var check = await sale.Manager.Client.PublishCheckAsync(sale.LotId);
         Assert.Equal((true, true, false, "MSG-GEN-04", Confirm($"publish the origin information of harvest lot {code}")), (check.GetProperty("canPublish").GetBoolean(),
             check.GetProperty("onSalesInvoice").GetBoolean(), check.GetProperty("republish").GetBoolean(), check.Text("messageCode"), check.Text("message")));
@@ -69,8 +69,8 @@ public class ProvenanceLotPublishTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId);
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
         var seedLot = await api.CancelSeedReceiptAsync(sale.RaftId);
         var expected = new Dictionary<Guid, (string Item, string Text)>
@@ -105,7 +105,7 @@ public class ProvenanceLotPublishTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.WithdrawAsync(sale.LotId);
         var withdrawn = await api.LotRowAsync(sale.LotId);
         var code = withdrawn.LotCode;
@@ -139,7 +139,7 @@ public class ProvenanceLotPublishTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.CancelInvoiceAsync(invoice.Id());
 
         var check = await sale.Owner.Client.PublishCheckAsync(sale.LotId);

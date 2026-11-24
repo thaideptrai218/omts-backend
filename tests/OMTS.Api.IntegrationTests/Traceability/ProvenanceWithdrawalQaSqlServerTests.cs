@@ -52,7 +52,7 @@ public class ProvenanceWithdrawalQaSqlServerTests
 
     private static async Task<Guid> PublishedLotAsync(Setup setup)
     {
-        var lotId = (await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1))).Id();
+        var lotId = (await factory.HarvestLotOfLanesAsync(setup.Owner, setup.RaftId, HarvestFields.OfLanes(1))).Id();
         await SellAsync(setup, lotId, setup.CustomerId);
         await (await setup.Owner.PostPublishAsync(lotId)).ReadAsync(HttpStatusCode.OK);
         return lotId;

@@ -26,8 +26,8 @@ public class CustomerPaymentConfirmationTests
 
         var older = await sale.PayLaterAsync(sale.CustomerId, 20m, cash: 100_000m);
         await api.BackDateAsync(older.Id(), 3);
-        var paidInCash = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
-        var walkIn = (await sale.Manager.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId))).GetProperty("invoice");
+        var paidInCash = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
+        var walkIn = (await sale.Owner.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId))).GetProperty("invoice");
         var (first, second, third) = (await api.PortCashOfAsync(older), await api.PortCashOfAsync(paidInCash), await api.PortCashOfAsync(walkIn));
 
         // Oldest first, each with its customer (none for the walk-in), invoice, amount and the Zone Manager who collected it.

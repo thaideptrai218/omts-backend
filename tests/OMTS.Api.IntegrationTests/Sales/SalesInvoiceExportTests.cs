@@ -22,7 +22,7 @@ public class SalesInvoiceExportTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var other = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var inOther = await other.Manager.Client.SoldAsync(other, other.LotId);
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
@@ -197,7 +197,7 @@ public class SalesInvoiceExportTests
         foreach (var name in new[] { "=HYPERLINK(\"https://example.invalid\",\"DEMO\")", "+1+1", "-1+1", "@SUM(A1)" })
         {
             await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = name);
-            var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+            var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
             using var list = await WorkbookAsync(await sale.Owner.Client.ExportInvoicesAsync());
             var cell = list.Worksheet(SalesInvoiceExportSheets.ListSheet).Cell(2, 4);

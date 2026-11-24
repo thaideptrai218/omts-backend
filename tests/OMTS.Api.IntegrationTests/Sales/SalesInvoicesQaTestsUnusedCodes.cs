@@ -81,7 +81,7 @@ public class SalesInvoicesQaTestsUnusedCodes
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId).With("deduplicationKey", "tap-twice");
-        var races = new LostRaces { Failures = 1, Meanwhile = async () => (await sale.Manager.Client.PostInvoiceAsync(body)).EnsureSuccessStatusCode() };
+        var races = new LostRaces { Failures = 1, Meanwhile = async () => (await sale.Owner.Client.PostInvoiceAsync(body)).EnsureSuccessStatusCode() };
         var (host, client) = Losing(api, sale.Manager, races);
         await using var _ = host;
 

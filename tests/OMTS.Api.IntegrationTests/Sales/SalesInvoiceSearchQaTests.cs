@@ -118,7 +118,7 @@ public class SalesInvoiceSearchQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<FarmingZone>(sale.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
         var manager = await api.LoginAsync(sale.Manager.Account.Username);
 
@@ -176,7 +176,7 @@ public class SalesInvoiceSearchQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var list = await sale.Manager.Client.InvoiceListAsync("?from=&to=&zoneId=&customerId=&harvestLotId=&raftId=&statusId=&paid=&code=");
 
@@ -327,7 +327,7 @@ public class SalesInvoiceSearchQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var row = (await sale.Manager.Client.InvoiceListAsync()).Rows()[0];
 

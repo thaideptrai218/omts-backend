@@ -16,7 +16,7 @@ public class ProvenanceWithdrawalAccessTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         var accountant = await api.StaffAsync(null, StaffRole.Accountant);
         var trader = await api.TraderAsync();
