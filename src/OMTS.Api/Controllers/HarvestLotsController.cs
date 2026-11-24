@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestLotsController(
     HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
-    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestLanesFinishService lanesFinish, HarvestCrewService crews, HarvestLotWeighingService weighing,
+    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestLanesFinishService lanesFinish, HarvestCrewService crews, HarvestLotWeighingService weighing, HarvestLotCageService cages,
     HarvestLotReopeningService reopening, HarvestLotRegisterService register, HarvestLotRegisterFileService registerFiles) : ControllerBase
 {
     private const string PhotosField = "Photos";
@@ -179,10 +179,42 @@ public sealed class HarvestLotsController(
         (await register.MovementsAsync(lotId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Weighs a lot waiting for its weighing (it becomes Open, for sale), or weighs an Open or Reopened lot again: <c>lines</c> holds the <c>weighedKg</c> of each product line by <c>lineNumber</c> (every line once;
-    /// above 0, at most 3 decimals), or <c>weighedKg</c> for a lot with no lines; <c>weighedAt</c> (default now, not before the harvest, not in the future) and <c>rowVersion</c>. The Harvest rows of the product
-    /// ledger are written at the weighed kg (again: the earlier ones undone, nothing else touched) and the figures of the lot count from them. A Zone Manager of the lot's zone or the Cooperative Owner. 200 with the
-    /// lot and MSG-GEN-05; 409 MSG-GEN-09 when the lot is Closed.
+    /// The weighing sheet (phiếu cân) of a lot: the cages weighed at the port in order, the sum per product line, the last completed weighing, <c>needsCompleting</c> when the cages changed since and
+    /// <c>canEdit</c>. Harvests View, zone-scoped.
+    /// </summary>
+    [HttpGet("api/harvest-lots/{lotId:guid}/cages")]
+    [ProducesResponseType<LotWeighingSheet>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Cages(Guid lotId, CancellationToken cancellationToken) =>
+        (await cages.SheetAsync(lotId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Weighs one more cage (owner decision of 24/11/2026): <c>kg</c> (above 0, at most 3 decimals), <c>productId</c> (one of the lot's product lines; left out, the product of its only line, as a lot holds one) and an optional
+    /// <c>clientOperationId</c> made by the app, so a cage sent again after a lost answer is not weighed twice. The lot keeps its kg until the weighing is completed (<c>weigh</c>). A Zone Manager of the
+    /// lot's zone or the Cooperative Owner. 200 with the sheet; 409 MSG-GEN-09 when the lot is Closed.
+    /// </summary>
+    [HttpPost("api/harvest-lots/{lotId:guid}/cages")]
+    [ProducesResponseType<LotWeighingSheet>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddCage(Guid lotId, AddLotCageRequest request, CancellationToken cancellationToken) =>
+        (await cages.AddAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Weighs a cage again or puts it under another product of the lot: <c>kg</c> and <c>productId</c> as when it was weighed. Same callers and answers as weighing a cage.</summary>
+    [HttpPut("api/harvest-lots/{lotId:guid}/cages/{cageId:guid}")]
+    [ProducesResponseType<LotWeighingSheet>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateCage(Guid lotId, Guid cageId, UpdateLotCageRequest request, CancellationToken cancellationToken) =>
+        (await cages.UpdateAsync(lotId, cageId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Takes a cage off the sheet; its number is not given again. Same callers and answers as weighing a cage.</summary>
+    [HttpDelete("api/harvest-lots/{lotId:guid}/cages/{cageId:guid}")]
+    [ProducesResponseType<LotWeighingSheet>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RemoveCage(Guid lotId, Guid cageId, CancellationToken cancellationToken) =>
+        (await cages.RemoveAsync(lotId, cageId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Completes the weighing ("Hoàn tất") from the cages weighed: the kg of each product line is the sum of its cages (of the lot, the sum of every cage when it has no lines); <c>weighedAt</c> (default now,
+    /// not before the harvest, not in the future) and <c>rowVersion</c> of the sheet. A lot Awaiting weighing becomes Open, for sale; an Open or Reopened lot is weighed again after a cage was corrected. The
+    /// Harvest rows of the product ledger are written at the weighed kg (again: the earlier ones undone, nothing else touched) and the figures of the lot count from them. MSG-GEN-01 names <c>Cages</c> (none
+    /// weighed), <c>Line {n} cages</c> (a product line with no cage) and <c>Cage {number} product</c> (a cage whose product is no longer on the lot). A Zone Manager of the lot's zone or the Cooperative Owner.
+    /// 200 with the lot and MSG-GEN-05; 409 MSG-GEN-09 when the lot is Closed.
     /// </summary>
     [HttpPost("api/harvest-lots/{lotId:guid}/weigh")]
     [ProducesResponseType<HarvestLotChanged>(StatusCodes.Status200OK)]

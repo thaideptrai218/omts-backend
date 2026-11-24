@@ -21,7 +21,7 @@ public sealed record HarvestLotListRow(
 
 public interface IHarvestLotRepository
 {
-    /// <summary>The lot with its lanes, photos, cycle, raft and zone, tracked for editing.</summary>
+    /// <summary>The lot with its lanes, photos, product lines, weighed cages, cycle, raft and zone, tracked for editing.</summary>
     Task<HarvestLot?> GetForEditAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>The same, read only.</summary>
@@ -96,7 +96,7 @@ public interface IHarvestLotRepository
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);
 
-    /// <summary>Removes the lot with its lanes and photos: it is kept only in the audit log (BR-HARVEST-05).</summary>
+    /// <summary>Removes the lot with its lanes, photos, product lines, crew and weighed cages: it is kept only in the audit log (BR-HARVEST-05).</summary>
     void Remove(HarvestLot lot);
 
     void AddLane(HarvestLotLane lane);
@@ -110,4 +110,8 @@ public interface IHarvestLotRepository
     void AddProductLine(HarvestLotProductLine line);
 
     void RemoveProductLine(HarvestLotProductLine line);
+
+    void AddCage(HarvestLotCage cage);
+
+    void RemoveCage(HarvestLotCage cage);
 }

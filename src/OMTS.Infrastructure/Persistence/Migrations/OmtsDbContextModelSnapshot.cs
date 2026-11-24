@@ -1934,6 +1934,55 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Kg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("LotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("WeighedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("WeighedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientOperationId")
+                        .IsUnique()
+                        .HasFilter("[ClientOperationId] IS NOT NULL");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("WeighedByAccountId");
+
+                    b.HasIndex("LotId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("HarvestLotCages", t =>
+                        {
+                            t.HasCheckConstraint("CK_HarvestLotCage_Kg", "[Kg] > 0");
+
+                            t.HasCheckConstraint("CK_HarvestLotCage_Number", "[Number] >= 1");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
                 {
                     b.Property<Guid>("LotId")
@@ -9875,6 +9924,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCage", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "Lot")
+                        .WithMany("Cages")
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("WeighedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lot");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
@@ -11820,6 +11893,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLot", b =>
                 {
+                    b.Navigation("Cages");
+
                     b.Navigation("Crew");
 
                     b.Navigation("Lanes");

@@ -155,35 +155,40 @@ public static class HarvestTestKit
     public static async Task<JsonElement> HarvestLotAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
         await client.WeighAtEstimateAsync((await client.RecordHarvestAsync(raftId, fields)).GetProperty("lot"));
 
-    /// <summary>Weighs a lot awaiting weighing at the estimated kg of each product line, shown in line order (or of the lot without lines); the weighed lot.</summary>
+    /// <summary>Weighs a lot awaiting weighing at the estimated kg of each product line, one cage each in line order (one cage for the lot without lines), and completes it; the weighed lot.</summary>
     public static async Task<JsonElement> WeighAtEstimateAsync(this HttpClient client, JsonElement lot)
     {
-        var lines = lot.GetProperty("productLines").EnumerateArray()
-            .Select((l, i) => new { lineNumber = i + 1, weighedKg = l.GetProperty("kg").GetDecimal() })
-            .ToList();
-        var response = await client.PostAsJsonAsync($"/api/harvest-lots/{lot.Text("id")}/weigh", new
-        {
-            rowVersion = lot.Text("rowVersion"),
-            lines,
-            weighedKg = lines.Count == 0 ? lot.GetProperty("estimatedKg").GetDecimal() : (decimal?)null,
-        });
+        var lines = lot.GetProperty("productLines").EnumerateArray().Select(l => l.GetProperty("kg").GetDecimal()).ToArray();
+        var response = await client.PostWeighAsync(lot, lines.Length == 0 ? [lot.GetProperty("estimatedKg").GetDecimal()] : lines);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("lot");
     }
 
     /// <summary>
-    /// Weighs a lot, or weighs it again, at <paramref name="weighedKg"/> for each of its product lines in line order (for the lot itself when it has no lines), with the version the lot view carries; the whole answer.
+    /// Weighs a lot, or weighs it again, at <paramref name="weighedKg"/> for each of its product lines in line order (for the lot itself when it has no lines): the cages on its sheet are taken off, one cage
+    /// is weighed per value, then the weighing is completed with the version the lot view carries; the answer of the completion.
     /// </summary>
-    public static Task<HttpResponseMessage> PostWeighAsync(this HttpClient client, JsonElement lot, params decimal[] weighedKg)
+    public static async Task<HttpResponseMessage> PostWeighAsync(this HttpClient client, JsonElement lot, params decimal[] weighedKg)
     {
-        var hasLines = lot.GetProperty("productLines").GetArrayLength() > 0;
-        return client.PostAsJsonAsync($"/api/harvest-lots/{lot.Text("id")}/weigh", new
+        var id = lot.Text("id")!;
+        var sheet = await client.GetFromJsonAsync<JsonElement>($"/api/harvest-lots/{id}/cages");
+        foreach (var cage in sheet.GetProperty("cages").EnumerateArray())
         {
-            rowVersion = lot.Text("rowVersion"),
-            lines = hasLines ? weighedKg.Select((kg, i) => (object)new { lineNumber = i + 1, weighedKg = kg }).ToList() : new List<object>(),
-            weighedKg = hasLines ? (decimal?)null : weighedKg[0],
-        });
+            (await client.DeleteAsync($"/api/harvest-lots/{id}/cages/{cage.Text("id")}")).EnsureSuccessStatusCode();
+        }
+
+        var lines = lot.GetProperty("productLines").EnumerateArray().ToList();
+        for (var i = 0; i < weighedKg.Length; i++)
+        {
+            (await client.PostCageAsync(id, lines.Count == 0 ? null : lines[i].Text("productId"), weighedKg[i])).EnsureSuccessStatusCode();
+        }
+
+        return await client.PostAsJsonAsync($"/api/harvest-lots/{id}/weigh", new { rowVersion = lot.Text("rowVersion") });
     }
+
+    /// <summary>Weighs one cage of a lot; the answer is the weighing sheet.</summary>
+    public static Task<HttpResponseMessage> PostCageAsync(this HttpClient client, string lotId, string? productId, decimal kg, Guid? clientOperationId = null) =>
+        client.PostAsJsonAsync($"/api/harvest-lots/{lotId}/cages", new { productId, kg, clientOperationId });
 
     public static Task<JsonElement> HarvestScreenAsync(this HttpClient client, Guid raftId) =>
         client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/harvest-lots");
