@@ -293,7 +293,7 @@ SQL Server, code-first EF Core migrations. Every business table derives from `Au
 | EmployeeWorkingZones | EmployeeId, ZoneId | primary key (EmployeeId, ZoneId) |
 | AuditEvents | ActorAccountId, Action, RecordType, RecordId, RecordCode, OccurredAt, Reason, Before (JSON), After (JSON), ZoneId | (RecordType, RecordId); OccurredAt; (ZoneId, OccurredAt) |
 | Notifications | RecipientAccountId, Type, Title, Body, RelatedRecordType, RelatedRecordCode, CreatedAt, ReadAt, IsMandatory | (RecipientAccountId, ReadAt) |
-| Statuses / StatusTransitions | fixed catalog seeded by migrations (SRS Table 3.4-1 / 3.4-2) | unique (Group, Code) |
+| Statuses | fixed catalog seeded by migrations (SRS Table 3.4-1); the moves between statuses are enforced by the rules of each feature | unique (Group, Code) |
 
 ## 5. API list
 
@@ -309,7 +309,7 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | POST /api/auth/register | anonymous, per-IP limit | ACS-01 |
 | POST /api/auth/recovery, /api/auth/recovery/reset | anonymous, per-IP limit | ACS-03 |
 | POST /api/me/password (current password; none after a temporary-password login) | signed in | ACS-04 |
-| GET /api/me/sessions; DELETE /api/me/sessions/{id}; POST /api/me/sessions/revoke-others; GET /api/me/devices; DELETE /api/me/devices/{deviceKey} | signed in, own account only | ACS-02 (devices and sessions) |
+| DELETE /api/me/sessions/{id}; POST /api/me/sessions/revoke-others; GET /api/me/devices; DELETE /api/me/devices/{deviceKey} | signed in, own account only | ACS-02 (devices and sessions) |
 | POST /api/me/phone-verification (per-IP limit, unverified phone only), /confirm | signed in | ACS-02 branch, ACS-06 |
 | POST /api/auth/zalo/link, /zalo/login, /zalo/trader-requests (login rate limit) | anonymous, proven by the Zalo tokens | ACS-01 (Zalo Mini App) |
 | DELETE /api/me/zalo-link | signed in | ACS-01 (Zalo Mini App) |
@@ -319,10 +319,10 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | GET /api/me (identity, `mustChangePassword`, `phoneVerificationRequired`; open while either step is pending) | signed in | onboarding routing |
 | GET /api/me/permissions | signed in | menus, dashboard tiles |
 | GET/POST /api/accounts; GET/PUT /api/accounts/{id}; POST …/lock, …/unlock, …/reset-password | Cooperative Owner | ACS-09 |
-| GET/POST /api/accounts/{id}/grants; POST …/grants/{grantId}/revoke; POST /api/accounts/permission-preview | Cooperative Owner | FARM-05 |
+| GET/POST /api/accounts/{id}/grants; POST …/grants/{grantId}/revoke | Cooperative Owner | FARM-05 |
 | GET /api/permission-functions; GET/POST /api/roles; GET/PUT /api/roles/{id}; POST …/copy, …/discontinue, …/reactivate; GET …/impact | Cooperative Owner | ACS-10 |
 | GET/PUT /api/cooperative/profile; POST/DELETE /api/cooperative/profile/logo | Cooperative Owner | FARM-01 |
-| GET /api/public/cooperative/logo (current logo); GET /api/public/cooperative/logos/{yyyy}/{MM}/{file} (one logo file, the URL the profile returns and a published version stores) | anonymous | provenance page |
+| GET /api/public/cooperative/logos/{yyyy}/{MM}/{file} (one logo file, the URL the profile returns and a published version stores) | anonymous | provenance page |
 | GET/POST /api/employees; GET /api/employees/linkable-accounts; GET/PUT /api/employees/{id}; POST …/account, …/end-employment, …/reinstate | Cooperative Owner | LAB-01, ACS-09 |
 | GET /api/files/local/{key} | signed, expiring URL | file downloads (Local storage) |
 | GET /health (liveness), /health/db (database + migrations, for platform probes), /health/ready (post-deployment verification) | anonymous | deployment |
