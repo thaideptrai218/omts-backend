@@ -37,7 +37,8 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
 
         // SALE-09 by period and zone, the customer debt (BR-DEBT-02) and Fulfilled (BR-SALE-01).
         builder.HasIndex(x => new { x.InvoiceDate, x.ZoneId });
-        builder.HasIndex(x => new { x.CustomerId, x.StatusId });
+        // The debt sums, the customer list figures and the sales performance read only these columns, so they ride along and need no lookup.
+        builder.HasIndex(x => new { x.CustomerId, x.StatusId }).IncludeProperties(x => new { x.Total, x.PriceCutTotal, x.InvoiceDate, x.InvoicedAt });
         builder.HasIndex(x => x.PurchaseRequestId);
         builder.ToTable(t =>
         {
@@ -132,7 +133,8 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
 
         // The customer debt (BR-DEBT-02), the payments of an invoice and the payments Awaiting confirmation, oldest first (DEBT-02.2).
-        builder.HasIndex(x => new { x.CustomerId, x.StatusId });
+        // The debt sums read only these columns, so they ride along and need no lookup.
+        builder.HasIndex(x => new { x.CustomerId, x.StatusId }).IncludeProperties(x => new { x.Kind, x.Amount, x.DiscountAmount, x.PaymentDate });
         builder.HasIndex(x => x.InvoiceId);
         builder.HasIndex(x => x.SalesOrderId);
         builder.HasIndex(x => new { x.StatusId, x.PaymentDate });

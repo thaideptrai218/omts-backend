@@ -29,6 +29,7 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.HasIndex(x => new { x.RecipientAccountId, x.ReadAt });
         builder.HasIndex(x => new { x.RelatedRecordType, x.RelatedRecordId });
         // Counting the sendings of one type since the start of the day (the supplier SMS budget); the table is never pruned.
-        builder.HasIndex(x => new { x.Type, x.Channel, x.CreatedAt });
+        // The record id rides along: the budget counts the distinct records notified.
+        builder.HasIndex(x => new { x.Type, x.Channel, x.CreatedAt }).IncludeProperties(x => x.RelatedRecordId);
     }
 }

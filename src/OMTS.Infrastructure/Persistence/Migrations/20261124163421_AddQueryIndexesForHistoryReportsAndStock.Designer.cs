@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261124144402_AddQueryIndexesForHistoryReportsAndStock")]
+    [Migration("20261124163421_AddQueryIndexesForHistoryReportsAndStock")]
     partial class AddQueryIndexesForHistoryReportsAndStock
     {
         /// <inheritdoc />
@@ -1268,8 +1268,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ZoneId", "MeasuredAt");
 
-                    b.HasIndex("ZoneId", "StatusId", "MeasuredAt", "CreatedAt")
-                        .IsDescending(false, false, true, true);
+                    b.HasIndex("ZoneId", "StatusId", "MeasuredAt", "CreatedAt", "Id")
+                        .IsDescending(false, false, true, true, true);
 
                     b.ToTable("WaterMeasurements");
                 });
@@ -4380,6 +4380,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecipientAccountId", "Channel", "CreatedAt");
 
                     b.HasIndex("Type", "Channel", "CreatedAt");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("Type", "Channel", "CreatedAt"), new[] { "RelatedRecordId" });
 
                     b.ToTable("Notifications");
                 });
@@ -7822,6 +7824,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "StatusId");
 
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "StatusId"), new[] { "Kind", "Amount", "DiscountAmount", "PaymentDate" });
+
                     b.HasIndex("StatusId", "PaymentDate");
 
                     b.HasIndex(new[] { "PaidBackForPaymentId" }, "IX_CustomerPayments_PaidBackForPayment")
@@ -8900,6 +8904,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ZoneId");
 
                     b.HasIndex("CustomerId", "StatusId");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "StatusId"), new[] { "Total", "PriceCutTotal", "InvoiceDate", "InvoicedAt" });
 
                     b.HasIndex("InvoiceDate", "ZoneId");
 

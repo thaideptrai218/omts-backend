@@ -11,14 +11,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
+                name: "IX_SalesInvoices_CustomerId_StatusId",
+                table: "SalesInvoices");
+
+            migrationBuilder.DropIndex(
                 name: "IX_InputStockMovements_ItemId_OccurredAt",
                 table: "InputStockMovements");
 
+            migrationBuilder.DropIndex(
+                name: "IX_CustomerPayments_CustomerId_StatusId",
+                table: "CustomerPayments");
+
             migrationBuilder.CreateIndex(
-                name: "IX_WaterMeasurements_ZoneId_StatusId_MeasuredAt_CreatedAt",
+                name: "IX_WaterMeasurements_ZoneId_StatusId_MeasuredAt_CreatedAt_Id",
                 table: "WaterMeasurements",
-                columns: new[] { "ZoneId", "StatusId", "MeasuredAt", "CreatedAt" },
-                descending: new[] { false, false, true, true });
+                columns: new[] { "ZoneId", "StatusId", "MeasuredAt", "CreatedAt", "Id" },
+                descending: new[] { false, false, true, true, true });
 
             migrationBuilder.CreateIndex(
                 name: "IX_VerificationCodes_Channel_LastSentAt",
@@ -37,6 +45,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 column: "ReturnDate");
 
             migrationBuilder.CreateIndex(
+                name: "IX_SalesInvoices_CustomerId_StatusId",
+                table: "SalesInvoices",
+                columns: new[] { "CustomerId", "StatusId" })
+                .Annotation("SqlServer:Include", new[] { "Total", "PriceCutTotal", "InvoiceDate", "InvoicedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_SalesInvoicePriceCuts_CutDate",
                 table: "SalesInvoicePriceCuts",
                 column: "CutDate");
@@ -49,7 +63,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Notifications_Type_Channel_CreatedAt",
                 table: "Notifications",
-                columns: new[] { "Type", "Channel", "CreatedAt" });
+                columns: new[] { "Type", "Channel", "CreatedAt" })
+                .Annotation("SqlServer:Include", new[] { "RelatedRecordId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_LoginSessions_RefreshTokenExpiresAt",
@@ -79,6 +94,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 column: "WeighedOn");
 
             migrationBuilder.CreateIndex(
+                name: "IX_CustomerPayments_CustomerId_StatusId",
+                table: "CustomerPayments",
+                columns: new[] { "CustomerId", "StatusId" })
+                .Annotation("SqlServer:Include", new[] { "Kind", "Amount", "DiscountAmount", "PaymentDate" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_CustomerPayments_PaidAt",
                 table: "CustomerPayments",
                 column: "PaidAt");
@@ -99,7 +120,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
-                name: "IX_WaterMeasurements_ZoneId_StatusId_MeasuredAt_CreatedAt",
+                name: "IX_WaterMeasurements_ZoneId_StatusId_MeasuredAt_CreatedAt_Id",
                 table: "WaterMeasurements");
 
             migrationBuilder.DropIndex(
@@ -113,6 +134,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_SalesReturns_ReturnDate",
                 table: "SalesReturns");
+
+            migrationBuilder.DropIndex(
+                name: "IX_SalesInvoices_CustomerId_StatusId",
+                table: "SalesInvoices");
 
             migrationBuilder.DropIndex(
                 name: "IX_SalesInvoicePriceCuts_CutDate",
@@ -147,6 +172,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "HarvestLots");
 
             migrationBuilder.DropIndex(
+                name: "IX_CustomerPayments_CustomerId_StatusId",
+                table: "CustomerPayments");
+
+            migrationBuilder.DropIndex(
                 name: "IX_CustomerPayments_PaidAt",
                 table: "CustomerPayments");
 
@@ -159,9 +188,19 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "AuditEvents");
 
             migrationBuilder.CreateIndex(
+                name: "IX_SalesInvoices_CustomerId_StatusId",
+                table: "SalesInvoices",
+                columns: new[] { "CustomerId", "StatusId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_InputStockMovements_ItemId_OccurredAt",
                 table: "InputStockMovements",
                 columns: new[] { "ItemId", "OccurredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CustomerPayments_CustomerId_StatusId",
+                table: "CustomerPayments",
+                columns: new[] { "CustomerId", "StatusId" });
         }
     }
 }
