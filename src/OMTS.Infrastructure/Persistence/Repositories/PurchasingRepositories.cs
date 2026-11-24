@@ -18,8 +18,7 @@ internal sealed class SupplierRepository(OmtsDbContext db) : ISupplierRepository
 
     public Task<Supplier?> FindByCodeAsync(string code, Guid? exceptSupplierId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.Suppliers.AsNoTracking().FirstOrDefaultAsync(s => s.Code.ToUpper() == upper && s.Id != exceptSupplierId, cancellationToken);
+        return db.Suppliers.AsNoTracking().FirstOrDefaultAsync(s => s.Code == code && s.Id != exceptSupplierId, cancellationToken);
     }
 
     public async Task<IReadOnlySet<string>> ExistingPhonesAsync(IReadOnlyCollection<string> phoneNumbers, CancellationToken cancellationToken) =>
@@ -142,25 +141,22 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
 
     public Task<FarmingInputItem?> FindByCodeAsync(string code, Guid? exceptItemId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Code.ToUpper() == upper && i.Id != exceptItemId, cancellationToken);
+        return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Code == code && i.Id != exceptItemId, cancellationToken);
     }
 
     public Task<FarmingInputItem?> FindByNameAsync(string name, Guid? exceptItemId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Name.ToUpper() == upper && i.Id != exceptItemId, cancellationToken);
+        return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Name == name && i.Id != exceptItemId, cancellationToken);
     }
 
     public async Task<CodeOwner?> FindCodeOwnerAsync(string code, Guid? exceptItemId, Guid? exceptItemUnitId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        if (await db.FarmingInputItems.AsNoTracking().Where(i => i.Code.ToUpper() == upper && i.Id != exceptItemId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken) is { } itemId)
+        if (await db.FarmingInputItems.AsNoTracking().Where(i => i.Code == code && i.Id != exceptItemId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken) is { } itemId)
         {
             return new CodeOwner(itemId, false);
         }
 
-        var unitOwner = await db.InputItemUnits.AsNoTracking().Where(u => u.Code.ToUpper() == upper && u.Id != exceptItemUnitId).Select(u => (Guid?)u.ItemId).FirstOrDefaultAsync(cancellationToken);
+        var unitOwner = await db.InputItemUnits.AsNoTracking().Where(u => u.Code == code && u.Id != exceptItemUnitId).Select(u => (Guid?)u.ItemId).FirstOrDefaultAsync(cancellationToken);
         return unitOwner is { } owner ? new CodeOwner(owner, true) : null;
     }
 

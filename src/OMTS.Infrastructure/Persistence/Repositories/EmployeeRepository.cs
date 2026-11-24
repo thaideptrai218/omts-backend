@@ -44,7 +44,7 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
         await WithRows(Ordered(Filtered(filter), filter, firstZoneIds).Take(limit + 1)).ToListAsync(cancellationToken);
 
     public Task<Employee?> FindByCodeAsync(string code, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
-        db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Code != null && e.Code.ToUpper() == code.ToUpper() && e.Id != exceptEmployeeId, cancellationToken);
+        db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Code != null && e.Code == code && e.Id != exceptEmployeeId, cancellationToken);
 
     private IQueryable<Employee> Filtered(EmployeeSearchFilter filter)
     {
