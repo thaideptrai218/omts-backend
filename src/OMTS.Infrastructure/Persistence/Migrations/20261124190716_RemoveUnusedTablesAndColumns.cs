@@ -233,7 +233,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "Cooperatives",
                 type: "int",
                 nullable: false,
-                defaultValue: 0);
+                // By hand: the check added below accepts 1 to 28 only, so existing rows must get 1, not 0.
+                defaultValue: 1);
 
             migrationBuilder.CreateTable(
                 name: "NurseryBatchAllocations",
