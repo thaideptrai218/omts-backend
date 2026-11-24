@@ -50,6 +50,11 @@ internal sealed class CultivationCycleQuery(OmtsDbContext db) : ICultivationCycl
         return onDate.GroupBy(c => c.RaftId).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.StartDate).First());
     }
 
+    public async Task<DateOnly?> EarliestOpenStartOfZoneAsync(Guid zoneId, CancellationToken cancellationToken) =>
+        await db.CultivationCycles.AsNoTracking()
+            .Where(c => c.StatusId == StatusIds.CultivationCycle.Open && c.Raft.ZoneId == zoneId)
+            .MinAsync(c => (DateOnly?)c.StartDate, cancellationToken);
+
     public async Task<IReadOnlyDictionary<Guid, DateOnly>> EarliestOpenStartByZoneAsync(CancellationToken cancellationToken) =>
         await db.CultivationCycles.AsNoTracking()
             .Where(c => c.StatusId == StatusIds.CultivationCycle.Open)

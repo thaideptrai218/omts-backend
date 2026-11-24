@@ -19,4 +19,7 @@ public interface ICultivationCycleQuery
 
     /// <summary>The earliest start date among the Open cycles of each zone that has one (GFR-04); other zones are left out.</summary>
     Task<IReadOnlyDictionary<Guid, DateOnly>> EarliestOpenStartByZoneAsync(CancellationToken cancellationToken);
+
+    /// <summary>The earliest start date among the Open cycles of one zone, or null when it has none.</summary>
+    Task<DateOnly?> EarliestOpenStartOfZoneAsync(Guid zoneId, CancellationToken cancellationToken);
 }

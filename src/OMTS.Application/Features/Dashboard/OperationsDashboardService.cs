@@ -92,10 +92,11 @@ public sealed class OperationsDashboardService(
     /// <summary>The zones In Use whose latest Active measurement has a value outside its thresholds, as the WATER-03 overview shows them (the alert is worked out, not stored).</summary>
     private async Task<DashboardWaterAlertsTile> WaterAlertsAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
-        var inUse = await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken);
-        var latest = await measurements.LatestActiveByZoneAsync(cancellationToken);
-        var alerting = inUse
+        var inUse = (await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken))
             .Where(z => zoneId is null || z.Id == zoneId)
+            .ToList();
+        var latest = await measurements.LatestActiveByZoneAsync(inUse.Select(z => z.Id).ToList(), cancellationToken);
+        var alerting = inUse
             .Where(z => latest.TryGetValue(z.Id, out var m) && WaterAlertService.Evaluate(m).ValuesOutside.Count > 0)
             .Select(z => new DashboardAlertZone(z.Id, z.Code, z.Name, latest[z.Id].MeasuredAt))
             .ToList();

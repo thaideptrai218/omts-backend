@@ -33,11 +33,12 @@ public sealed class WaterMeasurementOverdueReminder(
             return [];
         }
 
-        var latest = await measurements.LatestActiveByZoneAsync(cancellationToken);
-        var zones = await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken);
+        var zones = (await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken))
+            .Where(zone => openStarts.ContainsKey(zone.Id))
+            .ToList();
+        var latest = await measurements.LatestActiveByZoneAsync(zones.Select(zone => zone.Id).ToList(), cancellationToken);
         return zones
-            .Where(zone => openStarts.TryGetValue(zone.Id, out var openStart)
-                && IsDue(zone, WaterOverdueRule.BaseDate(latest.GetValueOrDefault(zone.Id)?.MeasuredAt, openStart), today))
+            .Where(zone => IsDue(zone, WaterOverdueRule.BaseDate(latest.GetValueOrDefault(zone.Id)?.MeasuredAt, openStarts[zone.Id]), today))
             .Select(zone => zone.Id)
             .ToList();
     }
@@ -50,8 +51,7 @@ public sealed class WaterMeasurementOverdueReminder(
     public async Task<bool> RemindAsync(Guid zoneId, DateOnly today, CancellationToken cancellationToken)
     {
         var zone = await measurements.GetZoneAsync(zoneId, track: true, cancellationToken);
-        var openStarts = await cycles.EarliestOpenStartByZoneAsync(cancellationToken);
-        if (zone?.StatusId != StatusIds.Usage.InUse || !openStarts.TryGetValue(zoneId, out var openStart))
+        if (zone?.StatusId != StatusIds.Usage.InUse || await cycles.EarliestOpenStartOfZoneAsync(zoneId, cancellationToken) is not { } openStart)
         {
             return false;
         }

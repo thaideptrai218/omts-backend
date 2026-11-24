@@ -23,7 +23,7 @@ public sealed class WaterZoneOverviewService(
     {
         var permitted = await zoneAccess.PermittedZonesAsync(PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
         var zones = await measurements.ListZonesAsync(permitted, inUseOnly, track: false, cancellationToken);
-        var latest = await measurements.LatestActiveByZoneAsync(cancellationToken);
+        var latest = await measurements.LatestActiveByZoneAsync(zones.Select(z => z.Id).ToList(), cancellationToken);
         return zones.Select(zone => Item(zone, latest.GetValueOrDefault(zone.Id))).ToList();
     }
 

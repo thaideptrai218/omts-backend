@@ -125,7 +125,7 @@ public class WaterOverdueSqlServerTests
         var repository = scope.ServiceProvider.GetRequiredService<IWaterMeasurementRepository>();
 
         Assert.Equal(new[] { second.Id, first.Id }, (await repository.ListLatestActiveAsync(seeded.Zone.Id, 2, default)).Select(m => m.Id));
-        Assert.Equal(second.Id, (await repository.LatestActiveByZoneAsync(default))[seeded.Zone.Id].Id);
+        Assert.Equal(second.Id, (await repository.LatestActiveByZoneAsync([seeded.Zone.Id], default))[seeded.Zone.Id].Id);
     }
 
     [SqlServerFact]
