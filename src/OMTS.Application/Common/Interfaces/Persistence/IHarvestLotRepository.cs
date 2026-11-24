@@ -20,6 +20,20 @@ public sealed record HarvestLotListRow(
     Guid Id, string LotCode, DateTimeOffset HarvestedAt, DateOnly HarvestDate, Guid ZoneId, string ZoneCode, Guid RaftId, string RaftCode, Guid CycleId, decimal CageCount, decimal EstimatedKg,
     decimal? WeighedKg, DateTimeOffset? WeighedAt, int StatusId, HarvestLotCloseReason? CloseReason, DateOnly? CloseDate, decimal? LeftoverKg, Guid RecordedByAccountId);
 
+/// <summary>How the lot list is ordered; the lot code then breaks every tie.</summary>
+public enum HarvestLotSort
+{
+    Code,
+    HarvestedAt,
+    RemainingKg,
+}
+
+/// <summary>The count and the sums of every lot the filters match; the sold, remaining and lost kg are worked out by the same rules as <see cref="HarvestLotFigures"/>.</summary>
+public sealed record HarvestLotListSums(int Count, decimal CageCount, decimal EstimatedKg, decimal WeighedKg, decimal SoldKg, decimal RemainingKg, decimal LostKg)
+{
+    public static readonly HarvestLotListSums None = new(0, 0m, 0m, 0m, 0m, 0m, 0m);
+}
+
 public interface IHarvestLotRepository
 {
     /// <summary>The lot with its lanes, photos, product lines, weighed cages, cycle, raft and zone, tracked for editing.</summary>
@@ -88,8 +102,11 @@ public interface IHarvestLotRepository
     /// <summary>How many cages the lots of each request hold; a request with no lot is left out.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken);
 
-    /// <summary>Every lot the filters match with its raft and zone, read only, the latest harvest first; the caller sorts and pages them once it knows their figures.</summary>
-    Task<IReadOnlyList<HarvestLotListRow>> SearchAsync(HarvestLotFilter filter, CancellationToken cancellationToken);
+    /// <summary>One page of the lots the filters match with their raft and zone, read only, in the order asked; the lot code breaks every tie, so a page never repeats or skips a lot.</summary>
+    Task<IReadOnlyList<HarvestLotListRow>> SearchPageAsync(HarvestLotFilter filter, HarvestLotSort sort, bool descending, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>The count and the sums of every lot the filters match, in one query.</summary>
+    Task<HarvestLotListSums> SumsAsync(HarvestLotFilter filter, CancellationToken cancellationToken);
 
     /// <summary>The product lines of these lots with their products, read only, in line order.</summary>
     Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
