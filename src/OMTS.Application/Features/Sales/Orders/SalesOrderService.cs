@@ -280,10 +280,11 @@ public sealed class SalesOrderService(
             audit.Record(new AuditEntry("SalesOrder.Updated", RecordType) { RecordId = order.Id, RecordCode = order.Code, Before = changedBefore, After = changedAfter });
         }
 
-        // Confirming the Draft order that a trader's request made answers the request: it becomes Ordered in the same save, as when the Owner makes the order from the request.
+        // The Owner confirming the Draft order that a trader's request made answers the request: it becomes Ordered in the same save, as when the Owner makes the order from the request.
+        // Only the Owner answers a trader's request, so a Zone Manager's edit of that order leaves the request as it is.
         PurchaseRequest? confirmed = null;
         Notification? sending = null;
-        if (order.PurchaseRequestId is { } requestId
+        if (owner && order.PurchaseRequestId is { } requestId
             && await requests.GetForEditAsync(requestId, cancellationToken) is { } waiting && SalesOrderRules.ConfirmationOrdersRequest(waiting.StatusId))
         {
             confirmed = waiting;
