@@ -102,6 +102,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The products the lot is split into; empty for a lot recorded before products. <see cref="CageCount"/> and <see cref="EstimatedKg"/> are the sums of the lines when there are any.</summary>
     public ICollection<HarvestLotProductLine> ProductLines { get; set; } = [];
 
+    /// <summary>The cages weighed at the port, one by one; the weighing of the lot is completed from them (owner decision of 24/11/2026).</summary>
+    public ICollection<HarvestLotCage> Cages { get; set; } = [];
+
     /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
     public ICollection<HarvestRecordEmployee> Crew { get; set; } = [];
 

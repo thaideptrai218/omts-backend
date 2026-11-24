@@ -222,6 +222,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
         db.HarvestLotProductLines.RemoveRange(lot.ProductLines);
         db.HarvestRecordEmployees.RemoveRange(lot.Crew);
+        db.HarvestLotCages.RemoveRange(lot.Cages);
         db.HarvestLots.Remove(lot);
     }
 
@@ -237,6 +238,10 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void RemovePhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Remove(photo);
 
+    public void AddCage(HarvestLotCage cage) => db.HarvestLotCages.Add(cage);
+
+    public void RemoveCage(HarvestLotCage cage) => db.HarvestLotCages.Remove(cage);
+
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);
 
@@ -247,6 +252,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .Include(l => l.Cycle)
             .Include(l => l.PurchaseRequest)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
+            .Include(l => l.Cages)
             .Include(l => l.Raft).ThenInclude(r => r.Zone)
             .AsSplitQuery();
 }
