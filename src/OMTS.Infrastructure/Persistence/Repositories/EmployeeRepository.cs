@@ -64,9 +64,11 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             var text = filter.Search.Trim();
             var phone = filter.PhoneNumber;
             query = phone is null
-                ? query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text)) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text)))
+                ? query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text)) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text))
+                    || (e.Account != null && e.Account.Username.Contains(text)))
                 : query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text))
-                    || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber == phone)));
+                    || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber == phone))
+                    || (e.Account != null && e.Account.Username.Contains(text)));
         }
 
         if (filter.StatusId is not null)

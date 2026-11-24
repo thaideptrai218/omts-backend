@@ -21,6 +21,28 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
     private static DateOnly Day => DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(2);
 
     [Fact]
+    public async Task The_owner_can_look_up_staff_before_a_work_plan_exists_without_opening_the_request_to_managers()
+    {
+        var (owner, trader, row) = await SetupAsync();
+        var crew = await CrewAsync(1);
+        var options = (await owner.GetFromJsonAsync<List<StaffingEmployeeOption>>(
+            $"/api/purchase-requests/staffing-employees?day={Day:yyyy-MM-dd}&purchaseRequestId={row.Id}"))!;
+        Assert.True(options.Single(e => e.Id == crew[0].Employee.Id).Available);
+        Assert.False(await factory.QueryAsync(db => db.Set<WorkDayPlan>().AnyAsync(p => p.PurchaseRequestId == row.Id)));
+        Assert.False(await factory.QueryAsync(db => db.Set<PurchaseShiftInvitation>().AnyAsync(i => i.PurchaseRequestId == row.Id)));
+        Assert.Equal(0, await AssignmentsAsync(crew));
+
+        var account = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
+        await factory.GrantAsync(account, StaffRole.ZoneManager, await factory.AddZoneAsync(NewCode()));
+        var manager = await factory.LoginAsync(account.Username);
+        var route = $"/api/purchase-requests/staffing-employees?day={Day:yyyy-MM-dd}&purchaseRequestId={row.Id}";
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await trader.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(
+            $"/api/purchase-requests/staffing-employees?day={Day:yyyy-MM-dd}&purchaseRequestId={Guid.NewGuid()}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Choosing_the_staff_makes_the_assignments_at_once_and_the_owner_accepts_without_any_agreement()
     {
         var (owner, trader, row) = await SetupAsync();

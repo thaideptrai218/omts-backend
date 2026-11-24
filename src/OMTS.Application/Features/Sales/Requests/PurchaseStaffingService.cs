@@ -41,7 +41,13 @@ public sealed class PurchaseStaffingService(
         if (purchaseRequestId is { } orderId)
         {
             var plan = await plans.ForPurchaseAsync(orderId, ct);
-            if (plan is null || !await planAccess.CanAssignAsync(plan, ct) || plan.WorkDate != day) return AppError.Forbidden;
+            if (plan is null)
+            {
+                // The Owner may inspect available staff before preparing the request's work plan.
+                if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
+                if (await requests.GetAsync(orderId, ct) is null) return AppError.NotFound;
+            }
+            else if (!await planAccess.CanAssignAsync(plan, ct) || plan.WorkDate != day) return AppError.Forbidden;
         }
         else if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
         if (day == default || day < Today) return AppError.Invalid("Work date");

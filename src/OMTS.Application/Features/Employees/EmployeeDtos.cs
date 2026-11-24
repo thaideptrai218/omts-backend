@@ -113,7 +113,7 @@ public sealed record EmployeeView(
     LinkedAccountView? Account,
     string RowVersion);
 
-/// <param name="Account">The linked staff account; for the Cooperative Owner only.</param>
+/// <param name="Account">The linked account's basic identity and status, within the caller's employee scope. Managing accounts remains Owner-only.</param>
 /// <param name="MonthHours">Paid hours worked from the first of this month to today (break deducted, as the payroll counts them); only for a caller with PAYROLL View (Owner, Accountant), else null.</param>
 /// <param name="OutstandingWage">What the employee is still owed on Finalized payroll sheets, VND; same visibility as <paramref name="MonthHours"/>.</param>
 public sealed record EmployeeListItem(
@@ -167,7 +167,7 @@ public sealed record EndingConsequences(
     bool AccountCanBeLocked);
 
 /// <summary>The employee list query. Invalid values are refused with MSG-GEN-01 naming the parameter.</summary>
-/// <param name="Search">Name, code or phone number (contains).</param>
+/// <param name="Search">Name, code, phone number or linked account username (contains).</param>
 /// <param name="StatusId">Employed or Left.</param>
 /// <param name="ZoneId">A working zone of the employee.</param>
 /// <param name="EmployeeType">The type in force today: SeasonalWorker or Staff.</param>

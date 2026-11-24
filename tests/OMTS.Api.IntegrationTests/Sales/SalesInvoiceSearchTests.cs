@@ -27,7 +27,7 @@ public class SalesInvoiceSearchTests
         var other = await b.Manager.Client.SoldAsync(b, b.LotId, 5m);
 
         var mine = await a.Manager.Client.InvoiceListAsync();
-        Assert.Equal([later.Text("code"), cash.Text("code")], mine.Codes());
+        Assert.Equal<string?>([later.Text("code"), cash.Text("code")], mine.Codes());
         Assert.Equal((2, 900_000m), (mine.GetProperty("page").GetProperty("total").GetInt32(), mine.Money("completedTotal")));
         Assert.Equal((Today, Today), (DateOnly.Parse(mine.Text("from")!), DateOnly.Parse(mine.Text("to")!)));
 
@@ -59,8 +59,8 @@ public class SalesInvoiceSearchTests
         var accountantAll = (await api.StaffAsync(null, StaffRole.Accountant)).Client;
         var managerAll = (await api.StaffAsync(null, StaffRole.ZoneManager)).Client;
 
-        Assert.Equal([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync()).Codes());
-        Assert.Equal([inA.Text("code")], (await accountantA.InvoiceListAsync()).Codes());
+        Assert.Equal<string?>([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync()).Codes());
+        Assert.Equal<string?>([inA.Text("code")], (await accountantA.InvoiceListAsync()).Codes());
         Assert.Equal(2, (await accountantAll.InvoiceListAsync()).Rows().Count);
         Assert.Equal(2, (await managerAll.InvoiceListAsync()).Rows().Count);
 
@@ -74,7 +74,7 @@ public class SalesInvoiceSearchTests
             Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
-        Assert.Equal([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync($"?zoneId={a.ZoneId}")).Codes());
+        Assert.Equal<string?>([inA.Text("code")], (await a.Manager.Client.InvoiceListAsync($"?zoneId={a.ZoneId}")).Codes());
         Assert.Equal(HttpStatusCode.OK, (await accountantA.GetInvoiceAsync(inA.Id())).StatusCode);
     }
 
@@ -113,15 +113,15 @@ public class SalesInvoiceSearchTests
         await api.BackDateAsync(old.Id(), 40);
         var owner = a.Owner.Client;
 
-        Assert.Equal([inB.Text("code")], (await owner.InvoiceListAsync(Query(("zoneId", b.ZoneId)))).Codes());
-        Assert.Equal([second.Text("code")], (await manager.InvoiceListAsync(Query(("customerId", other.Id())))).Codes());
+        Assert.Equal<string?>([inB.Text("code")], (await owner.InvoiceListAsync(Query(("zoneId", b.ZoneId)))).Codes());
+        Assert.Equal<string?>([second.Text("code")], (await manager.InvoiceListAsync(Query(("customerId", other.Id())))).Codes());
         Assert.Equal(new[] { unpaid.Text("code"), second.Text("code") }.Order(), (await manager.InvoiceListAsync(Query(("harvestLotId", a.OtherLotId)))).Codes().Order());
-        Assert.Equal([inB.Text("code")], (await owner.InvoiceListAsync(Query(("raftId", b.RaftId)))).Codes());
-        Assert.Equal([cancelled.Text("code")], (await manager.InvoiceListAsync(Query(("statusId", StatusIds.SalesInvoice.Cancelled)))).Codes());
-        Assert.Equal([unpaid.Text("code")], (await manager.InvoiceListAsync(Query(("paid", false)))).Codes());
+        Assert.Equal<string?>([inB.Text("code")], (await owner.InvoiceListAsync(Query(("raftId", b.RaftId)))).Codes());
+        Assert.Equal<string?>([cancelled.Text("code")], (await manager.InvoiceListAsync(Query(("statusId", StatusIds.SalesInvoice.Cancelled)))).Codes());
+        Assert.Equal<string?>([unpaid.Text("code")], (await manager.InvoiceListAsync(Query(("paid", false)))).Codes());
         Assert.Equal(new[] { second.Text("code"), first.Text("code") }.Order(), (await manager.InvoiceListAsync(Query(("paid", true)))).Codes().Order());
-        Assert.Equal([first.Text("code")], (await manager.InvoiceListAsync(Query(("code", first.Text("code")![2..])))).Codes());
-        Assert.Equal([old.Text("code")], (await manager.InvoiceListAsync(Query(("from", Today.AddDays(-45)), ("to", Today.AddDays(-30))))).Codes());
+        Assert.Equal<string?>([first.Text("code")], (await manager.InvoiceListAsync(Query(("code", first.Text("code")![2..])))).Codes());
+        Assert.Equal<string?>([old.Text("code")], (await manager.InvoiceListAsync(Query(("from", Today.AddDays(-45)), ("to", Today.AddDays(-30))))).Codes());
     }
 
     // BR-DEBT-05: paid is what the allocation covers, oldest first: the customer's transfer pays the older invoice.
@@ -143,7 +143,7 @@ public class SalesInvoiceSearchTests
 
         Assert.Equal(new[] { older.Text("code"), walkIn.Text("code") }.Order(), paid.Codes().Order());
         Assert.Equal((600_000m, 2), (paid.Money("completedTotal"), paid.GetProperty("page").GetProperty("total").GetInt32()));
-        Assert.Equal([newer.Text("code")], notPaid.Codes());
+        Assert.Equal<string?>([newer.Text("code")], notPaid.Codes());
         var row = notPaid.Rows()[0];
         Assert.Equal((false, 300_000m), (row.GetProperty("isPaid").GetBoolean(), row.Money("unpaidAmount")));
     }
@@ -189,9 +189,9 @@ public class SalesInvoiceSearchTests
 
         var list = await manager.InvoiceListAsync("?cashCollectedByMe=true");
 
-        Assert.Equal([mine.Text("code")], list.Codes());
+        Assert.Equal<string?>([mine.Text("code")], list.Codes());
         Assert.Equal(300_000m, list.Rows()[0].Money("cashAwaitingConfirmation"));
-        Assert.Equal([byOther.Text("code")], (await other.InvoiceListAsync("?cashCollectedByMe=true")).Codes());
+        Assert.Equal<string?>([byOther.Text("code")], (await other.InvoiceListAsync("?cashCollectedByMe=true")).Codes());
         Assert.Empty((await sale.Owner.Client.InvoiceListAsync("?cashCollectedByMe=true")).Rows());
         Assert.Contains(payLater.Text("code"), (await manager.InvoiceListAsync()).Codes());
     }
@@ -228,6 +228,6 @@ public class SalesInvoiceSearchTests
             Assert.Equal(("MSG-GEN-10", 0), (list.Text("messageCode"), list.Rows().Count));
         }
 
-        Assert.Equal([sold.Text("code")], (await client.InvoiceListAsync(Query(("code", " " + sold.Text("code")![..3] + " ")))).Codes());
+        Assert.Equal<string?>([sold.Text("code")], (await client.InvoiceListAsync(Query(("code", " " + sold.Text("code")![..3] + " ")))).Codes());
     }
 }

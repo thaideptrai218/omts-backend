@@ -44,7 +44,7 @@ public class SalesInvoiceSearchQaTests
         var accountantB = (await api.StaffAsync(await api.ZoneEntityAsync(b.ZoneId), StaffRole.Accountant)).Client;
 
         var seenInA = await a.Manager.Client.InvoiceListAsync(Query(("harvestLotId", b.LotId)));
-        Assert.Equal([mixed.Text("code")], seenInA.Codes());
+        Assert.Equal<string?>([mixed.Text("code")], seenInA.Codes());
         Assert.Equal(60_000m, seenInA.Money("completedTotal"));
         var lineZones = (await a.Manager.Client.InvoiceAsync(mixed.Id())).GetProperty("lines").EnumerateArray().Count();
         Assert.Equal(2, lineZones);
@@ -80,7 +80,7 @@ public class SalesInvoiceSearchQaTests
         var list = await client.InvoiceListAsync();
         Assert.Equal(new[] { inA.Text("code"), inB.Text("code") }.Order(), list.Codes().Order());
         Assert.Equal(90_000m, list.Money("completedTotal"));
-        Assert.Equal([inB.Text("code")], (await client.InvoiceListAsync(Query(("zoneId", b.ZoneId)))).Codes());
+        Assert.Equal<string?>([inB.Text("code")], (await client.InvoiceListAsync(Query(("zoneId", b.ZoneId)))).Codes());
         var refused = await client.GetInvoicesAsync(Query(("zoneId", c.ZoneId)));
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (refused.StatusCode, await refused.ErrorCodeAsync()));
         Assert.Equal(4, await SheetRowsAsync(await client.ExportInvoicesAsync()));
@@ -102,7 +102,7 @@ public class SalesInvoiceSearchQaTests
 
         Assert.Equal(HttpStatusCode.OK, (await a.Owner.Client.PostAsJsonAsync($"/api/accounts/{account.Id}/grants/{pairA.Id}/revoke", new { reason = "Moved" })).StatusCode);
 
-        Assert.Equal([inB.Text("code")], (await client.InvoiceListAsync()).Codes());
+        Assert.Equal<string?>([inB.Text("code")], (await client.InvoiceListAsync()).Codes());
         foreach (var response in new[] { await client.GetInvoiceAsync(inA.Id()), await client.PrintInvoiceAsync(inA.Id()), await client.GetInvoicesAsync(Query(("zoneId", a.ZoneId))) })
         {
             Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (response.StatusCode, await response.ErrorCodeAsync()));
@@ -122,7 +122,7 @@ public class SalesInvoiceSearchQaTests
         await api.UpdateAsync<FarmingZone>(sale.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
         var manager = await api.LoginAsync(sale.Manager.Account.Username);
 
-        Assert.Equal([invoice.Text("code")], (await manager.InvoiceListAsync()).Codes());
+        Assert.Equal<string?>([invoice.Text("code")], (await manager.InvoiceListAsync()).Codes());
         Assert.Equal(HttpStatusCode.OK, (await manager.GetInvoiceAsync(invoice.Id())).StatusCode);
     }
 
@@ -234,7 +234,7 @@ public class SalesInvoiceSearchQaTests
             ("from", Today), ("to", Today), ("zoneId", a.ZoneId), ("customerId", a.CustomerId), ("harvestLotId", a.OtherLotId), ("raftId", a.RaftId),
             ("statusId", StatusIds.SalesInvoice.Completed), ("paid", false), ("code", wanted.Text("code")![2..])));
 
-        Assert.Equal([wanted.Text("code")], list.Codes());
+        Assert.Equal<string?>([wanted.Text("code")], list.Codes());
         Assert.Equal(ListPrice, list.Money("completedTotal"));
     }
 

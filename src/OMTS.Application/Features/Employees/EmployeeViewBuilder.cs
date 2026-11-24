@@ -8,7 +8,8 @@ namespace OMTS.Application.Features.Employees;
 
 /// <summary>
 /// What a caller sees of an employee: only the employees with a working zone among the caller's zones (decision of 24/11/2026), and of those only the zones the caller sees; bank details and the other
-/// personal fields go only to those who maintain the employee. The linked staff account is for the Cooperative Owner.
+/// personal fields go only to those who maintain the employee. The list includes the linked account's basic identity;
+/// the linked account on the full profile remains for the Cooperative Owner.
 /// </summary>
 public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvider timeProvider)
 {
@@ -38,7 +39,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             maintains ? e.OtherInformation : null,
             maintains ? e.Notes : null,
             maintains && e.BankAccount is { } bank ? new EmployeeBankAccountView(bank.BankName, bank.AccountNumber, bank.AccountHolderName) : null,
-            Linked(e, caller),
+            caller.IsOwner ? Linked(e) : null,
             RowVersionGuard.Encode(e.RowVersion));
     }
 
@@ -53,7 +54,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
         statusCatalog.DisplayNameOf(e.StatusId),
         e.LastWorkingDay,
         caller.Maintains(e),
-        Linked(e, caller),
+        caller.Sees(e) ? Linked(e) : null,
         RowVersionGuard.Encode(e.RowVersion));
 
     private IReadOnlyList<JobTypeRef> JobTypes(Employee e) =>
@@ -66,8 +67,8 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
     private static IReadOnlyList<ZoneRef> Zones(Employee e, EmployeeCaller caller) =>
         e.WorkingZones.Where(w => w.Zone is not null && (caller.Visible.AllZones || caller.Visible.ZoneIds.Contains(w.ZoneId))).Select(w => new ZoneRef(w.ZoneId, w.Zone.Code, w.Zone.Name)).OrderBy(z => z.Code).ToList();
 
-    private LinkedAccountView? Linked(Employee e, EmployeeCaller caller) =>
-        caller.IsOwner && e.Account is { } account
+    private LinkedAccountView? Linked(Employee e) =>
+        e.Account is { } account
             ? new LinkedAccountView(account.Id, account.Username, account.DisplayName, statusCatalog.DisplayNameOf(account.StatusId))
             : null;
 }

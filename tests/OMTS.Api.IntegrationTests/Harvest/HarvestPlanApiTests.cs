@@ -40,7 +40,9 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var code = $"KHT-{Guid.NewGuid():N}"[..14];
         await client.CreatePlanAsync(PlanBody(PlanLine(raft.RaftId, [1])).WithPlanField("code", code));
 
-        var again = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [2])).WithPlanField("code", code.ToLowerInvariant()));
+        var again = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [2]))
+            .WithPlanField("code", code.ToLowerInvariant())
+            .WithPlanField("salesOrderIds", new[] { await client.OpenOrderAsync() }));
 
         var body = await again.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal("Code", body.Text("field"));
@@ -55,7 +57,8 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         var none = await client.PostPlanAsync(PlanBody());
         var twice = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [1, 1])));
-        var noRaftLane = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [9])));
+        var noRaftLane = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [9]))
+            .WithPlanField("salesOrderIds", new[] { await client.OpenOrderAsync() }));
 
         Assert.Equal(["Lines"], await none.InvalidFieldsAsync());
         Assert.Equal(["Line 1 lanes"], await twice.InvalidFieldsAsync());
@@ -69,7 +72,8 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var client = raft.Owner.Client;
         var first = await client.CreatePlanAsync(PlanBody(PlanLine(raft.RaftId, [1, 2])));
 
-        var clash = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [2, 3])));
+        var clash = await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [2, 3]))
+            .WithPlanField("salesOrderIds", new[] { await client.OpenOrderAsync() }));
 
         var body = await clash.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-02");
         Assert.Contains(first.Text("code"), body.Text("detail"));
@@ -209,7 +213,9 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
         (await manager.Client.PostSkipAsync(plan.Id(), plan.LineId(0), [1], "Dead oysters")).EnsureSuccessStatusCode();
         var current = await client.GetPlanAsync(plan.Id());
 
-        Dictionary<string, object?> Body(params object[] lines) => PlanBody(lines).WithPlanField("rowVersion", current.Text("rowVersion"));
+        Dictionary<string, object?> Body(params object[] lines) => PlanBody(lines)
+            .WithPlanField("rowVersion", current.Text("rowVersion"))
+            .WithPlanField("salesOrderIds", current.GetProperty("orders").EnumerateArray().Select(o => o.Id()).ToArray());
         var lockedChanged = await client.PutAsJsonAsync($"{PlanRoute}/{plan.Id()}", Body(PlanLine(raft.RaftId, [1, 3], plan.LineId(0)), PlanLine(raft.RaftId, [2], plan.LineId(1))));
         var lockedDropped = await client.PutAsJsonAsync($"{PlanRoute}/{plan.Id()}", Body(PlanLine(raft.RaftId, [2], plan.LineId(1))));
         var fine = await client.PutAsJsonAsync($"{PlanRoute}/{plan.Id()}", Body(PlanLine(raft.RaftId, [1], plan.LineId(0)), PlanLine(raft.RaftId, [4], plan.LineId(1)), PlanLine(raft.RaftId, [5])));
@@ -281,7 +287,7 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task One_plan_links_many_orders_and_one_order_many_plans()
+    public async Task One_plan_links_many_orders_and_an_order_keeps_cancelled_plan_history_but_has_only_one_active_plan()
     {
         var sale = await factory.SaleSetupAsync();
         var client = sale.Owner.Client;
@@ -290,11 +296,40 @@ public class HarvestPlanApiTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var second = (await client.CreateOrderAsync(OrderBody(sale.CustomerId, sale.ProductId, unit))).GetProperty("order");
 
         var planOne = await client.CreatePlanAsync(PlanBody(PlanLine(sale.RaftId, [3])).WithPlanField("salesOrderIds", new[] { first.Id(), second.Id() }));
-        var planTwo = await client.CreatePlanAsync(PlanBody(PlanLine(sale.RaftId, [4])).WithPlanField("salesOrderIds", new[] { first.Id() }));
-
         Assert.Equal(2, planOne.GetProperty("orders").GetArrayLength());
+        var secondBody = PlanBody(PlanLine(sale.RaftId, [4])).WithPlanField("salesOrderIds", new[] { first.Id() });
+        var refused = await (await client.PostPlanAsync(secondBody)).PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-08");
+        Assert.Equal("SalesOrderIds", refused.Text("field"));
+        Assert.Contains(first.Text("code"), refused.Text("detail"));
+        Assert.Contains(planOne.Text("code"), refused.Text("detail"));
+        Assert.Single((await client.GetOrderAsync(first.Id())).GetProperty("harvestPlans").EnumerateArray());
+
+        (await client.PostAsJsonAsync($"{PlanRoute}/{planOne.Id()}/cancel", new { reason = "Replanned" })).EnsureSuccessStatusCode();
+        var planTwo = await client.CreatePlanAsync(secondBody);
         var codes = (await client.GetOrderAsync(first.Id())).GetProperty("harvestPlans").EnumerateArray().Select(p => p.Text("code")).Order().ToList();
         Assert.Equal(new[] { planOne.Text("code"), planTwo.Text("code") }.Order().ToList(), codes);
+    }
+
+    [Fact]
+    public async Task Creating_or_updating_a_plan_without_orders_is_refused_and_keeps_the_saved_plan_unchanged()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var client = raft.Owner.Client;
+        var missing = await (await client.PostPlanAsync(PlanBody(PlanLine(raft.RaftId, [1]))))
+            .PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-07");
+        Assert.Equal("SalesOrderIds", missing.Text("field"));
+
+        var plan = await client.CreatePlanAsync(PlanBody(PlanLine(raft.RaftId, [1])));
+        var update = PlanBody(PlanLine(raft.RaftId, [2], plan.LineId())).WithPlanField("rowVersion", plan.Text("rowVersion"));
+        var removed = await (await client.PutAsJsonAsync($"{PlanRoute}/{plan.Id()}", update))
+            .PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-07");
+        Assert.Equal("SalesOrderIds", removed.Text("field"));
+
+        var current = await client.GetPlanAsync(plan.Id());
+        Assert.Equal(plan.GetProperty("orders")[0].Id(), Assert.Single(current.GetProperty("orders").EnumerateArray()).Id());
+        Assert.Equal("Planned", current.LaneState(0, 1));
+        Assert.Single(current.GetProperty("lines")[0].GetProperty("lanes").EnumerateArray());
+        Assert.Equal(plan.Text("rowVersion"), current.Text("rowVersion"));
     }
 
     [Fact]

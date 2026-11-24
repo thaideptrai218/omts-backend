@@ -172,9 +172,9 @@ public class SalesInvoiceExportTests
         Assert.NotEqual(orderCode, plain.GetProperty("salesOrder").Text("code"));
 
         var list = await client.InvoiceListAsync(Query(("orderCode", orderCode)));
-        Assert.Equal([ordered.Text("code")], list.Codes());
+        Assert.Equal<string?>([ordered.Text("code")], list.Codes());
         Assert.Equal(orderCode, list.Rows()[0].GetProperty("salesOrder").Text("code"));
-        Assert.Equal([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[2..] + " ")))).Codes());
+        Assert.Equal<string?>([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[2..] + " ")))).Codes());
         var wildcard = await client.InvoiceListAsync(Query(("orderCode", "DH%")));
         Assert.Equal(("MSG-GEN-10", 0), (wildcard.Text("messageCode"), wildcard.Rows().Count));
         var all = await client.InvoiceListAsync();

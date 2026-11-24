@@ -98,7 +98,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
 
     // A last working day moved or ended twice: only one Left, one way back.
     [Fact]
-    public async Task A_left_employee_cannot_be_ended_edited_or_given_a_zone_and_an_employed_one_cannot_be_resumed()
+    public async Task A_left_employee_keeps_employment_fields_when_contacts_change_and_cannot_be_ended_or_given_a_zone()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"States {NewCode()}", NewPhone());
@@ -111,7 +111,18 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
 
         var left = await EndAsync(owner, id, today.AddDays(-1));
         var version = RowVersionOf(left);
-        Assert.Equal("MSG-GEN-09", await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("rowVersion", version))).ErrorCodeAsync());
+        var edited = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile("Ignored rename", phone, other.Id, b =>
+        {
+            b["rowVersion"] = version;
+            b["employeeType"] = "Staff";
+            b["employeeTypeFrom"] = today.ToString("yyyy-MM-dd");
+            b["notes"] = "Contact correction";
+        }))).BodyAsync(HttpStatusCode.OK);
+        var employee = edited.GetProperty("employee");
+        Assert.Equal((name, "SeasonalWorker", "Left"), (employee.GetProperty("fullName").GetString(), employee.GetProperty("employeeType").GetString(), employee.GetProperty("status").GetString()));
+        Assert.Equal("Contact correction", employee.GetProperty("notes").GetString());
+        Assert.Equal([zone.Id], employee.GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("id").GetGuid()));
+        version = RowVersionOf(edited);
         Assert.Equal("MSG-GEN-09", await (await owner.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = other.Id })).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-09", await (await owner.PostEndAsync(id, new { lastWorkingDay = today.ToString("yyyy-MM-dd"), rowVersion = version })).ErrorCodeAsync());
     }

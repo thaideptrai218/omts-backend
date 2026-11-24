@@ -13,8 +13,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Employees;
 
 /// <summary>
-/// QA of OMTS-227, who reads what. BR-LABOR-01 and BR-FARM-08, owner decision of 24/11/2026: a Zone Manager sees only the employees with a working zone among its zones; §I.4.4: Accountant,
-/// Trader and anonymous have no LABOR-01. Hiding the personal fields from a manager who does not maintain the employee is the
+/// QA of OMTS-227, who reads what. Per the decision of 24/11/2026, a Zone Manager sees only employees with a working zone among its zones. The Accountant
+/// reads employees for payroll reconciliation (decision of 19/11/2026), while Trader and anonymous have no LABOR-01. Hiding the personal fields from a manager who does not maintain the employee is the
 /// branch's own rule (PM question): the SRS neither asks for it nor forbids it (NFR-11 "shown only to authorized users").
 /// </summary>
 public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -32,6 +32,8 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
             ("Manager of the zone", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneA))).Client, true),
             ("Manager of both zones", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.ZoneManager, zoneA))).Client, true),
             ("All zones manager", (await StaffAsync(factory, (StaffRole.ZoneManager, null))).Client, true),
+            ("Accountant of the zone", (await StaffAsync(factory, (StaffRole.Accountant, zoneA))).Client, false),
+            ("All zones accountant", (await StaffAsync(factory, (StaffRole.Accountant, null))).Client, false),
             ("Manager B, Accountant A", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.Accountant, zoneA))).Client, false),
             ("Manager B, Accountant All", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.Accountant, null))).Client, false),
         };
@@ -58,9 +60,9 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Empty(listed.GetProperty("items").EnumerateArray());
     }
 
-    // §I.4.4: LABOR-01 is No for the Accountant and the Trader, also with an All zones pair; a mixed pair gives nothing more.
+    // Trader and a revoked pair have no LABOR-01; the Accountant's scoped read is covered above.
     [Fact]
-    public async Task Accountants_traders_anonymous_and_a_revoked_pair_read_nothing()
+    public async Task Traders_anonymous_and_a_revoked_pair_read_nothing()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var id = IdOf(await CreateAsync(owner, FullProfile($"Refuse {NewCode()}", NewPhone(), zone)));
@@ -69,8 +71,6 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         var (revoked, revokedAccount) = await StaffAsync(factory, (StaffRole.ZoneManager, zone));
         var refused = new[]
         {
-            (await StaffAsync(factory, (StaffRole.Accountant, zone))).Client,
-            (await StaffAsync(factory, (StaffRole.Accountant, null))).Client,
             await factory.LoginAsync(trader.Username, traderPassword),
             revoked,
         };

@@ -12,16 +12,17 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Employees;
 
 /// <summary>
-/// LABOR-01 access per the §I.4.4 matrix (Owner Full, Zone Manager Full*, others No) and BR-LABOR-01, owner decision of 24/11/2026: a caller limited to some zones sees and maintains only the
+/// LABOR-01 access: Owner Full, Zone Manager Full*, Accountant scoped read (decision of 19/11/2026), others No. Per the owner decision of 24/11/2026, a caller limited to some zones sees and maintains only the
 /// employees with a working zone among their zones; the Owner and an All zones pair see and maintain everyone.
 /// </summary>
 public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task Accountants_traders_and_anonymous_callers_are_refused_on_every_endpoint()
+    public async Task Accountants_only_read_scoped_employees_and_traders_and_anonymous_callers_are_refused()
     {
         var (owner, zone, role) = await SetupAsync(factory);
-        var saved = await CreateAsync(owner, Profile($"Access {NewCode()}", NewPhone(), zone.Id));
+        var saved = await CreateAsync(owner, Profile($"Access {NewCode()}", NewPhone(), zone.Id,
+            b => { b["bankAccount"] = Bank(); b["notes"] = "Private note"; }));
         var id = IdOf(saved);
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var body = Profile($"Intruder {NewCode()}", NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["rowVersion"] = RowVersionOf(saved); });
@@ -41,13 +42,23 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         {
             await ManagerAsync(factory, zone, StaffRole.Accountant),
             await ManagerAsync(factory, null, StaffRole.Accountant),
-            await factory.LoginAsync(trader.Username),
         })
         {
-            foreach (var call in calls)
+            Assert.Equal(HttpStatusCode.OK, (await calls[0](client)).StatusCode);
+            var view = await client.GetFromJsonAsync<JsonElement>($"/api/employees/{id}");
+            Assert.False(view.GetProperty("canMaintain").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, view.GetProperty("bankAccount").ValueKind);
+            Assert.Equal(JsonValueKind.Null, view.GetProperty("notes").ValueKind);
+            foreach (var call in calls.Skip(2))
             {
                 Assert.Equal("MSG-GEN-08", await (await call(client)).ErrorCodeAsync());
             }
+        }
+
+        var traderClient = await factory.LoginAsync(trader.Username);
+        foreach (var call in calls)
+        {
+            Assert.Equal("MSG-GEN-08", await (await call(traderClient)).ErrorCodeAsync());
         }
 
         foreach (var call in calls)
