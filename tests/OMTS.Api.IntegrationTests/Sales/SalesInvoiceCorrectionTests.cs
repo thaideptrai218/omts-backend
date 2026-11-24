@@ -58,7 +58,7 @@ public class SalesInvoiceCorrectionTests
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
 
-        Assert.Equal("MSG-GEN-08", (await (await sale.Manager.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
+        Assert.Equal("MSG-GEN-08", (await (await sale.Accountant.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
         Assert.Equal("MSG-GEN-08", (await (await accountant.Client.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
 
         await sale.Owner.Client.CancelledAsync(sold.Id(), Cancellation(sold));
@@ -90,7 +90,7 @@ public class SalesInvoiceCorrectionTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
+        var sold = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
         var code = sold.Text("code");
         Assert.Equal(200_000m, await owner.CustomerDebtAsync(sale.CustomerId));
 
@@ -173,7 +173,7 @@ public class SalesInvoiceCorrectionTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
 
         var raised = await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 11m)], sale.LotId))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-SALE-21", raised.Text("code"));
@@ -201,8 +201,8 @@ public class SalesInvoiceCorrectionTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
-        await sale.Manager.Client.FinishedAsync(sold.Id(), wantsQrCode: false);
+        var sold = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
+        await sale.Owner.Client.FinishedAsync(sold.Id(), wantsQrCode: false);
         var current = await owner.InvoiceAsync(sold.Id());
         Assert.Equal(200_000m, await owner.CustomerDebtAsync(sale.CustomerId));
 
@@ -233,7 +233,7 @@ public class SalesInvoiceCorrectionTests
         var owner = sale.Owner.Client;
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var question = await (await owner.CorrectAsync(sold.Id(), PriceCut(sold, 50_000m))).QuestionAsync();
         Assert.Equal(("MSG-SALE-17", "confirmOwedBack", 50_000m), (question.Code, question.Field, question.Body.Money("owedBackAmount")));

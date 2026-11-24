@@ -4047,6 +4047,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("EndsAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid?>("HarvestPlanLineId")
                         .HasColumnType("uniqueidentifier");
 
@@ -5029,7 +5032,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "User decision 31/10/2026: employees approve their shift before the Owner accepts the request.",
+                            Meaning = "Legacy (31/10/2026 flow): requests sent before 24/11/2026 may still wait here for employees to answer; new staffing plans keep the request Awaiting response and make the work assignments at once.",
                             SortOrder = 5
                         },
                         new
@@ -5172,7 +5175,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Handed to the Zone Managers of its zone; no lot is recorded and no lane left out yet.",
+                            Meaning = "Handed to the Zone Managers of its zone; none of them has pressed Receive yet, so no lot is recorded and no lane left out.",
                             SortOrder = 2
                         },
                         new
@@ -5183,7 +5186,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "A lot is recorded from a line of the plan, or a lane is left out.",
+                            Meaning = "A lot is recorded from a line of the plan, or a lane is left out; it stays here until a Zone Manager hands the plan over.",
                             SortOrder = 3
                         },
                         new
@@ -5194,7 +5197,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Every line has its lot or has every lane left out, or the Owner finished the plan by hand; removing a lot of a plan finished by itself opens it again.",
+                            Meaning = "The Owner closed a plan the Zone Manager handed over; removing a lot or putting a lane back opens it again.",
                             SortOrder = 4
                         },
                         new
@@ -5207,6 +5210,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Cancelled with a reason before any lot was recorded.",
                             SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 4206,
+                            Code = "RECEIVED",
+                            DisplayName = "Đã nhận",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on.",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 4207,
+                            Code = "HANDED_OVER",
+                            DisplayName = "Đã bàn giao",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan.",
+                            SortOrder = 7
                         },
                         new
                         {
@@ -5522,7 +5547,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 180,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3201,
-                            GuardCondition = "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.",
+                            GuardCondition = "A staffing plan exists (employees assigned at once, no agreement to wait for); the accepted cages are above 0, not more than the requested cages and equal to the planned cages; the pickup date is not before today and equals the planned pickup.",
                             ReasonRequired = false,
                             ToStatusId = 3202,
                             TriggerEvent = "Action",
@@ -5906,7 +5931,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             Id = 30111,
                             AllowedPerformers = "System",
-                            FromStatusId = 4202,
+                            FromStatusId = 4206,
                             GuardCondition = "The first lot is recorded from a line of the plan, or the first lane is left out.",
                             ReasonRequired = false,
                             ToStatusId = 4203,
@@ -5916,9 +5941,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 30112,
-                            AllowedPerformers = "Cooperative Owner; System",
-                            FromStatusId = 4203,
-                            GuardCondition = "Every line has its lot or every lane left out, or the Owner finishes the plan: lanes still to do stay as they are.",
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4207,
+                            GuardCondition = "The plan was handed over by a Zone Manager; only the Owner completes it. The system never completes a plan by itself.",
                             ReasonRequired = false,
                             ToStatusId = 4204,
                             TriggerEvent = "Action",
@@ -5926,12 +5951,45 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 30113,
-                            AllowedPerformers = "System",
+                            Id = 30120,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
                             FromStatusId = 4202,
-                            GuardCondition = "Every lane of every line is left out and no lot was recorded.",
+                            GuardCondition = "A Zone Manager of a zone of the plan presses Receive; there is no refusal.",
                             ReasonRequired = false,
-                            ToStatusId = 4204,
+                            ToStatusId = 4206,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30121,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4203,
+                            GuardCondition = "Every line of the plan has its lot or has every lane left out; a Zone Manager presses Hand over.",
+                            ReasonRequired = false,
+                            ToStatusId = 4207,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30122,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4207,
+                            GuardCondition = "A lot of a handed over plan is removed, or a lane left out is put back: a line is open again.",
+                            ReasonRequired = false,
+                            ToStatusId = 4203,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30123,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4206,
+                            GuardCondition = "A reason is given and no lot was recorded from the plan.",
+                            ReasonRequired = true,
+                            ToStatusId = 4205,
                             TriggerEvent = "Action",
                             UseCases = "HARVEST-PLAN"
                         },
@@ -5962,7 +6020,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 30116,
                             AllowedPerformers = "System",
                             FromStatusId = 4204,
-                            GuardCondition = "A lot of a plan that finished by itself is removed, or a lane left out is put back: a line is open again.",
+                            GuardCondition = "The Owner completed the plan and a lot is removed or a lane left out is put back: a line is open again.",
                             ReasonRequired = false,
                             ToStatusId = 4203,
                             TriggerEvent = "Action",
@@ -6083,7 +6141,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 30082,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3201,
-                            GuardCondition = "The Owner sends dated shift invitations with a cage capacity.",
+                            GuardCondition = "Legacy, no longer made: since 24/11/2026 the Owner picks the employees, their shifts become work assignments at once and the request stays Awaiting response.",
                             ReasonRequired = false,
                             ToStatusId = 3205,
                             TriggerEvent = "Action",
@@ -6116,7 +6174,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 30085,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3205,
-                            GuardCondition = "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.",
+                            GuardCondition = "A staffing plan exists (employees chosen, assignments made); cages and pickup match it. No employee agreement is counted any more.",
                             ReasonRequired = false,
                             ToStatusId = 3202,
                             TriggerEvent = "Action",

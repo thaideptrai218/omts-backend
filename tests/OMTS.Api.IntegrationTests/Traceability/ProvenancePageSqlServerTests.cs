@@ -32,8 +32,8 @@ public class ProvenancePageSqlServerTests
         await owner.SeedingRecordAsync(cycleId, seed.Session([2], date: Today.AddDays(-1)).Percents(50m, 2));
         var productId = (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id();
         var customerId = (await Catalogue.CreateCustomerAsync(owner)).Id();
-        var lotId = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1, 2))).Id();
-        var withdrawnId = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(3))).Id();
+        var lotId = (await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1, 2))).Id();
+        var withdrawnId = (await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(3))).Id();
         await host.UseDbAsync(db =>
         {
             db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 2, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });

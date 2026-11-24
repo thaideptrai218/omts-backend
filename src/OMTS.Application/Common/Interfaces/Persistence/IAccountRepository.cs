@@ -34,7 +34,7 @@ public interface IAccountRepository
 
     /// <summary>Staff accounts by name, username or phone (contains), optional status, ordered by display name.</summary>
     Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
-        string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken);
+        string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false);
 
     /// <summary>The Active Cooperative Owner accounts, for a notification that has no zone (BR-LABOR-04).</summary>
     Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);

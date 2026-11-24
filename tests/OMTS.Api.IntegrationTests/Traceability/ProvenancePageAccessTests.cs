@@ -24,7 +24,7 @@ public class ProvenancePageAccessTests
 
         var anonymous = await api.CreateClient().GetProvenanceAsync(token);
         var asOwner = await sale.Owner.Client.GetProvenanceAsync(token);
-        var asManager = await sale.Manager.Client.GetProvenanceAsync(token);
+        var asManager = await sale.Accountant.Client.GetProvenanceAsync(token);
 
         Assert.Equal(HttpStatusCode.OK, anonymous.StatusCode);
         // The signed photo links carry the expiry second of each request: only that part may differ.
@@ -82,7 +82,7 @@ public class ProvenancePageAccessTests
             page.PropertyPaths());
     }
 
-    // The page is limited per client IP like the other anonymous endpoints: over the limit, 429 TOO_MANY_REQUESTS with Retry-After, before any lookup.
+    // The page is limited per client IP like the other anonymous endpoints: over the limit, 429 MSG-ORIGIN-05 with Retry-After, before any lookup.
     [Fact]
     public async Task Pages_over_the_per_minute_limit_get_429()
     {
@@ -94,7 +94,8 @@ public class ProvenancePageAccessTests
 
         Assert.Equal(2, answers.Count(r => r.StatusCode == HttpStatusCode.NotFound));
         var refused = Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests);
-        Assert.Equal("TOO_MANY_REQUESTS", await refused.ErrorCodeAsync());
+        // The page answers its own MSG-ORIGIN-05 (it offers its QR code to open on a phone, another network), not the technical code of the other anonymous endpoints.
+        Assert.Equal("MSG-ORIGIN-05", await refused.ErrorCodeAsync());
         Assert.Equal("60", refused.Headers.RetryAfter?.ToString());
     }
 }

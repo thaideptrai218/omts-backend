@@ -29,7 +29,7 @@ public class ProvenancePageTests
         var cycle = await owner.StartCycleAsync(secondRaftId, new CycleBody(Today.AddDays(-10)));
         var seed = await owner.SeedLotAsync();
         await owner.SeedingRecordAsync(cycle.Id(), seed.Session([1, 2, 3, 4, 5]));
-        var secondLot = await owner.HarvestLotAsync(secondRaftId, HarvestFields.OfLanes(1));
+        var secondLot = await api.HarvestLotOfLanesAsync(owner, secondRaftId, HarvestFields.OfLanes(1));
 
         var (invoice, token) = await sale.SoldWithQrCodeAsync((sale.LotId, 300m), (secondLot.Id(), 200m));
 
@@ -109,9 +109,9 @@ public class ProvenancePageTests
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         var sale = new SaleSetup(raft.Owner, raft.Owner, raft.ZoneId, raft.RaftId, lot.Id(), lot.Id(),
-            (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id(), (await Catalogue.CreateCustomerAsync(owner)).Id());
+            (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id(), (await Catalogue.CreateCustomerAsync(owner)).Id(), raft.Owner);
         var (_, token) = await sale.SoldWithQrCodeAsync((lot.Id(), 10m));
         var item = await api.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == raft.Lot.ItemId).Select(i => i.Name).SingleAsync());
 

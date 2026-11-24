@@ -68,8 +68,8 @@ public class HarvestLotRemovalTests
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var other = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2, 3).FinishedLanes(3));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
+        var other = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(2, 3).FinishedLanes(3));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
         Assert.Equal("Harvested", (await owner.HarvestScreenAsync(raft.RaftId)).HarvestStateOf(1));
 
         await api.RemoveLotAsync(owner, lot.Id());
@@ -85,7 +85,7 @@ public class HarvestLotRemovalTests
         Assert.Equal(0, await api.QueryAsync(db => db.HarvestLotLanes.CountAsync(l => l.LotId == lot.Id())));
 
         // The lane can be harvested and finished again.
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
         Assert.Equal("Harvested", (await owner.HarvestScreenAsync(raft.RaftId)).HarvestStateOf(1));
     }
 

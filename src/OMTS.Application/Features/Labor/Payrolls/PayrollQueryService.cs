@@ -15,7 +15,8 @@ public sealed class PayrollQueryService(
     IPayrollReader reader,
     IPayrollWorkReader workReader,
     IAccountRepository accounts,
-    IEmployeeRepository employees)
+    IEmployeeRepository employees,
+    IRaftRepository rafts)
 {
     public const int MaxPageSize = 100;
     private const int MaxSearchLength = 200;
@@ -108,7 +109,7 @@ public sealed class PayrollQueryService(
         var paid = slips.Sum(s => s.Paid);
         return new PayrollSheetDetail(
             raw.Id, raw.Code, PayrollRules.NameOf(raw.PeriodType, raw.From, raw.To), raw.PeriodType, raw.From, raw.To, raw.Scope, PayrollRules.StatusOf(raw.StatusId),
-            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count);
+            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count, raw.UpdatedAt ?? raw.CreatedAt);
     }
 
     private static PayrollSlipRow Slip(PayrollSlipRaw s)
@@ -133,7 +134,7 @@ public sealed class PayrollQueryService(
             slip.Income, slip.Net, slip.Paid, slip.Outstanding, PayrollRules.StatusOf(raw.StatusId),
             raw.Jobs.Select(j => new PayrollSlipJobLine(j.JobName, j.Hours, j.HourlyRate, j.Amount)).ToList(),
             raw.Payments.Select(p => new PayrollSlipPayment(p.Id, p.VoucherCode, p.PaidAt, p.Method, p.Amount, p.Kind, p.Cancelled ? "Cancelled" : "Recorded")).ToList(),
-            await AttendanceAsync(slip.EmployeeId, raw.From, raw.To, cancellationToken));
+            await AttendanceAsync(slip.EmployeeId, raw.From, raw.To, cancellationToken), slip.EmployeeCode);
     }
 
     /// <summary>The days a seasonal worker was paid for in the period, one row per day and job type (BR-LABOR-05); a day without a complete record has none.</summary>
@@ -148,11 +149,20 @@ public sealed class PayrollQueryService(
         var employee = data.Employees[0];
         var periodsOf = data.Assignments.ToLookup(a => a.Date);
         var days = new List<PayrollSlipAttendanceDay>();
+        var raftCodes = (await rafts.GetByIdsAsync(data.Assignments.Where(a => a.RaftId is not null).Select(a => a.RaftId!.Value).Distinct().ToList(), cancellationToken))
+            .ToDictionary(r => r.Id, r => r.Code);
         foreach (var record in data.Attendances.Where(a => a.IsComplete && WorkRules.TypeOn(employee, a.Date) == EmployeeType.SeasonalWorker).OrderBy(a => a.Date))
         {
             var day = WorkHoursCalculator.Calculate(record.CheckInAt, record.CheckOutAt, periodsOf[record.Date], AttendanceSettingsVersion.EffectiveOn(data.Settings, record.Date));
-            days.AddRange(day.Jobs.Where(j => j.Minutes > 0)
-                .Select(j => new PayrollSlipAttendanceDay(record.Date, data.JobTypes.GetValueOrDefault(j.JobTypeId)?.Name ?? string.Empty, j.Hours)));
+            foreach (var job in day.Jobs.Where(j => j.Minutes > 0))
+            {
+                var jobType = data.JobTypes.GetValueOrDefault(job.JobTypeId);
+                var rate = jobType is null ? 0m : PayRate.EffectiveOn(jobType.Rates, record.Date)?.HourlyRate ?? 0m;
+                var raftIds = day.Periods.Where(p => p.JobTypeId == job.JobTypeId && p.RaftId is not null).Select(p => p.RaftId!.Value).Distinct().ToList();
+                var codes = raftIds.Count == 0 ? null : string.Join(", ", raftIds.Select(id => raftCodes.GetValueOrDefault(id, string.Empty)).Where(c => c.Length > 0).Order());
+                days.Add(new PayrollSlipAttendanceDay(
+                    record.Date, jobType?.Name ?? string.Empty, job.Hours, codes, record.CheckInAt, record.CheckOutAt, rate, Math.Round(job.Minutes * rate / 60m, 0, MidpointRounding.AwayFromZero)));
+            }
         }
 
         return days;

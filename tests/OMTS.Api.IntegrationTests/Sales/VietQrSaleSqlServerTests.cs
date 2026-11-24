@@ -65,7 +65,7 @@ public class VietQrSaleSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var lot = await setup.Host.Owner.Client.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(round + 1));
-            var code = (await setup.Manager.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 400m)], VietQr(4_000_000m)))).Code();
+            var code = (await setup.Host.Owner.Client.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 400m)], VietQr(4_000_000m)))).Code();
             var reference = NewReference();
 
             var answers = await Task.WhenAll(Enumerable.Range(0, Parallel).Select(_ => TransferAsync(setup, code, 8_000_000m, reference)));
@@ -96,7 +96,7 @@ public class VietQrSaleSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var lot = await setup.Host.Owner.Client.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(round + 3));
-            var code = (await setup.Manager.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 10m)], VietQr()))).Code();
+            var code = (await setup.Host.Owner.Client.AwaitTransferAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 10m)], VietQr()))).Code();
             var reference = NewReference();
 
             var transfer = TransferAsync(setup, code, 300_000m, reference);

@@ -18,7 +18,7 @@ public class OrderToInvoiceFlowTests
         var sale = await api.SaleSetupAsync();
         var buyer = await api.TraderAsync();
         var other = await api.TraderAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)))).GetProperty("invoice");
 
         Assert.Equal(HttpStatusCode.OK, (await buyer.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).StatusCode);
@@ -28,7 +28,7 @@ public class OrderToInvoiceFlowTests
         Assert.Empty(empty.GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal("MSG-GEN-11", empty.Text("messageCode"));
 
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.GetAsync("/api/me/invoices")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.GetAsync("/api/me/invoices")).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await sale.Owner.Client.GetAsync($"/api/me/invoices/{invoice.Id()}")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync("/api/me/invoices")).StatusCode);
     }

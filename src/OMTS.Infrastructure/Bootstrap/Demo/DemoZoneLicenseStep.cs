@@ -47,7 +47,7 @@ internal sealed class DemoZoneLicenseStep : IDemoSeedStep
                 EffectiveDate = context.Today.AddDays(license.EffectiveDays),
                 ExpiryDate = context.Today.AddDays(license.ExpiryDays),
                 IssuingAuthority = license.Authority,
-                Holder = "Hợp tác xã Nuôi hàu Vân Đồn",
+                Holder = await context.Db.Cooperatives.Select(c => c.FullName).FirstAsync(cancellationToken),
                 LegalScope = $"Nuôi hàu bè tại {license.ZoneCode}, Vân Đồn, Quảng Ninh",
                 ZoneId = zoneId,
             };

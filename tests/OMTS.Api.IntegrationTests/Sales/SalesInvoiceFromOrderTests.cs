@@ -80,7 +80,7 @@ public class SalesInvoiceFromOrderTests
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api);
         var owner = plan.Sale.Owner.Client;
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
 
         var draft = await manager.GetFromJsonAsync<JsonElement>($"/api/sales-orders/{plan.OrderId}/invoice-draft");
         Assert.Equal((7_400_000m, 100_000m, 100_000m, 500_000m), (draft.Money("subtotal"), draft.Money("orderDiscount"), draft.Money("discountShare"), draft.Money("advanceLeft")));
@@ -92,7 +92,7 @@ public class SalesInvoiceFromOrderTests
         Assert.Equal(plan.Sale.ZoneId, draft.GetProperty("zone").Id());
 
         // 60 kg of the 100: 100,000 × 3,000,000 / 7,400,000 = 40,541 of the discount, the advance of 500,000 pays first, the cash settles the rest.
-        var saved = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 60m)], Cash(2_459_459m)).With("discount", 40_541m).With("zoneId", Guid.NewGuid()));
+        var saved = await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 60m)], Cash(2_459_459m)).With("discount", 40_541m).With("zoneId", Guid.NewGuid()));
         var invoice = saved.GetProperty("invoice");
         Assert.Equal(plan.Sale.ZoneId, invoice.GetProperty("zone").Id());
         Assert.Equal((2_959_459m, "OrderPrice"), (invoice.Money("total"), invoice.GetProperty("lines")[0].Text("priceSource")));
@@ -143,10 +143,10 @@ public class SalesInvoiceFromOrderTests
     {
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api, advance: false);
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
 
         // 2 cages at 1,200,000 weighing 38.5 kg, and 100 kg at 50,000: the money follows the unit of the line, the ledger the kg weighed.
-        var saved = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 100m), CageLine(plan, 2m, 38.5m)], Cash(7_300_000m)).With("discount", 100_000m));
+        var saved = await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 100m), CageLine(plan, 2m, 38.5m)], Cash(7_300_000m)).With("discount", 100_000m));
 
         var lines = saved.GetProperty("invoice").GetProperty("lines").EnumerateArray().ToList();
         Assert.Equal((5_000_000m, 2_400_000m, 2m, 38.5m), (lines[0].Money("amount"), lines[1].Money("amount"), lines[1].Money("quantity"), lines[1].Money("kg")));
@@ -164,7 +164,7 @@ public class SalesInvoiceFromOrderTests
     {
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api, advance: false);
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
         var owner = plan.Sale.Owner.Client;
         var other = await owner.CreateCustomerAsync();
 
@@ -189,20 +189,19 @@ public class SalesInvoiceFromOrderTests
     }
 
     [Fact]
-    public async Task The_price_of_the_order_line_is_asked_about_and_a_discount_within_the_share_is_not()
+    public async Task The_owner_sells_an_order_line_at_another_price_and_a_discount_above_its_share_without_being_asked()
     {
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api, advance: false);
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
 
-        var price = await (await manager.PostAsJsonAsync("/api/sales-invoices", FromOrder(plan, [KgLine(plan, 10m, unitPrice: 55_000m)], Cash(550_000m)))).QuestionAsync();
-        Assert.Equal(("MSG-SALE-10", "lines[0].priceDecidedByOwner"), (price.Code, price.Field));
+        // MSG-SALE-10 is for a seller who is not the Owner, and only the Owner sells since 20/11/2026: the Owner decides another price and a larger discount without being asked.
+        var price = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 10m, unitPrice: 55_000m)], Cash(550_000m)));
+        Assert.Equal("DecidedByOwner", price.GetProperty("invoice").GetProperty("lines")[0].Text("priceSource"));
 
-        // 10 kg is 500,000 of 7,400,000: its share of the 100,000 discount is 6,757; a discount of 6,758 is above it and is asked.
-        var within = await manager.SellAsync(FromOrder(plan, [KgLine(plan, 10m)], Cash(493_243m)).With("discount", 6_757m));
+        // 10 kg is 500,000 of 7,400,000: its share of the 100,000 discount is 6,757.
+        var within = await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 10m)], Cash(493_243m)).With("discount", 6_757m));
         Assert.Equal(493_243m, within.GetProperty("invoice").Money("total"));
-        var above = await (await manager.PostAsJsonAsync("/api/sales-invoices", FromOrder(plan, [KgLine(plan, 10m)], Cash(493_000m)).With("discount", 6_758m))).QuestionAsync();
-        Assert.Equal(("MSG-SALE-10", "discountDecidedByOwner"), (above.Code, above.Field));
     }
 
     [Fact]
@@ -211,7 +210,7 @@ public class SalesInvoiceFromOrderTests
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api);
         var owner = plan.Sale.Owner.Client;
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
 
         // An invoice of another order of the same customer, on the debt: the advance reserved for the first order does not pay it.
         var (otherOrder, otherLines) = await owner.OrderOfAsync(plan.Sale.CustomerId, (plan.Sale.ProductId, 10m));
@@ -226,7 +225,7 @@ public class SalesInvoiceFromOrderTests
         Assert.Equal(500_000m, Assert.Single(debt.GetProperty("reservedAdvances").EnumerateArray()).Money("amount"));
 
         // 4 kg of the first order (200,000) are paid by its advance alone; the 300,000 left stay reserved, and the invoice of the other order is still unpaid.
-        await manager.SellAsync(FromOrder(plan, [KgLine(plan, 4m)], Cash(0m)));
+        await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 4m)], Cash(0m)));
         var reserved = await owner.GetFromJsonAsync<JsonElement>($"/api/customer-debts/{plan.Sale.CustomerId}");
         Assert.Equal(300_000m, Assert.Single(reserved.GetProperty("reservedAdvances").EnumerateArray()).Money("amount"));
         Assert.Equal(300_000m, (await owner.InvoiceAsync(sold.Id())).GetProperty("debtEffect").Money("unpaid"));
@@ -243,11 +242,11 @@ public class SalesInvoiceFromOrderTests
     {
         using var api = new AuthApiFactory();
         var plan = await PlanAsync(api, advance: false);
-        var manager = plan.Sale.Manager.Client;
+        var manager = plan.Sale.Owner.Client;
 
         var next = await manager.GetFromJsonAsync<JsonElement>("/api/sales-invoices/next-code");
         Assert.Matches("^HD[0-9]{6}$", next.Text("code")!);
-        var first = (await manager.SellAsync(FromOrder(plan, [KgLine(plan, 1m)], Cash(50_000m)).With("code", "hd-A.1").With("note", "Weighed twice"))).GetProperty("invoice");
+        var first = (await plan.Sale.Owner.Client.SellAsync(FromOrder(plan, [KgLine(plan, 1m)], Cash(50_000m)).With("code", "hd-A.1").With("note", "Weighed twice"))).GetProperty("invoice");
         Assert.Equal(("hd-A.1", "Weighed twice"), (first.Text("code"), first.Text("note")));
         var taken = await (await manager.PostAsJsonAsync("/api/sales-invoices", FromOrder(plan, [KgLine(plan, 1m)], Cash(50_000m)).With("code", "HD-a.1"))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG-GEN-02", "Code", first.Id()), (taken.Text("code"), taken.Text("field"), taken.GetProperty("existingId").GetGuid()));

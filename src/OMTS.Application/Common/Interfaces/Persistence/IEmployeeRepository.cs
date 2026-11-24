@@ -29,6 +29,9 @@ public interface IEmployeeRepository
     /// <summary>Another employee of the cooperative with this code, whatever its letter case.</summary>
     Task<Employee?> FindByCodeAsync(string code, Guid? exceptEmployeeId, CancellationToken cancellationToken);
 
+    /// <summary>Another employee (any status) holding this ID number, if any: saving is allowed, the caller only warns (L16).</summary>
+    Task<Employee?> FindWithIdNumberAsync(string idNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);
+
     /// <summary>The Employed employee who has this number (at most one, BR-LABOR-01), other than <paramref name="exceptEmployeeId"/>.</summary>
     Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);
 
@@ -68,6 +71,7 @@ public enum EmployeeSort
 /// <param name="PhoneNumber">The search read as a whole phone number in its stored form, if it is one: it also finds that number.</param>
 /// <param name="Today">The day the employee type in force is read at.</param>
 /// <param name="Ids">Only these employees (the export of selected rows); the filters above are then left empty by the caller.</param>
+/// <param name="VisibleZoneIds">Only the employees with a working zone among these zones (a caller limited to some zones); null: every employee, an empty collection: none.</param>
 public sealed record EmployeeSearchFilter(
     string? Search,
     string? PhoneNumber,
@@ -78,4 +82,5 @@ public sealed record EmployeeSearchFilter(
     DateOnly Today,
     EmployeeSort Sort = EmployeeSort.Default,
     bool Descending = false,
-    IReadOnlyCollection<Guid>? Ids = null);
+    IReadOnlyCollection<Guid>? Ids = null,
+    IReadOnlyCollection<Guid>? VisibleZoneIds = null);

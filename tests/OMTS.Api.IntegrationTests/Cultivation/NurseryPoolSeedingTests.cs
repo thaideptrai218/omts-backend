@@ -179,7 +179,8 @@ public sealed class NurseryPoolSeedingTests
         var put = await client.PutSeedingAsync(second.Id(), second.AsCorrection() with { Quantity = 5000m, RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(second.Id()) });
         await put.ReadAsync(HttpStatusCode.OK);
         var reopened = await client.GetNurseryAsync(batch.Id());
-        Assert.Equal((4002, 500m, 0m), (reopened.GetProperty("statusId").GetInt32(), reopened.Pieces("remaining"), reopened.Pieces("closeLossPieces")));
+        // Nothing was written off: a batch that is open again has no close loss at all, not a loss of 0.
+        Assert.Equal((4002, 500m, JsonValueKind.Null), (reopened.GetProperty("statusId").GetInt32(), reopened.Pieces("remaining"), reopened.GetProperty("closeLossPieces").ValueKind));
 
         // Used up again, then removed: open again too.
         var back = await client.PutSeedingAsync(second.Id(), second.AsCorrection() with { Quantity = 5500m, RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(second.Id()) });

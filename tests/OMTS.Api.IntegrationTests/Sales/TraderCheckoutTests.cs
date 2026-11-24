@@ -63,7 +63,7 @@ public class TraderCheckoutTests
         var account = await sale.Owner.Client.PostAsJsonAsync("/api/cash-accounts", new { kind = "Bank", bankBin = BankBin, accountNumber = AccountNumber, holderName = "HTX DEMO" });
         await account.ReadAsync(HttpStatusCode.Created);
         var buyer = await api.TraderAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(
+        var invoice = (await sale.Owner.Client.SellAsync(
             Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
         return new Setup(sale, buyer, invoice);
     }
@@ -242,7 +242,7 @@ public class TraderCheckoutTests
         using var api = new CheckoutApi(linkedAccount: true);
         var sale = await api.SaleSetupAsync();
         var buyer = await api.TraderAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(
+        var invoice = (await sale.Owner.Client.SellAsync(
             Invoice(buyer.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
 
         // No receiving bank account (staging cannot accept one while no notification service is chosen), and the channel account is not in the cash book yet.

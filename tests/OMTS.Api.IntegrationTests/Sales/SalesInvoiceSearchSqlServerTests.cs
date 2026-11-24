@@ -43,7 +43,7 @@ public class SalesInvoiceSearchSqlServerTests
         var s = await SetupAsync(host);
         for (var i = 0; i < 2; i++)
         {
-            await s.Manager.SellAsync(CashSale(s));
+            await s.Owner.SellAsync(CashSale(s));
         }
 
         using var counter = new CommandCounter(new SqlConnectionStringBuilder(host.Database.ConnectionString).InitialCatalog);
@@ -56,7 +56,7 @@ public class SalesInvoiceSearchSqlServerTests
 
         for (var i = 0; i < ManyInvoices; i++)
         {
-            await s.Manager.SellAsync(CashSale(s, walkIn: i % 3 == 0));
+            await s.Owner.SellAsync(CashSale(s, walkIn: i % 3 == 0));
         }
 
         var (list, manySearch) = await counter.MeasureAsync(() => s.Manager.InvoiceListAsync("?pageSize=100"));
@@ -84,7 +84,7 @@ public class SalesInvoiceSearchSqlServerTests
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var s = await SetupAsync(host);
-        await s.Manager.SellAsync(CashSale(s));
+        await s.Owner.SellAsync(CashSale(s));
 
         foreach (var text in new[] { "%", "_", "[a-z]", "HD%", "H_", "'", "--", new string('x', 4001) })
         {

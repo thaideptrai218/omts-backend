@@ -21,7 +21,7 @@ public class VietQrPendingSaleActionsTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var code = (await client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
 
         Assert.Equal(["Payment"], await (await client.ChangePaymentAsync(code, VietQr())).InvalidFieldsAsync());
@@ -53,7 +53,7 @@ public class VietQrPendingSaleActionsTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var code = (await client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 100m)], VietQr(1_000_000m)))).Code();
 
         var (question, field, _) = await (await client.ChangePaymentAsync(code, Cash(1_000_000m, "PayLater"))).QuestionAsync();
@@ -72,7 +72,7 @@ public class VietQrPendingSaleActionsTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var code = (await client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(100_000m)))).Code();
 
         var (question, field, asked) = await (await client.StopAsync(code, confirmed: false)).QuestionAsync();
@@ -86,7 +86,7 @@ public class VietQrPendingSaleActionsTests
 
         Assert.Equal("Stopped", stopped.Text("status"));
         var audit = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.Action == "SalesInvoice.SaleStopped" && e.RecordCode == code));
-        Assert.Equal(("Stop sale", sale.Manager.Account.Id), (audit.Reason, audit.ActorAccountId!.Value));
+        Assert.Equal(("Stop sale", sale.Owner.Account.Id), (audit.Reason, audit.ActorAccountId!.Value));
         Assert.Equal((0, 0), await api.QueryAsync(async db => (await db.SalesInvoices.CountAsync(), await db.CustomerPayments.CountAsync())));
         Assert.Equal("MSG-GEN-09", await (await client.StopAsync(code, confirmed: true)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-09", await (await client.ChangePaymentAsync(code, Cash(300_000m))).ErrorCodeAsync());
@@ -110,7 +110,7 @@ public class VietQrPendingSaleActionsTests
         var sale = await api.SaleSetupAsync();
         await api.UseReceivingAccountAsync();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr());
-        var code = (await sale.Manager.Client.AwaitTransferAsync(body)).Code();
+        var code = (await sale.Owner.Client.AwaitTransferAsync(body)).Code();
         var otherZone = await api.ManagerAsync((await sale.Owner.Client.CreateZoneAsync()).Id());
         var accountant = await api.AllZonesAccountantAsync();
         var trader = await api.TraderAsync();
@@ -125,9 +125,9 @@ public class VietQrPendingSaleActionsTests
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.Client.PostInvoiceAsync(body)).StatusCode);
         using var anonymous = api.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PollAsync(code)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await sale.Manager.Client.PollAsync("HD999999")).StatusCode);
-        Assert.Empty((await otherZone.Client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending"))!);
-        Assert.Equal([code], (await sale.Manager.Client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending"))!.Select(p => p.Code()));
+        Assert.Equal(HttpStatusCode.NotFound, (await sale.Owner.Client.PollAsync("HD999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherZone.Client.GetAsync("/api/sales-invoices/pending")).StatusCode);
+        Assert.Equal([code], (await sale.Owner.Client.GetFromJsonAsync<JsonElement[]>("/api/sales-invoices/pending"))!.Select(p => p.Code()));
         Assert.Equal("Awaiting", (await sale.Owner.Client.PolledAsync(code)).Text("status"));
         Assert.Equal(PendingSaleStatus.Awaiting, (await api.PendingRowAsync(code)).Status);
     }

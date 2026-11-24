@@ -127,7 +127,7 @@ public class QualityClaimQaAccessTests
         var accountant = await OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit.AccountantAsync(api);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await c.Owner.GetAsync("/api/me/quality-claims")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.World.Sale.Manager.Client.GetAsync($"/api/me/quality-claims/{c.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.World.Sale.Accountant.Client.GetAsync($"/api/me/quality-claims/{c.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.PostClaimAsync(c.World.InvoiceId)).StatusCode);
     }
 
@@ -141,7 +141,7 @@ public class QualityClaimQaAccessTests
         var trader = c.World.Trader.Client;
         var unknown = Guid.NewGuid();
 
-        foreach (var caller in new[] { c.World.Sale.Manager.Client, accountant, trader, allZones.Client })
+        foreach (var caller in new[] { c.World.Sale.Accountant.Client, accountant, trader, allZones.Client })
         {
             Assert.Equal(HttpStatusCode.Forbidden, (await caller.AcceptClaimAsync(c.Id, c.RowVersion)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await caller.RejectClaimAsync(c.Id, c.RowVersion)).StatusCode);
@@ -163,15 +163,15 @@ public class QualityClaimQaAccessTests
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.Client.GetAsync("/api/quality-claims")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.Client.GetAsync($"/api/quality-claims/{c.Id}")).StatusCode);
 
-        var outsider = other.Sale.Manager.Client;
-        var list = await (await outsider.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK);
-        Assert.Empty(list.Items());
+        // Claims are the Owner's alone (decision of 20/11/2026): staff of another zone are refused on the list, on a claim and on an unknown one.
+        var outsider = other.Sale.Accountant.Client;
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync("/api/quality-claims")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync($"/api/quality-claims/{c.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/quality-claims/{Guid.NewGuid()}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync($"/api/quality-claims/{Guid.NewGuid()}")).StatusCode);
     }
 
     [Fact]
-    public async Task A_revoked_zone_is_gone_at_the_next_request_while_the_other_zone_stays_and_all_zones_sees_everything()
+    public async Task A_zone_manager_pair_opens_no_claim_before_or_after_a_zone_is_revoked_and_the_owner_reads_them_all()
     {
         using var api = new QualityClaimApiFactory();
         var a = await api.QaClaimedAsync();
@@ -181,19 +181,18 @@ public class QualityClaimQaAccessTests
         var staff = await StaffAsync(api, (StaffRole.ZoneManager, zoneA), (StaffRole.ZoneManager, zoneB));
         var everywhere = await StaffAsync(api, (StaffRole.ZoneManager, null));
 
-        var both = await (await staff.Client.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(2, both.GetProperty("total").GetInt32());
-        var all = await (await everywhere.Client.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(2, all.GetProperty("total").GetInt32());
-        (await everywhere.Client.GetAsync($"/api/quality-claims/{a.Id}")).EnsureSuccessStatusCode();
+        // Claims are the Owner's alone (decision of 20/11/2026): no Zone Manager pair opens them, in one zone or all, before or after a revoke.
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync("/api/quality-claims")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await everywhere.Client.GetAsync("/api/quality-claims")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await everywhere.Client.GetAsync($"/api/quality-claims/{a.Id}")).StatusCode);
+        Assert.Equal(2, (await (await a.Owner.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
 
         var grantA = await api.QueryAsync(db => db.AccessGrants.Where(g => g.AccountId == staff.Account.Id && g.ZoneId == zoneA.Id).Select(g => g.Id).SingleAsync());
         Assert.Equal(HttpStatusCode.OK, (await a.Owner.PostAsJsonAsync($"/api/accounts/{staff.Account.Id}/grants/{grantA}/revoke", new { reason = "Moved" })).StatusCode);
 
-        var after = await (await staff.Client.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(b.Id, after.Items().Single().Id());
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync("/api/quality-claims")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync($"/api/quality-claims/{a.Id}")).StatusCode);
-        (await staff.Client.GetAsync($"/api/quality-claims/{b.Id}")).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync($"/api/quality-claims/{b.Id}")).StatusCode);
     }
 
     [Fact]

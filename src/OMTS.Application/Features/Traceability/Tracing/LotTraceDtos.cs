@@ -4,8 +4,30 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Traceability.Tracing;
 
-/// <summary>TRACE-02.0 step 1: the harvest lot by its lot code (codes starting with it) or through a sales invoice that sells it; both may be given.</summary>
-public sealed record LotTraceSearchQuery(string? LotCode, string? InvoiceCode);
+/// <summary>
+/// TRACE-02.0 step 1: the harvest lot by its lot code (codes starting with it) or through a sales invoice that sells it (not a cancelled one); the harvest day range, the raft code and the
+/// product name narrow the lots further. At least one filter is required; all given must match.
+/// </summary>
+public sealed record LotTraceSearchQuery(string? LotCode, string? InvoiceCode, DateOnly? HarvestFrom = null, DateOnly? HarvestTo = null, string? RaftCode = null, string? ProductName = null);
+
+/// <summary>The reverse trace asks for one seed lot code (PN000123-1, or the receipt code) or a supplier name.</summary>
+public sealed record SeedLotTraceQuery(string? Term);
+
+/// <summary>An invoice found through a seed lot: its customer is null when the caller does not view the sales invoices of the invoice's zone (like the prices of the trace).</summary>
+public sealed record SeedForwardInvoice(Guid InvoiceId, string InvoiceCode, DateOnly InvoiceDate, string ZoneCode, string? CustomerName, string? CustomerPhone, bool WalkIn, decimal Kg);
+
+/// <summary>A harvest lot that grew from the seed lot, with the invoices that sold it.</summary>
+public sealed record SeedForwardLot(LotTraceSearchItem Lot, IReadOnlyList<SeedForwardInvoice> Invoices);
+
+/// <summary>Reverse trace (for recalling a bad seed lot): seed lot or supplier, to the harvest lots in the caller's zones, to the invoices, to the customers.</summary>
+public sealed record SeedForwardTrace(IReadOnlyList<SeedForwardLot> Lots, string? Message, string? MessageCode);
+
+/// <summary>The harvest plan a lot was recorded from.</summary>
+public sealed record TraceOrderRef(Guid Id, string Code);
+public sealed record TraceHarvestPlan(string Code, DateOnly PlannedDate, string Status, IReadOnlyList<TraceOrderRef> Orders);
+
+/// <summary>A quality claim on an invoice of the lot that is still open (awaiting the Owner's response, or an offer the trader has not answered). Shown only; it changes no state.</summary>
+public sealed record TraceOpenClaim(string Code, string InvoiceCode, DateTimeOffset SentAt);
 
 /// <summary>A lot to trace, in a zone the caller traces.</summary>
 public sealed record LotTraceSearchItem(
@@ -56,6 +78,8 @@ public sealed record TraceInvoice(
 /// <param name="CanCorrect">The link to Correct traceability data (TRACE-03) for the raft: the caller corrects provenance in the zone.</param>
 /// <param name="CanExport">The caller exports the trace (TRACE-02.2).</param>
 /// <param name="CanWithdraw">Withdraw is offered (TRACE-04): the Cooperative Owner, for a Published lot.</param>
+/// <param name="WeighedKg">The kg weighed at the port (the real weight, once the lot has been weighed); <see cref="EstimatedKg"/> is only the estimate made at harvest.</param>
+/// <param name="WeighedAt">When it was weighed.</param>
 public sealed record LotTrace(
     Guid LotId,
     string LotCode,
@@ -88,4 +112,8 @@ public sealed record LotTrace(
     bool CanPublish,
     bool CanCorrect,
     bool CanExport,
-    bool CanWithdraw);
+    bool CanWithdraw,
+    decimal? WeighedKg = null,
+    DateTimeOffset? WeighedAt = null,
+    TraceHarvestPlan? HarvestPlan = null,
+    IReadOnlyList<TraceOpenClaim>? OpenClaims = null);

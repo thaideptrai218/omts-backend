@@ -23,7 +23,8 @@ public sealed record LotTraceSource(
     IReadOnlyList<LotSaleLine> SaleLines,
     IReadOnlyList<TraceCorrectionRow> Corrections,
     IReadOnlyDictionary<Guid, string> ActorNames,
-    IReadOnlyList<LotSaleReturn>? Returns = null);
+    IReadOnlyList<LotSaleReturn>? Returns = null,
+    LotTraceContext? Context = null);
 
 /// <summary>
 /// Builds the trace of a harvest lot (TRACE-02): backward from the lanes of the lot to every seeding session of the lot's cycle on these lanes, their seed lots, receipts and suppliers
@@ -43,7 +44,8 @@ public static class LotTraceBuilder
                 l.Lane.LaneNumber,
                 l.IsFinished,
                 source.CycleSessions
-                    .Where(s => s.Lanes.Any(sl => sl.LaneId == l.LaneId))
+                    // Only this lot's own batch: sessions of its cycle on this lane, up to the harvest day (a later reseeding is not part of this lot).
+                    .Where(s => s.SeedingDate <= lot.HarvestDate && s.Lanes.Any(sl => sl.LaneId == l.LaneId))
                     .OrderBy(s => s.SeedingDate).ThenBy(s => s.CreatedAt)
                     .Select(s => Seeding(s, marks[s.Id].ToList(), statusCatalog))
                     .ToList()))
@@ -84,7 +86,13 @@ public static class LotTraceBuilder
             LotPublishRules.Block(access, lot, zoneId, onSalesInvoice: invoices.Count > 0) is null,
             Allows(access, PermissionFunctions.Provenance, PermissionAction.Edit, zoneId),
             Allows(access, PermissionFunctions.LotTracing, PermissionAction.Export, zoneId),
-            access?.IsCooperativeOwner == true && lot.OriginState == HarvestLotOriginState.Published);
+            access?.IsCooperativeOwner == true && lot.OriginState == HarvestLotOriginState.Published,
+            lot.WeighedKg,
+            lot.WeighedAt,
+            source.Context?.PlanCode is { } planCode && source.Context.PlannedDate is { } plannedDate && source.Context.PlanStatusId is { } planStatus
+                ? new TraceHarvestPlan(planCode, plannedDate, statusCatalog.DisplayNameOf(planStatus), source.Context.Orders)
+                : null,
+            source.Context?.OpenClaims ?? []);
     }
 
     public static bool Allows(AccountAccess? access, string function, PermissionAction action, Guid zoneId) =>
@@ -103,7 +111,7 @@ public static class LotTraceBuilder
         ? [new LotLaneSeedLot(lotId, lane.LaneNumber, null, false)]
         : lane.Seedings.Select(s => new LotLaneSeedLot(lotId, lane.LaneNumber, s.SeedLot.Code, s.OnCompletedReceipt));
 
-    // The lines of one invoice together, in the order read. Prices and amounts only for whoever views the sales invoices of the invoice's zone (BR-SALE-08: it may not be the lot's).
+    // The lines of one invoice together, in the order read. Prices, amounts and the trader only for whoever views the sales invoices of the invoice's zone (BR-SALE-08: it may not be the lot's).
     private static List<TraceInvoice> Invoices(IReadOnlyList<LotSaleLine> lines, IReadOnlyList<LotSaleReturn> returns, AccountAccess? access) => lines
         .GroupBy(l => l.InvoiceId)
         .Select(invoice =>
@@ -116,9 +124,10 @@ public static class LotTraceBuilder
 
             // The sales returns that stand on this invoice (BR-TRACE-03, AC-11), this lot's kg per outcome.
             var traceReturns = returns.Where(r => r.InvoiceId == first.InvoiceId).Select(r => new TraceSalesReturn(r.Id, r.Code, r.ReturnDate, r.Kg, r.Outcome)).ToList();
+            // The trader's name and phone follow the same right as the prices: the zone of the invoice, not the zone of the lot (BR-SALE-08).
             return new TraceInvoice(
-                first.InvoiceId, first.InvoiceCode, first.InvoicedAt, first.InvoiceDate, first.InvoiceZoneId, first.InvoiceZoneCode, first.CustomerId, first.CustomerName,
-                first.CustomerPhone, first.CustomerId is null, traceLines.Sum(l => l.Kg), traceLines, traceReturns);
+                first.InvoiceId, first.InvoiceCode, first.InvoicedAt, first.InvoiceDate, first.InvoiceZoneId, first.InvoiceZoneCode, prices ? first.CustomerId : null, prices ? first.CustomerName : null,
+                prices ? first.CustomerPhone : null, first.CustomerId is null, traceLines.Sum(l => l.Kg), traceLines, traceReturns);
         })
         .ToList();
 }

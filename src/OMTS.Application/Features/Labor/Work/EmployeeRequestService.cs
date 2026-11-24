@@ -8,6 +8,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
@@ -186,18 +187,20 @@ public sealed class EmployeeRequestService(
         return EmployeeRequestViews.Of(request, statusCatalog);
     }
 
-    /// <summary>LABOR-05.0, LABOR-05.2: approves or rejects a request Awaiting review. Cooperative Owner only.</summary>
+    /// <summary>
+    /// LABOR-05.0, LABOR-05.2: approves or rejects a request Awaiting review. The Cooperative Owner, or a Zone Manager holding ATTENDANCE Edit in a working zone of the employee (owner decision of 20/11/2026).
+    /// </summary>
     public async Task<Result<EmployeeRequestView>> ReviewAsync(Guid id, ReviewEmployeeRequest review, CancellationToken cancellationToken)
     {
-        if (!await zones.IsCooperativeOwnerAsync(cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
-
         var request = await requests.GetAsync(id, cancellationToken);
         if (request is null)
         {
-            return AppError.NotFound;
+            return await zones.IsCooperativeOwnerAsync(cancellationToken) ? AppError.NotFound : AppError.Forbidden;
+        }
+
+        if (!await MayReviewAsync(request.EmployeeId, cancellationToken))
+        {
+            return AppError.Forbidden;
         }
 
         if (request.StatusId != StatusIds.EmployeeRequest.AwaitingReview)
@@ -267,6 +270,15 @@ public sealed class EmployeeRequestService(
             return Cannot("a job period of the day would be outside the check-in and the check-out");
         }
 
+        // A Zone Manager does not change the attendance of a day whose job periods are in a zone it does not hold.
+        foreach (var zoneId in periods.Select(p => p.ZoneId).Distinct())
+        {
+            if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Edit, zoneId, cancellationToken))
+            {
+                return AppError.Forbidden;
+            }
+        }
+
         var employee = (await employeeReader.GetForWorkAsync([request.EmployeeId], cancellationToken))[0];
         if (isCheckIn && periods.Count == 0 && WorkRules.TypeOn(employee, day) == EmployeeType.SeasonalWorker
             && await AddAssignmentAsync(employee, day, review, account, cancellationToken) is { } refused)
@@ -311,6 +323,11 @@ public sealed class EmployeeRequestService(
             return AppError.Invalid("Raft");
         }
 
+        if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Edit, raft.ZoneId, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
         assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = day, RaftId = raft.Id, ZoneId = raft.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account });
         return null;
     }
@@ -330,6 +347,26 @@ public sealed class EmployeeRequestService(
         }
 
         return null;
+    }
+
+    /// <summary>The Owner always; a Zone Manager when ATTENDANCE Edit is held in a working zone of the employee (a request has no zone of its own).</summary>
+    private async Task<bool> MayReviewAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        if (await zones.IsCooperativeOwnerAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        var employee = (await employeeReader.GetForWorkAsync([employeeId], cancellationToken)).FirstOrDefault();
+        foreach (var working in employee?.WorkingZones.Select(w => w.ZoneId) ?? Enumerable.Empty<Guid>())
+        {
+            if (await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Edit, working, cancellationToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The first day of the range that a Finalized payroll holds (BR-LABOR-08), or null.</summary>

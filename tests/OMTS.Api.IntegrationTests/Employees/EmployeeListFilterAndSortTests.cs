@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Employees.EmployeeRequests;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -157,7 +158,7 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task Without_a_sort_the_list_keeps_its_name_order_and_a_zone_manager_still_gets_their_zone_first()
+    public async Task Without_a_sort_the_list_keeps_its_name_order_and_a_zone_manager_gets_only_the_employees_of_their_zone()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var other = await factory.AddZoneAsync(NewCode());
@@ -165,14 +166,16 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
         var tag = NewCode();
         await CreateAsync(owner, Profile($"{tag} A in other zone", null, other.Id));
         await CreateAsync(owner, Profile($"{tag} B in own zone", null, zone.Id));
+        await CreateAsync(owner, Profile($"{tag} C in both zones", null, zone.Id, b => b["workingZoneIds"] = new[] { zone.Id, other.Id }));
 
         var byOwner = Names(await ListAsync(owner, $"search={tag}"));
         var byManager = Names(await ListAsync(manager, $"search={tag}"));
-        var sortedByManager = Names(await ListAsync(manager, $"search={tag}&sortBy=name"));
+        var sortedByManager = Names(await ListAsync(manager, $"search={tag}&sortBy=name&sortDir=desc"));
 
-        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone"], byOwner);
-        Assert.Equal([$"{tag} B in own zone", $"{tag} A in other zone"], byManager);
-        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone"], sortedByManager);
+        Assert.Equal([$"{tag} A in other zone", $"{tag} B in own zone", $"{tag} C in both zones"], byOwner);
+        // Owner decision of 24/11/2026: the employee of the other zone only is not in the manager's list at all.
+        Assert.Equal([$"{tag} B in own zone", $"{tag} C in both zones"], byManager);
+        Assert.Equal([$"{tag} C in both zones", $"{tag} B in own zone"], sortedByManager);
     }
 
     [Fact]
@@ -186,5 +189,49 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
 
         Assert.Equal([IdOf(created)], Items(found).Select(i => i.Id()));
         Assert.Equal(code, Items(found)[0].GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Searching_linked_usernames_shows_account_summaries_only_for_employees_in_scope()
+    {
+        var (owner, zone, _) = await SetupAsync(factory);
+        var other = await factory.AddZoneAsync(NewCode());
+        var tag = $"u{NewCode()}";
+        var expected = new List<(Guid Id, Guid AccountId, string Username)>();
+        foreach (var (suffix, zones) in new[]
+        {
+            ("mine", new[] { zone.Id }),
+            ("other", new[] { other.Id }),
+            ("shared", new[] { zone.Id, other.Id }),
+        })
+        {
+            var account = await factory.AddAccountAsync($"{tag}{suffix}", Password, SubjectType.Staff);
+            var saved = await CreateAsync(owner, Profile($"Unrelated {NewCode()}", null, zone.Id,
+                b => b["workingZoneIds"] = zones));
+            var id = IdOf(saved);
+            await factory.UpdateAsync<Employee>(id, e => e.AccountId = account.Id);
+            expected.Add((id, account.Id, account.Username));
+        }
+
+        var manager = await ManagerAsync(factory, zone);
+        var page = await ListAsync(manager, $"search={tag}");
+        var rows = Items(page);
+        Assert.Equal(2, page.GetProperty("total").GetInt32());
+        Assert.Equal(new[] { expected[0].Id, expected[2].Id }.Order(), rows.Select(r => r.Id()).Order());
+        foreach (var row in rows)
+        {
+            var account = row.GetProperty("account");
+            var linked = expected.Single(e => e.Id == row.Id());
+            Assert.Equal(linked.AccountId, account.Id());
+            Assert.Equal(linked.Username, account.GetProperty("username").GetString());
+            Assert.Equal("Active", account.GetProperty("status").GetString());
+            Assert.Equal(new[] { "displayName", "id", "status", "username" }, account.EnumerateObject().Select(p => p.Name).Order());
+            Assert.Equal([zone.Id], row.GetProperty("workingZones").EnumerateArray().Select(z => z.Id()));
+        }
+
+        Assert.Empty(Items(await ListAsync(manager, $"search={expected[1].Username}")));
+        Assert.Equal(3, (await ListAsync(owner, $"search={tag}")).GetProperty("total").GetInt32());
+        Assert.Equal(JsonValueKind.Null, (await manager.GetFromJsonAsync<JsonElement>($"{Url}/{expected[0].Id}")).GetProperty("account").ValueKind);
+        Assert.Equal("MSG-GEN-08", await (await manager.GetAsync("/api/accounts")).ErrorCodeAsync());
     }
 }

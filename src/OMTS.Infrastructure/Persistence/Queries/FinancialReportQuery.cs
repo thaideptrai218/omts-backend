@@ -50,11 +50,12 @@ internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQ
             .GroupBy(l => (l.Kind, Date: BusinessClock.ToBusinessDate(l.IssuedAt)))
             .Select(g => new FinancialEntry(g.Key.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, g.Key.Date, g.Sum(l => l.Value))));
 
-        // Wages count in the expense month chosen when the sheet was finalized: whole months, from the month of the first day to that of the last.
+        // Wages count in the expense month chosen when the sheet was finalized: whole months, from the month of the first day to that of the last. The cost is the gross income of the payslips
+        // (main pay + bonus): an advance already paid is a receivable settled against the payslip, not a cost that disappears (decision of 19/11/2026, REP-01).
         var (firstMonth, lastMonth) = ($"{from:yyyy-MM}", $"{to:yyyy-MM}");
         var payrolls = await db.Payrolls.AsNoTracking()
             .Where(p => p.StatusId == StatusIds.Payroll.Finalized && p.ExpenseMonth != null)
-            .Select(p => new { p.ExpenseMonth, Net = p.Lines.Sum(l => l.MainPay + l.Bonus - l.Deduction) })
+            .Select(p => new { p.ExpenseMonth, Net = p.Lines.Sum(l => l.MainPay + l.Bonus) })
             .ToListAsync(cancellationToken);
         entries.AddRange(payrolls
             .Where(p => string.CompareOrdinal(p.ExpenseMonth, firstMonth) >= 0 && string.CompareOrdinal(p.ExpenseMonth, lastMonth) <= 0)

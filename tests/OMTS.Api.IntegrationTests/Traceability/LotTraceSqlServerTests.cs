@@ -30,14 +30,14 @@ public class LotTraceSqlServerTests
         var productId = (await Sales.SalesCatalogueTestKit.CreateProductAsync(owner, unitPrice: ListPrice)).Id();
         var customerId = (await Sales.SalesCatalogueTestKit.CreateCustomerAsync(owner)).Id();
         var manager = (await host.StaffInZoneAsync(zoneId)).Client;
-        var few = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1))).Id();
-        var many = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(2, 3))).Id();
+        var few = (await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1))).Id();
+        var many = (await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(2, 3))).Id();
         var codes = new List<string>();
         foreach (var (lotId, count) in new[] { (few, 2), (many, ManyInvoices) })
         {
             for (var i = 0; i < count; i++)
             {
-                var sold = await manager.SellAsync(Invoice(i % 3 == 0 ? null : customerId, [Line(productId, lotId, 1m)], Cash(ListPrice), lotId));
+                var sold = await owner.SellAsync(Invoice(i % 3 == 0 ? null : customerId, [Line(productId, lotId, 1m)], Cash(ListPrice), lotId));
                 codes.Add(sold.GetProperty("invoice").Text("code"));
             }
         }

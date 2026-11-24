@@ -14,8 +14,8 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.PurchaseRequests;
 
 /// <summary>
-/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response or Awaiting staff
-/// (BR-SALE-02). Accepting needs the staffing plan agreed by enough staff (decision of 31/10/2026). The response is saved first; the
+/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response (or the legacy Awaiting staff)
+/// (BR-SALE-02). Accepting needs only that a staffing plan exists: the chosen employees already have their work assignments and no agreement is counted (decision of 24/11/2026). The response is saved first; the
 /// trader is told afterwards, and a message that is not accepted undoes nothing (GFR-06).
 /// </summary>
 public sealed class PurchaseRequestResponseService(
@@ -35,7 +35,7 @@ public sealed class PurchaseRequestResponseService(
 {
     /// <summary>
     /// SALE-03.0: the accepted cages are the requested cages or fewer, and any date not before today, also an unchanged one. They are the
-    /// cages and the pickup date of the staffing plan; the shifts the staff agreed to become their work assignments.
+    /// cages and the pickup date of the staffing plan; the shifts are already work assignments (a legacy shift that was agreed but not yet assigned becomes one now).
     /// </summary>
     public async Task<Result<PurchaseRequestView>> AcceptAsync(Guid requestId, AcceptPurchaseRequest entry, CancellationToken cancellationToken)
     {

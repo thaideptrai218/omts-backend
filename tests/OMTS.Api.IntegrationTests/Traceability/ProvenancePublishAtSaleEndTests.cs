@@ -24,7 +24,7 @@ public class ProvenancePublishAtSaleEndTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(
                 sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(450_000m), sale.LotId, sale.OtherLotId)))
             .GetProperty("invoice");
         var code = (await api.LotRowAsync(sale.LotId)).LotCode;
@@ -32,7 +32,7 @@ public class ProvenancePublishAtSaleEndTests
         const string missing = "lane 2 has no seeding session in the cycle of the lot";
 
         // TRACE-01.0 steps 1-2: the ready lot and what the other misses.
-        var check = await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var check = await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((invoice.Text("code"), true), (check.Text("invoiceCode"), check.GetProperty("getsQrCode").GetBoolean()));
         var checkedLots = check.LotsById();
         Assert.Equal(("NotPublished", 0, JsonValueKind.Null), (checkedLots[sale.LotId].Text("originState"), checkedLots[sale.LotId].GetProperty("missing").GetArrayLength(),
@@ -42,7 +42,7 @@ public class ProvenancePublishAtSaleEndTests
         Assert.Equal(HarvestLotOriginState.NotPublished, (await api.LotRowAsync(sale.LotId)).OriginState);
         Assert.Empty(await api.PublishAuditAsync(sale.LotId));
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         var lots = finished.LotsById();
         Assert.Equal(("Published", "NotPublished"), (lots[sale.LotId].Text("originState"), lots[sale.OtherLotId].Text("originState")));
@@ -56,7 +56,7 @@ public class ProvenancePublishAtSaleEndTests
         Assert.Equal(HarvestLotOriginState.Published, (await api.LotRowAsync(sale.LotId)).OriginState);
         Assert.Equal(HarvestLotOriginState.NotPublished, (await api.LotRowAsync(sale.OtherLotId)).OriginState);
         var audit = Assert.Single(await api.PublishAuditAsync(sale.LotId));
-        Assert.Equal((ProvenancePublishTestKit.PublishedAction, code, (Guid?)sale.Manager.Account.Id), (audit.Action, audit.RecordCode, audit.ActorAccountId));
+        Assert.Equal((ProvenancePublishTestKit.PublishedAction, code, (Guid?)sale.Owner.Account.Id), (audit.Action, audit.RecordCode, audit.ActorAccountId));
         Assert.Contains($"\"SalesInvoiceCode\":\"{invoice.Text("code")}\"", audit.After);
         Assert.Empty(await api.PublishAuditAsync(sale.OtherLotId));
         var finishAudit = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.RecordId == invoice.Id() && e.Action == "SalesInvoice.SaleFinished"));
@@ -67,8 +67,8 @@ public class ProvenancePublishAtSaleEndTests
 
         // BR-TRACE-02: published once. A later invoice that sells the Published lot gets its QR code without publishing it again.
         var publishedAt = (await api.LotRowAsync(sale.LotId)).PublishedAt;
-        var later = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        var laterFinished = await sale.Manager.Client.FinishedAsync(later.Id(), wantsQrCode: true);
+        var later = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        var laterFinished = await sale.Owner.Client.FinishedAsync(later.Id(), wantsQrCode: true);
         Assert.NotNull(laterFinished.Text("qrUrl"));
         Assert.Equal("Published", laterFinished.LotsById()[sale.LotId].Text("originState"));
         Assert.Single(await api.PublishAuditAsync(sale.LotId));
@@ -81,18 +81,18 @@ public class ProvenancePublishAtSaleEndTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var refusedNo = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        Assert.Equal(0, (await sale.Manager.Client.FinishedAsync(refusedNo.Id(), wantsQrCode: false)).GetProperty("lots").GetArrayLength());
+        var refusedNo = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        Assert.Equal(0, (await sale.Owner.Client.FinishedAsync(refusedNo.Id(), wantsQrCode: false)).GetProperty("lots").GetArrayLength());
         Assert.Equal(HarvestLotOriginState.NotPublished, (await api.LotRowAsync(sale.LotId)).OriginState);
 
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 1);
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(60_000m))))
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(60_000m))))
             .GetProperty("invoice");
-        var check = await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var check = await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
         Assert.False(check.GetProperty("getsQrCode").GetBoolean());
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         Assert.Equal(JsonValueKind.Null, finished.GetProperty("qrUrl").ValueKind);
         Assert.All(finished.GetProperty("lots").EnumerateArray(), l => Assert.Equal(("NotPublished", "MSG-TRACE-01"), (l.Text("originState"), l.Text("messageCode"))));
@@ -123,25 +123,22 @@ public class ProvenancePublishAtSaleEndTests
         Assert.Empty(await api.PublishAuditAsync(sale.LotId));
     }
 
-    // The invoice zone may differ from the lot's zone (BR-SALE-08): a Zone Manager ends the sale of their zone, but a lot of a zone where they do not publish stays Not published
-    // and says who can publish it.
+    // The invoice zone may differ from the lot's zone (BR-SALE-08): the Owner ends the sale (a Zone Manager has no sales since 20/11/2026) and publishes in every zone, so a lot of another zone is published too.
     [Fact]
-    public async Task A_lot_of_another_zone_is_not_published_by_a_zone_manager_who_does_not_publish_there()
+    public async Task A_lot_of_another_zone_is_published_at_the_end_of_the_sale_by_the_owner_who_publishes_everywhere()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var away = await api.SeededRaftAsync();
-        var awayLot = await away.Owner.Client.HarvestLotAsync(away.RaftId, HarvestFields.OfLanes(1));
+        var awayLot = await api.HarvestLotOfLanesAsync(away.Owner.Client, away.RaftId, HarvestFields.OfLanes(1));
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m), Line(sale.ProductId, awayLot.Id(), 1m)], Cash(60_000m)).With("zoneId", sale.ZoneId);
         var invoice = (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice");
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         var lots = finished.LotsById();
-        Assert.Equal(("Published", "NotPublished"), (lots[sale.LotId].Text("originState"), lots[awayLot.Id()].Text("originState")));
-        var zoneCode = awayLot.Text("zoneCode");
-        Assert.Equal([$"NotPublisherOfZone {zoneCode}"], lots[awayLot.Id()].Missing());
-        Assert.Equal(NotReady(awayLot.Text("lotCode"), $"only a Zone Manager of zone {zoneCode} or the Cooperative Owner can publish it"), lots[awayLot.Id()].Text("message"));
-        Assert.Empty(await api.PublishAuditAsync(awayLot.Id()));
+        Assert.Equal(("Published", "Published"), (lots[sale.LotId].Text("originState"), lots[awayLot.Id()].Text("originState")));
+        Assert.Empty(lots[awayLot.Id()].Missing());
+        Assert.Single(await api.PublishAuditAsync(awayLot.Id()));
     }
 }

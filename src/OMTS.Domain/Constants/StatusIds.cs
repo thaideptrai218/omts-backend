@@ -206,7 +206,10 @@ public static class StatusIds
         public const int Cancelled = 4404;
     }
 
-    /// <summary>A harvest plan (KHT): a Draft is prepared by the Owner; Assigned once handed to the Zone Managers of its zone; Harvesting from the first lot or the first lane left out; Completed or Cancelled end it.</summary>
+    /// <summary>
+    /// A harvest plan (KHT): a Draft is prepared by the Owner; Assigned once handed to the Zone Managers of its zone; Received when a Zone Manager presses "Nhận"; Harvesting from the first lot or the first lane left out;
+    /// HandedOver when a Zone Manager presses "Bàn giao" (every line has its lot or all its lanes left out); Completed by the Owner from HandedOver; Cancelled ends a plan that has no lot.
+    /// </summary>
     public static class HarvestPlan
     {
         public const int Draft = 4201;
@@ -214,5 +217,7 @@ public static class StatusIds
         public const int Harvesting = 4203;
         public const int Completed = 4204;
         public const int Cancelled = 4205;
+        public const int Received = 4206;
+        public const int HandedOver = 4207;
     }
 }

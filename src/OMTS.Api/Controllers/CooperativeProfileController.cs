@@ -81,6 +81,14 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
     public async Task<IActionResult> RemoveCoverPhoto(CancellationToken cancellationToken) =>
         (await coverPhotos.RemoveAsync(cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>The cooperative's name (anonymous, never cached): the one place the name of the cooperative is read from by the web and by print labels.</summary>
+    [HttpGet("api/public/cooperative-brand")]
+    [AllowAnonymous]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<CooperativeBrand>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Brand(CancellationToken cancellationToken) =>
+        (await profiles.GetBrandAsync(cancellationToken)).ToActionResult(Ok);
+
     /// <summary>The logo shown on the public provenance page (anonymous).</summary>
     [HttpGet(CooperativePublicFiles.CurrentLogoPath)]
     [AllowAnonymous]

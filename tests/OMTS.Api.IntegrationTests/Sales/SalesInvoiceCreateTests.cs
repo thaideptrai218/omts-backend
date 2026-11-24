@@ -22,7 +22,7 @@ public class SalesInvoiceCreateTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
 
-        var saved = await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 200m)], Cash(6_000_000m)));
+        var saved = await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 200m)], Cash(6_000_000m)));
 
         var invoice = saved.GetProperty("invoice");
         Assert.Matches("^HD[0-9]{6}$", invoice.Text("code"));
@@ -33,14 +33,14 @@ public class SalesInvoiceCreateTests
             (invoice.Money("subtotal"), invoice.Money("total"), invoice.Money("discount"), invoice.Money("otherCharges"), invoice.Text("paymentTerm"), invoice.Text("status")));
         Assert.Equal(sale.ZoneId, invoice.GetProperty("zone").Id());
         Assert.Equal(sale.CustomerId, invoice.GetProperty("customer").Id());
-        Assert.Equal(sale.Manager.Account.Id, invoice.GetProperty("createdBy").Id());
+        Assert.Equal(sale.Owner.Account.Id, invoice.GetProperty("createdBy").Id());
         Assert.Equal(("MSG-SALE-06", $"Invoice {invoice.Text("code")} is completed: 6,000,000 VND collected in cash."), (saved.Text("messageCode"), saved.Text("message")));
         Assert.Equal(0m, saved.Money("change"));
 
         // POST-2: one cash payment of the invoice, Awaiting confirmation, with the Zone Manager who collected it.
         var payment = Assert.Single(invoice.GetProperty("payments").EnumerateArray());
         Assert.Matches("^PT[0-9]{6}$", payment.Text("code"));
-        Assert.Equal(("Cash", "Payment", 6_000_000m, "Awaiting confirmation", sale.Manager.Account.Id),
+        Assert.Equal(("Cash", "Payment", 6_000_000m, "Awaiting confirmation", sale.Owner.Account.Id),
             (payment.Text("method"), payment.Text("kind"), payment.Money("amount"), payment.Text("status"), payment.GetProperty("collectedBy").Id()));
 
         // POST-3: the ticked lot is Closed, Sold whole lot, leftover 0, naming this invoice; the other lot stays for sale.
@@ -55,7 +55,7 @@ public class SalesInvoiceCreateTests
         Assert.Contains("HarvestLot.Closed", actions);
 
         // The answer reads back the same through GET.
-        var read = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var read = await (await sale.Owner.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(invoice.GetRawText(), read.GetRawText());
     }
 
@@ -64,7 +64,7 @@ public class SalesInvoiceCreateTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
 
         Assert.Equal(["Line 1 kg"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 0m)], Cash(0m)))).InvalidFieldsAsync());
         Assert.Equal(["Line 1 kg"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1.0001m)], Cash(0m)))).InvalidFieldsAsync());
@@ -87,21 +87,15 @@ public class SalesInvoiceCreateTests
 
     // AC-06 and SALE-05.5: a different price or a discount is kept only after MSG-SALE-10; the Owner is not asked.
     [Fact]
-    public async Task A_price_other_than_the_list_price_and_a_discount_need_the_owner_decision_and_keep_the_list_price_on_the_line()
+    public async Task A_price_other_than_the_list_price_and_a_discount_are_the_owners_decision_and_keep_the_list_price_on_the_line()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var product = (await sale.Owner.Client.GetFromJsonAsync<JsonElement>($"/api/products/{sale.ProductId}")).Text("name");
 
-        var (code, field, body) = await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 100m, unitPrice: 28_000m)], Cash(2_800_000m)))).QuestionAsync();
-        Assert.Equal(("MSG-SALE-10", "lines[0].priceDecidedByOwner"), (code, field));
-        Assert.Equal($"{product}: the list price is 30,000 VND/kg, and you entered 28,000 VND/kg. Has the Cooperative Owner decided this price?", body.Text("detail"));
-
+        // Only the Owner sells (decision of 20/11/2026), so the Owner is the one who decides a price or a discount and is not asked (MSG-SALE-10 is for a seller who is not the Owner).
         var discounted = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 100m, unitPrice: 28_000m, priceDecidedByOwner: true)], Cash(2_600_000m)).With("discount", 200_000m);
-        var (discountCode, discountField, discountBody) = await (await client.PostInvoiceAsync(discounted)).QuestionAsync();
-        Assert.Equal(("MSG-SALE-10", "discountDecidedByOwner"), (discountCode, discountField));
-        Assert.Contains("Has the Cooperative Owner decided a discount of 200,000 VND on this invoice?", discountBody.GetRawText());
 
         var saved = (await client.SellAsync(discounted.With("discountDecidedByOwner", true))).GetProperty("invoice");
         var line = saved.GetProperty("lines")[0];
@@ -123,13 +117,13 @@ public class SalesInvoiceCreateTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var first = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
+        var first = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId))).GetProperty("invoice");
         var product = await sale.Owner.Client.GetFromJsonAsync<JsonElement>($"/api/products/{sale.ProductId}");
         (await sale.Owner.Client.PutAsJsonAsync($"/api/products/{sale.ProductId}", new { name = product.Text("name"), unitPrice = 35_000m, rowVersion = product.RowVersion() })).EnsureSuccessStatusCode();
 
-        var second = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(350_000m)))).GetProperty("invoice");
+        var second = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(350_000m)))).GetProperty("invoice");
 
-        Assert.Equal(30_000m, (await sale.Manager.Client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/{first.Id()}")).GetProperty("lines")[0].Money("unitPrice"));
+        Assert.Equal(30_000m, (await sale.Accountant.Client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/{first.Id()}")).GetProperty("lines")[0].Money("unitPrice"));
         Assert.Equal(("OrderPrice", 35_000m), (second.GetProperty("lines")[0].Text("priceSource"), second.GetProperty("lines")[0].Money("unitPrice")));
     }
 
@@ -140,11 +134,11 @@ public class SalesInvoiceCreateTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
 
-        var byManager = (await sale.Manager.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 12.5m)], Cash(375_000m), sale.LotId))).GetProperty("invoice");
+        var byManager = (await sale.Owner.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 12.5m)], Cash(375_000m), sale.LotId))).GetProperty("invoice");
         var byOwner = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 2m)], Cash(60_000m)))).GetProperty("invoice");
 
         var notices = await api.QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.Type == "SALE_COMPLETED" && n.RecipientAccountId == sale.Owner.Account.Id).ToListAsync());
-        var managerName = sale.Manager.Account.DisplayName;
+        var managerName = sale.Owner.Account.DisplayName;
         var walkIn = notices.Single(n => n.RelatedRecordId == byManager.Id());
         Assert.Equal(($"{managerName} sold 12.5 kg to a walk-in customer for 375,000 VND (invoice {byManager.Text("code")}, Pay now).", "MSG-SALE-08", "SalesInvoice", byManager.Text("code")),
             (walkIn.Body, walkIn.MessageCode, walkIn.RelatedRecordType, walkIn.RelatedRecordCode));

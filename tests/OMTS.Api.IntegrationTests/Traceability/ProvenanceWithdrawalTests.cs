@@ -44,12 +44,12 @@ public class ProvenanceWithdrawalTests
         var (account, trader) = await Catalogue.LinkedProfileAsync(api, "DEMO trader one");
         var second = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader two");
         var third = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader three");
-        var first = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 3m, customerId: trader.Id);
-        var other = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 2m, customerId: second.Id());
-        var again = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 1m, customerId: trader.Id);
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 1m, walkIn: true);
-        var cancelled = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 1m, customerId: third.Id());
-        await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, kg: 1m);
+        var first = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 3m, customerId: trader.Id);
+        var other = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 2m, customerId: second.Id());
+        var again = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 1m, customerId: trader.Id);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 1m, walkIn: true);
+        var cancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 1m, customerId: third.Id());
+        await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, kg: 1m);
         await api.CancelInvoiceAsync(cancelled.Id());
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         var code = (await api.LotRowAsync(sale.LotId)).LotCode;
@@ -115,8 +115,8 @@ public class ProvenanceWithdrawalTests
         var (account, noPhone) = await Catalogue.LinkedProfileAsync(api, "DEMO trader without phone", c => c.PhoneNumber = null);
         var refused = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader refused");
         api.RefuseSmsTo(refused.Text("phoneNumber"));
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: noPhone.Id);
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: refused.Id());
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: noPhone.Id);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: refused.Id());
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
 
         var answer = await sale.Owner.Client.WithdrawnAsync(sale.LotId, Reason);
@@ -143,7 +143,7 @@ public class ProvenanceWithdrawalTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         await api.CancelInvoiceAsync(invoice.Id());
         var code = (await api.LotRowAsync(sale.LotId)).LotCode;

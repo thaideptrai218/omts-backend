@@ -83,7 +83,7 @@ public sealed record PayrollSlipRaw(
 
 public sealed record PayrollDetailRaw(
     Guid Id, string Code, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, int StatusId, string? ExpenseMonth,
-    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips);
+    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null);
 
 public sealed record SlipJobRaw(string JobName, decimal Hours, decimal HourlyRate, decimal Amount);
 
@@ -116,6 +116,9 @@ public interface IPayrollReader
     /// <summary>Every sheet with a status among <paramref name="statusIds"/> (all when null), of the type, whose period shares a day with <paramref name="from"/>…<paramref name="to"/>, with its total (sum of net pay) and paid.</summary>
     Task<IReadOnlyList<PayrollHeaderRow>> ListHeadersAsync(
         IReadOnlyCollection<int>? statusIds, PayrollPeriodType? type, DateOnly? from, DateOnly? to, CancellationToken cancellationToken);
+
+    /// <summary>What each of these employees is still owed on Finalized sheets (wage payments not cancelled taken off); an employee owed nothing is absent. One grouped read, whatever the number of employees.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> OwedByEmployeeAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken);
 
     Task<PayrollDetailRaw?> GetDetailAsync(Guid id, CancellationToken cancellationToken);
 

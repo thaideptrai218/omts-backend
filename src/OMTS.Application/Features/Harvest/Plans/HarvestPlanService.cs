@@ -16,7 +16,7 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
-/// The harvest plans (KHT): the Owner makes one for the rafts of any zones (the zone of a line is the zone of its raft), changes it, hands it to the Zone Managers of every zone of its lines, finishes it by hand or
+/// The harvest plans (KHT): the Owner makes one for the rafts of any zones (the zone of a line is the zone of its raft), changes it, hands it to the Zone Managers of every zone of its lines, completes it once a Zone Manager handed it over, or
 /// cancels it. A Draft is free to change; once it is handed over only the lines without a lot and without a lane left out can change, and lines can be added (the Zone Managers of a zone a change brings in are told).
 /// A lane may wait in only one open plan at a time (MSG-PLAN-02). Lots and lanes left out move the plan along (<see cref="HarvestPlanProgress"/>). The service checks the zones of the lines; the API checks that the
 /// role holds the right in some zone.
@@ -272,7 +272,7 @@ public sealed class HarvestPlanService(
         return await SavedAsync(plan.Id, cancellationToken);
     }
 
-    /// <summary>"Kết thúc": the Owner finishes a plan being harvested by hand; the lanes still to do stay as they are, and the audit log says how many.</summary>
+    /// <summary>"Hoàn thành": only the Owner, only a plan a Zone Manager handed over ("Bàn giao": every line has its lot or all its lanes left out). The system never completes a plan by itself.</summary>
     public async Task<Result<HarvestPlanSaved>> FinishAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
@@ -281,7 +281,7 @@ public sealed class HarvestPlanService(
             return AppError.NotFound;
         }
 
-        if (!await access.MayWriteAsync(HarvestPlanAccess.ZoneIdsOf(plan), PermissionAction.Edit, cancellationToken))
+        if (!await access.IsOwnerAsync(cancellationToken))
         {
             return AppError.Forbidden;
         }
@@ -312,7 +312,7 @@ public sealed class HarvestPlanService(
         return await SavedAsync(plan.Id, cancellationToken);
     }
 
-    /// <summary>Cancels a Draft, or an Assigned plan with no lot, with a reason. A plan that has started is finished instead (MSG-PLAN-04).</summary>
+    /// <summary>Cancels a Draft, an Assigned or a Received plan with no lot, with a reason. A plan that has started is handed over and completed instead (MSG-PLAN-04).</summary>
     public async Task<Result<HarvestPlanSaved>> CancelAsync(Guid planId, CancelHarvestPlanRequest request, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
@@ -326,7 +326,7 @@ public sealed class HarvestPlanService(
             return AppError.Forbidden;
         }
 
-        if (plan.StatusId == StatusIds.HarvestPlan.Harvesting)
+        if (plan.StatusId is StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.HandedOver)
         {
             return AppError.Conflict(UserMessages.PlanCannotBeCancelled(plan.Code));
         }

@@ -58,7 +58,7 @@ public static class CustomerPaymentTestKit
 
     /// <summary>A Pay later invoice of <paramref name="kg"/> × 30,000 VND with <paramref name="cash"/> at the port.</summary>
     public static async Task<JsonElement> PayLaterAsync(this SaleSetup sale, Guid customerId, decimal kg, decimal cash = 0m) =>
-        (await sale.Manager.Client.SellAsync(Invoice(customerId, [Line(sale.ProductId, sale.LotId, kg)], Cash(cash, "PayLater", payLaterOwnerAgreed: true), sale.LotId)))
+        (await sale.Owner.Client.SellAsync(Invoice(customerId, [Line(sale.ProductId, sale.LotId, kg)], Cash(cash, "PayLater", payLaterOwnerAgreed: true), sale.LotId)))
             .GetProperty("invoice");
 
     /// <summary>The debt as every screen shows it: the DEBT-03 list (0 when not listed), the statement and the customer view (SALE-04.1).</summary>

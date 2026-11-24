@@ -24,15 +24,15 @@ public class SalesInvoiceFinishTests
         await api.PublishAsync(sale.LotId);
         // TRACE-01 would publish the other lot at the Yes: its lane loses its seed lot, so it misses origin information and stays Not published (BR-TRACE-01).
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(450_000m))))
+        var invoice = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(450_000m))))
             .GetProperty("invoice");
 
-        var asked = await (await sale.Manager.Client.FinishAsync(invoice.Id(), null)).QuestionAsync();
+        var asked = await (await sale.Owner.Client.FinishAsync(invoice.Id(), null)).QuestionAsync();
         Assert.Equal(("MSG-SALE-07", "wantsQrCode"), (asked.Code, asked.Field));
         Assert.Equal($"Does the trader want the QR code of invoice {invoice.Text("code")}, to see where the oysters come from?", asked.Body.Text("detail"));
         Assert.Empty(await api.InvoiceSendingsAsync(invoice.Id()));
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         var qrUrl = finished.Text("qrUrl")!;
         var token = finished.GetProperty("invoice").Text("qrToken")!;
@@ -62,7 +62,7 @@ public class SalesInvoiceFinishTests
         Assert.Contains("\"QrCodeCreated\":true", audit.After);
         Assert.Equal(sale.ZoneId, audit.ZoneId);
         // Read by the same caller: allowedActions is what this caller is offered (SALE-09.1 step 3).
-        var read = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var read = await (await sale.Owner.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(view.GetRawText(), read.GetRawText());
     }
 
@@ -75,12 +75,12 @@ public class SalesInvoiceFinishTests
         await api.WithdrawAsync(sale.OtherLotId);
         // The Not published lot misses origin information, so the Yes cannot publish it (TRACE-01.0.E1).
         await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 1);
-        var notPublished = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        var withdrawn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId);
+        var notPublished = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        var withdrawn = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId);
         await AssertNoQrCodeAsync(notPublished, wants: true);
         await AssertNoQrCodeAsync(withdrawn, wants: true);
         await api.PublishAsync(sale.LotId);
-        await AssertNoQrCodeAsync(await sale.Manager.Client.SoldAsync(sale, sale.LotId), wants: false);
+        await AssertNoQrCodeAsync(await sale.Owner.Client.SoldAsync(sale, sale.LotId), wants: false);
 
         // Once only: the lot of the first invoice is Published now, but a second end of the sale (a mobile retry after a lost answer) answers the current result, with or
         // without an answer to MSG-SALE-07, creates no QR code and sends nothing again.
@@ -101,7 +101,7 @@ public class SalesInvoiceFinishTests
 
         async Task AssertNoQrCodeAsync(JsonElement invoice, bool wants)
         {
-            var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wants);
+            var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wants);
             Assert.Equal(JsonValueKind.Null, finished.GetProperty("qrUrl").ValueKind);
             Assert.Equal(JsonValueKind.Null, finished.GetProperty("invoice").GetProperty("qrToken").ValueKind);
             Assert.Equal("Sent", finished.Text("deliveryStatus"));
@@ -116,12 +116,12 @@ public class SalesInvoiceFinishTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.PublishAsync(sale.LotId);
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
-        var noPhone = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        var noPhone = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.PhoneNumber = null);
 
-        var walkInAnswer = await sale.Manager.Client.FinishedAsync(walkIn.Id(), wantsQrCode: true);
-        var noPhoneAnswer = await sale.Manager.Client.FinishedAsync(noPhone.Id(), wantsQrCode: false);
+        var walkInAnswer = await sale.Owner.Client.FinishedAsync(walkIn.Id(), wantsQrCode: true);
+        var noPhoneAnswer = await sale.Owner.Client.FinishedAsync(noPhone.Id(), wantsQrCode: false);
 
         Assert.Equal(("Not sent", "MSG-SALE-16", $"Invoice {walkIn.Text("code")} is not sent: it has no customer profile. Please show the invoice to the trader on your screen."),
             (walkInAnswer.Text("deliveryStatus"), walkInAnswer.Text("messageCode"), walkInAnswer.Text("message")));
@@ -140,7 +140,7 @@ public class SalesInvoiceFinishTests
         Assert.Equal(("Not sent", 1, JsonValueKind.Null), (shown.Text("deliveryStatus"), shown.GetProperty("sendings").GetArrayLength(), shown.GetProperty("sendings")[0].GetProperty("phoneNumber").ValueKind));
 
         // A retry of the end of the sale tells MSG-SALE-16 again and writes nothing; Resend keeps one more Not sent attempt.
-        var retried = await sale.Manager.Client.FinishedAsync(walkIn.Id(), wantsQrCode: false);
+        var retried = await sale.Owner.Client.FinishedAsync(walkIn.Id(), wantsQrCode: false);
         Assert.Equal(("Not sent", "MSG-SALE-16", walkInAnswer.Text("qrUrl")), (retried.Text("deliveryStatus"), retried.Text("messageCode"), retried.Text("qrUrl")));
         Assert.Single(await api.InvoiceSendingsAsync(walkIn.Id()));
         var resent = await (await sale.Owner.Client.ResendAsync(walkIn.Id())).ReadAsync(HttpStatusCode.OK);

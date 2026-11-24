@@ -89,7 +89,7 @@ public class HarvestLotCloseQaTestsAutoClose
         var sale = await api.SaleSetupAsync();
         Assert.Equal(new HarvestLotAutoCloseRun(0, 2), await api.AutoCloseOnAsync(Today.AddDays(3)));
 
-        await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 50m)], Cash(1_500_000m)));
+        await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 50m)], Cash(1_500_000m)));
 
         Assert.Equal(new HarvestLotAutoCloseRun(1, 0), await api.AutoCloseOnAsync(Today.AddDays(4)));
         var sold = await api.LotRowAsync(sale.LotId);

@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -16,7 +17,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Labor.Work;
 
 /// <summary>
-/// LABOR-04.4: the Cooperative Owner enters a missing or corrected check-in or check-out of any employee and day, today or earlier, and
+/// LABOR-04.4: the Cooperative Owner, or a Zone Manager in the zone of the day (ATTENDANCE Edit; owner decision of 20/11/2026), enters a missing or corrected check-in or check-out of an employee and day, today or earlier, and
 /// changes, adds or removes the job periods of the day, with a reason; the times and the periods then have the method Correction and
 /// the hours are worked out again when shown (BR-LABOR-05). The audit log keeps the values before and after with the reason. Nothing
 /// can be corrected in a pay period whose payroll is Awaiting finalization or Finalized (BR-LABOR-13, MSG-LABOR-04). The client asks
@@ -37,29 +38,38 @@ public sealed class AttendanceCorrectionService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>The attendance record and the job periods of an employee on a day, as the correction form shows them. Cooperative Owner only.</summary>
+    /// <summary>The attendance record and the job periods of an employee on a day, as the correction form shows them. Cooperative Owner, or a Zone Manager of the zone of the day (ATTENDANCE Edit).</summary>
     public async Task<Result<AttendanceDayView>> GetDayAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken)
     {
-        if (!await zones.IsCooperativeOwnerAsync(cancellationToken))
+        var employee = (await employeeReader.GetForWorkAsync([employeeId], cancellationToken)).FirstOrDefault();
+        if (employee is null)
+        {
+            return await zones.IsCooperativeOwnerAsync(cancellationToken) ? AppError.NotFound : AppError.Forbidden;
+        }
+
+        var periods = await assignments.ListOfEmployeesAsync([employee.Id], day, cancellationToken);
+        if (!await MayCorrectAsync(employee, periods.Select(p => p.ZoneId), cancellationToken))
         {
             return AppError.Forbidden;
         }
 
-        var employee = (await employeeReader.GetForWorkAsync([employeeId], cancellationToken)).FirstOrDefault();
-        return employee is null ? AppError.NotFound : await ViewAsync(employee, day, cancellationToken);
+        return await ViewAsync(employee, day, cancellationToken);
     }
 
     public async Task<Result<AttendanceCorrected>> CorrectAsync(Guid employeeId, DateOnly day, CorrectAttendanceRequest request, CancellationToken cancellationToken)
     {
-        if (!await zones.IsCooperativeOwnerAsync(cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
-
         var employee = (await employeeReader.GetForWorkAsync([employeeId], cancellationToken)).FirstOrDefault();
         if (employee is null)
         {
-            return AppError.NotFound;
+            return await zones.IsCooperativeOwnerAsync(cancellationToken) ? AppError.NotFound : AppError.Forbidden;
+        }
+
+        // The zone of the day is that of its job periods (a Staff employee, who has none: a working zone of the employee); a Zone Manager needs ATTENDANCE Edit in it (decision of 20/11/2026), the Owner any.
+        var existing = (await assignments.ListOfEmployeesAsync([employee.Id], day, cancellationToken))
+            .OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).ToList();
+        if (!await MayCorrectAsync(employee, existing.Select(p => p.ZoneId), cancellationToken))
+        {
+            return AppError.Forbidden;
         }
 
         var check = new FieldCheck();
@@ -90,18 +100,23 @@ public sealed class AttendanceCorrectionService(
             return conflict;
         }
 
-        var existing = (await assignments.ListOfEmployeesAsync([employee.Id], day, cancellationToken))
-            .OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).ToList();
         var (refused, zoneOfRaft) = await RefuseChoicesAsync(inputs, existing, cancellationToken);
         if (refused is not null)
         {
             return refused;
         }
 
+        // The zones the corrected periods move work into must be the caller's too: a Zone Manager cannot put an employee on a raft of another zone.
+        var newZones = zoneOfRaft.Values.Concat(inputs.Where(p => p.RaftId is null).Select(p => p.ZoneId!.Value));
+        if (!await AllowsEveryZoneAsync(newZones, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
         var account = currentUser.AccountId ?? throw new InvalidOperationException("Attendance is corrected by a logged-in user.");
         var before = Snapshot(record, existing);
         record = ApplyTimes(employee, day, record, request, reason, account);
-        ApplyPeriods(employee, day, existing, inputs, zoneOfRaft, reason, account);
+        ApplyPeriods(employee, day, existing, inputs, zoneOfRaft, reason, account, request.CheckInAt, request.CheckOutAt);
         audit.Record(new AuditEntry("Attendance.Corrected", nameof(Attendance))
         {
             RecordId = record.Id, RecordCode = employee.Code, Before = before, After = Snapshot(record, inputs), Reason = reason,
@@ -112,11 +127,57 @@ public sealed class AttendanceCorrectionService(
         return new AttendanceCorrected(await ViewAsync(employee, day, cancellationToken), saved.Text, saved.Code);
     }
 
+    /// <summary>
+    /// Whether the caller may correct the day of this employee: the Owner always; a Zone Manager when it holds ATTENDANCE Edit in every zone of the day's job periods, or, when the day has none (a Staff
+    /// employee, or a day not yet assigned), in a working zone of the employee.
+    /// </summary>
+    private async Task<bool> MayCorrectAsync(Employee employee, IEnumerable<Guid> periodZoneIds, CancellationToken cancellationToken)
+    {
+        if (await zones.IsCooperativeOwnerAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        var periodZones = periodZoneIds.Distinct().ToList();
+        if (periodZones.Count > 0)
+        {
+            return await AllowsEveryZoneAsync(periodZones, cancellationToken);
+        }
+
+        foreach (var working in employee.WorkingZones.Select(w => w.ZoneId))
+        {
+            if (await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Edit, working, cancellationToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task<bool> AllowsEveryZoneAsync(IEnumerable<Guid> zoneIds, CancellationToken cancellationToken)
+    {
+        foreach (var zoneId in zoneIds.Distinct())
+        {
+            if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Edit, zoneId, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>The checks of LABOR-04.4.E2: the times are on the day and in order, and each period of a seasonal worker has a job type and a raft and starts between them.</summary>
     private static void Validate(FieldCheck check, Employee employee, DateOnly day, CorrectAttendanceRequest request, IReadOnlyList<DayPeriodInput> inputs)
     {
         check.Check(request.CheckInAt is null || BusinessClock.ToBusinessDate(request.CheckInAt.Value) == day, "Check-in");
-        check.Check(request.CheckOutAt is null || BusinessClock.ToBusinessDate(request.CheckOutAt.Value) == day, "Check-out");
+        // A night shift ends on the next day (L2): the check-out is on the day of the check-in or the next, no later than 18 hours after the check-in; the day worked stays the day of the check-in.
+        check.Check(
+            request.CheckOutAt is null
+            || (BusinessClock.ToBusinessDate(request.CheckOutAt.Value) is var outDay && (outDay == day || outDay == day.AddDays(1))
+                && (request.CheckInAt is not { } inAt || request.CheckOutAt.Value - inAt <= WorkRules.MaxShift)),
+            "Check-out");
         check.Check(request.CheckInAt is null || request.CheckOutAt is null || request.CheckOutAt > request.CheckInAt, "Check-out");
         check.Check(request.CheckInAt is not null || request.CheckOutAt is not null, "Check-in");
         if (WorkRules.TypeOn(employee, day) == EmployeeType.Staff)
@@ -211,23 +272,29 @@ public sealed class AttendanceCorrectionService(
     }
 
     /// <summary>The periods are matched in time order: a period that changes is marked Correction with the reason, extra ones are added and surplus ones removed.</summary>
-    private void ApplyPeriods(Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, IReadOnlyDictionary<Guid, Guid> zoneOfRaft, string reason, Guid account)
+    private void ApplyPeriods(
+        Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, IReadOnlyDictionary<Guid, Guid> zoneOfRaft, string reason, Guid account,
+        DateTimeOffset? checkIn, DateTimeOffset? checkOut)
     {
+        var result = new List<WorkAssignment>();
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
             var zoneId = input.RaftId is { } raftOfInput ? zoneOfRaft[raftOfInput] : input.ZoneId!.Value;
             if (i >= existing.Count)
             {
-                assignments.Add(new WorkAssignment
+                var added = new WorkAssignment
                 {
                     EmployeeId = employee.Id, Date = day, RaftId = input.RaftId, ZoneId = zoneId, JobTypeId = input.JobTypeId!.Value, StartsAt = input.StartsAt,
                     AssignedByAccountId = account, Method = AttendanceMethod.Correction, CorrectionReason = reason,
-                });
+                };
+                assignments.Add(added);
+                result.Add(added);
                 continue;
             }
 
             var period = existing[i];
+            result.Add(period);
             if (period.RaftId == input.RaftId && period.ZoneId == zoneId && period.JobTypeId == input.JobTypeId && period.StartsAt == input.StartsAt)
             {
                 continue;
@@ -240,6 +307,35 @@ public sealed class AttendanceCorrectionService(
         foreach (var surplus in existing.Skip(inputs.Count))
         {
             assignments.Remove(surplus);
+        }
+
+        KeepEndsConsistent(result, checkIn, checkOut);
+    }
+
+    /// <summary>
+    /// A period closed at its own check-out (<see cref="WorkAssignment.EndsAt"/>, a day worked in two sessions) keeps that end only while it still lies after the period's start, before the next period
+    /// starts and not after the check-out entered; otherwise the end is cleared so it cannot disagree with the corrected times. The last period always runs to the check-out (L1).
+    /// </summary>
+    private static void KeepEndsConsistent(IReadOnlyList<WorkAssignment> periods, DateTimeOffset? checkIn, DateTimeOffset? checkOut)
+    {
+        for (var i = 0; i < periods.Count; i++)
+        {
+            var period = periods[i];
+            if (period.EndsAt is not { } ends)
+            {
+                continue;
+            }
+
+            var start = period.StartsAt ?? checkIn;
+            var last = i == periods.Count - 1;
+            var valid = !last
+                && (start is null || ends > start)
+                && ends <= (periods[i + 1].StartsAt ?? ends)
+                && (checkOut is null || ends <= checkOut);
+            if (!valid)
+            {
+                period.EndsAt = null;
+            }
         }
     }
 

@@ -110,7 +110,7 @@ public class HarvestLotsQaTestsFiles
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
-        var form = new HarvestFields().ToForm();
+        var form = (await new HarvestFields().PlannedAsync(raft.RaftId)).ToForm();
         form.Add(FileContent(Jpeg, "image/jpeg"), "photos", fileName);
 
         var lot = (await (await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", form)).ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
@@ -150,7 +150,8 @@ public class HarvestLotsQaTestsFiles
         var owner = raft.Owner;
         var manager = await api.ManagerAsync(raft.ZoneId);
         var pushes = api.Services.GetRequiredService<FakePushSender>().Inbox;
-        var fields = HarvestFields.OfLanes(1).FinishedLanes(1) with { Photos = [Jpeg] };
+        // The plan is made first: the fault is for the save of the lot, not for the save of the plan.
+        var fields = await (new HarvestFields { Photos = [Jpeg] }.FinishedLanes(1)).PlannedAsync(raft.RaftId);
         api.Faults.FailNextSave(Conflict);
 
         var answer = await (await manager.Client.PostHarvestAsync(raft.RaftId, fields)).ReadAsync(HttpStatusCode.Conflict);
@@ -174,9 +175,10 @@ public class HarvestLotsQaTestsFiles
     {
         using var api = new FileFaultApiFactory();
         var raft = await api.SeededRaftAsync();
+        var planned = await new HarvestFields { Photos = [Jpeg] }.PlannedAsync(raft.RaftId);
         api.Faults.FailNextSaveAfterCommit(new InvalidOperationException("Test: the reply was lost."));
 
-        await raft.Owner.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg] });
+        await raft.Owner.Client.PostHarvestAsync(raft.RaftId, planned);
 
         var keys = await api.QueryAsync(db => db.HarvestLotPhotos.Select(p => p.FileKey).ToListAsync());
         Assert.Single(keys);
@@ -334,10 +336,10 @@ public class HarvestLotsQaTestsKestrel(KestrelApiFactory api) : IClassFixture<Ke
         var raft = await api.SeededRaftAsync();
         using var client = await OnKestrelAsync(raft.Owner.Account.Username);
         var photo = Sized(Jpeg, (int)(10 * Megabyte));
-        var form = (HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with
+        var form = (await (new HarvestFields
         {
             Cages = "100000", EstimatedKg = "1000000", Photos = Enumerable.Repeat(photo, 3).ToList(),
-        }).ToForm();
+        }).PlannedAsync(raft.RaftId)).ToForm();
 
         using var response = await client.PostAsync($"api/rafts/{raft.RaftId}/harvest-lots", form);
 

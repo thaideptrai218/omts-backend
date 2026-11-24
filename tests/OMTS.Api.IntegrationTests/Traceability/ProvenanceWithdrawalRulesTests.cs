@@ -21,7 +21,7 @@ public class ProvenanceWithdrawalRulesTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var code = (await api.LotRowAsync(sale.LotId)).LotCode;
 
         // PRE-2: a lot that is Not published has no withdrawal.
@@ -66,7 +66,7 @@ public class ProvenanceWithdrawalRulesTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
         await sale.Owner.Client.WithdrawnAsync(sale.LotId, "First doubt");
         var first = await api.LotRowAsync(sale.LotId);

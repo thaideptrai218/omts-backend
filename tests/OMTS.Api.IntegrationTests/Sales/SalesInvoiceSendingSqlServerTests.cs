@@ -50,7 +50,7 @@ public class SalesInvoiceSendingSqlServerTests
     {
         var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1));
         var body = Invoice(customerId, [Line(setup.ProductId, lot.Id(), 10m)], Cash(cash, rest, payLaterOwnerAgreed: rest == "PayLater"), lot.Id());
-        return (await setup.Manager.SellAsync(body)).GetProperty("invoice");
+        return (await setup.Owner.SellAsync(body)).GetProperty("invoice");
     }
 
     private static Task<List<Notification>> SendingsAsync(FarmingSqlServerHost host, Guid invoiceId) =>
@@ -68,7 +68,7 @@ public class SalesInvoiceSendingSqlServerTests
         {
             var invoice = await SellAsync(setup, customerId);
 
-            var answers = await Task.WhenAll(setup.Manager.FinishAsync(invoice.Id(), true), setup.Owner.FinishAsync(invoice.Id(), false));
+            var answers = await Task.WhenAll(setup.Owner.FinishAsync(invoice.Id(), true), setup.Owner.FinishAsync(invoice.Id(), false));
 
             var bodies = await Task.WhenAll(answers.Select(a => a.ReadAsync(HttpStatusCode.OK)));
             Assert.Single(bodies.Select(b => b.GetProperty("invoice").Text("qrDecidedAt")).Distinct());
@@ -90,7 +90,7 @@ public class SalesInvoiceSendingSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var invoice = await SellAsync(setup, customerId);
-            await setup.Manager.FinishedAsync(invoice.Id(), wantsQrCode: false);
+            await setup.Owner.FinishedAsync(invoice.Id(), wantsQrCode: false);
             sender.Reset();
 
             var first = owner.ResendAsync(invoice.Id());
@@ -133,7 +133,7 @@ public class SalesInvoiceSendingSqlServerTests
         setup.Host.Api.RefuseSmsTo(refused.Text("phoneNumber")!);
         foreach (var invoice in new[] { unpaid, paid, notAccepted, nothingSent })
         {
-            await setup.Manager.FinishedAsync(invoice.Id(), wantsQrCode: false);
+            await setup.Owner.FinishedAsync(invoice.Id(), wantsQrCode: false);
         }
 
         Assert.Equal(1, await CountAsync(setup.Host));

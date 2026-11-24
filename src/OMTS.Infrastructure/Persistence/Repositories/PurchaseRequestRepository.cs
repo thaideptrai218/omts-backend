@@ -64,9 +64,16 @@ internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseReq
             .Select(n => new PurchaseRequestSending(n.RelatedRecordId!.Value, n.Channel, n.PhoneNumber, n.DeliveryStatusId, n.DeliveryStatusAt))
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(CancellationToken ct) =>
-        await db.Employees.Include(e => e.Account).Where(e => e.StatusId == StatusIds.Employee.Working)
-            .OrderBy(e => e.FullName).ToListAsync(ct);
+    public async Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(IReadOnlyCollection<Guid>? zoneIds, CancellationToken ct)
+    {
+        var query = db.Employees.Include(e => e.Account).Where(e => e.StatusId == StatusIds.Employee.Working);
+        if (zoneIds is not null)
+        {
+            query = query.Where(e => e.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+        }
+
+        return await query.OrderBy(e => e.FullName).ToListAsync(ct);
+    }
     public async Task<IReadOnlyList<PurchaseShiftInvitation>> EmployeeInvitationsAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken ct) =>
         await db.Set<PurchaseShiftInvitation>().AsNoTrackingWithIdentityResolution().Include(i => i.PurchaseRequest).ThenInclude(r => r.ShiftInvitations)
             .Where(i => i.EmployeeId == employeeId && i.PurchaseRequest.WorkDate >= from && i.PurchaseRequest.WorkDate <= to)

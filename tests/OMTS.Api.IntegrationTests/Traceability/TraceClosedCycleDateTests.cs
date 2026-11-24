@@ -19,7 +19,7 @@ public class TraceClosedCycleDateTests
         var (owner, _, raftId, cycleId) = await api.ClockedRaftAsync();
         var session = (await owner.SeedingListAsync(cycleId)).GetProperty("records")[0];
         api.Clock.At = InVietnam(10, 20);
-        await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
+        await api.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1));
         var log = await owner.RecordLogAsync(cycleId, new LogFields { VisitDate = new DateOnly(2026, 10, 20) });
         api.Clock.At = InVietnam(10, 25);
         await owner.CloseCycleAsync(cycleId);

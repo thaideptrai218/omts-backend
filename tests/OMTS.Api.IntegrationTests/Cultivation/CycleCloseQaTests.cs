@@ -23,7 +23,7 @@ public class CycleCloseQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     public async Task Every_seeded_lane_harvested_is_a_normal_close_even_with_lanes_never_seeded()
     {
         var raft = await factory.SeededRaftAsync(1, 2);
-        await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "210.5" });
+        await factory.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "210.5" });
         var manager = await factory.ManagerAsync(raft.ZoneId);
 
         var preview = await manager.Client.ClosePreviewAsync(raft.CycleId);
@@ -47,7 +47,7 @@ public class CycleCloseQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     public async Task A_lane_still_being_harvested_makes_the_close_early_and_its_kg_count()
     {
         var raft = await factory.SeededRaftAsync(1, 2, 3);
-        await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { EstimatedKg = "120" });
+        await factory.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { EstimatedKg = "120" });
         var manager = await factory.ManagerAsync(raft.ZoneId);
 
         var preview = await manager.Client.ClosePreviewAsync(raft.CycleId);
@@ -73,8 +73,8 @@ public class CycleCloseQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var raft = await factory.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
-        var first = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1) with { EstimatedKg = "100" });
-        var second = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2) with { EstimatedKg = "50" });
+        var first = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1) with { EstimatedKg = "100" });
+        var second = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(2) with { EstimatedKg = "50" });
         await factory.CorrectLotAsync(owner, first.Id(), HarvestFields.OfLanes(1) with { EstimatedKg = "80" });
         await factory.RemoveLotAsync(owner, second.Id());
 
@@ -181,7 +181,7 @@ public class CycleCloseQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
         var atClose = (await owner.CloseCycleAsync(raft.CycleId)).GetProperty("summary");
         Assert.Equal([2, 3, 4, 5], atClose.Numbers("notHarvestedLanes"));
 

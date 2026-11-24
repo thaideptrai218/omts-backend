@@ -44,10 +44,22 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, decimal>> OwedByEmployeeAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken)
+    {
+        var net = (await db.PayrollLines.Where(l => l.Payroll.StatusId == StatusIds.Payroll.Finalized && employeeIds.Contains(l.EmployeeId))
+                .GroupBy(l => l.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(l => l.MainPay + l.Bonus - l.Deduction) }).ToListAsync(cancellationToken))
+            .ToDictionary(r => r.Employee, r => r.Amount);
+        var paid = (await db.WagePayments
+                .Where(w => employeeIds.Contains(w.EmployeeId) && w.Kind == WagePaymentKind.Wage && w.PayrollLine!.Payroll.StatusId == StatusIds.Payroll.Finalized && w.CashVoucher.CancelledAt == null)
+                .GroupBy(w => w.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(w => w.Amount) }).ToListAsync(cancellationToken))
+            .ToDictionary(r => r.Employee, r => r.Amount);
+        return net.Select(n => (Id: n.Key, Amount: n.Value - paid.GetValueOrDefault(n.Key))).Where(o => o.Amount > 0).ToDictionary(o => o.Id, o => o.Amount);
+    }
+
     public async Task<PayrollDetailRaw?> GetDetailAsync(Guid id, CancellationToken cancellationToken)
     {
         var sheet = await db.Payrolls.AsNoTracking().Where(p => p.Id == id)
-            .Select(p => new { p.Id, p.Code, p.PeriodType, p.PeriodStart, p.PeriodEnd, p.Scope, p.StatusId, p.ExpenseMonth, p.Note, p.CreatedBy, p.CreatedAt })
+            .Select(p => new { p.Id, p.Code, p.PeriodType, p.PeriodStart, p.PeriodEnd, p.Scope, p.StatusId, p.ExpenseMonth, p.Note, p.CreatedBy, p.CreatedAt, p.UpdatedAt })
             .FirstOrDefaultAsync(cancellationToken);
         if (sheet is null)
         {
@@ -56,7 +68,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
 
         var slips = await SlipsAsync(db.PayrollLines.Where(l => l.PayrollId == id), cancellationToken);
         return new PayrollDetailRaw(
-            sheet.Id, sheet.Code, sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd, sheet.Scope, sheet.StatusId, sheet.ExpenseMonth, sheet.Note, sheet.CreatedBy, sheet.CreatedAt, slips);
+            sheet.Id, sheet.Code, sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd, sheet.Scope, sheet.StatusId, sheet.ExpenseMonth, sheet.Note, sheet.CreatedBy, sheet.CreatedAt, slips, sheet.UpdatedAt);
     }
 
     private async Task<IReadOnlyList<PayrollSlipRaw>> SlipsAsync(IQueryable<PayrollLine> lines, CancellationToken cancellationToken)

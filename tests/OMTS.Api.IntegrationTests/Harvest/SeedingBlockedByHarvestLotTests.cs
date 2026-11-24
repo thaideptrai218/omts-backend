@@ -53,7 +53,7 @@ public class SeedingBlockedByHarvestLotTests(AuthApiFactory factory) : IClassFix
     public async Task A_session_with_no_lane_in_a_lot_can_still_be_corrected_and_removed_and_says_which_can()
     {
         var (raft, manager, session) = await SessionOfManagerAsync();
-        await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(5));
+        await factory.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(5));
 
         var list = await manager.Client.SeedingListAsync(raft.CycleId);
         var ofLanes = list.GetProperty("records").EnumerateArray().ToDictionary(r => r.Id(), r => r.GetProperty("canCorrect").GetBoolean());
@@ -86,7 +86,7 @@ public class SeedingBlockedByHarvestLotTests(AuthApiFactory factory) : IClassFix
         var free = await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([4]));
         // Lane 3 holds half, so it can be hung again below (a lane never holds more than 100 %).
         await (await owner.PutSeedingAsync(raft.Session.Id(), raft.Session.AsCorrection() with { LanePercents = new Dictionary<int, decimal> { [3] = 50m } })).ReadAsync(HttpStatusCode.OK);
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
+        await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
 
         var list = await owner.SeedingListAsync(raft.CycleId);
         Assert.Equal(("BeingHarvested", "Harvested", "Growing"), (list.StateOf(1), list.StateOf(2), list.StateOf(3)));

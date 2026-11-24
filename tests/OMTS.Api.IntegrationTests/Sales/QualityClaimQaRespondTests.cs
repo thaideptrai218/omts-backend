@@ -320,6 +320,6 @@ public class QualityClaimQaRespondTests
         var row = await ListRowAsync(api, c, NotificationTypes.QualityClaimResponse);
 
         Assert.Equal(HttpStatusCode.NotFound, (await c.Owner.GetAsync($"/api/me/notifications/{row.Id}/open")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await c.World.Sale.Manager.Client.GetAsync($"/api/me/notifications/{row.Id}/open")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.World.Sale.Accountant.Client.GetAsync($"/api/me/notifications/{row.Id}/open")).StatusCode);
     }
 }

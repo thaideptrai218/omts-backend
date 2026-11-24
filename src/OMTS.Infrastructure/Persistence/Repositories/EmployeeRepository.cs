@@ -54,14 +54,21 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             query = query.Where(e => ids.Contains(e.Id));
         }
 
+        if (filter.VisibleZoneIds is { } visible)
+        {
+            query = query.Where(e => e.WorkingZones.Any(w => visible.Contains(w.ZoneId)));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var text = filter.Search.Trim();
             var phone = filter.PhoneNumber;
             query = phone is null
-                ? query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text)) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text)))
+                ? query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text)) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text))
+                    || (e.Account != null && e.Account.Username.Contains(text)))
                 : query.Where(e => e.FullName.Contains(text) || (e.Code != null && e.Code.Contains(text))
-                    || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber == phone)));
+                    || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber == phone))
+                    || (e.Account != null && e.Account.Username.Contains(text)));
         }
 
         if (filter.StatusId is not null)
@@ -123,6 +130,9 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
         .Include(e => e.TypePeriods)
         .Include(e => e.Account)
         .AsSplitQuery();
+
+    public Task<Employee?> FindWithIdNumberAsync(string idNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
+        db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.IdNumber == idNumber && e.Id != exceptEmployeeId, cancellationToken);
 
     public Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
         db.Employees.AsNoTracking().FirstOrDefaultAsync(

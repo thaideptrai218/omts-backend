@@ -96,7 +96,7 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task Purchase_plan_routes_invitations_through_manager_then_owner_acceptance_activates_work()
+    public async Task Purchase_plan_goes_through_the_manager_who_assigns_at_once_and_the_owner_accepts_without_waiting_for_the_staff()
     {
         var s = await SetupAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
@@ -113,24 +113,54 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         await Success(await s.Manager.PostAsJsonAsync($"/api/work-plans/{plan.Id}/response", new RespondWorkDayPlan(true, null, plan.RowVersion)));
         plan = await GetAsync(s.Manager, plan.Id);
         await Success(await s.Manager.PostAsJsonAsync($"/api/work-plans/{plan.Id}/assignments", new AssignWorkDayPlan([s.Employee.Id], plan.RowVersion)));
-        Assert.False(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id)));
+        // Owner decision of 24/11/2026: the shift is a work assignment at once, the employee only gets a notice, and the request does not wait for them.
+        Assert.True(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id && a.RaftId == s.Raft.Id && a.Date == Day)));
         var invitation = Assert.Single((await s.Worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!);
-        await Success(await s.Worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invitation.Id}/response", new RespondPurchaseShift(true, null, invitation.RowVersion)));
-        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.ManagerAccount.Id &&
-            n.Type == "WORK_PLAN_STAFF_RESPONDED" && n.RelatedRecordCode == plan.Id.ToString())));
-        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.OwnerAccount.Id &&
-            n.Type == "PURCHASE_SHIFT_RESPONDED" && n.RelatedRecordCode == order.Code)));
+        Assert.False(invitation.CanRespond);
+        Assert.True(invitation.Approved);
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.Employee.AccountId &&
+            n.Type == "PURCHASE_SHIFT_ASSIGNED" && n.RelatedRecordCode == order.Code)));
         order = (await s.Owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{order.Id}"))!;
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, order.StatusId);
+        Assert.Equal("ASSIGNED", (await GetAsync(s.Manager, plan.Id)).Status);
         await factory.UseDbAsync(async db => (await db.Set<JobType>().SingleAsync(j => j.Id == s.Job.Id)).StatusId = StatusIds.Usage.Discontinued);
         Assert.Equal(HttpStatusCode.BadRequest, (await s.Owner.PostAsJsonAsync($"/api/purchase-requests/{order.Id}/accept", new AcceptPurchaseRequest(20, Day, false, null, order.RowVersion))).StatusCode);
-        Assert.False(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id)));
         await factory.UseDbAsync(async db => (await db.Set<JobType>().SingleAsync(j => j.Id == s.Job.Id)).StatusId = StatusIds.Usage.InUse);
         await Success(await s.Owner.PostAsJsonAsync($"/api/purchase-requests/{order.Id}/accept", new AcceptPurchaseRequest(20, Day, false, null, order.RowVersion)));
         var assignment = await factory.QueryAsync(db => db.WorkAssignments.SingleAsync(a => a.EmployeeId == s.Employee.Id));
-        // The acceptance assigns the staff who agreed through LABOR-02 (OMTS-132): the first period of the day, on the raft and job type of the plan.
+        // The assignment made when the manager chose the staff stays the only one (LABOR-02, OMTS-132): the first period of the day, on the raft and job type of the plan.
         Assert.Equal((s.Raft.Id, s.Job.Id, Day), (assignment.RaftId, assignment.JobTypeId, assignment.Date));
         Assert.Null(assignment.StartsAt);
         Assert.Equal("ASSIGNED", (await GetAsync(s.Manager, plan.Id)).Status);
+    }
+
+    [Fact]
+    public async Task A_zone_manager_plans_for_itself_in_its_own_zone_and_in_no_other()
+    {
+        var s = await SetupAsync(); var outsider = await SetupAsync();
+        var own = new SaveWorkDayPlan(s.Raft.Id, s.Job.Id, Day, s.ManagerAccount.Id, Guid.NewGuid());
+
+        // Owner decision of 20/11/2026: the Zone Manager of the zone makes and changes a work-day plan of its zone, naming itself, so the plan is ready to staff.
+        var plan = await CreateAsync(s.Manager, own);
+        Assert.Equal("READY_TO_ASSIGN", plan.Status); Assert.True(plan.CanAssign);
+        var responsibles = (await s.Manager.GetFromJsonAsync<List<WorkPlanResponsible>>($"/api/work-plans/responsibles?raftId={s.Raft.Id}"))!;
+        Assert.Equal([s.ManagerAccount.Id], responsibles.Select(o => o.Id));
+        await Success(await s.Manager.PutAsJsonAsync($"/api/work-plans/{plan.Id}", own with { Note = "Đổi ghi chú", RowVersion = plan.RowVersion }));
+
+        // Another zone: 403 on the candidates, on a new plan and on changing the plan of this zone.
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.GetAsync($"/api/work-plans/responsibles?raftId={s.Raft.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.PostAsJsonAsync("/api/work-plans", own with { ResponsibleAccountId = outsider.ManagerAccount.Id, ClientOperationId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.Manager.PutAsJsonAsync($"/api/work-plans/{plan.Id}", own with { ResponsibleAccountId = outsider.ManagerAccount.Id, RowVersion = plan.RowVersion })).StatusCode);
+
+        // In its own zone it still cannot name someone else, nor tie a plan to a trader's purchase request (the Owner's alone).
+        Assert.Equal(HttpStatusCode.BadRequest, (await s.Manager.PostAsJsonAsync("/api/work-plans", own with { ResponsibleAccountId = s.OwnerAccount.Id, ClientOperationId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await s.Manager.PostAsJsonAsync("/api/work-plans", own with { ClientOperationId = Guid.NewGuid(), PurchaseRequestId = Guid.NewGuid(), Cages = 1, CagesPerEmployeePerDay = 1, PickupDate = Day })).StatusCode);
+
+        // An Accountant holds no work-assignment right at all.
+        var accountant = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
+        await factory.GrantAsync(accountant, StaffRole.Accountant, null);
+        var accountantClient = await factory.LoginAsync(accountant.Username);
+        Assert.Equal(HttpStatusCode.Forbidden, (await accountantClient.PostAsJsonAsync("/api/work-plans", own with { ClientOperationId = Guid.NewGuid() })).StatusCode);
     }
 
     private async Task<(HttpClient Owner, Account OwnerAccount, HttpClient Manager, Account ManagerAccount, Raft Raft, JobType Job, Employee Employee, HttpClient Worker)> SetupAsync()
@@ -145,6 +175,8 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         var job = new JobType { Name = "Thu hoặc sửa bè " + NewCode() };
         var phone = NewPhone();
         var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode(), PhoneNumber = phone };
+        // The employee works in the zone of the manager: a manager sees, and so staffs, only the employees of its zones (decision of 24/11/2026).
+        employee.WorkingZones.Add(new EmployeeWorkingZone { ZoneId = zone.Id });
         await factory.UseDbAsync(db => { db.Rafts.Add(raft); db.Set<JobType>().Add(job); db.Employees.Add(employee); });
         return (await factory.LoginAsync(owner.Username), owner, await factory.LoginAsync(manager.Username), manager,
             raft, job, employee, await factory.LoginAsync(employeeAccount.Username));

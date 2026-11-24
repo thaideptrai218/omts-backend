@@ -58,21 +58,23 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var accountant = await factory.StaffAsync(null, StaffRole.Accountant);
         var nine = Enumerable.Range(1, 9).ToArray();
 
-        var first = await manager.Client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(nine).FinishedLanes(nine));
+        // A lot harvests the whole raft and finishes no lane (owner decision of 18/11/2026): the lanes are finished by their own action.
+        var first = await manager.Client.RecordHarvestAsync(raftId);
 
         Assert.False(first.Flag("everySeededLaneHarvested"));
         Assert.Empty(await factory.NoticesAsync(ReminderType, cycleId));
+        var harvesting = await manager.Client.HarvestScreenAsync(raftId);
+        Assert.All(Enumerable.Range(1, 10), lane => Assert.Equal("BeingHarvested", harvesting.HarvestStateOf(lane)));
+
+        var notLast = await manager.Client.FinishLanesAsync(raftId, nine);
+
+        Assert.False(notLast.Flag("everySeededLaneHarvested"));
+        Assert.Empty(await factory.NoticesAsync(ReminderType, cycleId));
         var screen = await manager.Client.HarvestScreenAsync(raftId);
         Assert.All(nine, lane => Assert.Equal("Harvested", screen.HarvestStateOf(lane)));
-        Assert.Equal("Growing", screen.HarvestStateOf(10));
+        Assert.Equal("BeingHarvested", screen.HarvestStateOf(10));
 
-        var notFinished = await manager.Client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(10));
-
-        Assert.False(notFinished.Flag("everySeededLaneHarvested"));
-        Assert.Empty(await factory.NoticesAsync(ReminderType, cycleId));
-        Assert.Equal("BeingHarvested", (await manager.Client.HarvestScreenAsync(raftId)).HarvestStateOf(10));
-
-        var last = await manager.Client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(10).FinishedLanes(10));
+        var last = await manager.Client.FinishLanesAsync(raftId, 10);
 
         Assert.True(last.Flag("everySeededLaneHarvested"));
         var rows = await factory.NoticesAsync(ReminderType, cycleId);
@@ -303,12 +305,12 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var raft = await factory.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
 
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(2));
 
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
         var progress = (await owner.ProgressAsync(raft.RaftId)).GetProperty("lanes").EnumerateArray().ToDictionary(l => l.GetProperty("laneNumber").GetInt32(), l => l.Text("state"));
         var seeding = await owner.SeedingListAsync(raft.CycleId);
-        foreach (var (lane, state) in new[] { (1, "BeingHarvested"), (2, "Harvested"), (3, "Growing"), (4, "NotSeeded") })
+        foreach (var (lane, state) in new[] { (1, "BeingHarvested"), (2, "Harvested"), (3, "BeingHarvested"), (4, "NotSeeded") })
         {
             Assert.Equal(state, screen.HarvestStateOf(lane));
             Assert.Equal(state, progress[lane]);
@@ -322,12 +324,12 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(5).FinishedLanes(5));
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(5));
         await factory.CloseCycleAsync(raft.CycleId);
         var laneId = await factory.QueryAsync(db => db.Lanes.Where(l => l.RaftId == raft.RaftId && l.LaneNumber == 5).Select(l => l.Id).SingleAsync());
         await factory.UpdateAsync<Lane>(laneId, l => l.StatusId = StatusIds.Lane.Removed);
 
-        Assert.Equal([5], (await owner.GetHarvestLotAsync(lot.Id())).Numbers("laneNumbers"));
+        Assert.Equal([1, 2, 3, 4, 5], (await owner.GetHarvestLotAsync(lot.Id())).Numbers("laneNumbers"));
         var lane = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/5/progress?cycleId={raft.CycleId}");
         Assert.Equal([lot.Text("lotCode")], lane.GetProperty("harvestLots").EnumerateArray().Select(l => l.Text("lotCode")));
     }
@@ -371,9 +373,9 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal($"{(raftCode == start ? raftBase : expectedStart)}-{lot.Date("harvestDate"):yyyyMMdd}", lot.Text("lotCode"));
     }
 
-    // Lanes beyond the raft, an old lane number of another raft, and lanes of a raft whose lanes differ.
+    // The lanes of a lot are the lanes of its raft: a lane number of another, longer raft sent by a client is not read.
     [Fact]
-    public async Task A_lane_of_another_raft_cannot_be_named_by_number_when_this_raft_is_shorter()
+    public async Task A_lane_of_another_raft_sent_by_number_is_ignored_and_the_lot_holds_the_lanes_of_its_own_raft()
     {
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
@@ -385,9 +387,9 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
             await owner.Client.SeedingRecordAsync(cycleId, (await owner.Client.SeedLotAsync()).Session([1, 2]));
         }
 
-        var answer = await (await owner.Client.PostHarvestAsync(shortRaft, HarvestFields.OfLanes(6))).ReadAsync(HttpStatusCode.BadRequest);
+        var lot = await owner.Client.HarvestLotAsync(shortRaft, HarvestFields.OfLanes(6));
 
-        Assert.Equal("Lanes", answer.Text("field"));
+        Assert.Equal([1, 2], lot.Numbers("laneNumbers"));
     }
 
     // CYCLE-05 with its new field holds nothing per lane that AC-03 forbids, and the Accountant is not let in through it.
@@ -471,8 +473,8 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/harvest-lots/{Guid.NewGuid()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/rafts/{Guid.NewGuid()}/harvest-lots")).StatusCode);
 
-        var answer = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Lanes = ["99"], Cages = "0" })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Lanes", answer.Text("field"));
+        var answer = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "0", EstimatedKg = "-1" })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal("Number of cages", answer.Text("field"));
     }
 
     // The lanes shown: In Use, and Removed only with a record in the cycle (client list), with the raft view agreeing.
@@ -481,14 +483,14 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var raft = await factory.SeededRaftAsync(1, 5);
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(5).FinishedLanes(5));
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(5));
         await factory.CloseCycleAsync(raft.CycleId);
         var view = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}");
         var body = new RaftBody(view.Text("code"), 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null, 3, view.Text("rowVersion"));
 
         (await owner.PutAsJsonAsync($"/api/rafts/{raft.RaftId}", body)).EnsureSuccessStatusCode();
 
-        Assert.Equal([5], (await owner.GetHarvestLotAsync(lot.Id())).Numbers("laneNumbers"));
+        Assert.Equal([1, 5], (await owner.GetHarvestLotAsync(lot.Id())).Numbers("laneNumbers"));
         var lane = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/5/progress?cycleId={raft.CycleId}");
         Assert.Equal(lot.Id(), lane.GetProperty("harvestLots")[0].Id());
         // Closed today: the state of today still comes from that cycle, and lane 5 has its record.
@@ -502,12 +504,12 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var raft = await factory.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(2));
 
         var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today");
 
         var states = today.GetProperty("lanes").EnumerateArray().ToDictionary(l => l.GetProperty("laneNumber").GetInt32(), l => l.Text("state"));
-        Assert.Equal(("BeingHarvested", "Harvested", "Growing", "NotSeeded"), (states[1], states[2], states[3], states[4]));
+        Assert.Equal(("BeingHarvested", "Harvested", "BeingHarvested", "NotSeeded"), (states[1], states[2], states[3], states[4]));
     }
 
     // Two pairs of one manager on the zone give one reminder, and an Accountant pair here gives none.

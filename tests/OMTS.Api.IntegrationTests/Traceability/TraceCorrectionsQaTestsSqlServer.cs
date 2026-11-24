@@ -57,7 +57,7 @@ public class TraceCorrectionsQaTestsSqlServer(ITestOutputHelper output)
             // Open cycle: lanes 1 and 2 seeded yesterday by one session, lane 1 harvested, so the session is corrected only in TRACE-03.
             var (raftId, cycleId, seedLot) = await CycleAsync(owner, zoneId);
             var session = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2]));
-            await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
+            await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1));
 
             var correction = owner.PutSeedingTraceAsync(session.Id(), session.SeedingCorrection(lanes: [1]));
             var harvest = owner.PostHarvestAsync(raftId, HarvestFields.OfLanes(2));
@@ -79,7 +79,7 @@ public class TraceCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         {
             var (raftId, cycleId, seedLot) = await CycleAsync(owner, zoneId);
             var session = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2]));
-            var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
+            var lot = await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1));
             await owner.CloseCycleAsync(cycleId);
             var current = await owner.GetSeedingAsync(session.Id());
             var lotVersion = (await owner.GetFromJsonAsync<JsonElement>($"/api/harvest-lots/{lot.Id()}")).Text("rowVersion");
@@ -106,7 +106,7 @@ public class TraceCorrectionsQaTestsSqlServer(ITestOutputHelper output)
             var (raftId, cycleId, seedLot) = await CycleAsync(owner, zoneId);
             var a = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 2], Today.AddDays(-2)).Percents(50m, 1));
             var b = await owner.SeedingRecordAsync(cycleId, seedLot.Session([1, 3], Today.AddDays(-1)).Percents(50m, 1));
-            await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
+            await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(1));
             await owner.CloseCycleAsync(cycleId);
             var (currentA, currentB) = (await owner.GetSeedingAsync(a.Id()), await owner.GetSeedingAsync(b.Id()));
 

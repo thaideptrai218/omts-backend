@@ -45,9 +45,14 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email, cancellationToken);
 
     public async Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
-        string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
+        string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false)
     {
         var query = db.Accounts.AsNoTracking().Where(a => a.SubjectType == SubjectType.Staff);
+        if (unlinkedOnly)
+        {
+            query = query.Where(a => !db.Employees.Any(e => e.AccountId == a.Id));
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var text = search.Trim();

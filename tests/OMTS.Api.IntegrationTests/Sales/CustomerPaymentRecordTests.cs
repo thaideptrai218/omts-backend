@@ -26,7 +26,7 @@ public class CustomerPaymentRecordTests
         var name = await NameAsync(api, sale.CustomerId);
 
         var transfer = await accountant.Client.PaidAsync(MoneyBody(sale.CustomerId, 500_000m) .With("note", "Bank statement 07/11"));
-        var cash = await accountant.Client.PaidAsync(MoneyBody(sale.CustomerId, 200_000m, "Cash", sale.Manager.Account.Id));
+        var cash = await accountant.Client.PaidAsync(MoneyBody(sale.CustomerId, 200_000m, "Cash", sale.Owner.Account.Id));
 
         var paid = transfer.Payment();
         Assert.Equal((700_000m, "MSG-GEN-05", $"Payment {paid.Text("code")} saved."), (transfer.Money("debtAfter"), transfer.Text("messageCode"), transfer.Text("message")));
@@ -34,7 +34,7 @@ public class CustomerPaymentRecordTests
         Assert.Equal(accountant.Account.Id, paid.GetProperty("recordedBy").Id());
         Assert.Equal(accountant.Account.Id, paid.GetProperty("confirmedBy").Id());
         Assert.Equal(accountant.Account.Id, paid.GetProperty("collectedBy").Id());
-        Assert.Equal((500_000m, sale.Manager.Account.Id), (cash.Money("debtAfter"), cash.Payment().GetProperty("collectedBy").Id()));
+        Assert.Equal((500_000m, sale.Owner.Account.Id), (cash.Money("debtAfter"), cash.Payment().GetProperty("collectedBy").Id()));
         Assert.Equal(JsonValueKind.Null, cash.Payment().GetProperty("bankReference").ValueKind);
 
         Assert.Equal((500_000m, 500_000m, 500_000m), await sale.Owner.Client.DebtsEverywhereAsync(sale.CustomerId));
@@ -97,7 +97,7 @@ public class CustomerPaymentRecordTests
         var form = await (await accountant.GetFormAsync(sale.CustomerId)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((-200_000m, 200_000m, 0), (form.Money("debt"), form.Money("owedBack"), form.GetProperty("unpaidInvoices").GetArrayLength()));
         var collectors = form.GetProperty("cashCollectors").EnumerateArray().Select(c => c.Id()).ToList();
-        Assert.Contains(sale.Manager.Account.Id, collectors);
+        Assert.Contains(sale.Owner.Account.Id, collectors);
         Assert.Contains(sale.Owner.Account.Id, collectors);
 
         var tooMuch = await (await accountant.PayBackAsync(MoneyBody(sale.CustomerId, 200_001m, "Cash"))).ReadAsync(HttpStatusCode.BadRequest);

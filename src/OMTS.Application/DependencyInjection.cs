@@ -151,6 +151,7 @@ public static class DependencyInjection
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
+        services.AddScoped<EmploymentConsequencesService>();
         services.AddScoped<EmploymentEndService>();
 
         // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
@@ -181,6 +182,7 @@ public static class DependencyInjection
         services.AddScoped<PayrollPaymentService>();
         services.AddScoped<PayrollExportService>();
         services.AddScoped<LaborCostService>();
+        services.AddScoped<LaborCostExportService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
@@ -348,6 +350,7 @@ public static class DependencyInjection
         services.AddScoped<HarvestPlanCodeService>();
         services.AddScoped<HarvestPlanViews>();
         services.AddScoped<HarvestPlanProgress>();
+        services.AddScoped<HarvestPlanHandoverService>();
         services.AddScoped<HarvestPlanNotifier>();
         services.AddScoped<HarvestPlanStaffingService>();
         services.AddScoped<HarvestPlanService>();

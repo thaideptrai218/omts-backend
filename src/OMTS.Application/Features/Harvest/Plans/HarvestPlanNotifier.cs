@@ -13,6 +13,7 @@ public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerAct
 {
     private const string AssignedTitle = "Harvest plan assigned";
     private const string LanesSkippedTitle = "Harvest plan lanes left out";
+    private const string HandedOverTitle = "Kế hoạch thu hoạch đã bàn giao";
 
     /// <summary>
     /// MSG-PLAN-05 to the Zone Managers of every one of <paramref name="zoneIds"/> (the zones of the plan, or the zones a change newly brought in), or to the Owners for a zone with none. Someone in several of the zones gets
@@ -49,6 +50,22 @@ public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerAct
                     new RelatedRecord(RelatedRecordTypes.HarvestPlan, plan.Id, plan.Code)),
                 cancellationToken);
         }
+    }
+
+    /// <summary>A Zone Manager handed the plan over ("Bàn giao"): every line has its lot or all its lanes left out, and the Owners can complete it. Not told to an Owner who did it.</summary>
+    public async Task HandedOverAsync(HarvestPlan plan, Guid actor, CancellationToken cancellationToken)
+    {
+        var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetCooperativeOwnersAsync(cancellationToken), actor, cancellationToken);
+        await notifications.NotifyAsync(
+            told,
+            NotificationTypes.HarvestPlanHandedOver,
+            HandedOverTitle,
+            $"Kế hoạch thu hoạch {plan.Code} đã được quản lý vùng bàn giao ({plan.Lines.Count} bè). Chủ HTX kiểm tra và hoàn thành kế hoạch.",
+            RelatedRecordTypes.HarvestPlan,
+            plan.Code,
+            false,
+            cancellationToken,
+            plan.Id);
     }
 
     /// <summary>MSG-PLAN-06 to the Owners: lanes of a raft will not be harvested, with the reason.</summary>

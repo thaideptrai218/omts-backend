@@ -13,8 +13,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Employees;
 
 /// <summary>
-/// QA of OMTS-227, who reads what. BR-LABOR-01 and BR-FARM-08: every Zone Manager sees every employee; §I.4.4: Accountant,
-/// Trader and anonymous have no LABOR-01. Hiding the personal fields from a manager who does not maintain the employee is the
+/// QA of OMTS-227, who reads what. Per the decision of 24/11/2026, a Zone Manager sees only employees with a working zone among its zones. The Accountant
+/// reads employees for payroll reconciliation (decision of 19/11/2026), while Trader and anonymous have no LABOR-01. Hiding the personal fields from a manager who does not maintain the employee is the
 /// branch's own rule (PM question): the SRS neither asks for it nor forbids it (NFR-11 "shown only to authorized users").
 /// </summary>
 public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -32,7 +32,8 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
             ("Manager of the zone", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneA))).Client, true),
             ("Manager of both zones", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.ZoneManager, zoneA))).Client, true),
             ("All zones manager", (await StaffAsync(factory, (StaffRole.ZoneManager, null))).Client, true),
-            ("Manager of another zone", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB))).Client, false),
+            ("Accountant of the zone", (await StaffAsync(factory, (StaffRole.Accountant, zoneA))).Client, false),
+            ("All zones accountant", (await StaffAsync(factory, (StaffRole.Accountant, null))).Client, false),
             ("Manager B, Accountant A", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.Accountant, zoneA))).Client, false),
             ("Manager B, Accountant All", (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB), (StaffRole.Accountant, null))).Client, false),
         };
@@ -50,11 +51,18 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
             Assert.True(row.GetProperty("canMaintain").GetBoolean() == maintains, who);
             Assert.All(PersonalFields, field => Assert.False(row.TryGetProperty(field, out _), $"{field} is on the list row for {who}."));
         }
+
+        // Owner decision of 24/11/2026: a Zone Manager of another zone does not see the employee at all, on the detail, the list or the export.
+        var elsewhere = (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB))).Client;
+        Assert.Equal(HttpStatusCode.NotFound, (await elsewhere.GetAsync($"/api/employees/{id}")).StatusCode);
+        var listed = await (await elsewhere.GetAsync($"/api/employees?search={Uri.EscapeDataString(name)}")).JsonAsync(HttpStatusCode.OK);
+        Assert.Equal(0, listed.GetProperty("total").GetInt32());
+        Assert.Empty(listed.GetProperty("items").EnumerateArray());
     }
 
-    // §I.4.4: LABOR-01 is No for the Accountant and the Trader, also with an All zones pair; a mixed pair gives nothing more.
+    // Trader and a revoked pair have no LABOR-01; the Accountant's scoped read is covered above.
     [Fact]
-    public async Task Accountants_traders_anonymous_and_a_revoked_pair_read_nothing()
+    public async Task Traders_anonymous_and_a_revoked_pair_read_nothing()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var id = IdOf(await CreateAsync(owner, FullProfile($"Refuse {NewCode()}", NewPhone(), zone)));
@@ -63,8 +71,6 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         var (revoked, revokedAccount) = await StaffAsync(factory, (StaffRole.ZoneManager, zone));
         var refused = new[]
         {
-            (await StaffAsync(factory, (StaffRole.Accountant, zone))).Client,
-            (await StaffAsync(factory, (StaffRole.Accountant, null))).Client,
             await factory.LoginAsync(trader.Username, traderPassword),
             revoked,
         };
@@ -97,11 +103,10 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
 
         await (await owner.PostAsJsonAsync($"/api/accounts/{account.Id}/grants/{pairA}/revoke", new { reason = "Thu hồi" })).JsonAsync(HttpStatusCode.OK);
 
-        var after = await (await manager.GetAsync($"/api/employees/{id}")).JsonAsync(HttpStatusCode.OK);
-        Assert.False(after.GetProperty("canMaintain").GetBoolean());
-        AssertPersonalFields(after, visible: false);
-        Assert.Equal("MSG-GEN-08", await (await manager.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zoneB))).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await manager.PostEndAsync(id, await EndBodyAsync(owner, id, Today()))).ErrorCodeAsync());
+        // The employee works in zone A only: with the pair of zone A gone the manager of zone B does not see them at all (24/11/2026).
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync($"/api/employees/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zoneB))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.PostEndAsync(id, await EndBodyAsync(owner, id, Today()))).StatusCode);
 
         await factory.GrantAsync(account, StaffRole.ZoneManager, zoneA);
         AssertPersonalFields(await (await manager.GetAsync($"/api/employees/{id}")).JsonAsync(HttpStatusCode.OK), visible: true);
@@ -205,7 +210,9 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
         var id = IdOf(await CreateAsync(owner, FullProfile($"Unlock {NewCode()}", NewPhone(), zoneA)));
-        var (other, otherAccount) = await StaffAsync(factory, (StaffRole.ZoneManager, zoneB));
+        // Sees the employee through an Accountant pair of zone A (24/11/2026), and brings its own zone B in.
+        var (other, otherAccount) = await StaffAsync(factory, (StaffRole.Accountant, zoneA), (StaffRole.ZoneManager, zoneB));
+        AssertPersonalFields(await (await other.GetAsync($"/api/employees/{id}")).JsonAsync(HttpStatusCode.OK), visible: false);
 
         var added = await (await other.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id })).JsonAsync(HttpStatusCode.OK);
 

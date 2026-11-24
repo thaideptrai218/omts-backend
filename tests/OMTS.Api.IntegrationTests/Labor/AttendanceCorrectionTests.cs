@@ -165,25 +165,52 @@ public class AttendanceCorrectionTests
     }
 
     [Fact]
-    public async Task Only_the_owner_corrects_attendance_and_a_locked_pay_period_cannot_be_corrected()
+    public async Task Only_the_owner_and_the_zone_manager_of_the_zone_correct_attendance_and_a_locked_pay_period_cannot_be_corrected()
     {
         await using var factory = new AuthApiFactory();
         var s = await SetupWorkAsync(factory);
         var employee = await AddEmployeeAsync(s);
         var body = Body("06:00", "10:00", [Period(s.Harvest, s.Raft.Id, null)]);
+        var otherManager = await ManagerAsync(factory, s.OtherZone);
+        var accountant = await ManagerAsync(factory, null, StaffRole.Accountant);
 
-        Assert.Equal("MSG-GEN-08", await (await s.Manager.PutAsJsonAsync(Url(employee, PastDay), body)).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await s.Manager.GetAsync(Url(employee, PastDay))).ErrorCodeAsync());
+        // Owner decision of 20/11/2026: the Zone Manager of the zone corrects the days of its employees; another zone's Manager and an Accountant cannot.
+        Assert.Equal("MSG-GEN-08", await (await otherManager.PutAsJsonAsync(Url(employee, PastDay), body)).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await otherManager.GetAsync(Url(employee, PastDay))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await accountant.PutAsJsonAsync(Url(employee, PastDay), body)).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await accountant.GetAsync(Url(employee, PastDay))).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().PutAsJsonAsync(Url(employee, PastDay), body)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await s.Owner.PutAsJsonAsync(Url(Guid.NewGuid(), PastDay), body)).StatusCode);
+        Assert.False(await factory.QueryAsync(db => db.Attendances.AnyAsync(a => a.EmployeeId == employee)));
+
+        // The reason is mandatory for a Zone Manager too; with one, the correction is saved and audited with it.
+        Assert.Equal("Reason", await FieldAsync(await s.Manager.PutAsJsonAsync(Url(employee, PastDay), Body("06:00", "10:00", [Period(s.Harvest, s.Raft.Id, null)], reason: " "))));
+        var corrected = await s.Manager.PutAsJsonAsync(Url(employee, PastDay), Body("06:00", "10:00", [Period(s.Harvest, s.Raft.Id, null)], "Quản lý vùng sửa"));
+        await corrected.BodyAsync(HttpStatusCode.OK);
+        var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.Action == "Attendance.Corrected"));
+        Assert.Equal("Quản lý vùng sửa", audit.Reason);
+
+        // A raft of another zone is not the Manager's to put the employee on.
+        var version = (await s.Manager.GetFromJsonAsync<JsonElement>(Url(employee, PastDay))).Str("rowVersion");
+        var toOtherZone = await s.Manager.PutAsJsonAsync(Url(employee, PastDay), Body("06:00", "10:00", [Period(s.Harvest, s.OtherRaft.Id, null)], "Chuyển vùng", version));
+        Assert.Equal("MSG-GEN-08", await toOtherZone.ErrorCodeAsync());
+
+        // A day of another zone (its job period is on a raft there) is not the Manager's either, but the Owner's.
+        var foreign = await AddEmployeeAsync(s, zone: s.OtherZone);
+        await AddPastDayAsync(s, foreign, PastDay, "06:00", "10:00", (s.Harvest, s.OtherRaft.Id, null));
+        Assert.Equal("MSG-GEN-08", await (await s.Manager.PutAsJsonAsync(Url(foreign, PastDay), Body("06:00", "11:00", [Period(s.Harvest, s.OtherRaft.Id, null)]))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await s.Manager.GetAsync(Url(foreign, PastDay))).ErrorCodeAsync());
 
         await factory.AddPayrollAsync("2026-03-01", "2026-03-31", StatusIds.Payroll.AwaitingFinalization);
-        var locked = await s.Owner.PutAsJsonAsync(Url(employee, PastDay), body);
+        // Nothing of a locked pay period changes, whoever corrects it (BR-LABOR-13).
+        foreach (var client in new[] { s.Owner, s.Manager })
+        {
+            var locked = await client.PutAsJsonAsync(Url(employee, PastDay), body);
+            Assert.Equal(("MSG-LABOR-04", HttpStatusCode.Conflict), (await locked.ErrorCodeAsync(), locked.StatusCode));
+        }
 
-        Assert.Equal(("MSG-LABOR-04", HttpStatusCode.Conflict), (await locked.ErrorCodeAsync(), locked.StatusCode));
-        Assert.False(await factory.QueryAsync(db => db.Attendances.AnyAsync(a => a.EmployeeId == employee)));
-        // A day after that pay period can still be corrected.
-        var later = await s.Owner.PutAsJsonAsync(Url(employee, new DateOnly(2026, 4, 2)), Body("06:00", "10:00", [Period(s.Harvest, s.Raft.Id, null, new DateOnly(2026, 4, 2))], day: new DateOnly(2026, 4, 2)));
+        // A day after that pay period can still be corrected, by the Manager as by the Owner.
+        var later = await s.Manager.PutAsJsonAsync(Url(employee, new DateOnly(2026, 4, 2)), Body("06:00", "10:00", [Period(s.Harvest, s.Raft.Id, null, new DateOnly(2026, 4, 2))], day: new DateOnly(2026, 4, 2)));
         Assert.Equal(HttpStatusCode.OK, later.StatusCode);
     }
 }

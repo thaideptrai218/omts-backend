@@ -28,6 +28,12 @@ internal static class ProblemResults
     {
         var problem = new ProblemDetails { Status = status, Title = message.Code, Detail = message.Text };
         problem.Extensions["code"] = message.Code;
+        // The values the text is built from (reason_list, employee_name, ...), so the client can fill its own Vietnamese template.
+        if (message.Parameters is { Count: > 0 } parameters)
+        {
+            problem.Extensions["parameters"] = parameters;
+        }
+
         if (message.LegacyCode is { } legacyCode)
         {
             problem.Extensions["legacyCode"] = legacyCode;

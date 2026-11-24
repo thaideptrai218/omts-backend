@@ -16,7 +16,7 @@ public class ProvenancePublishAccessTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var accountant = await api.StaffAsync(null, StaffRole.Accountant);
         var stranger = await api.ManagerAsync((await sale.Owner.Client.CreateZoneAsync()).Id());
 
@@ -43,8 +43,8 @@ public class ProvenancePublishAccessTests
             Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
         }
 
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         await api.CancelInvoiceAsync(invoice.Id());
-        Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.GetInvoicePublishCheckAsync(invoice.Id())).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await sale.Owner.Client.GetInvoicePublishCheckAsync(invoice.Id())).ErrorCodeAsync());
     }
 }

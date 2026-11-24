@@ -190,7 +190,7 @@ public class EmployeeRequestTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     [Fact]
-    public async Task The_list_shows_awaiting_requests_first_to_the_owner_and_the_manager_but_only_the_owner_decides()
+    public async Task The_list_shows_awaiting_requests_first_to_the_owner_and_the_manager_and_the_manager_decides_only_for_its_own_zone()
     {
         await using var own = new AuthApiFactory();
         var s = await SetupWorkAsync(own);
@@ -209,7 +209,12 @@ public class EmployeeRequestTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var filtered = await s.Owner.GetFromJsonAsync<JsonElement>($"{Workforce}/leave-requests?statusId={StatusIds.EmployeeRequest.Approved}");
         Assert.Equal([decided.GetProperty("id").GetGuid()], filtered.EnumerateArray().Select(r => r.GetProperty("id").GetGuid()));
         Assert.Equal("Status", await FieldAsync(await s.Owner.GetAsync($"{Workforce}/leave-requests?statusId=1")));
-        Assert.Equal("MSG-GEN-08", await (await s.Manager.PostAsJsonAsync($"{Workforce}/leave-requests/{old.GetProperty("id").GetGuid()}/review", new { approved = true, rowVersion = old.Str("rowVersion") })).ErrorCodeAsync());
+        // Owner decision of 20/11/2026: a Zone Manager decides the requests of the employees of its zone (ATTENDANCE Edit) and no others; an Accountant decides none.
+        var reviewOld = $"{Workforce}/leave-requests/{old.GetProperty("id").GetGuid()}/review";
+        Assert.Equal("MSG-GEN-08", await (await (await ManagerAsync(own, s.OtherZone)).PostAsJsonAsync(reviewOld, new { approved = true, rowVersion = old.Str("rowVersion") })).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await (await ManagerAsync(own, null, StaffRole.Accountant)).PostAsJsonAsync(reviewOld, new { approved = true, rowVersion = old.Str("rowVersion") })).ErrorCodeAsync());
+        var byManager = await s.Manager.PostAsJsonAsync(reviewOld, new { approved = true, rowVersion = old.Str("rowVersion") });
+        Assert.Equal(StatusIds.EmployeeRequest.Approved, (await byManager.BodyAsync(HttpStatusCode.OK)).GetProperty("statusId").GetInt32());
         Assert.Equal("MSG-GEN-08", await (await (await ManagerAsync(own, null, StaffRole.Accountant)).GetAsync($"{Workforce}/leave-requests")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await own.CreateClient().GetAsync($"{Workforce}/leave-requests")).StatusCode);
     }

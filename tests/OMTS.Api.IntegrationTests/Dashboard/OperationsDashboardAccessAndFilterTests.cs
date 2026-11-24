@@ -23,7 +23,7 @@ public class OperationsDashboardAccessAndFilterTests
 
         Assert.Equal(HttpStatusCode.OK, (await sale.Owner.Client.GetDashboardAsync()).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await accountant.Client.GetDashboardAsync()).StatusCode);
-        foreach (var client in new[] { sale.Manager.Client, allZonesManager.Client, trader })
+        foreach (var client in new[] { sale.Accountant.Client, allZonesManager.Client, trader })
         {
             var refused = await client.GetDashboardAsync();
             Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (refused.StatusCode, await refused.ErrorCodeAsync()));

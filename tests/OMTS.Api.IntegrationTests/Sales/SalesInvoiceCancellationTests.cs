@@ -53,7 +53,7 @@ public class SalesInvoiceCancellationTests
         var sold = await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice);
 
         Assert.Equal(["Reason"], await (await sale.Owner.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("reason", " "))).InvalidFieldsAsync());
-        Assert.Equal("MSG-GEN-08", (await (await sale.Manager.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
+        Assert.Equal("MSG-GEN-08", (await (await sale.Accountant.Client.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).ReadAsync(HttpStatusCode.Forbidden)).Text("code"));
         Assert.Equal(300_000m, await sale.Owner.Client.CustomerDebtAsync(sale.CustomerId));
     }
 
@@ -84,7 +84,7 @@ public class SalesInvoiceCancellationTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
 
         var (code, field, body) = await (await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold))).QuestionAsync();
@@ -106,7 +106,7 @@ public class SalesInvoiceCancellationTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
         var body = Cancellation(sold).With("cashGivenBack", GivenBack(payment.Id, false));
 
@@ -118,7 +118,8 @@ public class SalesInvoiceCancellationTests
 
         Assert.Equal(StatusIds.CustomerPayment.AwaitingConfirmation, Assert.Single(await api.PaymentsOfAsync(sold.Id())).StatusId);
         Assert.Equal(-300_000m, await owner.CustomerDebtAsync(sale.CustomerId));
-        Assert.Single(await api.OwedBackNoticesAsync(sold.Id()));
+        // The Accountant of the zone is told, and the Owner.
+        Assert.Equal(2, (await api.OwedBackNoticesAsync(sold.Id())).Count);
         Assert.Contains("We will pay back the 300,000 VND you paid", api.SmsTo(await api.PhoneOfAsync(sale.CustomerId))[0].Text);
     }
 
@@ -129,7 +130,7 @@ public class SalesInvoiceCancellationTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
         await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Completed);
 
@@ -146,7 +147,7 @@ public class SalesInvoiceCancellationTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
         var body = Cancellation(sold).With("cashGivenBack", GivenBack(payment.Id, false));
 
@@ -159,7 +160,7 @@ public class SalesInvoiceCancellationTests
         Assert.Equal((Guid?)sale.CustomerId, Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
         Assert.Single(api.SmsTo(await api.PhoneOfAsync(sale.CustomerId)));
 
-        var given = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
+        var given = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
         var paymentGiven = Assert.Single(await api.PaymentsOfAsync(given.Id()));
         var noProfile = await owner.CancelledAsync(given.Id(), Cancellation(given).With("cashGivenBack", GivenBack(paymentGiven.Id, true)));
         Assert.Equal("Not sent", noProfile.Text("deliveryStatus"));

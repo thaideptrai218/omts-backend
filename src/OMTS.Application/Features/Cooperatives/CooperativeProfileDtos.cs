@@ -30,6 +30,9 @@ public sealed record PublicCooperativePreview(
     string? IntroductionEn,
     IReadOnlyList<PublicCertification> Certifications);
 
+/// <summary>The cooperative's name as every screen, tab title, QR label and export footer shows it: read from the profile, never typed into a screen. Not secret (the provenance page shows it too).</summary>
+public sealed record CooperativeBrand(string FullName, string? ShortName);
+
 /// <param name="LogoUrl">Public URL of this logo file (anonymous).</param>
 /// <param name="CoverPhotoUrl">Public URL of the current cover photo (anonymous).</param>
 /// <param name="AsOf">The business date the certification states are worked out for (today).</param>

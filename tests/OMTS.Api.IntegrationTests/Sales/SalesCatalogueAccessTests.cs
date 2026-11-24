@@ -143,13 +143,13 @@ public class SalesCatalogueAccessTests(AuthApiFactory factory) : IClassFixture<A
         }
     }
 
-    // BR-FARM-08: profiles have no zone, so a pair in one zone opens all of them, whoever created them.
+    // BR-FARM-08: profiles have no zone, so a pair in one zone opens all of them, whoever created them. The Zone Manager has no customers any more (decision of 20/11/2026): the Accountant does.
     [Fact]
-    public async Task A_zone_manager_of_one_zone_works_on_every_profile()
+    public async Task An_accountant_of_one_zone_works_on_every_profile()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var customer = await owner.CreateCustomerAsync();
-        var manager = await ZoneManagerAsync();
+        var manager = await factory.AccountantAsync(await factory.AddZoneAsync(NewCode()));
 
         await (await manager.GetAsync($"/api/customers/{customer.Id()}")).ReadAsync(HttpStatusCode.OK);
         var edit = await manager.PutAsJsonAsync($"/api/customers/{customer.Id()}", new

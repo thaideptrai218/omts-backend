@@ -22,7 +22,7 @@ public class CustomerDebtStatementTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var first = (await client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(first.Id(), 20);
         var second = (await client.SellAsync(PayLater(sale.CustomerId, sale, 20m, cash: 100_000m))).GetProperty("invoice");
@@ -68,7 +68,7 @@ public class CustomerDebtStatementTests
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
         var request = await trader.Client.PlaceAsync(sale.ProductId, 50);
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var keptOld = (await client.SellAsync(PayLater(trader.Profile.Id, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(keptOld.Id(), 9);
         var mergedInvoice = (await client.SellAsync(PayLater(sale.CustomerId, sale, 20m))).GetProperty("invoice");
@@ -102,7 +102,7 @@ public class CustomerDebtStatementTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = (await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m, cash: 50_000m))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m, cash: 50_000m))).GetProperty("invoice");
         var accountant = await api.StaffAsync(null, OMTS.Domain.Enums.StaffRole.Accountant);
         var statement = await accountant.Client.StatementAsync(sale.CustomerId);
 
@@ -131,12 +131,12 @@ public class CustomerDebtStatementTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
+        await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
         var accountant = await api.AllZonesAccountantAsync();
         var cash = (await accountant.Client.PaidAsync(
-            CustomerPaymentTestKit.MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Manager.Account.Id).With("note", "Handed over at the office"))).Payment();
+            CustomerPaymentTestKit.MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Owner.Account.Id).With("note", "Handed over at the office"))).Payment();
         (await accountant.Client.CancelAsync(cash.Id(), "Counted twice")).EnsureSuccessStatusCode();
-        var names = await api.QueryAsync(db => db.Accounts.Where(a => a.Id == accountant.Account.Id || a.Id == sale.Manager.Account.Id).ToDictionaryAsync(a => a.Id, a => a.DisplayName));
+        var names = await api.QueryAsync(db => db.Accounts.Where(a => a.Id == accountant.Account.Id || a.Id == sale.Owner.Account.Id).ToDictionaryAsync(a => a.Id, a => a.DisplayName));
 
         using var workbook = new XLWorkbook(await (await accountant.Client.ExportDebtsAsync(sale.CustomerId)).Content.ReadAsStreamAsync());
 
@@ -144,7 +144,7 @@ public class CustomerDebtStatementTests
         Assert.Equal(["Recorded by", "Confirmed by", "Collected by", "Note", "Cancel reason"], Enumerable.Range(9, 5).Select(c => sheet.Cell(1, c).GetString()).ToList());
         var payment = sheet.RowsUsed().Single(r => r.Cell(3).GetString() == cash.Text("code"));
         Assert.Equal(
-            [names[accountant.Account.Id], names[accountant.Account.Id], names[sale.Manager.Account.Id], "Handed over at the office", "Counted twice"],
+            [names[accountant.Account.Id], names[accountant.Account.Id], names[sale.Owner.Account.Id], "Handed over at the office", "Counted twice"],
             Enumerable.Range(9, 5).Select(c => payment.Cell(c).GetString()).ToList());
         var invoice = sheet.RowsUsed().Single(r => r.Cell(2).GetString() == "Sales invoice");
         Assert.All(Enumerable.Range(9, 5), c => Assert.True(invoice.Cell(c).IsEmpty()));

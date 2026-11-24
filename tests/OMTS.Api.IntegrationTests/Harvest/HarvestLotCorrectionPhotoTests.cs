@@ -210,12 +210,14 @@ public class HarvestLotCorrectionPhotoTests
     public async Task A_lane_finished_by_another_lot_during_the_upload_refuses_and_removes_the_photos()
     {
         using var api = new CycleLogsQaFaultFactory();
-        var raft = await api.SeededRaftAsync();
+        // The lot holds lane 1 only (lane 2 is seeded later), and its correction adds lane 2 while another lot finishes it.
+        var raft = await api.SeededRaftAsync(1);
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId);
+        await owner.RecordSeedingAsync(raft.CycleId, raft.Lot.Session([2]));
 
         var pendingLane = await HeldAsync(api, owner, lot.Id(), HarvestFields.OfLanes(1, 2));
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(2));
         api.Hold.Release();
         var refused = await (await pendingLane).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Lanes", refused.Text("field"));

@@ -41,17 +41,17 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
-        var cash = await manager.SoldAsync(sale, sale.LotId);
-        var partCash = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, cash: 100_000m, customerId: await NewCustomerAsync(sale)))).GetProperty("invoice");
-        var payLater = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: await NewCustomerAsync(sale)))).GetProperty("invoice");
+        var manager = sale.Accountant.Client;
+        var cash = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        var partCash = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, cash: 100_000m, customerId: await NewCustomerAsync(sale)))).GetProperty("invoice");
+        var payLater = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: await NewCustomerAsync(sale)))).GetProperty("invoice");
         var awaitingCustomer = await NewCustomerAsync(sale);
-        var awaitingCovered = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: awaitingCustomer))).GetProperty("invoice");
+        var awaitingCovered = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: awaitingCustomer))).GetProperty("invoice");
         await api.RecordPaymentAsync(awaitingCustomer, 300_000m, statusId: StatusIds.CustomerPayment.AwaitingConfirmation);
         var unconfirmedCash = await NewCustomerAsync(sale);
-        var cashCancelled = await manager.SoldAsync(sale, sale.LotId, customerId: unconfirmedCash);
-        var walkIn = await manager.SoldAsync(sale, sale.LotId, walkIn: true);
-        var walkInCancelled = await manager.SoldAsync(sale, sale.LotId, walkIn: true);
+        var cashCancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: unconfirmedCash);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        var walkInCancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
         foreach (var payment in (await api.PaymentsOfAsync(cashCancelled.Id())).Concat(await api.PaymentsOfAsync(walkInCancelled.Id())))
         {
             await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Cancelled);
@@ -74,11 +74,11 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         var customer = await NewCustomerAsync(sale);
-        var older = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: customer))).GetProperty("invoice");
+        var older = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: customer))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 2);
-        var cancelled = await manager.SoldAsync(sale, sale.LotId, customerId: customer);
+        var cancelled = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: customer);
         await api.UpdateAsync<SalesInvoice>(cancelled.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
 
         var list = await manager.InvoiceListAsync(Span);
@@ -96,9 +96,9 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         var customer = await NewCustomerAsync(sale);
-        var invoice = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: customer))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: customer))).GetProperty("invoice");
         await api.RecordPaymentAsync(customer, 400_000m);
         await api.RecordPaymentAsync(customer, 100_000m, kind: CustomerPaymentKind.PaidBack);
 
@@ -115,7 +115,7 @@ public class SalesInvoiceDetailQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var customer = await NewCustomerAsync(sale);
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: customer);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: customer);
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => (i.PriceCutTotal, i.Total) = (100_000m, 200_000m));
         await api.UseDbAsync(db =>
         {
@@ -123,8 +123,8 @@ public class SalesInvoiceDetailQaTests
             db.Set<SalesInvoicePriceCut>().Add(new SalesInvoicePriceCut { InvoiceId = invoice.Id(), Amount = 40_000m, CutDate = Today.AddDays(-1), Reason = "First", EnteredByAccountId = sale.Owner.Account.Id });
         });
 
-        var view = await sale.Manager.Client.InvoiceAsync(invoice.Id());
-        var row = (await sale.Manager.Client.InvoiceListAsync()).Rows().Single(r => r.Id() == invoice.Id());
+        var view = await sale.Accountant.Client.InvoiceAsync(invoice.Id());
+        var row = (await sale.Accountant.Client.InvoiceListAsync()).Rows().Single(r => r.Id() == invoice.Id());
 
         Assert.Equal(new[] { "First", "Second" }, view.GetProperty("priceCuts").EnumerateArray().Select(c => c.Text("reason")));
         Assert.Equal((200_000m, 100_000m), (view.Money("total"), view.Money("priceCutTotal")));
@@ -139,9 +139,9 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
-        var payment = (await sale.Manager.Client.InvoiceAsync(invoice.Id())).GetProperty("payments")[0];
+        var payment = (await sale.Accountant.Client.InvoiceAsync(invoice.Id())).GetProperty("payments")[0];
 
         var names = payment.EnumerateObject().Select(p => p.Name).ToList();
         Assert.True(new[] { "createdAt", "recordedAt", "paidAt", "paymentTime" }.Any(names.Contains), "The payment has no time: " + string.Join(", ", names));
@@ -153,7 +153,7 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var invoice = await client.SoldAsync(sale, sale.LotId);
         await client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         var latest = new Notification
@@ -181,9 +181,10 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager;
+        // Only Owners sell (decision of 20/11/2026): "me" is the Owner who collected the cash, "other" another Owner.
+        var manager = sale.Owner;
         var invoice = (await manager.Client.SellAsync(sale.PayLater(sale.LotId, 10m, cash: 100_000m))).GetProperty("invoice");
-        var other = await api.ManagerAsync(sale.ZoneId);
+        var other = await api.OwnerAsync();
 
         CustomerPayment Extra(int status, Guid collector, decimal amount) => new()
         {
@@ -207,10 +208,16 @@ public class SalesInvoiceDetailQaTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var (account, pairA) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId));
-        await api.GrantAsync(account, StaffRole.ZoneManager, await api.ZoneEntityAsync(b.ZoneId));
+        var (account, pairA) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId), StaffRole.Accountant);
+        await api.GrantAsync(account, StaffRole.Accountant, await api.ZoneEntityAsync(b.ZoneId));
         var client = await api.LoginAsync(account.Username);
-        await client.SoldAsync(a, a.LotId);
+        // Only Owners sell, so the cash this person collected is a payment row of an invoice of zone A.
+        var inA = await a.Owner.Client.SoldAsync(a, a.LotId);
+        await api.UseDbAsync(db => db.CustomerPayments.Add(new CustomerPayment
+        {
+            Code = "PT" + AcsTestKit.NewCode(), CustomerId = a.CustomerId, InvoiceId = inA.Id(), Kind = CustomerPaymentKind.Payment, Amount = 10_000m, Method = CustomerPaymentMethod.Cash,
+            PaymentDate = Today, StatusId = StatusIds.CustomerPayment.AwaitingConfirmation, CollectedByAccountId = account.Id,
+        }));
         Assert.Single((await client.InvoiceListAsync("?cashCollectedByMe=true")).Rows());
 
         Assert.Equal(HttpStatusCode.OK, (await a.Owner.Client.PostAsJsonAsync($"/api/accounts/{account.Id}/grants/{pairA.Id}/revoke", new { reason = "Moved" })).StatusCode);
@@ -224,11 +231,11 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var manager = sale.Manager.Client;
+        var manager = sale.Accountant.Client;
         var mergedId = await NewCustomerAsync(sale);
-        var ofMerged = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: mergedId))).GetProperty("invoice");
+        var ofMerged = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m, customerId: mergedId))).GetProperty("invoice");
         await api.BackDateAsync(ofMerged.Id(), 2);
-        var ofKept = (await manager.SellAsync(sale.PayLater(sale.LotId, 10m))).GetProperty("invoice");
+        var ofKept = (await sale.Owner.Client.SellAsync(sale.PayLater(sale.LotId, 10m))).GetProperty("invoice");
         Assert.Equal(HttpStatusCode.OK, (await sale.Owner.Client.MergeAsync(sale.CustomerId, mergedId, ownerApproved: true)).StatusCode);
         await api.RecordPaymentAsync(sale.CustomerId, 300_000m);
 
@@ -243,9 +250,9 @@ public class SalesInvoiceDetailQaTests
         Assert.Equal((0, "MSG-GEN-10"), (byMergedId.Rows().Count, byMergedId.Text("messageCode")));
     }
 
-    // SALE-09.1 step 3: rights add up over two pairs of one zone (Accountant + Zone Manager); the commands of the answers follow the same rule.
+    // SALE-09.1 step 3: rights add up over two pairs of one zone (Accountant + Zone Manager), but the Zone Manager pair adds no sales right since 20/11/2026: the commands are the Accountant's.
     [Fact]
-    public async Task A_person_with_two_roles_in_one_zone_gets_the_larger_set_and_the_save_answers_carry_the_callers_commands()
+    public async Task A_person_with_two_roles_in_one_zone_gets_the_accountants_set_and_the_zone_manager_pair_adds_nothing()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -254,12 +261,11 @@ public class SalesInvoiceDetailQaTests
         await api.GrantAsync(account, StaffRole.Accountant, zone);
         var both = await api.LoginAsync(account.Username);
 
-        var created = (await both.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(ListPrice), sale.LotId))).GetProperty("invoice");
-        Assert.Equal(["CreateReturn", "Print"], created.Actions());
+        var created = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(ListPrice), sale.LotId))).GetProperty("invoice");
+        await (await both.PostAsJsonAsync("/api/sales-invoices", Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(ListPrice), sale.LotId))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await sale.Owner.Client.FinishedAsync(created.Id(), wantsQrCode: false);
 
-        var finished = (await both.FinishedAsync(created.Id(), wantsQrCode: false)).GetProperty("invoice");
-        Assert.Equal(["Resend", "CreateReturn", "Print"], finished.Actions());
-        Assert.Equal(["Resend", "CreateReturn", "Print"], (await both.InvoiceAsync(created.Id())).Actions());
+        Assert.Equal(["Print"], (await both.InvoiceAsync(created.Id())).Actions());
         Assert.Equal(["Resend", "CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(created.Id())).Actions());
     }
 
@@ -269,10 +275,10 @@ public class SalesInvoiceDetailQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
-        var view = (await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false)).GetProperty("invoice");
-        var read = await sale.Owner.Client.InvoiceAsync(invoice.Id());
+        var view = (await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false)).GetProperty("invoice");
+        var read = await sale.Accountant.Client.InvoiceAsync(invoice.Id());
 
         Assert.Equal(WithoutCommands(view), WithoutCommands(read));
         Assert.NotEqual(view.Actions(), read.Actions());

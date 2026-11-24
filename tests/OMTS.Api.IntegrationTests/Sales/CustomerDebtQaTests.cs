@@ -37,9 +37,9 @@ public class CustomerDebtQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
+        await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
         var target = (await owner.CreateCustomerAsync("Searched " + AcsTestKit.NewCode())).Id();
-        await sale.Manager.Client.SellAsync(PayLater(target, sale, 20m));
+        await sale.Owner.Client.SellAsync(PayLater(target, sale, 20m));
 
         var all = await owner.DebtListAsync();
         var searched = await owner.DebtListAsync("?search=Searched");
@@ -55,7 +55,7 @@ public class CustomerDebtQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, 10m, walkIn: true);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, 10m, walkIn: true);
 
         var list = await sale.Owner.Client.DebtListAsync();
         var statement = await sale.Owner.Client.StatementAsync(sale.CustomerId);
@@ -72,7 +72,7 @@ public class CustomerDebtQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.SetReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var older = (await client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 3);
         await api.RecordPaymentAsync(sale.CustomerId, 400_000m, PurchaseRequestTestKit.Today.AddDays(-2));
@@ -95,7 +95,7 @@ public class CustomerDebtQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.SetReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var older = (await client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 2);
         await client.FinishedAsync(older.Id(), wantsQrCode: false);
@@ -119,7 +119,7 @@ public class CustomerDebtQaTests
         var sale = await api.SaleSetupAsync();
         const string name = "=HYPERLINK(\"https://example.invalid\",\"DEMO\")";
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = name);
-        var invoice = (await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
+        var invoice = (await sale.Owner.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m))).GetProperty("invoice");
         await api.BackDateAsync(invoice.Id(), 4);
 
         var file = await sale.Owner.Client.ExportDebtsAsync(sale.CustomerId, PurchaseRequestTestKit.Today.AddDays(-10), PurchaseRequestTestKit.Today);

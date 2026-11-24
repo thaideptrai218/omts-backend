@@ -183,8 +183,11 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(FixedRoles.ZoneManagerCode, one.Text("code"));
         var permissions = one.GetProperty("permissions").EnumerateArray().ToDictionary(p => p.Text("functionCode")!, p => p.GetProperty("actions").EnumerateArray().Select(a => a.GetString()).ToList());
         Assert.Equal(FixedRoles.ZoneManager.Permissions.Count, permissions.Count);
-        Assert.Equal(["View"], permissions[PermissionFunctions.PurchaseRequests]);
-        Assert.Equal(["View", "Create", "Export"], permissions[PermissionFunctions.SalesInvoices]);
+        // Owner decision of 20/11/2026: the Zone Manager holds no sales function; it keeps the plans handed to its zones (View) and the lot tracing.
+        Assert.DoesNotContain(permissions.Keys, f => f is PermissionFunctions.PurchaseRequests or PermissionFunctions.SalesInvoices or PermissionFunctions.SalesOrders
+            or PermissionFunctions.SalesReturns or PermissionFunctions.Customers or PermissionFunctions.QualityClaims);
+        Assert.Equal(["View"], permissions[PermissionFunctions.HarvestPlans]);
+        Assert.Contains(PermissionFunctions.LotTracing, permissions.Keys);
         Assert.False(one.TryGetProperty("status", out _));
         Assert.All(writes, w => Assert.True(w.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, $"{w.RequestMessage!.Method} {w.RequestMessage.RequestUri}: {(int)w.StatusCode}"));
         Assert.Equal(PermissionFunctions.All.Count, catalog.GetArrayLength());

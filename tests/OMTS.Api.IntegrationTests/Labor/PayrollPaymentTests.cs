@@ -83,7 +83,7 @@ public class PayrollPaymentTests
         var empty = await f.S.Owner.PostAsJsonAsync($"{Payrolls}/{id}/payments", new { paidAt = DateTimeOffset.UtcNow.ToString("o"), method = "Cash", note = "", lines = Array.Empty<object>() });
 
         Assert.Equal((HttpStatusCode.BadRequest, "MSG-LABOR-34"), (over.StatusCode, await over.ErrorCodeAsync()));
-        Assert.Contains("40,000", JsonDocument.Parse(await over.Content.ReadAsStringAsync()).RootElement.Detail());
+        Assert.Contains("40.000", JsonDocument.Parse(await over.Content.ReadAsStringAsync()).RootElement.Detail());
         foreach (var refused in new[] { zero, fraction, twice, foreign, other, future, empty })
         {
             Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01"), (refused.StatusCode, await refused.ErrorCodeAsync()));
@@ -132,19 +132,20 @@ public class PayrollPaymentTests
     }
 
     [Fact]
-    public async Task A_voucher_cancelled_in_the_cash_book_gives_the_money_back_to_what_is_owed()
+    public async Task A_wage_voucher_is_not_cancelled_from_the_cash_book_and_the_slip_keeps_what_was_paid()
     {
         await using var factory = new AuthApiFactory();
         var f = await FinalizedSheetAsync(factory);
         var result = await (await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "Cash", (f.SlipAn, 640_000))).BodyAsync(HttpStatusCode.Created);
 
+        // A wage voucher is made by payroll and its debt follows it, so the cash book does not cancel it (L7).
         var cancel = await f.S.Owner.PostAsJsonAsync($"/api/cash-book/vouchers/{result.GetProperty("vouchers")[0].GuidOf()}/cancel", new { reason = "Chi nhầm" });
 
-        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+        Assert.Equal((HttpStatusCode.Conflict, "MSG-GEN-09"), (cancel.StatusCode, await cancel.ErrorCodeAsync()));
         var slip = (await f.S.Owner.SheetAsync(f.Sheet.GuidOf())).SlipOf(f.An);
-        Assert.Equal((0m, 640_000m), (slip.Money("paid"), slip.Money("outstanding")));
+        Assert.Equal((640_000m, 0m), (slip.Money("paid"), slip.Money("outstanding")));
         var history = await f.S.Owner.JsonAsync($"{Payments}?employeeId={f.An}");
-        Assert.Equal("Cancelled", history.GetProperty("items")[0].Str("status"));
+        Assert.Equal("Recorded", history.GetProperty("items")[0].Str("status"));
     }
 
     [Fact]
@@ -270,8 +271,9 @@ public class PayrollPaymentTests
         var paid = await (await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "Cash", (f.SlipAn, 640_000))).BodyAsync(HttpStatusCode.Created);
         await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "BankTransfer", (f.SlipBinh, 320_000));
         await PayEmployeeAsync(f.S.Owner, f.An, 5_000);
-        var cancel = await f.S.Owner.PostAsJsonAsync($"/api/cash-book/vouchers/{paid.GetProperty("vouchers")[0].GuidOf()}/cancel", new { reason = "Chi nhầm" });
-        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+        // The cash book does not cancel a wage voucher (L7): the cancelled one of this list is written as an older database holds it.
+        var voucherId = paid.GetProperty("vouchers")[0].GuidOf();
+        await factory.UpdateAsync<OMTS.Domain.Entities.CashBook.CashVoucher>(voucherId, v => (v.CancelledAt, v.CancelReason) = (DateTimeOffset.UtcNow, "Chi nhầm"));
 
         async Task<JsonElement> ListAsync(string query) => await f.S.Owner.JsonAsync($"{Payments}?{query}");
         var all = await ListAsync("pageSize=1");

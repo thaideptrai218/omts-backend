@@ -15,7 +15,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>SALE-04.3, BR-SALE-04: the merge refusals and confirmations, re-pointing, audit.</summary>
 public class CustomerMergeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    private async Task<HttpClient> ManagerAsync() => await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
+    private async Task<HttpClient> ManagerAsync() => await factory.AccountantAsync(await factory.AddZoneAsync(NewCode()));
 
     private Task<Guid?> MergedIntoAsync(Guid id) =>
         factory.QueryAsync(db => db.Customers.Where(c => c.Id == id).Select(c => c.MergedIntoCustomerId).SingleAsync());

@@ -22,7 +22,7 @@ public class SalesInvoiceRulesTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var (orderId, _) = await client.OrderOfAsync(sale.CustomerId, (sale.ProductId, 5m));
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => (l.StatusId, l.CloseDate, l.LeftoverKg) = (StatusIds.HarvestLot.Closed, FarmingTestKit.Today, 0m));
         var code = (await sale.Owner.Client.GetHarvestLotAsync(sale.LotId)).Text("lotCode");
@@ -55,7 +55,7 @@ public class SalesInvoiceRulesTests
         Assert.Equal("MSG-GEN-08", await (await accountant.Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await (await api.TraderAsync()).Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         // Every invoice has an order of its own, which has no zone: the zone of an invoice is the zone of its first lot, and a zone named in the body is ignored (even an unknown one).
-        var named = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("zoneId", otherZone))).GetProperty("invoice");
+        var named = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("zoneId", otherZone))).GetProperty("invoice");
         Assert.NotEqual(otherZone, named.GetProperty("zone").Id());
         var unknown = await sale.Owner.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("zoneId", Guid.NewGuid()));
         Assert.Equal(HttpStatusCode.Created, unknown.StatusCode);
@@ -72,14 +72,14 @@ public class SalesInvoiceRulesTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var duplicate = (await sale.Owner.Client.CreateCustomerAsync()).Id();
-        await sale.Manager.Client.SellAsync(Invoice(duplicate, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId));
+        await sale.Owner.Client.SellAsync(Invoice(duplicate, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId));
         Assert.Equal(300_000m, await sale.Owner.Client.CustomerDebtAsync(duplicate));
 
         var merged = await (await sale.Owner.Client.MergeAsync(sale.CustomerId, duplicate)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(300_000m, merged.Money("currentDebt"));
         Assert.Equal(sale.CustomerId, await api.QueryAsync(db => db.SalesInvoices.Select(i => i.CustomerId).SingleAsync()));
-        Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.PostInvoiceAsync(Invoice(duplicate, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await sale.Owner.Client.PostInvoiceAsync(Invoice(duplicate, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)))).ErrorCodeAsync());
     }
 
     // A second tap on Save sells nothing twice.
@@ -90,8 +90,8 @@ public class SalesInvoiceRulesTests
         var sale = await api.SaleSetupAsync();
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m)).With("deduplicationKey", "tap-1");
 
-        var first = (await sale.Manager.Client.SellAsync(body)).GetProperty("invoice");
-        var again = await sale.Manager.Client.SellAsync(body);
+        var first = (await sale.Owner.Client.SellAsync(body)).GetProperty("invoice");
+        var again = await sale.Owner.Client.SellAsync(body);
 
         Assert.Equal(first.Id(), again.GetProperty("invoice").Id());
         Assert.Equal("MSG-SALE-06", again.Text("messageCode"));
@@ -106,7 +106,7 @@ public class SalesInvoiceRulesTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var estimated = (await sale.Owner.Client.GetHarvestLotAsync(sale.OtherLotId)).Money("estimatedKg");
-        var first = (await sale.Manager.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.OtherLotId, 150.5m), Line(sale.ProductId, sale.OtherLotId, 49.5m)], Cash(6_000_000m), sale.OtherLotId))).GetProperty("invoice");
+        var first = (await sale.Owner.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.OtherLotId, 150.5m), Line(sale.ProductId, sale.OtherLotId, 49.5m)], Cash(6_000_000m), sale.OtherLotId))).GetProperty("invoice");
 
         var lot = await sale.Owner.Client.GetHarvestLotAsync(sale.OtherLotId);
         var figures = lot.GetProperty("figures");
@@ -118,7 +118,7 @@ public class SalesInvoiceRulesTests
         Assert.Equal(estimated - 200m, forSale.Money("remainingKg"));
 
         // Sales are not limited by the remaining kg (BR-HARVEST-02): more than the estimate is sold, and the remaining kg stays at 0.
-        var second = (await sale.Manager.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.OtherLotId, estimated)], Cash(estimated * ListPrice), sale.OtherLotId))).GetProperty("invoice");
+        var second = (await sale.Owner.Client.SellAsync(Invoice(null, [Line(sale.ProductId, sale.OtherLotId, estimated)], Cash(estimated * ListPrice), sale.OtherLotId))).GetProperty("invoice");
         Assert.Equal(0m, (await sale.Owner.Client.GetHarvestLotAsync(sale.OtherLotId)).GetProperty("figures").Money("remainingKg"));
 
         // A cancelled invoice counts nowhere, but keeps its lines (the removal guard still holds). SALE-08 comes with PR 10: set here.

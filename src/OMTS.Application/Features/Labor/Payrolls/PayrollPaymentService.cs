@@ -29,6 +29,7 @@ public sealed class PayrollPaymentService(
     IWagePaymentRepository payments,
     IEmployeeRepository employees,
     ICashVoucherRepository vouchers,
+    ICashAccountRepository accounts,
     ICashVoucherTypeRepository voucherTypes,
     CashVoucherCodeService codes,
     ICurrentUser currentUser,
@@ -45,6 +46,11 @@ public sealed class PayrollPaymentService(
     public async Task<Result<PayrollPaymentResult>> PaySheetAsync(Guid payrollId, PayPayrollRequest request, string? requestKey, CancellationToken cancellationToken)
     {
         var invalid = InvalidFields(request.PaidAt, request.Method, request.Note, requestKey);
+        if (!await AccountAllowedAsync(request.Method, request.CashAccountId, cancellationToken))
+        {
+            invalid.Add("Cash account");
+        }
+
         var asked = request.Lines ?? [];
         if (asked.Count is 0 or > PayrollRules.MaxEmployees || asked.Any(l => l.SlipId is null || !IsMoney(l.Amount)) || asked.Select(l => l.SlipId).Distinct().Count() != asked.Count)
         {
@@ -72,6 +78,11 @@ public sealed class PayrollPaymentService(
             return AppError.Conflict(UserMessages.WrongStatus($"Payroll {sheet.Code}", PayrollRules.StatusOf(sheet.StatusId).ToString()));
         }
 
+        if (PaidBeforeFinalized(sheet, request.PaidAt!.Value) is { } early)
+        {
+            return early;
+        }
+
         var byId = sheet.Lines.ToDictionary(l => l.Id);
         if (asked.Any(l => !byId.ContainsKey(l.SlipId!.Value)))
         {
@@ -94,7 +105,7 @@ public sealed class PayrollPaymentService(
             parts.Add(new Part(line, ask.Amount.Value));
         }
 
-        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken);
+        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, null, request.CashAccountId);
         return AsResult(created);
     }
 
@@ -102,6 +113,11 @@ public sealed class PayrollPaymentService(
     public async Task<Result<StandalonePaymentResult>> PayEmployeeAsync(StandalonePayrollPaymentRequest request, string? requestKey, CancellationToken cancellationToken)
     {
         var invalid = InvalidFields(request.PaidAt, request.Method, request.Note, requestKey);
+        if (!await AccountAllowedAsync(request.Method, request.CashAccountId, cancellationToken))
+        {
+            invalid.Add("Cash account");
+        }
+
         if (request.EmployeeId is null)
         {
             invalid.Insert(0, "Employee");
@@ -142,6 +158,14 @@ public sealed class PayrollPaymentService(
             }
         }
 
+        foreach (var sheet in parts.Where(p => p.Line is not null).Select(p => p.Line!.Payroll).DistinctBy(p => p.Id))
+        {
+            if (PaidBeforeFinalized(sheet, request.PaidAt!.Value) is { } early)
+            {
+                return early;
+            }
+        }
+
         if (left > 0)
         {
             // An advance is for a seasonal worker who still works: a Left employee is paid on the payslips only (BR-LABOR-01, BR-LABOR-11), and a Staff employee is not paid through OMTS (BR-LABOR-09).
@@ -156,13 +180,13 @@ public sealed class PayrollPaymentService(
             parts.Add(new Part(null, left));
         }
 
-        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, employee);
+        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, employee, request.CashAccountId);
         return new StandalonePaymentResult(created[0].CashVoucherId);
     }
 
     /// <summary>Makes the payments and their vouchers in one save; with a request key, a parallel save of the same key that won is answered with its payments.</summary>
     private async Task<IReadOnlyList<WagePayment>> SaveAsync(
-        IReadOnlyList<Part> parts, DateTimeOffset paidAt, PaymentMethod method, string? note, string? requestKey, CancellationToken cancellationToken, Employee? employee = null)
+        IReadOnlyList<Part> parts, DateTimeOffset paidAt, PaymentMethod method, string? note, string? requestKey, CancellationToken cancellationToken, Employee? employee = null, Guid? cashAccountId = null)
     {
         var type = (await voucherTypes.GetByIdsAsync([CashVoucherTypeIds.PaymentPayroll], cancellationToken)).GetValueOrDefault(CashVoucherTypeIds.PaymentPayroll);
         var fund = CashBookRules.FundOfPayment(method);
@@ -177,6 +201,7 @@ public sealed class PayrollPaymentService(
                 Code = await codes.NextAsync(fund, CashDirection.Payment, cancellationToken),
                 Direction = CashDirection.Payment,
                 Fund = fund,
+                CashAccountId = fund == CashFund.Bank ? cashAccountId : null,
                 TypeId = CashVoucherTypeIds.PaymentPayroll,
                 OccurredAt = occurredAt,
                 VoucherDate = BusinessClock.ToBusinessDate(occurredAt),
@@ -234,6 +259,14 @@ public sealed class PayrollPaymentService(
         return made;
     }
 
+    /// <summary>L16: wages are paid after the sheet is finalized; a payment dated before that day is refused (400, field Paid at).</summary>
+    private static AppError? PaidBeforeFinalized(Payroll sheet, DateTimeOffset paidAt) =>
+        sheet.FinalizedAt is { } finalized && BusinessClock.ToBusinessDate(paidAt) < BusinessClock.ToBusinessDate(finalized)
+            ? new AppError(
+                ErrorKind.Validation, PayrollMessages.PaidBeforeFinalized(sheet.Code, BusinessClock.ToBusinessDate(finalized)),
+                new Dictionary<string, object?> { ["field"] = "Paid at", ["finalizedOn"] = BusinessClock.ToBusinessDate(finalized) })
+            : null;
+
     private async Task<IReadOnlyList<WagePayment>> Existing(string key, CancellationToken cancellationToken) =>
         await payments.ListByRequestKeyAsync(key, cancellationToken);
 
@@ -245,6 +278,23 @@ public sealed class PayrollPaymentService(
         var what = line is null ? "Tạm ứng lương" : $"Trả lương {line.Code} ({line.Payroll.Code})";
         var text = SupplierPaymentRules.Trimmed(note);
         return text is null ? what : $"{what}: {text}";
+    }
+
+    /// <summary>The fund the money leaves: Cash takes no account; a bank transfer may name an active Bank account of the cooperative (none is allowed, as before the choice existed).</summary>
+    private async Task<bool> AccountAllowedAsync(PaymentMethod? method, Guid? accountId, CancellationToken cancellationToken)
+    {
+        if (accountId is null)
+        {
+            return true;
+        }
+
+        if (method != PaymentMethod.BankTransfer)
+        {
+            return false;
+        }
+
+        var account = (await accounts.GetByIdsAsync([accountId.Value], cancellationToken)).GetValueOrDefault(accountId.Value);
+        return account is { IsActive: true, Kind: CashAccountKind.Bank };
     }
 
     private List<string> InvalidFields(DateTimeOffset? paidAt, PaymentMethod? method, string? note, string? requestKey)

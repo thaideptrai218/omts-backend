@@ -19,9 +19,9 @@ public class PurchaseRequestQaPermissionsTests(AuthApiFactory factory) : IClassF
     private static JsonElement Function(JsonElement permissions, string code) =>
         Functions(permissions).Single(f => f.Text("function") == code);
 
-    // allZones is read by the menus. For a manager of zone A it says PURCHASE_REQUESTS View, and no other function changes.
+    // allZones is read by the menus. A manager of zone A has no PURCHASE_REQUESTS row any more (decision of 20/11/2026), and every other function stays in zone A.
     [Fact]
-    public async Task All_zones_on_purchase_requests_widens_nothing_else_for_a_manager_of_one_zone()
+    public async Task A_manager_of_one_zone_has_no_purchase_requests_row_and_every_other_function_stays_in_its_zone()
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var other = await factory.AddZoneAsync(NewCode());
@@ -31,10 +31,7 @@ public class PurchaseRequestQaPermissionsTests(AuthApiFactory factory) : IClassF
 
         var permissions = await (await manager.GetAsync("/api/me/permissions")).ReadAsync(HttpStatusCode.OK);
 
-        var row = Function(permissions, PermissionFunctions.PurchaseRequests);
-        Assert.True(row.GetProperty("allZones").GetBoolean());
-        Assert.Empty(row.GetProperty("zoneIds").EnumerateArray());
-        Assert.Equal(["View"], row.GetProperty("actions").EnumerateArray().Select(a => a.GetString()!).ToList());
+        Assert.DoesNotContain(Functions(permissions), f => f.Text("function") == PermissionFunctions.PurchaseRequests);
 
         // Every all-zones row is a function with no zone on its records; every other row stays in this one zone.
         foreach (var function in Functions(permissions))
@@ -50,10 +47,12 @@ public class PurchaseRequestQaPermissionsTests(AuthApiFactory factory) : IClassF
         using var scope = factory.Services.CreateScope();
         var access = (await scope.ServiceProvider.GetRequiredService<PermissionService>().GetAccessAsync(staff.Id, CancellationToken.None))!;
         Assert.False(access.Allows(PermissionFunctions.PurchaseRequests, PermissionAction.Edit, PermissionScope.AnyZone, null));
+        Assert.False(access.Allows(PermissionFunctions.PurchaseRequests, PermissionAction.View, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(PermissionFunctions.PurchaseRequests, PermissionAction.Edit, PermissionScope.ZoneScoped, zone.Id));
         Assert.False(access.Allows(PermissionFunctions.CultivationLogs, PermissionAction.View, PermissionScope.ZoneScoped, other.Id));
+        // Sales are the Owner's alone: the manager reads no invoice, in its own zone or another.
         Assert.False(access.Allows(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.ZoneScoped, other.Id));
-        Assert.True(access.Allows(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.ZoneScoped, zone.Id));
+        Assert.False(access.Allows(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.ZoneScoped, zone.Id));
     }
 
     [Fact]

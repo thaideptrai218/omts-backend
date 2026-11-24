@@ -151,7 +151,7 @@ public class PayrollListExportAndAccessTests
     }
 
     [Fact]
-    public async Task Only_the_cooperative_owner_uses_the_payroll_by_a_fixed_rule_whatever_roles_say()
+    public async Task Only_the_cooperative_owner_changes_the_payroll_and_the_accountant_only_reads_and_exports_it_by_a_fixed_rule_whatever_roles_say()
     {
         await using var factory = new AuthApiFactory();
         var s = await SetupWorkAsync(factory);
@@ -182,6 +182,13 @@ public class PayrollListExportAndAccessTests
             foreach (var (who, expected) in new[] { (accountant, HttpStatusCode.Forbidden), (zoneManager, HttpStatusCode.Forbidden), (anonymous, HttpStatusCode.Unauthorized) })
             {
                 var response = await who.SendAsync(new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body) });
+                // The Accountant views and exports the payroll (PAYROLL View and Export, decision of 19/11/2026): its reads are not refused, whatever the unknown id then answers.
+                if (who == accountant && method == HttpMethod.Get)
+                {
+                    Assert.True(response.StatusCode != HttpStatusCode.Forbidden && response.StatusCode != HttpStatusCode.Unauthorized, $"{method} {url}: the Accountant was refused with {(int)response.StatusCode}");
+                    continue;
+                }
+
                 Assert.True(response.StatusCode == expected, $"{method} {url}: expected {(int)expected}, got {(int)response.StatusCode}");
                 if (expected == HttpStatusCode.Forbidden)
                 {

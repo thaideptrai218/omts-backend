@@ -17,7 +17,7 @@ public class SalesInvoicePaymentTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 400m)], Cash(4_000_000m, "PayLater"));
 
         var (code, field, question) = await (await client.PostInvoiceAsync(body)).QuestionAsync();
@@ -49,7 +49,7 @@ public class SalesInvoicePaymentTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
 
         Assert.Equal(["Cash amount"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m)))).InvalidFieldsAsync());
         Assert.Equal(["Cash amount"], await (await client.PostInvoiceAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m)))).InvalidFieldsAsync());
@@ -63,7 +63,7 @@ public class SalesInvoicePaymentTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         await client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId));
         Assert.Equal(300_000m, await client.CustomerDebtAsync(sale.CustomerId));
 

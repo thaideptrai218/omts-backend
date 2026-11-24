@@ -35,6 +35,11 @@ public sealed class EmployeeWorkingZoneService(
         }
 
         var caller = await callers.GetAsync(cancellationToken);
+        if (!caller.Sees(employee))
+        {
+            return AppError.NotFound;
+        }
+
         if (!caller.HasZone(zoneId))
         {
             return AppError.Forbidden;

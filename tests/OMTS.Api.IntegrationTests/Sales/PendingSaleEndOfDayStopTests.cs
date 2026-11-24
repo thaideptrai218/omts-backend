@@ -25,7 +25,7 @@ public class PendingSaleEndOfDayStopTests
     private static readonly DateOnly Today = FarmingTestKit.Today;
 
     private static async Task<string> AwaitAsync(SaleSetup sale, decimal kg = 10m) =>
-        (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr()))).Code();
+        (await sale.Owner.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, kg)], VietQr()))).Code();
 
     // The cut is the start of the business day in UTC+7: 13/11 begins at 17:00 UTC on 12/11.
     [Fact]
@@ -45,8 +45,8 @@ public class PendingSaleEndOfDayStopTests
         var transferred = await AwaitAsync(sale);
         var byHand = await AwaitAsync(sale);
         var changed = await AwaitAsync(sale);
-        await (await sale.Manager.Client.ChangePaymentAsync(changed, Cash(300_000m))).ReadAsync(HttpStatusCode.Created);
-        await (await sale.Manager.Client.StopAsync(byHand, confirmed: true)).ReadAsync(HttpStatusCode.OK);
+        await (await sale.Owner.Client.ChangePaymentAsync(changed, Cash(300_000m))).ReadAsync(HttpStatusCode.Created);
+        await (await sale.Owner.Client.StopAsync(byHand, confirmed: true)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("CompletedSale", (await api.TransferAsync(transferred, 300_000m)).Outcome());
         var job = api.Services.GetRequiredService<PendingSaleEndOfDayStopJob>();
 
@@ -64,12 +64,12 @@ public class PendingSaleEndOfDayStopTests
         Assert.Equal(PendingSaleStatus.Completed, (await api.PendingRowAsync(transferred)).Status);
         Assert.Equal(PendingSaleStatus.PaymentChanged, (await api.PendingRowAsync(changed)).Status);
         var byHandRow = await api.PendingRowAsync(byHand);
-        Assert.Equal((PendingSaleStatus.Stopped, sale.Manager.Account.Id), (byHandRow.Status, byHandRow.EndedByAccountId));
+        Assert.Equal((PendingSaleStatus.Stopped, sale.Owner.Account.Id), (byHandRow.Status, byHandRow.EndedByAccountId));
 
         // BR-SALE-08: nothing saved on the invoice side for the stopped sale; the sale that was completed keeps its invoice.
         Assert.Equal(0, await api.QueryAsync(db => db.SalesInvoices.CountAsync(i => i.Code == overdue)));
         Assert.Equal(1, await api.QueryAsync(db => db.SalesInvoices.CountAsync(i => i.Code == transferred)));
-        Assert.Equal("Stopped", (await sale.Manager.Client.PolledAsync(overdue)).GetProperty("status").GetString());
+        Assert.Equal("Stopped", (await sale.Owner.Client.PolledAsync(overdue)).GetProperty("status").GetString());
 
         // One audit row for the stop of the system (no account, no employee, the reason says why) beside the one of the stop by hand, which keeps its actor.
         var audit = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().Where(e => e.Action == PendingSaleWriter.StoppedAction).ToListAsync());
@@ -78,7 +78,7 @@ public class PendingSaleEndOfDayStopTests
         Assert.Null(system.ActorAccountId);
         Assert.Null(system.ActorEmployeeId);
         Assert.Equal((PendingSaleWriter.EndOfDayStopReason, sale.ZoneId), (system.Reason, system.ZoneId));
-        Assert.Equal(sale.Manager.Account.Id, Assert.Single(audit, e => e.RecordCode == byHand).ActorAccountId);
+        Assert.Equal(sale.Owner.Account.Id, Assert.Single(audit, e => e.RecordCode == byHand).ActorAccountId);
 
         // A second run, even for a later day, changes nothing: the sales have ended.
         Assert.Equal(new PendingSaleEndOfDayRun(0), await job.RunOnceAsync(Today.AddDays(1)));

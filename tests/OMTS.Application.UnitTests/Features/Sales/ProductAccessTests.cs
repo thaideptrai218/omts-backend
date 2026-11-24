@@ -31,7 +31,8 @@ public sealed class ProductAccessTests
     [Fact]
     public void The_fixed_roles_keep_their_readers()
     {
-        Assert.Equal(ProductReader.Seller, ProductAccess.ReaderOf(Staff(Pair(FixedRoles.ZoneManager))));
+        // Since 20/11/2026 the Zone Manager sells nothing, so it reads the catalogue as a viewer of harvest lots (the screens treat Seller and Viewer alike).
+        Assert.Equal(ProductReader.Viewer, ProductAccess.ReaderOf(Staff(Pair(FixedRoles.ZoneManager))));
         Assert.Equal(ProductReader.Viewer, ProductAccess.ReaderOf(Staff(Pair(FixedRoles.Accountant))));
         Assert.Equal(ProductReader.Owner, ProductAccess.ReaderOf(new AccountAccess(Guid.NewGuid(), SubjectType.CooperativeOwner, false, true, [])));
     }

@@ -31,7 +31,7 @@ public static class TraceCorrectionTestKit
     public static async Task<TracedRaft> TracedRaftAsync(this AuthApiFactory factory)
     {
         var raft = await factory.SeededRaftAsync();
-        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1));
         var manager = await factory.ManagerAsync(raft.ZoneId);
         return new TracedRaft(raft.Owner, manager, raft.ZoneId, raft.RaftId, raft.CycleId, raft.Lot, raft.Session, lot);
     }

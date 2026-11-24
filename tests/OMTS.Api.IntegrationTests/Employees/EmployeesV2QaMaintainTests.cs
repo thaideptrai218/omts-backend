@@ -50,7 +50,8 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
 
         var kept = await (await managerA.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zoneA).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
 
-        Assert.Equal(2, kept.GetProperty("employee").GetProperty("workingZones").GetArrayLength());
+        // The answer shows only the zones the manager sees (24/11/2026); the zone of the other manager stays stored.
+        Assert.Equal([zoneA.Id], kept.GetProperty("employee").GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("id").GetGuid()));
         Assert.Equal(new[] { zoneA.Id, zoneB.Id }.Order(), await ZonesAsync(id));
         var dropped = await (await managerA.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zoneB).With("rowVersion", RowVersionOf(kept)))).JsonAsync(HttpStatusCode.OK);
 
@@ -123,7 +124,7 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
 
     // GFR-02: "A refused action shows MSG-GEN-08". The rights are checked after the fields on these two routes.
     [Fact]
-    public async Task L6_a_manager_of_another_zone_gets_msg_gen_08_whatever_they_send_on_end_and_resume()
+    public async Task L6_a_manager_of_another_zone_does_not_find_the_employee_whatever_they_send_on_end_and_resume()
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
@@ -135,8 +136,9 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
         var futureDate = await other.PostEndAsync(employed, await EndBodyAsync(owner, employed, Today().AddDays(1)));
         var badPhone = await other.PostAsJsonAsync($"/api/employees/{left}/resume", new { rowVersion = await CurrentVersionAsync(owner, left), phoneNumber = "123" });
 
-        Assert.Equal("MSG-GEN-08", await futureDate.ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await badPhone.ErrorCodeAsync());
+        // Owner decision of 24/11/2026: an employee with no working zone among the manager's zones is not there for it.
+        Assert.Equal(HttpStatusCode.NotFound, futureDate.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, badPhone.StatusCode);
     }
 
     [Fact]

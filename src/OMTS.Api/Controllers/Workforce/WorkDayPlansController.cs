@@ -24,13 +24,13 @@ public sealed class WorkDayPlansController(WorkDayPlanService plans) : Controlle
     [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.AnyZone)]
     public async Task<IActionResult> Purchase(Guid id, CancellationToken ct) => (await plans.ForPurchaseAsync(id, ct)).ToActionResult(value => new JsonResult(value));
     [HttpGet("responsibles")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]
     public async Task<IActionResult> Responsibles(Guid raftId, CancellationToken ct) => (await plans.ResponsiblesAsync(raftId, ct)).ToActionResult(Ok);
     [HttpPost]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]
     public async Task<IActionResult> Create(SaveWorkDayPlan input, CancellationToken ct) => (await plans.SaveAsync(null, input, ct)).ToActionResult(Ok);
     [HttpPut("{id:guid}")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Edit, PermissionScope.AnyZone)]
     public async Task<IActionResult> Update(Guid id, SaveWorkDayPlan input, CancellationToken ct) => (await plans.SaveAsync(id, input, ct)).ToActionResult(Ok);
     [HttpPost("{id:guid}/response")]
     [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]

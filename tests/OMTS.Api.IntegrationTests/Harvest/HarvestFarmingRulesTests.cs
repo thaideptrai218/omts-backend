@@ -112,7 +112,7 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var owner = raft.Owner.Client;
         await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 100m);
 
-        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", "late"));
+        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(raft.RaftId, new HarvestFields { Cages = "8" }, "true", "late"));
 
         var lot = (await saved.ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
         Assert.Equal(JsonValueKind.Null, lot.GetProperty("overPlanReason").ValueKind);
@@ -145,16 +145,16 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
     [Fact]
     public async Task Finish_harvest_marks_a_lane_being_harvested_without_a_lot_edit_is_idempotent_and_audited()
     {
-        var raft = await factory.SeededRaftAsync();
+        var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        var lot = await owner.HarvestLotAsync(raft.RaftId);
 
         var first = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal((1, "Harvested", true, lot.Text("lotCode")), (first.GetProperty("laneNumber").GetInt32(), first.Text("state"), first.GetProperty("changed").GetBoolean(), first.Text("lotCode")));
         Assert.False(first.GetProperty("everySeededLaneHarvested").GetBoolean());
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(["Harvested", "BeingHarvested", "Growing"], [screen.HarvestStateOf(1), screen.HarvestStateOf(2), screen.HarvestStateOf(3)]);
+        Assert.Equal(["Harvested", "BeingHarvested", "NotSeeded"], [screen.HarvestStateOf(1), screen.HarvestStateOf(2), screen.HarvestStateOf(3)]);
         Assert.Equal([1], (await owner.GetHarvestLotAsync(lot.Id())).Numbers("finishedLaneNumbers"));
 
         var second = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).ReadAsync(HttpStatusCode.OK);
@@ -177,9 +177,9 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
     [Fact]
     public async Task Finish_harvest_is_refused_for_a_lane_with_no_lot_an_unknown_lane_a_stranger_and_a_raft_with_no_cycle()
     {
-        var raft = await factory.SeededRaftAsync();
+        var raft = await factory.SeededRaftAsync(1);
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        await owner.HarvestLotAsync(raft.RaftId);
 
         var growing = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/2/finish-harvest", null)).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-GEN-09", growing.Text("code"));
@@ -212,7 +212,7 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal((6m, 300m, 1000m, 700m), (screen.Kg("harvestedCages"), screen.Kg("harvestedKg"), screen.Kg("targetYieldKg"), screen.Kg("remainingKg")));
         var one = screen.GetProperty("lanes")[0];
-        Assert.Equal((2, 4m, true, true, "BeingHarvested"), (one.GetProperty("lotCount").GetInt32(), one.Kg("harvestedCages"), one.GetProperty("canHarvest").GetBoolean(), one.GetProperty("canFinish").GetBoolean(), one.Text("state")));
+        Assert.Equal((2, 3m, true, true, "BeingHarvested"), (one.GetProperty("lotCount").GetInt32(), one.Kg("harvestedCages"), one.GetProperty("canHarvest").GetBoolean(), one.GetProperty("canFinish").GetBoolean(), one.Text("state")));
         Assert.Equal(Today.ToString("yyyy-MM-dd"), one.Text("lastHarvestDate"));
         Assert.Single(one.GetProperty("seedLotCodes").EnumerateArray());
         var two = screen.GetProperty("lanes")[1];
@@ -330,17 +330,18 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(125m, closedBody.GetProperty("summary").Kg("kgHarvested"));
     }
 
-    private static Task<MultipartFormDataContent> WithConfirmationAsync(HttpClient client, HarvestFields fields, string confirm, string? reason)
+    private static async Task<MultipartFormDataContent> WithConfirmationAsync(Guid raftId, HarvestFields fields, string confirm, string? reason)
     {
-        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026).
-        var form = (fields.Photos.Count == 0 ? fields with { Photos = [FarmingTestKit.Jpeg] } : fields).ToForm();
+        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026) and a line of a harvest plan.
+        var planned = await (fields.Photos.Count == 0 ? fields with { Photos = [FarmingTestKit.Jpeg] } : fields).PlannedAsync(raftId);
+        var form = planned.ToForm();
         form.Add(new StringContent(confirm), "confirmOverPlan");
         if (reason is not null)
         {
             form.Add(new StringContent(reason), "overPlanReason");
         }
 
-        return Task.FromResult(form);
+        return form;
     }
 
 }

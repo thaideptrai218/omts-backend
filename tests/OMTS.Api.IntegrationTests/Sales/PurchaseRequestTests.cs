@@ -118,8 +118,9 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         Assert.True(plan.IsSuccessStatusCode, await plan.Content.ReadAsStringAsync());
         var worker = await factory.LoginAsync(employeeAccount.Username);
         var invite = Assert.Single((await worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Today:yyyy-MM-dd}&to={Today.AddDays(2):yyyy-MM-dd}"))!);
-        var approval = await worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(true, null, invite.RowVersion));
-        Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
+        // The shift is a work assignment at once and the employee has nothing to answer (decision of 24/11/2026).
+        Assert.True(invite.Approved);
+        Assert.False(invite.CanRespond);
         row = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
         reply = reply with { RowVersion = row.RowVersion };
         var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", reply);
@@ -161,19 +162,19 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task Staff_with_view_can_read_but_only_owner_can_respond_and_filters_validate()
+    public async Task Staff_cannot_read_or_respond_only_the_owner_does_and_filters_validate()
     {
         var (trader, _, product) = await BuyerAsync(); var row = await SubmitAsync(trader, product);
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var role = await factory.RoleAsync(StaffRole.ZoneManager);
         await factory.GrantAsync(staff, StaffRole.ZoneManager, null); var client = await factory.LoginAsync(staff.Username);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/purchase-requests")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", Accept(row))).StatusCode);
         foreach (var query in new[] { "page=0", "pageSize=101", "pageSize=0", "page=2147483647" })
             Assert.Equal(HttpStatusCode.OK, (await trader.GetAsync("/api/me/purchases?" + query)).StatusCode);
         var page = await trader.GetFromJsonAsync<MyPurchases>("/api/me/purchases?status=AWAITING_RESPONSE&pageSize=1");
         Assert.Equal(1, page!.Total); Assert.Single(page.Requests);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-requests?statusId=3203")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await (await OwnerClientAsync()).GetAsync("/api/purchase-requests?statusId=3203")).StatusCode);
     }
 
     [Fact]

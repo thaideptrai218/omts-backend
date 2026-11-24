@@ -48,11 +48,11 @@ public class ProvenanceWithdrawalQaSqlServerTests
 
     /// <summary>A sale of 1 kg of the lot; <paramref name="soldWholeLot"/> ticks "sold the whole lot", which closes the lot (and so writes its row).</summary>
     private static async Task<JsonElement> SellAsync(Setup setup, Guid lotId, Guid customerId, bool soldWholeLot = false) =>
-        (await setup.Manager.SellAsync(Invoice(customerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice), soldWholeLot ? [] : [lotId]))).GetProperty("invoice");
+        (await setup.Owner.SellAsync(Invoice(customerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice), soldWholeLot ? [] : [lotId]))).GetProperty("invoice");
 
     private static async Task<Guid> PublishedLotAsync(Setup setup)
     {
-        var lotId = (await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1))).Id();
+        var lotId = (await setup.Owner.HarvestLotOfLanesAsync(setup.RaftId, HarvestFields.OfLanes(1))).Id();
         await SellAsync(setup, lotId, setup.CustomerId);
         await (await setup.Owner.PostPublishAsync(lotId)).ReadAsync(HttpStatusCode.OK);
         return lotId;
@@ -98,7 +98,7 @@ public class ProvenanceWithdrawalQaSqlServerTests
                 invoices.Add((await SellAsync(setup, lotId, i % 2 == 0 ? setup.CustomerId : setup.OtherCustomerId)).Id());
             }
 
-            var answers = await Task.WhenAll(invoices.Select(id => setup.Manager.FinishAsync(id, true)));
+            var answers = await Task.WhenAll(invoices.Select(id => setup.Owner.FinishAsync(id, true)));
 
             var statuses = new List<string>();
             foreach (var a in answers)
@@ -148,8 +148,17 @@ public class ProvenanceWithdrawalQaSqlServerTests
 
     private sealed class HookedTraceQuery(ILotTraceQuery inner, SaleLinesHook hook) : ILotTraceQuery
     {
-        public Task<IReadOnlyList<HarvestLot>> SearchAsync(string? lotCode, string? invoiceCode, PermittedZones zones, int max, CancellationToken cancellationToken) =>
-            inner.SearchAsync(lotCode, invoiceCode, zones, max, cancellationToken);
+        public Task<IReadOnlyList<HarvestLot>> SearchAsync(
+            string? lotCode, string? invoiceCode, DateOnly? harvestFrom, DateOnly? harvestTo, string? raftCode, string? productName, PermittedZones zones, int max, CancellationToken cancellationToken) =>
+            inner.SearchAsync(lotCode, invoiceCode, harvestFrom, harvestTo, raftCode, productName, zones, max, cancellationToken);
+
+        public Task<IReadOnlyList<HarvestLot>> LotsOfSeedAsync(string term, PermittedZones zones, int max, CancellationToken cancellationToken) =>
+            inner.LotsOfSeedAsync(term, zones, max, cancellationToken);
+
+        public Task<IReadOnlyList<SeedLotInvoiceRow>> InvoicesOfLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+            inner.InvoicesOfLotsAsync(lotIds, cancellationToken);
+
+        public Task<LotTraceContext> ContextAsync(Guid lotId, CancellationToken cancellationToken) => inner.ContextAsync(lotId, cancellationToken);
 
         public Task<IReadOnlyList<LotSaleReturn>> SaleReturnsAsync(Guid lotId, CancellationToken cancellationToken) => inner.SaleReturnsAsync(lotId, cancellationToken);
 

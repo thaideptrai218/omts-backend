@@ -44,6 +44,13 @@ public static partial class PayrollRules
         _ => to.DayNumber - from.DayNumber < MaxCustomDays,
     };
 
+    /// <summary>Hours as the screens show them: 7.33 is "7h20" (whole minutes, so a total never shows fractions of an hour).</summary>
+    public static string HoursText(decimal hours)
+    {
+        var minutes = (int)Math.Round(hours * 60m, 0, MidpointRounding.AwayFromZero);
+        return $"{minutes / 60}h{(minutes % 60).ToString("00", CultureInfo.InvariantCulture)}";
+    }
+
     public static bool IsExpenseMonth(string? text) => text is not null && ExpenseMonthPattern().IsMatch(text);
 
     /// <summary>"BL000012" or "PL000345": the prefix and at least six digits.</summary>

@@ -14,17 +14,6 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
 {
     public static TheoryData<string, HarvestFields> InvalidFields => new()
     {
-        { "Lanes", new HarvestFields { Lanes = [] } },
-        { "Lanes", new HarvestFields { Lanes = ["1", "1"] } },
-        { "Lanes", new HarvestFields { Lanes = ["0"] } },
-        { "Lanes", new HarvestFields { Lanes = ["-1"] } },
-        { "Lanes", new HarvestFields { Lanes = ["99"] } },
-        { "Lanes", new HarvestFields { Lanes = ["x"] } },
-        { "Lanes", new HarvestFields { Lanes = ["1", ""] } },
-        { "Lanes", new HarvestFields { Lanes = ["99999999999"] } },
-        { "Finished lanes", new HarvestFields { Lanes = ["1"], Finished = ["2"] } },
-        { "Finished lanes", new HarvestFields { Lanes = ["1"], Finished = ["1", "1"] } },
-        { "Finished lanes", new HarvestFields { Lanes = ["1"], Finished = ["x"] } },
         { "Number of cages", new HarvestFields { Cages = null } },
         { "Number of cages", new HarvestFields { Cages = "0" } },
         { "Number of cages", new HarvestFields { Cages = "-8" } },
@@ -56,9 +45,9 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var raft = await factory.SeededRaftAsync();
 
-        var answer = await raft.Owner.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Lanes = [], Finished = ["2"], Cages = "0", EstimatedKg = "-1" });
+        var answer = await raft.Owner.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "0", EstimatedKg = "-1" });
 
-        Assert.Equal(["Lanes", "Finished lanes", "Number of cages", "Estimated kg"], await answer.InvalidFieldsAsync());
+        Assert.Equal(["Number of cages", "Estimated kg"], await answer.InvalidFieldsAsync());
     }
 
     [Theory]
@@ -75,42 +64,64 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(saved, lot.Kg("estimatedKg"));
     }
 
-    // BR-HARVEST-01: only lanes In Use that are Growing or Being harvested.
+    // A lot harvests the raft (owner decision of 18/11/2026): the lanes of the form are not read, so a client cannot name a lane, finish one or send a wrong number.
+    [Theory]
+    [InlineData("1")]
+    [InlineData("99")]
+    [InlineData("x")]
+    public async Task The_lanes_and_finished_lanes_sent_by_a_client_are_ignored_and_the_lot_holds_every_harvestable_lane(string sent)
+    {
+        var raft = await factory.SeededRaftAsync();
+
+        var fields = await new HarvestFields { Lanes = [sent, sent], Finished = [sent], Photos = [Jpeg] }.PlannedAsync(raft.RaftId);
+
+        var saved = await (await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", fields.ToForm())).ReadAsync(HttpStatusCode.Created);
+
+        var lot = saved.GetProperty("lot");
+        Assert.Equal([1, 2, 3, 4, 5], lot.Numbers("laneNumbers"));
+        Assert.Empty(lot.Numbers("finishedLaneNumbers"));
+    }
+
+    // BR-HARVEST-01: only lanes In Use that are Growing or Being harvested; the others stay out of the lot, and with none left the harvest is refused naming the lanes.
     [Fact]
-    public async Task A_lane_with_no_seed_is_refused_and_named_and_nothing_is_saved()
+    public async Task A_lane_with_no_seed_stays_out_of_the_lot_and_a_raft_with_every_lane_harvested_is_refused()
     {
         var raft = await factory.SeededRaftAsync(1, 2);
+        var owner = raft.Owner.Client;
 
-        var answer = await (await raft.Owner.Client.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(2, 3, 4))).ReadAsync(HttpStatusCode.BadRequest);
+        var lot = await owner.HarvestLotAsync(raft.RaftId);
 
-        Assert.Equal(("Lanes", "Lanes 3, 4 cannot be harvested now."), (answer.Text("field"), answer.Text("hint")));
-        Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
+        Assert.Equal([1, 2], lot.Numbers("laneNumbers"));
+        await owner.FinishLanesAsync(raft.RaftId, 1, 2);
+        var refused = await (await owner.PostHarvestAsync(raft.RaftId)).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "Lanes"), (refused.Text("code"), refused.Text("field")));
+        Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
     }
 
     [Fact]
-    public async Task A_removed_lane_is_refused()
+    public async Task A_removed_lane_stays_out_of_the_lot()
     {
-        var raft = await factory.SeededRaftAsync(1);
+        var raft = await factory.SeededRaftAsync();
         await factory.UpdateAsync<Lane>(await factory.QueryAsync(db => Task.FromResult(db.Lanes.Single(l => l.RaftId == raft.RaftId && l.LaneNumber == 5).Id)), l => l.StatusId = StatusIds.Lane.Removed);
 
-        var answer = await (await raft.Owner.Client.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(5))).ReadAsync(HttpStatusCode.BadRequest);
+        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId);
 
-        Assert.Equal("Lanes", answer.Text("field"));
+        Assert.Equal([1, 2, 3, 4], lot.Numbers("laneNumbers"));
     }
 
     [Fact]
-    public async Task A_lane_being_harvested_stays_choosable_and_several_lanes_finish_in_one_lot()
+    public async Task A_lane_being_harvested_stays_in_the_next_lot_and_several_lanes_finish_by_their_own_action()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        await owner.HarvestLotAsync(raft.RaftId);
 
-        var second = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2, 3).FinishedLanes(1, 3));
+        var second = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(1, 3));
 
-        Assert.Equal([1, 2, 3], second.Numbers("laneNumbers"));
-        Assert.Equal([1, 3], second.Numbers("finishedLaneNumbers"));
+        Assert.Equal([1, 2, 3, 4, 5], second.Numbers("laneNumbers"));
+        Assert.Equal([1, 3], (await owner.GetHarvestLotAsync(second.Id())).Numbers("finishedLaneNumbers"));
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(["Harvested", "BeingHarvested", "Harvested", "Growing", "Growing"], Enumerable.Range(1, 5).Select(lane => screen.HarvestStateOf(lane)));
+        Assert.Equal(["Harvested", "BeingHarvested", "Harvested", "BeingHarvested", "BeingHarvested"], Enumerable.Range(1, 5).Select(lane => screen.HarvestStateOf(lane)));
     }
 
     [Fact]
@@ -177,8 +188,8 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("NotSeeded", empty.HarvestStateOf(3));
         Assert.False(empty.CanHarvest(3));
 
-        var first = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var second = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        var first = await owner.HarvestLotAsync(raft.RaftId);
+        var second = await owner.HarvestLotAsync(raft.RaftId);
         await factory.UpdateAsync<OMTS.Domain.Entities.Harvest.HarvestLot>(second.Id(), l => l.StatusId = StatusIds.HarvestLot.Closed);
 
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
@@ -187,10 +198,10 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var row = screen.GetProperty("lots")[0];
         Assert.Equal((0m, 400m), (row.Kg("invoicedKg"), row.Kg("remainingKg")));
         Assert.Equal("NotPublished", row.Text("originState"));
-        Assert.Equal([1], row.Numbers("laneNumbers"));
+        Assert.Equal([1, 2], row.Numbers("laneNumbers"));
 
         // Every seeded lane Harvested: nothing is left to record, though lanes have no seed.
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2));
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(1, 2));
         Assert.False((await owner.HarvestScreenAsync(raft.RaftId)).GetProperty("canRecordHarvest").GetBoolean());
     }
 
@@ -204,6 +215,10 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         Assert.False(saved.GetProperty("everySeededLaneHarvested").GetBoolean());
         Assert.Equal(("Harvest lot saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
+        // A lot awaiting weighing shows no remaining kg from its estimate (owner decision of 18/11/2026): the figures count once it is weighed at the estimate.
+        var recorded = await manager.Client.GetHarvestLotAsync(saved.GetProperty("lot").Id());
+        Assert.Equal(0m, recorded.GetProperty("figures").Kg("remainingKg"));
+        await manager.Client.WeighAtEstimateAsync(recorded);
         var lot = await manager.Client.GetHarvestLotAsync(saved.GetProperty("lot").Id());
         var figures = lot.GetProperty("figures");
         Assert.Equal((0m, 0m, 0m, 100m, 0m, 100m), (figures.Kg("invoicedKg"), figures.Kg("returnedKg"), figures.Kg("soldKg"), figures.Kg("remainingKg"), figures.Kg("lostKg"), figures.Kg("differenceKg")));

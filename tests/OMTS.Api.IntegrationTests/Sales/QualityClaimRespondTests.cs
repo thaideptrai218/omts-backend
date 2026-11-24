@@ -152,28 +152,28 @@ public class QualityClaimRespondTests
 
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.GetAsync($"/api/quality-claims/{c.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.AcceptClaimAsync(c.Id, c.RowVersion)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.World.Sale.Manager.Client.AcceptClaimAsync(c.Id, c.RowVersion)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.World.Sale.Accountant.Client.AcceptClaimAsync(c.Id, c.RowVersion)).StatusCode);
     }
 
     [Fact]
-    public async Task Zone_managers_read_claims_of_their_zones_only_the_accountant_none_and_awaiting_comes_first()
+    public async Task Only_the_owner_reads_claims_no_staff_does_and_awaiting_comes_first()
     {
         using var api = new QualityClaimApiFactory();
         var c = await ClaimedAsync(api);
         var answered = await ClaimedAsync(api);
         await (await answered.Owner.RejectClaimAsync(answered.Id, answered.RowVersion)).ReadAsync(HttpStatusCode.OK);
-        var manager = c.World.Sale.Manager.Client;
+        // Quality claims are the Owner's alone (decision of 20/11/2026): the staff of the zone of the invoice and the Accountant read none.
+        var staff = c.World.Sale.Accountant.Client;
 
-        var mine = await (await manager.GetAsync("/api/quality-claims")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(c.Id, mine.GetProperty("items").EnumerateArray().Single().Id());
-        Assert.Equal(c.World.Trader.Profile.Name, mine.GetProperty("items")[0].GetProperty("customer").Text("name"));
-        var detail = await manager.ClaimAsStaffAsync(c.Id);
+        var detail = await c.Owner.ClaimAsStaffAsync(c.Id);
+        Assert.Equal(c.World.Trader.Profile.Name, detail.GetProperty("customer").Text("name"));
         Assert.Equal(c.World.Sale.ZoneId, detail.GetProperty("invoice").GetProperty("zoneId").GetGuid());
         Assert.Equal(c.World.Trader.Profile.PhoneNumber, detail.GetProperty("customer").Text("phoneNumber"));
         Assert.Equal(300_000m, detail.GetProperty("invoice").GetProperty("total").GetDecimal());
         Assert.Equal(30_000m, detail.GetProperty("invoice").GetProperty("lines")[0].GetProperty("unitPrice").GetDecimal());
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync($"/api/quality-claims/{answered.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync("/api/quality-claims")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"/api/quality-claims/{answered.Id}")).StatusCode);
         var accountant = await api.AccountantAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.GetAsync("/api/quality-claims")).StatusCode);
 

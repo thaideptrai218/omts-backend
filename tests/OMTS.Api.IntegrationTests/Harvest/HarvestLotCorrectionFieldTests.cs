@@ -73,7 +73,7 @@ public class HarvestLotCorrectionFieldTests
             (new HarvestFields { Lanes = [] }, "Lanes"),
             (new HarvestFields { Lanes = ["1", "1"] }, "Lanes"),
             (new HarvestFields { Lanes = ["99"] }, "Lanes"),
-            (new HarvestFields { Finished = ["2"] }, "Finished lanes"),
+            (new HarvestFields { Lanes = ["1"], Finished = ["2"] }, "Finished lanes"),
         })
         {
             var refused = await (await api.SendCorrectionAsync(owner, lot.Id(), fields)).ReadAsync(HttpStatusCode.BadRequest);
@@ -91,7 +91,7 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
 
         api.Clock.At = InVietnam(10, 28);
-        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
+        var correction = new HarvestCorrection(new HarvestFields { Lanes = ["1", "2", "3", "4", "5"], Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
         var form = correction.ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T00:00:00+07:00"), "harvestedAt");
@@ -110,10 +110,12 @@ public class HarvestLotCorrectionFieldTests
     public async Task Lanes_are_added_and_taken_out_and_the_states_are_worked_out_again()
     {
         using var api = new AuthApiFactory();
-        var raft = await api.SeededRaftAsync();
+        // Lane 3 alone is in a first lot; the other lanes are seeded after it, so the second lot (the whole raft) is the only one to hold lanes 1, 2, 4 and 5.
+        var raft = await api.SeededRaftAsync(3);
         var owner = raft.Owner.Client;
-        var other = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(3));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 3).FinishedLanes(1));
+        var other = await owner.HarvestLotAsync(raft.RaftId);
+        await owner.RecordSeedingAsync(raft.CycleId, raft.Lot.Session([1, 2, 4, 5]));
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(1));
 
         var saved = await api.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(2, 4).FinishedLanes(4));
 

@@ -76,8 +76,19 @@ public sealed class SalesDoubleApiFactory : AuthApiFactory
 /// <summary>HARVEST-01.1 calls.</summary>
 public static class HarvestLotCorrectionTestKit
 {
-    public static Task<HttpResponseMessage> PutHarvestLotAsync(this HttpClient client, Guid lotId, HarvestCorrection correction) =>
-        client.PutAsync($"/api/harvest-lots/{lotId}", correction.ToForm());
+    /// <summary>
+    /// Sends the correction. One that names no lanes keeps the lanes of the lot (a lot holds the whole raft since 18/11/2026, so a test rarely names them): the lanes are read from the lot as this caller sees it.
+    /// </summary>
+    public static async Task<HttpResponseMessage> PutHarvestLotAsync(this HttpClient client, Guid lotId, HarvestCorrection correction)
+    {
+        if (correction.Fields.Lanes is null && await client.GetAsync($"/api/harvest-lots/{lotId}") is { IsSuccessStatusCode: true } read)
+        {
+            var lanes = (await read.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32().ToString()).ToList();
+            correction = correction with { Fields = correction.Fields with { Lanes = lanes } };
+        }
+
+        return await client.PutAsync($"/api/harvest-lots/{lotId}", correction.ToForm());
+    }
 
     public static Task<HttpResponseMessage> PostRemoveLotAsync(this HttpClient client, Guid lotId, string? reason, string? rowVersion) =>
         client.PostAsJsonAsync($"/api/harvest-lots/{lotId}/remove", new { reason, rowVersion });
@@ -97,6 +108,35 @@ public static class HarvestLotCorrectionTestKit
     /// <summary>A correction that must be saved: the whole answer.</summary>
     public static async Task<JsonElement> CorrectLotAsync(this AuthApiFactory factory, HttpClient client, Guid lotId, HarvestFields fields, IReadOnlyList<string>? keep = null) =>
         await (await factory.SendCorrectionAsync(client, lotId, fields, keep: keep)).ReadAsync(HttpStatusCode.OK);
+
+    /// <summary>
+    /// Records a lot of only the lanes <paramref name="fields"/> names, finished ones included, for a test that needs lanes in different lots. A lot recorded from a plan line holds the whole raft
+    /// (owner decision of 18/11/2026), so the kit records it and then takes the other lanes out by a correction of the lanes, which a client can still do; the lot is left awaiting weighing.
+    /// </summary>
+    public static async Task<JsonElement> RecordLotOfLanesAsync(this AuthApiFactory factory, HttpClient client, Guid raftId, HarvestFields fields)
+    {
+        var recorded = (await client.RecordHarvestAsync(raftId, fields with { Lanes = null, Finished = [] })).GetProperty("lot");
+        return (await factory.CorrectLotAsync(client, recorded.Id(), fields)).GetProperty("lot");
+    }
+
+    /// <summary>The lot of <see cref="RecordLotOfLanesAsync"/> weighed at its estimate, so it is Open and for sale.</summary>
+    public static async Task<JsonElement> HarvestLotOfLanesAsync(this AuthApiFactory factory, HttpClient client, Guid raftId, HarvestFields fields) =>
+        await client.WeighAtEstimateAsync(await factory.RecordLotOfLanesAsync(client, raftId, fields));
+
+    /// <summary>
+    /// <see cref="RecordLotOfLanesAsync(AuthApiFactory, HttpClient, Guid, HarvestFields)"/> for a host with a real database (SQL Server), where the lot view carries its own version: the version
+    /// the correction needs is read from it. A correction keeps the photos the lot has.
+    /// </summary>
+    public static async Task<JsonElement> RecordLotOfLanesAsync(this HttpClient client, Guid raftId, HarvestFields fields)
+    {
+        var recorded = (await client.RecordHarvestAsync(raftId, fields with { Lanes = null, Finished = [] })).GetProperty("lot");
+        var correction = new HarvestCorrection(fields, "Wrong count at sea", recorded.Text("rowVersion"), recorded.PhotoKeysOfLot());
+        return (await (await client.PutHarvestLotAsync(recorded.Id(), correction)).ReadAsync(HttpStatusCode.OK)).GetProperty("lot");
+    }
+
+    /// <summary>The lot of <see cref="RecordLotOfLanesAsync(HttpClient, Guid, HarvestFields)"/> weighed at its estimate, so it is Open and for sale.</summary>
+    public static async Task<JsonElement> HarvestLotOfLanesAsync(this HttpClient client, Guid raftId, HarvestFields fields) =>
+        await client.WeighAtEstimateAsync(await client.RecordLotOfLanesAsync(raftId, fields));
 
     public static async Task<HttpResponseMessage> SendRemovalAsync(this AuthApiFactory factory, HttpClient client, Guid lotId, string? reason = "Recorded by mistake") =>
         await client.PostRemoveLotAsync(lotId, reason, await factory.LotVersionAsync(lotId));

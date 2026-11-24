@@ -44,7 +44,8 @@ public static class WorkHoursCalculator
         for (var i = 0; i < ordered.Count; i++)
         {
             var from = i == 0 ? start : Max(start, ordered[i].StartsAt ?? start);
-            var to = i + 1 < ordered.Count ? Min(end, ordered[i + 1].StartsAt ?? end) : end;
+            // A period closed by a check-out (EndsAt) stops there: the time until the employee was assigned again is not worked. An EndsAt past the current check-out is ignored.
+            var to = Min(i + 1 < ordered.Count ? Min(end, ordered[i + 1].StartsAt ?? end) : end, ordered[i].EndsAt ?? end);
             if (to <= from)
             {
                 continue;

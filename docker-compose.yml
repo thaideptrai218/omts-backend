@@ -21,7 +21,7 @@ x-api: &api
     Push__Provider: Fake
     Ocr__Provider: Fake
     # Demo cooperative and first Owner (fake data); the seed gives the Owner the demo password listed in the README.
-    Bootstrap__Cooperative__FullName: "Hợp tác xã Nuôi hàu Vân Đồn"
+    Bootstrap__Cooperative__FullName: "HTX Thủy sản Trung Nam"
     Bootstrap__Owner__DisplayName: "Nguyễn Văn Hải"
     Bootstrap__Owner__Username: owner
     Bootstrap__Owner__PhoneNumber: "0900000001"

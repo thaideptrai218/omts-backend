@@ -119,10 +119,14 @@ public class SalesInvoicesMigrationAndDemoTests
                 .Select(i => new { i.Code, Zone = i.Zone.Code, i.PaymentTerm, i.Total, i.CustomerId, i.PurchaseRequestId, i.TakesRequestInFull, Creator = i.CreatedByAccountId, Payments = i.Payments.Sum(p => p.Amount) })
                 .ToListAsync());
             Assert.Equal(["HD000001", "HD000002"], invoices.Select(i => i.Code));
-            // 120 kg of the product of the lot at its list price (the lot of zone one holds "Hàu béo", 75,000 VND a kg).
-            Assert.Equal((SalesPaymentTerm.PayNow, 9_000_000m, 9_000_000m), (invoices[0].PaymentTerm, invoices[0].Total, invoices[0].Payments));
-            // 80 kg of the product of the lot of zone two ("Hàu sữa", 60,000 VND a kg).
-            Assert.Equal((SalesPaymentTerm.PayLater, 4_800_000m, 1_000_000m, false), (invoices[1].PaymentTerm, invoices[1].Total, invoices[1].Payments, invoices[1].TakesRequestInFull));
+            // A lot sells only the product its cycle farms ("Hàu bản địa Vân Đồn" 25,000 or "Hàu Thái Bình Dương" 35,000 VND a kg), so the totals are the kg at the list price of the product of each sale.
+            var prices = await UseDbAsync(api, db => db.SalesInvoices.OrderBy(i => i.Code)
+                .Select(i => i.Lines.Select(l => db.ProductUnits.Where(u => u.ProductId == l.ProductId && u.IsBase).Select(u => u.SalePrice).First()).First()).ToListAsync());
+            Assert.All(prices, price => Assert.Contains(price, new[] { 25_000m, 35_000m }));
+            // 120 kg of the product of the lot of zone one at its list price.
+            Assert.Equal((SalesPaymentTerm.PayNow, 120m * prices[0], 120m * prices[0]), (invoices[0].PaymentTerm, invoices[0].Total, invoices[0].Payments));
+            // 80 kg of the product of the lot of zone two.
+            Assert.Equal((SalesPaymentTerm.PayLater, 80m * prices[1], 1_000_000m, false), (invoices[1].PaymentTerm, invoices[1].Total, invoices[1].Payments, invoices[1].TakesRequestInFull));
             // Each demo sale is made from its own order (sales orders), not from a purchase request.
             Assert.True(await UseDbAsync(api, db => db.SalesInvoices.AllAsync(i => i.SalesOrderId != null)));
             var managers = await UseDbAsync(api, db => db.Accounts.Where(a => a.Username == "quanlyvung1" || a.Username == "quanlyvung2").OrderBy(a => a.Username).Select(a => a.Id).ToListAsync());

@@ -41,7 +41,7 @@ public class PublicProvenanceQaSqlServerTests
         var lotIds = new List<Guid>();
         for (var lane = 1; lane <= ManyLots; lane++)
         {
-            lotIds.Add((await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(lane))).Id());
+            lotIds.Add((await owner.HarvestLotOfLanesAsync(raftId, HarvestFields.OfLanes(lane))).Id());
         }
 
         await host.UseDbAsync(db =>

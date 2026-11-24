@@ -12,7 +12,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>SALE-04.3.E1 and the other refusals of a merge: nothing changes.</summary>
 public class CustomerMergeRefusalTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    private async Task<HttpClient> ManagerAsync() => await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
+    private async Task<HttpClient> ManagerAsync() => await factory.AccountantAsync(await factory.AddZoneAsync(NewCode()));
 
     private Task<Guid?> MergedIntoAsync(Guid id) =>
         factory.QueryAsync(db => db.Customers.Where(c => c.Id == id).Select(c => c.MergedIntoCustomerId).SingleAsync());

@@ -1,4 +1,8 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
@@ -8,12 +12,16 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Employees;
 
-/// <summary>LABOR-01 step 1: the employees of the cooperative, those of the caller's zones first (BR-LABOR-01).</summary>
+/// <summary>LABOR-01 step 1: the employees of the cooperative the caller sees, those of the caller's zones first (BR-LABOR-01); a caller limited to some zones sees only the employees with a working zone among them.</summary>
 public sealed class EmployeeQueryService(
     IEmployeeRepository employees,
     IAccountRepository accounts,
     EmployeeCallerAccess callers,
     EmployeeViewBuilder views,
+    IPayrollReader payrollReader,
+    IPayrollWorkReader workReader,
+    ICurrentUser currentUser,
+    PermissionService permissions,
     TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
@@ -32,7 +40,8 @@ public sealed class EmployeeQueryService(
     {
         // The upper bound keeps (page - 1) * pageSize inside int.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        var filter = FilterOf(query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
+        var caller = await callers.GetAsync(cancellationToken);
+        var filter = FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
         if (!filter.IsSuccess)
         {
             return filter.Error!;
@@ -43,9 +52,30 @@ public sealed class EmployeeQueryService(
             return new Paged<EmployeeListItem>([], page, pageSize, 0);
         }
 
-        var caller = await callers.GetAsync(cancellationToken);
         var (items, total) = await employees.SearchAsync(filter.Value, FirstZones(caller), page, pageSize, cancellationToken);
-        return new Paged<EmployeeListItem>(items.Select(e => views.ListItem(e, caller)).ToList(), page, pageSize, total);
+        var listed = items.Select(e => views.ListItem(e, caller)).ToList();
+        return new Paged<EmployeeListItem>(await WithPayrollFiguresAsync(listed, cancellationToken), page, pageSize, total);
+    }
+
+    /// <summary>
+    /// Adds the hours of this month and the wage still owed to each row for a caller with PAYROLL View (Owner, Accountant): one read of the month's work and one grouped read of the debts for the
+    /// whole page, never one per employee. Other callers get the rows as they are.
+    /// </summary>
+    private async Task<List<EmployeeListItem>> WithPayrollFiguresAsync(List<EmployeeListItem> rows, CancellationToken cancellationToken)
+    {
+        var access = currentUser.AccountId is { } accountId ? await permissions.GetAccessAsync(accountId, cancellationToken) : null;
+        if (rows.Count == 0 || access?.Allows(PermissionFunctions.Payroll, PermissionAction.View, PermissionScope.NoZone, null) != true)
+        {
+            return rows;
+        }
+
+        var ids = rows.Select(r => r.Id).ToList();
+        var today = timeProvider.Today();
+        var from = new DateOnly(today.Year, today.Month, 1);
+        var data = await workReader.LoadAsync(from, today, ids, cancellationToken);
+        var hours = data.Employees.ToDictionary(e => e.Id, e => PayrollCalculator.Calculate(e, from, today, data).Hours);
+        var owed = await payrollReader.OwedByEmployeeAsync(ids, cancellationToken);
+        return rows.Select(r => r with { MonthHours = hours.GetValueOrDefault(r.Id), OutstandingWage = owed.GetValueOrDefault(r.Id) }).ToList();
     }
 
     /// <summary>
@@ -61,15 +91,15 @@ public sealed class EmployeeQueryService(
             return AppError.Invalid("Ids", $"At most {MaxExportIds} employees.");
         }
 
+        var caller = await callers.GetAsync(cancellationToken);
         var filter = ids is { Count: > 0 }
-            ? FilterOf(null, null, null, null, null, query.SortBy, query.SortDir, ids)
-            : FilterOf(query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
+            ? FilterOf(caller, null, null, null, null, null, query.SortBy, query.SortDir, ids)
+            : FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
         if (!filter.IsSuccess)
         {
             return filter.Error!;
         }
 
-        var caller = await callers.GetAsync(cancellationToken);
         if (filter.Value is null)
         {
             return (Array.Empty<Employee>(), caller);
@@ -85,7 +115,7 @@ public sealed class EmployeeQueryService(
 
     /// <summary>The filter of the query; a success with null when the search text is longer than any name, code or number, so nothing can match.</summary>
     private Result<EmployeeSearchFilter?> FilterOf(
-        string? search, int? statusId, Guid? zoneId, EmployeeType? type, Guid? jobTypeId, string? sortBy, string? sortDir, IReadOnlyCollection<Guid>? ids)
+        EmployeeCaller caller, string? search, int? statusId, Guid? zoneId, EmployeeType? type, Guid? jobTypeId, string? sortBy, string? sortDir, IReadOnlyCollection<Guid>? ids)
     {
         if (type is { } t && !Enum.IsDefined(t))
         {
@@ -120,17 +150,19 @@ public sealed class EmployeeQueryService(
         }
 
         return Result<EmployeeSearchFilter?>.Success(new EmployeeSearchFilter(
-            text, PhoneNumbers.Normalize(text), statusId, zoneId, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids));
+            text, PhoneNumbers.Normalize(text), statusId, zoneId, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids, caller.VisibleZoneIds));
     }
 
     public async Task<Result<EmployeeView>> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        if (await employees.GetForEditAsync(id, cancellationToken) is not { } employee)
+        var caller = await callers.GetAsync(cancellationToken);
+        // An employee with no working zone among the caller's zones is not there for it.
+        if (await employees.GetForEditAsync(id, cancellationToken) is not { } employee || !caller.Sees(employee))
         {
             return AppError.NotFound;
         }
 
-        return await ViewAsync(employee, await callers.GetAsync(cancellationToken), cancellationToken);
+        return await ViewAsync(employee, caller, cancellationToken);
     }
 
     /// <summary>The view of a saved or read employee: whether a staff account has its phone number is asked here only.</summary>

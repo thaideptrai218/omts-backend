@@ -65,19 +65,14 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         }
     }
 
-    // PM 03/11: requests have no zone, so a Zone Manager of any zone reads them all; deciding is the Owner's (BR-SALE-02).
+    // Purchase requests are the Owner's alone (decision of 20/11/2026): a Zone Manager of any zone reads and answers none (BR-SALE-02).
     [Fact]
-    public async Task A_zone_manager_of_any_zone_reads_every_request_and_cannot_answer()
+    public async Task A_zone_manager_of_any_zone_reads_no_request_and_cannot_answer()
     {
         var (_, _, request) = await RequestAsync();
         var manager = await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
 
-        foreach (var call in StaffReads(manager, request.Id()))
-        {
-            Assert.Equal(HttpStatusCode.OK, (await call).StatusCode);
-        }
-
-        foreach (var call in StaffWrites(manager, request).Concat(TraderRoutes(manager, request)))
+        foreach (var call in StaffReads(manager, request.Id()).Concat(StaffWrites(manager, request)).Concat(TraderRoutes(manager, request)))
         {
             await (await call).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
@@ -86,14 +81,14 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
     }
 
     [Fact]
-    public async Task A_revoked_pair_reads_no_request_from_the_next_action()
+    public async Task A_zone_manager_pair_reads_no_request_before_or_after_it_is_revoked()
     {
         var (owner, _, request) = await RequestAsync();
         var zone = await factory.AddZoneAsync(NewCode());
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var pair = await factory.GrantAsync(staff, StaffRole.ZoneManager, zone);
         var manager = await factory.LoginAsync(staff.Username);
-        Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync($"/api/purchase-requests/{request.Id()}")).StatusCode);
+        await (await manager.GetAsync($"/api/purchase-requests/{request.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         (await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants/{pair.Id}/revoke", new { reason = "Moved" })).EnsureSuccessStatusCode();
 

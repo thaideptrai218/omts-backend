@@ -33,7 +33,7 @@ public class LotTraceQaTests
         var again = await owner.SeedLotAsync();
         await owner.HalveLaneAsync(raft.Session, 2);
         await owner.SeedingRecordAsync(raft.CycleId, again.Session([2], date: Today).Percents(50m, 2));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2));
         await api.UpdateAsync<PurchaseReceipt>(again.ReceiptId, r => r.StatusId = StatusIds.PurchaseReceipt.Cancelled);
 
         var trace = await owner.TraceAsync(lot.Id());
@@ -51,17 +51,17 @@ public class LotTraceQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 10m);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 10m);
         var zoneB = (await sale.Owner.Client.CreateZoneAsync()).Id();
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => i.ZoneId = zoneB);
         var managerB = await api.ManagerAsync(zoneB);
-        var allZones = await api.StaffAsync(null, StaffRole.ZoneManager);
 
         var trace = await sale.Manager.Client.TraceAsync(sale.LotId);
 
         var listed = Assert.Single(trace.GetProperty("invoices").EnumerateArray());
-        Assert.Equal((invoice.Text("code"), zoneB, sale.CustomerId, 10m), (listed.Text("invoiceCode"), listed.GetProperty("zoneId").GetGuid(),
-            listed.GetProperty("customerId").GetGuid(), listed.GetProperty("kg").GetDecimal()));
+        // The Zone Manager reads the invoice (code, zone, kg) but not its trader or its prices (decision of 20/11/2026).
+        Assert.Equal((invoice.Text("code"), zoneB, 10m), (listed.Text("invoiceCode"), listed.GetProperty("zoneId").GetGuid(), listed.GetProperty("kg").GetDecimal()));
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("customerId").ValueKind);
         var line = Assert.Single(listed.GetProperty("lines").EnumerateArray());
         Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (line.GetProperty("unitPrice").ValueKind, line.GetProperty("amount").ValueKind));
         var forward = (await (await sale.Manager.Client.GetTraceExportAsync(sale.LotId)).SheetsAsync())["Forward"];
@@ -70,7 +70,7 @@ public class LotTraceQaTests
         Assert.Equal(HttpStatusCode.Forbidden, (await managerB.Client.GetTraceAsync(sale.LotId)).StatusCode);
         Assert.Empty(await managerB.Client.FoundAsync(invoiceCode: invoice.Text("code")));
 
-        foreach (var client in new[] { allZones.Client, sale.Owner.Client })
+        foreach (var client in new[] { sale.Owner.Client })
         {
             var full = await client.TraceAsync(sale.LotId);
             Assert.Equal(ListPrice, full.GetProperty("invoices")[0].GetProperty("lines")[0].GetProperty("unitPrice").GetDecimal());
@@ -88,9 +88,9 @@ public class LotTraceQaTests
         var sale = await api.SaleSetupAsync();
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = "=1+2");
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => l.LotCode = "KV/01 B:01*\"x");
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 2.5m);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 2.5m);
 
-        var export = await sale.Manager.Client.GetTraceExportAsync(sale.LotId);
+        var export = await sale.Owner.Client.GetTraceExportAsync(sale.LotId);
 
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
         var name = export.Content.Headers.ContentDisposition?.FileNameStar ?? export.Content.Headers.ContentDisposition?.FileName?.Trim('"');
@@ -114,7 +114,7 @@ public class LotTraceQaTests
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(4, 5));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(4, 5));
         await api.UpdateAsync<CultivationCycle>(raft.CycleId, c => (c.StatusId, c.CloseDate) = (StatusIds.CultivationCycle.Closed, Today.AddDays(-2)));
         var lane5 = await api.QueryAsync(db => db.Lanes.Where(l => l.RaftId == raft.RaftId && l.LaneNumber == 5).Select(l => l.Id).SingleAsync());
         await api.UpdateAsync<Lane>(lane5, l => l.StatusId = StatusIds.Lane.Removed);
@@ -137,7 +137,7 @@ public class LotTraceQaTests
     {
         using var api = new AuthApiFactory();
         var t = await api.TracedRaftAsync();
-        var second = (await t.Owner.Client.HarvestLotAsync(t.RaftId, HarvestFields.OfLanes(2))).Id();
+        var second = (await api.HarvestLotOfLanesAsync(t.Owner.Client, t.RaftId, HarvestFields.OfLanes(2))).Id();
         await t.Owner.Client.RecordLogAsync(t.CycleId, new LogFields { Notes = "Buoys fine" });
         await t.Owner.Client.CloseCycleAsync(t.CycleId);
         (await api.SendLotTraceAsync(t.Owner.Client, second, HarvestFields.OfLanes(2) with { Cages = "7" }, reason: "DEMO cages recounted")).EnsureSuccessStatusCode();

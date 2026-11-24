@@ -42,7 +42,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var first = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
         var second = await AddInvoicePaymentAsync(api, sold.Id(), sale.CustomerId, 40_000m, CustomerPaymentMethod.Cash, StatusIds.CustomerPayment.AwaitingConfirmation);
 
@@ -69,7 +69,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         var answer = await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", new object?[] { null }));
 
@@ -202,11 +202,11 @@ public class SalesInvoiceCancellationQaTests
         var owner = sale.Owner.Client;
         var profile = await NewCustomerAsync(sale);
 
-        var fullCustomer = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var fullCustomer = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var answered = Cancellation(fullCustomer).With("cashGivenBack", GivenBack(Assert.Single(await api.PaymentsOfAsync(fullCustomer.Id())).Id, true));
         Assert.Equal(["Customer"], await (await owner.CancelInvoiceAsync(fullCustomer.Id(), answered.With("customerId", profile))).InvalidFieldsAsync());
 
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
         var walkInPayment = Assert.Single(await api.PaymentsOfAsync(walkIn.Id()));
         var givenBack = Cancellation(walkIn).With("cashGivenBack", GivenBack(walkInPayment.Id, true));
         Assert.Equal(["Customer"], await (await owner.CancelInvoiceAsync(walkIn.Id(), givenBack.With("customerId", profile))).InvalidFieldsAsync());
@@ -271,7 +271,7 @@ public class SalesInvoiceCancellationQaTests
         Assert.Equal(2, sendings.Count);
         Assert.Equal(StatusIds.MessageDelivery.Sent, sendings[^1].DeliveryStatusId);
 
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId, walkIn: true);
         await owner.FinishedAsync(walkIn.Id(), wantsQrCode: false);
         var walkInCurrent = await owner.InvoiceAsync(walkIn.Id());
         var answer = await owner.CorrectedAsync(walkIn.Id(), DataEntry(walkInCurrent, [Line(sale.ProductId, sale.OtherLotId, 10m, ListPrice)], sale.OtherLotId));
@@ -310,7 +310,7 @@ public class SalesInvoiceCancellationQaTests
         var allZonesAccountant = await api.StaffAsync(null, StaffRole.Accountant);
         var allZonesManager = await api.StaffAsync(null, StaffRole.ZoneManager);
         var trader = await api.TraderAsync();
-        HttpClient[] refused = [sale.Manager.Client, zoneAccountant.Client, allZonesAccountant.Client, allZonesManager.Client, trader.Client];
+        HttpClient[] refused = [sale.Accountant.Client, zoneAccountant.Client, allZonesAccountant.Client, allZonesManager.Client, trader.Client];
 
         foreach (var client in refused)
         {
@@ -343,7 +343,7 @@ public class SalesInvoiceCancellationQaTests
         await owner.CancelledAsync(cancelled.Id(), Cancellation(cancelled));
 
         Assert.Equal([true, true], [(await owner.InvoiceAsync(open.Id())).Actions().Contains("Correct"), (await owner.InvoiceAsync(open.Id())).Actions().Contains("Cancel")]);
-        foreach (var client in new[] { sale.Manager.Client, accountant.Client })
+        foreach (var client in new[] { sale.Accountant.Client, accountant.Client })
         {
             var actions = (await client.InvoiceAsync(open.Id())).Actions();
             Assert.DoesNotContain("Correct", actions);
@@ -382,7 +382,7 @@ public class SalesInvoiceCancellationQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
         Assert.Equal(["Reason"], await (await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("reason", new string('r', 1001)))).InvalidFieldsAsync());
         Assert.Equal(["RowVersion"], await (await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("rowVersion", null))).InvalidFieldsAsync());
@@ -403,14 +403,16 @@ public class SalesInvoiceCancellationQaTests
         var owner = sale.Owner.Client;
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var sold = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
 
         await owner.CancelledAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", GivenBack(payment.Id, false)).With("confirmOwedBack", true));
 
         var notices = await api.OwedBackNoticesAsync(sold.Id());
-        Assert.Equal(2, notices.Count);
+        // Every Accountant of the zone is told, the one of the zone of the sale too (the Zone Manager has no sales and is told nothing).
+        Assert.Equal(3, notices.Count);
         Assert.DoesNotContain(notices, n => n.RecipientAccountId == sale.Manager.Account.Id);
+        Assert.Contains(notices, n => n.RecipientAccountId == sale.Accountant.Account.Id);
         Assert.All(notices, n => Assert.Contains("300,000", n.Body));
         Assert.All(notices, n => Assert.Equal("MSG-SALE-18", n.MessageCode));
         Assert.Contains(notices, n => n.RecipientAccountId == accountant.Account.Id && n.Body!.Contains("Please pay the money back"));

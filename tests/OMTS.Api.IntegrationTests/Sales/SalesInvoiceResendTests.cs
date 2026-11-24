@@ -20,11 +20,11 @@ public class SalesInvoiceResendTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var phone = invoice.GetProperty("customer").Text("phoneNumber")!;
         api.RefuseSmsTo(phone);
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
 
         Assert.Equal(("Not sent", JsonNull), (finished.Text("deliveryStatus"), finished.GetProperty("messageCode").ValueKind));
         Assert.Equal(StatusIds.SalesInvoice.Completed, await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == invoice.Id()).Select(i => i.StatusId).SingleAsync()));
@@ -48,13 +48,13 @@ public class SalesInvoiceResendTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId, kg: 10m);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId, kg: 10m);
         var phone = invoice.GetProperty("customer").Text("phoneNumber")!;
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         var paymentId = invoice.GetProperty("payments")[0].Id();
         await api.UpdateAsync<CustomerPayment>(paymentId, p => p.StatusId = StatusIds.CustomerPayment.Cancelled);
 
-        (await sale.Manager.Client.ResendAsync(invoice.Id())).EnsureSuccessStatusCode();
+        (await sale.Owner.Client.ResendAsync(invoice.Id())).EnsureSuccessStatusCode();
 
         var texts = api.SmsTo(phone).Select(m => m.Text).ToList();
         Assert.Equal(2, texts.Count);
@@ -68,8 +68,8 @@ public class SalesInvoiceResendTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         var firstId = Assert.Single(await api.InvoiceSendingsAsync(invoice.Id())).Id;
         var row = new Notification
         {
@@ -79,18 +79,18 @@ public class SalesInvoiceResendTests
         };
         await api.UseDbAsync(db => db.Notifications.Add(row));
 
-        var blocked = await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.Conflict);
+        var blocked = await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.Conflict);
 
         Assert.Equal(("MSG-GEN-09", $"Sales invoice {invoice.Text("code")} is Sending and cannot be used for this action."), (blocked.Text("code"), blocked.Text("detail")));
         Assert.Equal(2, (await api.InvoiceSendingsAsync(invoice.Id())).Count);
-        var view = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Sending", view.Text("deliveryStatus"));
 
         var stale = DateTimeOffset.UtcNow - TraderMessageService.StaleSendingAfter - TimeSpan.FromMinutes(1);
         await api.UpdateAsync<Notification>(row.Id, n => (n.CreatedAt, n.DeliveryStatusAt) = (stale.AddSeconds(30), stale));
         await api.UpdateAsync<Notification>(firstId, n => n.CreatedAt = stale);
-        Assert.Equal("Not sent", (await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
-        Assert.Equal("Sent", (await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
+        Assert.Equal("Not sent", (await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
+        Assert.Equal("Sent", (await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
     }
 
     // Another message to the trader's phone about the invoice (the SALE-08 cancellation notice of PR 10) is not one of its sendings: neither the latest status nor the guard.
@@ -99,8 +99,8 @@ public class SalesInvoiceResendTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         await api.UseDbAsync(db => db.Notifications.Add(new Notification
         {
             Channel = NotificationChannel.Sms, Type = "SALES_INVOICE_CANCELLED", Title = "Sales invoice cancelled", RelatedRecordType = RelatedRecordTypes.SalesInvoice,
@@ -108,10 +108,10 @@ public class SalesInvoiceResendTests
             DeliveryStatusAt = DateTimeOffset.UtcNow,
         }));
 
-        var view = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await sale.Accountant.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Sent", 1), (view.Text("deliveryStatus"), view.GetProperty("sendings").GetArrayLength()));
-        Assert.Equal("Sent", (await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
+        Assert.Equal("Sent", (await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
     }
 
     // BR-SALE-08, BR-SALE-09, §I.4.4: the Zone Manager of the zone and the Owner; another zone and the Accountant get MSG-GEN-08 and nothing is sent.
@@ -120,7 +120,7 @@ public class SalesInvoiceResendTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var otherZone = (await sale.Owner.Client.CreateZoneAsync()).Id();
         var outsider = await api.StaffAsync(await api.ZoneEntityAsync(otherZone));
         var accountant = await api.StaffAsync(null, StaffRole.Accountant);
@@ -142,7 +142,7 @@ public class SalesInvoiceResendTests
         Assert.Empty(await api.InvoiceSendingsAsync(invoice.Id()));
         Assert.Empty(api.SmsTo(invoice.GetProperty("customer").Text("phoneNumber")!));
         Assert.Equal(rowVersion, await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == invoice.Id()).Select(i => i.RowVersion).SingleAsync()));
-        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         Assert.Equal(HttpStatusCode.OK, (await sale.Owner.Client.ResendAsync(invoice.Id())).StatusCode);
 
         // PRE-1: a Cancelled invoice (SALE-08, PR 10) is never sent again.

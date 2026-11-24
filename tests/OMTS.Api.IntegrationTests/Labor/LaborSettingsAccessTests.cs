@@ -77,11 +77,15 @@ public class LaborSettingsAccessTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task An_accountant_does_not_use_the_names_of_labor_01()
+    public async Task An_accountant_reads_the_job_type_options_and_uses_no_other_names_of_labor_01()
     {
         var accountant = await StaffAsync(factory, StaffRole.Accountant);
+        var owner = await OwnerAsync(factory);
+        var jobType = await AddJobTypeAsync(owner);
 
-        await (await accountant.GetAsync($"{JobTypes}/options")).SrsProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08", "MSG02");
+        // The Accountant reads the workers (LABOR_WORKERS View, decision of 20/11/2026), so it reads the options of the job types; the names themselves stay the Owner's.
+        await AssertAllForbiddenAsync(await AllJobTypeCallsAsync(accountant, jobType.IdOf()));
+        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync($"{JobTypes}/options")).StatusCode);
     }
 
     [Fact]

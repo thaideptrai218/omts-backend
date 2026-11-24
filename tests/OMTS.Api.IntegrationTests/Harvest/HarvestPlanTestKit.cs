@@ -77,17 +77,18 @@ public static class HarvestPlanTestKit
 
     /// <summary>
     /// The plan the kit makes for a harvest a test records without naming a plan line (a harvest needs a plan since 18/11/2026, MSG-HARVEST-06):
-    /// one line of the raft with the lanes the test sent, assigned, serving a new order. The id of its line, or null when the plan is refused
-    /// (the harvest is then posted as the test wrote it, so the test sees the answer of the API).
+    /// one line of the raft, assigned and received, serving a new order. A plan line is a raft (decision of 19/11/2026) and the lot holds every harvestable
+    /// lane of it whatever lanes the test sent, so the line names none: it then clashes with no other open plan of the raft. The id of its line, or null when
+    /// the plan is refused (the harvest is then posted as the test wrote it, so the test sees the answer of the API).
     /// </summary>
-    public static async Task<Guid?> PlannedLineForAsync(Guid raftId, IReadOnlyList<int> lanes)
+    public static async Task<Guid?> PlannedLineForAsync(Guid raftId)
     {
-        if (OwnerOfRaft(raftId) is not { } owner || lanes.Count == 0)
+        if (OwnerOfRaft(raftId) is not { } owner)
         {
             return null;
         }
 
-        var body = PlanBody(PlanLine(raftId, lanes.Distinct().ToArray())).WithPlanField("salesOrderIds", new[] { await owner.OpenOrderAsync() });
+        var body = PlanBody(PlanLine(raftId, [])).WithPlanField("salesOrderIds", new[] { await owner.OpenOrderAsync() });
         var created = await owner.PostPlanAsync(body);
         if (created.StatusCode != HttpStatusCode.Created)
         {
@@ -96,7 +97,14 @@ public static class HarvestPlanTestKit
 
         var plan = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("plan");
         var assigned = await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/assign", new { });
-        return assigned.IsSuccessStatusCode ? plan.LineId() : null;
+        if (!assigned.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        // A lot is recorded from a plan a Zone Manager received ("Nhận"): the kit presses it as the Owner, who may harvest in every zone.
+        var received = await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/receive", new { });
+        return received.IsSuccessStatusCode ? plan.LineId() : null;
     }
 
     public static Dictionary<string, object?> WithPlanField(this Dictionary<string, object?> body, string field, object? value)
@@ -128,6 +136,20 @@ public static class HarvestPlanTestKit
     {
         var plan = await client.CreatePlanAsync(body);
         return await client.PlanCommandAsync(plan.Id(), "assign");
+    }
+
+    /// <summary>An assigned plan that was received too ("Nhận"), pressed by <paramref name="receiver"/> (the Owner when none): lots can be recorded from it.</summary>
+    public static async Task<JsonElement> ReceivedPlanAsync(this HttpClient client, object body, HttpClient? receiver = null)
+    {
+        var plan = await client.AssignedPlanAsync(body);
+        return await (receiver ?? client).PlanCommandAsync(plan.Id(), "receive");
+    }
+
+    /// <summary>The plan handed over ("Bàn giao") by <paramref name="manager"/> and completed by the Owner ("Hoàn thành"); every line must be done.</summary>
+    public static async Task<JsonElement> CompletedPlanAsync(this HttpClient owner, Guid planId, HttpClient? manager = null)
+    {
+        await (manager ?? owner).PlanCommandAsync(planId, "hand-over");
+        return await owner.PlanCommandAsync(planId, "finish");
     }
 
     public static Task<HttpResponseMessage> PostSkipAsync(this HttpClient client, Guid planId, Guid lineId, int[] lanes, string? reason, string command = "skip-lanes") =>

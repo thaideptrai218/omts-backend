@@ -51,9 +51,9 @@ public class HarvestLotAcceptanceTests
         Assert.False(screen.CanHarvest(4));
         Assert.Equal(["KV01-B01-20261027", "KV01-B01-20261026"], screen.LotCodes());
 
-        // It cannot be chosen in another lot of the cycle, and the lanes beside it still can.
-        var refused = await (await owner.PostHarvestAsync(raftId, HarvestFields.OfLanes(3, 4))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("MSG-GEN-01", "Lanes", "Lanes 4 cannot be harvested now."), (refused.Text("code"), refused.Text("field"), refused.Text("hint")));
+        // A lot harvests the raft (owner decision of 18/11/2026): the Harvested lane stays out of the next lot, and the lanes beside it still go in.
+        var third = await owner.HarvestLotAsync(raftId);
+        Assert.Equal([1, 2, 3, 5], third.Numbers("laneNumbers"));
         Assert.True(screen.CanHarvest(3));
 
         // CYCLE-05: both days keep their state, and the lane lists both lots.
@@ -147,7 +147,7 @@ public class HarvestLotAcceptanceTests
         using var api = new CyclesQaClockApiFactory();
         var (owner, _, raftId, _) = await KV01Async(api, "KV01-B01");
         api.Clock.At = InVietnam(10, 26);
-        var form = new HarvestFields { Photos = [Jpeg] }.ToForm();
+        var form = new HarvestFields { Photos = [Jpeg] }.FromPlanLine((await HarvestPlanTestKit.PlannedLineForAsync(raftId))!.Value).ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T08:00:00+07:00"), "harvestedAt");
 
@@ -165,13 +165,14 @@ public class HarvestLotAcceptanceTests
         var (owner, zoneId, raftId, _) = await KV01Async(api, "KV01-B01");
         api.Clock.At = InVietnam(10, 26);
 
-        var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
+        var lot = await owner.HarvestLotAsync(raftId);
 
         var audit = await api.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.Action == "HarvestLot.Created" && e.RecordId == lot.Id()));
         Assert.Equal(("HarvestLot", "KV01-B01-20261026", zoneId), (audit.RecordType, audit.RecordCode, audit.ZoneId));
         using var after = JsonDocument.Parse(audit.After!);
-        Assert.Equal([1, 2], after.RootElement.GetProperty("Lanes").EnumerateArray().Select(n => n.GetInt32()));
-        Assert.Equal([2], after.RootElement.GetProperty("FinishedLanes").EnumerateArray().Select(n => n.GetInt32()));
+        // A lot harvests the raft and finishes no lane (owner decision of 18/11/2026).
+        Assert.Equal([1, 2, 3, 4, 5], after.RootElement.GetProperty("Lanes").EnumerateArray().Select(n => n.GetInt32()));
+        Assert.Empty(after.RootElement.GetProperty("FinishedLanes").EnumerateArray());
         Assert.Equal(400m, after.RootElement.GetProperty("EstimatedKg").GetDecimal());
     }
 }

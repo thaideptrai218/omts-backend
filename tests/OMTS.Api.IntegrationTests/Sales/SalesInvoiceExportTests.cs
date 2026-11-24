@@ -22,14 +22,14 @@ public class SalesInvoiceExportTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var other = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
-        var inOther = await other.Manager.Client.SoldAsync(other, other.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
+        var inOther = await other.Owner.Client.SoldAsync(other, other.LotId);
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
         var accountantAll = await api.StaffAsync(null, StaffRole.Accountant);
 
         // PM answer 12/11/2026 (OMTS-224 [5.1]): the Accountant prints and exports like the Zone Manager, in its zones.
-        foreach (var client in new[] { sale.Manager.Client, sale.Owner.Client, accountant.Client, accountantAll.Client })
+        foreach (var client in new[] { sale.Accountant.Client, sale.Owner.Client, accountant.Client, accountantAll.Client })
         {
             Assert.Equal(HttpStatusCode.OK, (await client.ExportInvoicesAsync()).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await client.PrintInvoiceAsync(invoice.Id())).StatusCode);
@@ -48,18 +48,18 @@ public class SalesInvoiceExportTests
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var inA = await a.Manager.Client.SoldAsync(a, a.LotId);
-        var inB = await b.Manager.Client.SoldAsync(b, b.LotId);
+        var inA = await a.Owner.Client.SoldAsync(a, a.LotId);
+        var inB = await b.Owner.Client.SoldAsync(b, b.LotId);
 
-        using var workbook = await WorkbookAsync(await a.Manager.Client.ExportInvoicesAsync());
+        using var workbook = await WorkbookAsync(await a.Accountant.Client.ExportInvoicesAsync());
         Assert.Equal(inA.Text("code"), workbook.Worksheet(SalesInvoiceExportSheets.ListSheet).Cell(2, 1).GetString());
         Assert.Equal(3, workbook.Worksheet(SalesInvoiceExportSheets.ListSheet).LastRowUsed()!.RowNumber());
 
-        var other = await a.Manager.Client.PrintInvoiceAsync(inB.Id());
+        var other = await a.Accountant.Client.PrintInvoiceAsync(inB.Id());
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (other.StatusCode, await other.ErrorCodeAsync()));
-        var filtered = await a.Manager.Client.ExportInvoicesAsync($"?zoneId={b.ZoneId}");
+        var filtered = await a.Accountant.Client.ExportInvoicesAsync($"?zoneId={b.ZoneId}");
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (filtered.StatusCode, await filtered.ErrorCodeAsync()));
-        Assert.Equal(HttpStatusCode.NotFound, (await a.Manager.Client.PrintInvoiceAsync(Guid.NewGuid())).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await a.Accountant.Client.PrintInvoiceAsync(Guid.NewGuid())).StatusCode);
     }
 
     // SALE-09.2: the list on the screen and its total: every page, whatever the page size asked for.
@@ -68,7 +68,7 @@ public class SalesInvoiceExportTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var first = await client.SoldAsync(sale, sale.LotId, 2m);
         var second = await client.SoldAsync(sale, sale.LotId, 3m);
         var cancelled = await client.SoldAsync(sale, sale.LotId, 4m);
@@ -91,7 +91,7 @@ public class SalesInvoiceExportTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         await client.SoldAsync(sale, sale.LotId, 2m);
 
         using var withCash = await WorkbookAsync(await client.ExportInvoicesAsync("?cashCollectedByMe=true"));
@@ -111,7 +111,7 @@ public class SalesInvoiceExportTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var sold = (await client.SellAsync(sale.PayLater(sale.LotId, 10m, cash: 100_000m))).GetProperty("invoice");
         await client.FinishedAsync(sold.Id(), wantsQrCode: false);
 
@@ -140,7 +140,7 @@ public class SalesInvoiceExportTests
             .Select(n => SalesInvoiceSearchQaTests.NewInvoice(sale.ZoneId, accountId, code: $"HDX{n:D5}")).ToList();
         await api.UseDbAsync(db => db.SalesInvoices.AddRange(invoices));
 
-        var atTheLimit = await sale.Manager.Client.ExportInvoicesAsync();
+        var atTheLimit = await sale.Accountant.Client.ExportInvoicesAsync();
         Assert.Equal(HttpStatusCode.OK, atTheLimit.StatusCode);
         using (var workbook = await WorkbookAsync(atTheLimit))
         {
@@ -149,13 +149,13 @@ public class SalesInvoiceExportTests
 
         await api.UseDbAsync(db => db.SalesInvoices.Add(SalesInvoiceSearchQaTests.NewInvoice(sale.ZoneId, accountId, code: "HDXLAST")));
 
-        var refused = await sale.Manager.Client.ExportInvoicesAsync();
+        var refused = await sale.Accountant.Client.ExportInvoicesAsync();
         var problem = await refused.ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("MSG-GEN-01", "Filters"), (problem.Text("code"), problem.Text("field")));
         Assert.Contains("Narrow the period or the filters", problem.Text("detail"));
         // The screen still lists them: only the file is limited, and narrowing the filters opens it again.
-        Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 1, (await sale.Manager.Client.InvoiceListAsync()).GetProperty("page").GetProperty("total").GetInt32());
-        Assert.Equal(HttpStatusCode.OK, (await sale.Manager.Client.ExportInvoicesAsync("?code=HDXLAST")).StatusCode);
+        Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 1, (await sale.Accountant.Client.InvoiceListAsync()).GetProperty("page").GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await sale.Accountant.Client.ExportInvoicesAsync("?code=HDXLAST")).StatusCode);
     }
 
     // PM answer 12/11/2026 (OMTS-224 [5.5]): the filter by the code (DH) of the purchase request the invoice fulfils, and the code in the list and the file.
@@ -164,7 +164,7 @@ public class SalesInvoiceExportTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var ordered = await client.SoldAsync(sale, sale.LotId, 2m);
         var plain = await client.SoldAsync(sale, sale.LotId, 3m);
         // Every invoice has its order (DH code): the filter reads the code of that order, and "contains" finds it by a part of the digits.
@@ -172,9 +172,9 @@ public class SalesInvoiceExportTests
         Assert.NotEqual(orderCode, plain.GetProperty("salesOrder").Text("code"));
 
         var list = await client.InvoiceListAsync(Query(("orderCode", orderCode)));
-        Assert.Equal([ordered.Text("code")], list.Codes());
+        Assert.Equal<string?>([ordered.Text("code")], list.Codes());
         Assert.Equal(orderCode, list.Rows()[0].GetProperty("salesOrder").Text("code"));
-        Assert.Equal([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[2..] + " ")))).Codes());
+        Assert.Equal<string?>([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[2..] + " ")))).Codes());
         var wildcard = await client.InvoiceListAsync(Query(("orderCode", "DH%")));
         Assert.Equal(("MSG-GEN-10", 0), (wildcard.Text("messageCode"), wildcard.Rows().Count));
         var all = await client.InvoiceListAsync();
@@ -197,7 +197,7 @@ public class SalesInvoiceExportTests
         foreach (var name in new[] { "=HYPERLINK(\"https://example.invalid\",\"DEMO\")", "+1+1", "-1+1", "@SUM(A1)" })
         {
             await api.UpdateAsync<Customer>(sale.CustomerId, c => c.Name = name);
-            var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+            var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
             using var list = await WorkbookAsync(await sale.Owner.Client.ExportInvoicesAsync());
             var cell = list.Worksheet(SalesInvoiceExportSheets.ListSheet).Cell(2, 4);

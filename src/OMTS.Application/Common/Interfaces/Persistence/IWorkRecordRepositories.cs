@@ -66,7 +66,8 @@ public interface IEmployeeRequestRepository
     /// The requests with their employee, untracked: Awaiting review first, oldest first, then the others, newest first. A null
     /// <paramref name="statusId"/> lists every status.
     /// </summary>
-    Task<IReadOnlyList<EmployeeRequest>> ListAsync(int? statusId, int take, CancellationToken cancellationToken);
+    /// <param name="zoneIds">Only the requests of employees with a working zone among these zones; null: every employee's.</param>
+    Task<IReadOnlyList<EmployeeRequest>> ListAsync(int? statusId, int take, IReadOnlyCollection<Guid>? zoneIds, CancellationToken cancellationToken);
 
     /// <summary>The requests of one employee whose days overlap the range, or that are still Awaiting review, untracked, newest first.</summary>
     Task<IReadOnlyList<EmployeeRequest>> ListOfEmployeeAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken cancellationToken);

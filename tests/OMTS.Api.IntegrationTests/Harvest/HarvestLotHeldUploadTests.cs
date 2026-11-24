@@ -57,20 +57,21 @@ public class HarvestLotHeldUploadTests
     }
 
     [Fact]
-    public async Task A_lane_finished_during_the_upload_answers_400_and_removes_the_photos()
+    public async Task A_lane_finished_during_the_upload_stays_out_of_the_lot_which_takes_the_lanes_still_harvestable()
     {
         using var api = new CycleLogsQaFaultFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
 
-        var pending = await HeldAsync(api, owner, raft.RaftId, HarvestFields.OfLanes(1, 2));
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        var pending = await HeldAsync(api, owner, raft.RaftId, new HarvestFields());
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(1));
         api.Hold.Release();
 
-        var refused = await (await pending).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Lanes", "Lanes 1 cannot be harvested now."), (refused.Text("field"), refused.Text("hint")));
+        // The lanes of a lot are read again after the upload (owner decision of 18/11/2026: the lot harvests the raft), so the lane finished meanwhile is not in it.
+        var lot = (await (await pending).ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
+        Assert.Equal([2, 3, 4, 5], lot.Numbers("laneNumbers"));
         await api.AssertNoOrphanLotPhotosAsync(Category);
-        Assert.Equal(1, await api.LotCountAsync(raft.RaftId));
+        Assert.Equal(2, await api.LotCountAsync(raft.RaftId));
     }
 
     [Fact]
@@ -111,9 +112,10 @@ public class HarvestLotHeldUploadTests
         using var api = new CycleLogsQaFaultFactory();
         var raft = await api.SeededRaftAsync();
         var manager = await api.ManagerAsync(raft.ZoneId);
+        var planned = await new HarvestFields { Photos = [Jpeg, Png] }.PlannedAsync(raft.RaftId);
         api.NotifyFails = true;
 
-        var answer = await manager.Client.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg, Png] });
+        var answer = await manager.Client.PostHarvestAsync(raft.RaftId, planned);
 
         Assert.Equal(HttpStatusCode.InternalServerError, answer.StatusCode);
         await api.AssertNoOrphanLotPhotosAsync(Category);

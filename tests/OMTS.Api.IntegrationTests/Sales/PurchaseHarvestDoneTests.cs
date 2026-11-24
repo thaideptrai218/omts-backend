@@ -45,8 +45,8 @@ public class PurchaseHarvestDoneTests
             var harvest = ready.GetProperty("harvest");
             Assert.Equal((18, 2, true), (harvest.GetProperty("harvestedCages").GetInt32(), harvest.GetProperty("lots").GetArrayLength(), Flag(ready, "canMarkDone")));
             Assert.Equal([12, 6], harvest.GetProperty("lots").EnumerateArray().Select(l => l.GetProperty("cageCount").GetInt32()));
-            Assert.False(Flag(await sale.Manager.Client.RequestDetailAsync(request.Id()), "canMarkDone"));
-            Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.PostHarvestDoneAsync(request.Id(), ready.RowVersion())).ErrorCodeAsync());
+            Assert.False(Flag(await sale.Accountant.Client.RequestDetailAsync(request.Id()), "canMarkDone"));
+            Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.PostHarvestDoneAsync(request.Id(), ready.RowVersion())).ErrorCodeAsync());
 
             var done = await (await owner.PostHarvestDoneAsync(request.Id(), ready.RowVersion())).ReadAsync(HttpStatusCode.OK);
 
@@ -74,7 +74,7 @@ public class PurchaseHarvestDoneTests
             var owner = sale.Owner.Client;
             await HarvestedForAsync(sale, request);
             var done = await owner.RequestDetailAsync(request.Id());
-            Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.PostClearHarvestDoneAsync(request.Id(), done.RowVersion())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await sale.Accountant.Client.PostClearHarvestDoneAsync(request.Id(), done.RowVersion())).ErrorCodeAsync());
 
             var cleared = await (await owner.PostClearHarvestDoneAsync(request.Id(), done.RowVersion())).ReadAsync(HttpStatusCode.OK);
             Assert.Equal(JsonValueKind.Null, cleared.GetProperty("harvestCompletedAt").ValueKind);

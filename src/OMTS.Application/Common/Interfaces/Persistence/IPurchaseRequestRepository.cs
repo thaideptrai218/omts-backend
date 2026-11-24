@@ -41,7 +41,8 @@ public interface IPurchaseRequestRepository
     /// </summary>
     Task<IReadOnlyList<PurchaseRequest>> ListOpenForHarvestAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(CancellationToken ct);
+    /// <param name="zoneIds">Only the employees with a working zone among these zones; null: every employee.</param>
+    Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(IReadOnlyCollection<Guid>? zoneIds, CancellationToken ct);
     Task<IReadOnlyList<PurchaseShiftInvitation>> EmployeeInvitationsAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken ct);
     Task<PurchaseShiftInvitation?> InvitationAsync(Guid id, CancellationToken ct);
     Task<bool> HasShiftReservationAsync(Guid employeeId, DateOnly day, Guid? exceptRequestId, CancellationToken ct);

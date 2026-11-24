@@ -124,7 +124,7 @@ public class CustomerPaymentSettlementTests
         var (older, newer) = await w.TwoInvoicesAsync();
         var orphan = await api.OrphanTransferAsync(400_000m);
         var otherCustomer = (await sale.Owner.Client.CreateCustomerAsync()).Id();
-        var foreign = (await sale.Manager.Client.SellAsync(Invoice(otherCustomer, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.OtherLotId)))
+        var foreign = (await sale.Owner.Client.SellAsync(Invoice(otherCustomer, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.OtherLotId)))
             .GetProperty("invoice").Id();
 
         Assert.Equal(["Allocation 1"], await (await accountant.SettleAsync(ToCustomer(orphan.Id, sale.CustomerId, (foreign, 10_000m)))).InvalidFieldsAsync());
@@ -212,13 +212,13 @@ public class CustomerPaymentSettlementTests
     {
         using var w = await StartSettlementAsync();
         var (api, sale, accountant) = (w.Api, w.Sale, w.Accountant);
-        var code = (await sale.Manager.Client.AwaitTransferAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(), sale.LotId))).Code();
+        var code = (await sale.Owner.Client.AwaitTransferAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 10m)], VietQr(), sale.LotId))).Code();
         Assert.Equal("WithoutCustomer", (await api.TransferAsync(code, 100_000m)).Outcome());
         var held = await api.PaymentOfCodeAsync(code);
-        Assert.Equal(100_000m, (await sale.Manager.Client.PolledAsync(code)).Money("receivedAmount"));
+        Assert.Equal(100_000m, (await sale.Owner.Client.PolledAsync(code)).Money("receivedAmount"));
 
         await (await accountant.SettleAsync(ToCustomer(held.Id, sale.CustomerId))).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(0m, (await sale.Manager.Client.PolledAsync(code)).Money("receivedAmount"));
+        Assert.Equal(0m, (await sale.Owner.Client.PolledAsync(code)).Money("receivedAmount"));
     }
 }

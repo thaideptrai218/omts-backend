@@ -25,9 +25,9 @@ public class ProvenanceWithdrawalNoticesTests
         var told = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader told");
         var refused = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader refused");
         api.RefuseSmsTo(refused.Text("phoneNumber"));
-        var walkIn = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: told.Id());
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: refused.Id());
+        var walkIn = await sale.Owner.Client.SoldAsync(sale, sale.LotId, walkIn: true);
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: told.Id());
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: refused.Id());
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
 
         // Never withdrawn: nothing to read again; an unknown lot is 404.
@@ -50,7 +50,7 @@ public class ProvenanceWithdrawalNoticesTests
         Assert.Equal(("Published", 2), ((await sale.Owner.Client.WithdrawalNoticesAsync(sale.LotId)).Text("originState"),
             (await sale.Owner.Client.WithdrawalNoticesAsync(sale.LotId)).GetProperty("notices").GetArrayLength()));
         var late = await Catalogue.CreateCustomerAsync(sale.Owner.Client, name: "DEMO trader late");
-        await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: late.Id());
+        await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: late.Id());
         var second = await sale.Owner.Client.WithdrawnAsync(sale.LotId);
 
         var latest = await sale.Owner.Client.WithdrawalNoticesAsync(sale.LotId);

@@ -168,7 +168,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
     // GBR-01: one discontinued after it was given stays, and other edits go on.
     [Fact]
-    public async Task A_zone_discontinued_later_does_not_stop_an_edit_and_a_left_employee_cannot_be_edited()
+    public async Task A_zone_discontinued_later_does_not_stop_an_edit_and_a_left_employee_can_correct_contact_details()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"Zone {NewCode()}", NewPhone());
@@ -176,10 +176,16 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         await factory.UpdateAsync<FarmingZone>(zone.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
 
         var edited = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, phone, zone.Id, b => { b["notes"] = "Sửa"; b["rowVersion"] = RowVersionOf(saved); }))).BodyAsync(HttpStatusCode.OK);
-        await EndAsync(owner, IdOf(saved));
-        var left = await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, phone, zone.Id, b => b["rowVersion"] = RowVersionOf(edited)));
+        var ended = await EndAsync(owner, IdOf(saved));
+        var correctedPhone = NewPhone();
+        var left = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile("Ignored rename", correctedPhone, zone.Id,
+            b => { b["rowVersion"] = RowVersionOf(ended); b["notes"] = "Contact corrected after leaving"; b["bankAccount"] = Bank(); }))).BodyAsync(HttpStatusCode.OK);
 
         Assert.Equal("Sửa", edited.GetProperty("employee").GetProperty("notes").GetString());
-        Assert.Equal("Employee is Left and cannot be used for this action.", (await left.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61")).Detail());
+        var employee = left.GetProperty("employee");
+        Assert.Equal((name, correctedPhone, "Left"), (employee.GetProperty("fullName").GetString(), employee.GetProperty("phoneNumber").GetString(), employee.GetProperty("status").GetString()));
+        Assert.Equal("Contact corrected after leaving", employee.GetProperty("notes").GetString());
+        Assert.Equal("999900000001", employee.GetProperty("bankAccount").GetProperty("accountNumber").GetString());
+        Assert.Equal([zone.Id], employee.GetProperty("workingZones").EnumerateArray().Select(z => z.GetProperty("id").GetGuid()));
     }
 }

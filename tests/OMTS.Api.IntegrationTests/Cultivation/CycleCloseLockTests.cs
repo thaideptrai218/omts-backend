@@ -32,7 +32,7 @@ public class CycleCloseLockTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var item = await factory.ItemAsync();
         var log = await owner.RecordLogAsync(raft.CycleId);
         var usage = await owner.RecordUsageAsync(raft.RaftId, item, Today.AddDays(-1));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         var cycle = await owner.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/cultivation-cycles/{raft.CycleId}");
 
         await owner.CloseCycleAsync(raft.CycleId);
@@ -79,7 +79,7 @@ public class CycleCloseLockTests(AuthApiFactory factory) : IClassFixture<AuthApi
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
-        await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { EstimatedKg = "123.4" });
+        await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { EstimatedKg = "123.4" });
         var closed = await owner.CloseCycleAsync(raft.CycleId, "Good spat, lane 2 slow");
 
         var summary = await owner.CycleSummaryAsync(raft.CycleId);

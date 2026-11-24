@@ -24,24 +24,33 @@ public static class HarvestPlanRules
     public const int MaxSkipReasonLength = 500;
     public const int MaxOrders = 20;
 
-    /// <summary>Draft, Assigned or Harvesting: the plan is not over.</summary>
-    public static bool IsOpen(int statusId) => statusId is StatusIds.HarvestPlan.Draft or StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting;
+    /// <summary>Draft, Assigned, Received, Harvesting or HandedOver: the plan is not over.</summary>
+    public static bool IsOpen(int statusId) =>
+        statusId is StatusIds.HarvestPlan.Draft or StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.HandedOver;
 
-    public static bool AllowsEdit(int statusId) => IsOpen(statusId);
+    /// <summary>The Owner changes a plan until the Zone Manager hands it over.</summary>
+    public static bool AllowsEdit(int statusId) => IsOpen(statusId) && statusId != StatusIds.HarvestPlan.HandedOver;
 
     public static bool AllowsAssign(int statusId) => statusId == StatusIds.HarvestPlan.Draft;
 
-    /// <summary>"Kết thúc": only a plan being harvested is finished by hand; the lanes still to do stay as they are.</summary>
-    public static bool AllowsFinish(int statusId) => statusId == StatusIds.HarvestPlan.Harvesting;
+    /// <summary>"Nhận": a Zone Manager receives a plan the Owner assigned; there is no refusal.</summary>
+    public static bool AllowsReceive(int statusId) => statusId == StatusIds.HarvestPlan.Assigned;
 
-    /// <summary>A plan that was handed over and has no lot yet can still be cancelled; once harvesting starts it is finished instead.</summary>
-    public static bool AllowsCancel(int statusId) => statusId is StatusIds.HarvestPlan.Draft or StatusIds.HarvestPlan.Assigned;
+    /// <summary>"Bàn giao": a Zone Manager hands over a plan being harvested once every line is done (see <see cref="AllDone"/>).</summary>
+    public static bool AllowsHandOver(int statusId) => statusId == StatusIds.HarvestPlan.Harvesting;
 
-    /// <summary>Lots are recorded from the lines, and lanes left out, only while the plan is with the Zone Managers.</summary>
-    public static bool AllowsHarvest(int statusId) => statusId is StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting;
+    /// <summary>"Hoàn thành" (the Finish action): only the Owner, only a plan the Zone Manager handed over. The system never completes a plan by itself.</summary>
+    public static bool AllowsFinish(int statusId) => statusId == StatusIds.HarvestPlan.HandedOver;
 
-    /// <summary>A lane left out is put back while the plan is with the Zone Managers, or after it finished because of the lanes left out.</summary>
-    public static bool AllowsUnskip(int statusId) => statusId is StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.Completed;
+    /// <summary>A plan with no lot yet can be cancelled while it is a Draft, Assigned or Received; once harvesting starts it is handed over instead.</summary>
+    public static bool AllowsCancel(int statusId) => statusId is StatusIds.HarvestPlan.Draft or StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Received;
+
+    /// <summary>Lots are recorded from the lines, and lanes left out, only after a Zone Manager received the plan and before it is handed over.</summary>
+    public static bool AllowsHarvest(int statusId) => statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting;
+
+    /// <summary>A lane left out is put back while the plan is being harvested; a plan already handed over or completed opens again (Harvesting).</summary>
+    public static bool AllowsUnskip(int statusId) =>
+        statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.HandedOver or StatusIds.HarvestPlan.Completed;
 
     public static HarvestPlanLaneState LaneState(bool inLot, bool skipped) =>
         inLot ? HarvestPlanLaneState.Harvested : skipped ? HarvestPlanLaneState.Skipped : HarvestPlanLaneState.Planned;
@@ -64,37 +73,27 @@ public static class HarvestPlanRules
     public static bool Started(IReadOnlyCollection<PlanLineFacts> lines) => lines.Any(l => l.HasLot || l.SkippedCount > 0);
 
     /// <summary>
-    /// The statuses a plan passes through after a lot, a lane left out or a change of its lines, in order (none when nothing moves). An Assigned plan whose every lane is left out and has no lot
-    /// goes straight to Completed; otherwise it is Harvesting first. A Completed plan opens again (Harvesting) when it had finished by itself, every line was done, and one is not any more.
+    /// The statuses a plan passes through after a lot, a lane left out or a change of its lines, in order (none when nothing moves). A Received plan becomes Harvesting with its first lot or lane left out and stays
+    /// there until a Zone Manager hands it over: the system never completes a plan. A HandedOver plan, or a Completed one that was whole before the change, opens again (Harvesting) when a line is not done any more.
     /// </summary>
-    /// <param name="allDoneBefore">Every line was done before this change; what tells a plan that finished by itself from one the Owner finished by hand with lanes still to do.</param>
+    /// <param name="allDoneBefore">Every line was done before this change; tells a Completed plan that was whole from one closed with lanes still to do.</param>
     public static IReadOnlyList<int> Settle(int statusId, IReadOnlyCollection<PlanLineFacts> lines, bool allDoneBefore)
     {
         var moves = new List<int>();
         var done = AllDone(lines);
         switch (statusId)
         {
-            case StatusIds.HarvestPlan.Assigned:
-                if (done && !lines.Any(l => l.HasLot))
-                {
-                    moves.Add(StatusIds.HarvestPlan.Completed);
-                    break;
-                }
-
+            case StatusIds.HarvestPlan.Received:
                 if (Started(lines))
                 {
                     moves.Add(StatusIds.HarvestPlan.Harvesting);
-                    if (done)
-                    {
-                        moves.Add(StatusIds.HarvestPlan.Completed);
-                    }
                 }
 
                 break;
-            case StatusIds.HarvestPlan.Harvesting:
-                if (done)
+            case StatusIds.HarvestPlan.HandedOver:
+                if (!done)
                 {
-                    moves.Add(StatusIds.HarvestPlan.Completed);
+                    moves.Add(StatusIds.HarvestPlan.Harvesting);
                 }
 
                 break;
@@ -111,11 +110,13 @@ public static class HarvestPlanRules
     }
 
     /// <summary>
-    /// The buttons of a plan for a caller. Edit, Assign and Finish are the Owner's (HARVEST_PLANS Edit), Cancel needs Delete and a plan without a lot; Harvest and SkipLane need a line still open in a zone the
-    /// caller harvests in (HARVESTS Create), whether the caller is the Owner or a Zone Manager.
+    /// The buttons of a plan for a caller. Edit and Assign are the Owner's (HARVEST_PLANS Edit), Finish (the Owner completes a handed over plan) is the Owner's alone, Cancel needs Delete and a plan without a lot;
+    /// Receive, HandOver, Harvest and SkipLane need the right to harvest (HARVESTS Create) in a zone of the plan the caller sees, whether the caller is the Owner or a Zone Manager.
     /// </summary>
     /// <param name="canHarvestNow">Some line the caller sees is still open and in a zone where the caller may harvest.</param>
-    public static IReadOnlyList<HarvestPlanAction> AllowedActions(int statusId, HarvestPlanCaller caller, bool hasLot, bool canHarvestNow)
+    /// <param name="mayHarvestInPlan">The caller sees a line of the plan in a zone where it may harvest.</param>
+    /// <param name="allLinesDone">Every line of the whole plan, also in zones the caller does not see, has its lot or has every lane left out.</param>
+    public static IReadOnlyList<HarvestPlanAction> AllowedActions(int statusId, HarvestPlanCaller caller, bool hasLot, bool canHarvestNow, bool mayHarvestInPlan = false, bool allLinesDone = false)
     {
         var actions = new List<HarvestPlanAction>();
         var mayEdit = caller.IsOwner || caller.CanEdit;
@@ -129,7 +130,17 @@ public static class HarvestPlanRules
             actions.Add(HarvestPlanAction.Assign);
         }
 
-        if (AllowsFinish(statusId) && mayEdit)
+        if (AllowsReceive(statusId) && mayHarvestInPlan)
+        {
+            actions.Add(HarvestPlanAction.Receive);
+        }
+
+        if (AllowsHandOver(statusId) && mayHarvestInPlan && allLinesDone)
+        {
+            actions.Add(HarvestPlanAction.HandOver);
+        }
+
+        if (AllowsFinish(statusId) && caller.IsOwner)
         {
             actions.Add(HarvestPlanAction.Finish);
         }

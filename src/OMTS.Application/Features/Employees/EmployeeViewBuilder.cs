@@ -7,8 +7,9 @@ using OMTS.Domain.Entities.Labor;
 namespace OMTS.Application.Features.Employees;
 
 /// <summary>
-/// What a caller sees of an employee: every Zone Manager sees every employee (BR-LABOR-01), and bank details and the other
-/// personal fields go only to those who maintain the employee. The linked staff account is for the Cooperative Owner.
+/// What a caller sees of an employee: only the employees with a working zone among the caller's zones (decision of 24/11/2026), and of those only the zones the caller sees; bank details and the other
+/// personal fields go only to those who maintain the employee. The list includes the linked account's basic identity;
+/// the linked account on the full profile remains for the Cooperative Owner.
 /// </summary>
 public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvider timeProvider)
 {
@@ -23,7 +24,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             EmployeeTypePeriod.TypeOn(e.TypePeriods, timeProvider.Today()),
             e.TypePeriods.OrderBy(p => p.EffectiveFrom).Select(p => new EmployeeTypePeriodView(p.Type, p.EffectiveFrom)).ToList(),
             JobTypes(e),
-            Zones(e),
+            Zones(e, caller),
             statusCatalog.DisplayNameOf(e.StatusId),
             e.LastWorkingDay,
             maintains,
@@ -38,7 +39,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             maintains ? e.OtherInformation : null,
             maintains ? e.Notes : null,
             maintains && e.BankAccount is { } bank ? new EmployeeBankAccountView(bank.BankName, bank.AccountNumber, bank.AccountHolderName) : null,
-            Linked(e, caller),
+            caller.IsOwner ? Linked(e) : null,
             RowVersionGuard.Encode(e.RowVersion));
     }
 
@@ -49,11 +50,11 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
         e.PhoneNumber,
         EmployeeTypePeriod.TypeOn(e.TypePeriods, timeProvider.Today()),
         JobTypes(e),
-        Zones(e),
+        Zones(e, caller),
         statusCatalog.DisplayNameOf(e.StatusId),
         e.LastWorkingDay,
         caller.Maintains(e),
-        Linked(e, caller),
+        caller.Sees(e) ? Linked(e) : null,
         RowVersionGuard.Encode(e.RowVersion));
 
     private IReadOnlyList<JobTypeRef> JobTypes(Employee e) =>
@@ -62,11 +63,12 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             .OrderBy(j => j.Name)
             .ToList();
 
-    private static IReadOnlyList<ZoneRef> Zones(Employee e) =>
-        e.WorkingZones.Where(w => w.Zone is not null).Select(w => new ZoneRef(w.ZoneId, w.Zone.Code, w.Zone.Name)).OrderBy(z => z.Code).ToList();
+    /// <summary>The working zones the caller sees: the zones of another Zone Manager the employee also works in are not shown.</summary>
+    private static IReadOnlyList<ZoneRef> Zones(Employee e, EmployeeCaller caller) =>
+        e.WorkingZones.Where(w => w.Zone is not null && (caller.Visible.AllZones || caller.Visible.ZoneIds.Contains(w.ZoneId))).Select(w => new ZoneRef(w.ZoneId, w.Zone.Code, w.Zone.Name)).OrderBy(z => z.Code).ToList();
 
-    private LinkedAccountView? Linked(Employee e, EmployeeCaller caller) =>
-        caller.IsOwner && e.Account is { } account
+    private LinkedAccountView? Linked(Employee e) =>
+        e.Account is { } account
             ? new LinkedAccountView(account.Id, account.Username, account.DisplayName, statusCatalog.DisplayNameOf(account.StatusId))
             : null;
 }

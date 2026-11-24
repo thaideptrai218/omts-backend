@@ -46,7 +46,7 @@ public class PublicProvenanceQaTests
         var cycle = await owner.StartCycleAsync(otherRaft.Id(), new CycleBody(Today.AddDays(-10)));
         var seed = await owner.SeedLotAsync();
         await owner.SeedingRecordAsync(cycle.Id(), seed.Session([1, 2, 3, 4, 5]));
-        var otherLot = await owner.HarvestLotAsync(otherRaft.Id(), HarvestFields.OfLanes(1));
+        var otherLot = await api.HarvestLotOfLanesAsync(owner, otherRaft.Id(), HarvestFields.OfLanes(1));
 
         var (_, token) = await sale.SoldWithQrCodeAsync((sale.LotId, 10m), (otherLot.Id(), 5m));
 
@@ -166,7 +166,7 @@ public class PublicProvenanceQaTests
         var hidden = new[]
             {
                 Path.GetFileNameWithoutExtension(logPhoto), Path.GetFileNameWithoutExtension(withdrawnPhoto), FileCategories.CultivationLogPhotos, "DEMO internal log note",
-                sale.Owner.Account.Username, sale.Manager.Account.Username, sale.Owner.Account.Id.ToString(), sale.Manager.Account.Id.ToString(),
+                sale.Owner.Account.Username, sale.Accountant.Account.Username, sale.Owner.Account.Id.ToString(), sale.Accountant.Account.Id.ToString(),
                 sale.ProductId.ToString(), sale.CustomerId.ToString(), invoice.Id().ToString(), cycleId.ToString(),
             }
             .Concat(receiptCodes).Concat(seedLotCodes);

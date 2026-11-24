@@ -20,7 +20,7 @@ public class CustomerDebtListTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SellAsync(PayLater(sale, sale.LotId, 10m));
+        await sale.Owner.Client.SellAsync(PayLater(sale, sale.LotId, 10m));
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var allowed = new[] { sale.Owner.Client, (await api.StaffAsync(zone, StaffRole.Accountant)).Client, (await api.StaffAsync(null, StaffRole.Accountant)).Client };
         var refused = new[] { sale.Manager.Client, (await api.StaffAsync(null, StaffRole.ZoneManager)).Client, (await api.TraderAsync()).Client };
@@ -48,7 +48,7 @@ public class CustomerDebtListTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var owner = sale.Owner.Client;
         var oldInvoice = (await client.SellAsync(PayLater(sale, sale.LotId, 10m, cash: 100_000m))).GetProperty("invoice");
         await api.BackDateAsync(oldInvoice.Id(), 12);
@@ -89,7 +89,7 @@ public class CustomerDebtListTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId));
+        await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(300_000m), sale.LotId));
 
         var list = await sale.Owner.Client.DebtListAsync();
 

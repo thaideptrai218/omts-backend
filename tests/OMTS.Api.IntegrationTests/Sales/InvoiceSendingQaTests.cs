@@ -31,9 +31,9 @@ public class InvoiceSendingQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.PublishAsync(sale.LotId);
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
 
-        var finished = await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
+        var finished = await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: true);
 
         var qrUrl = finished.Text("qrUrl")!;
         Assert.True(IsWebLink(qrUrl), $"The QR code links to '{qrUrl}', not to an absolute http(s) URL.");
@@ -50,12 +50,12 @@ public class InvoiceSendingQaTests
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
-        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var invoice = await sale.Owner.Client.SoldAsync(sale, sale.LotId);
         var phone = invoice.GetProperty("customer").Text("phoneNumber")!;
-        Assert.Equal("Sent", (await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false)).Text("deliveryStatus"));
+        Assert.Equal("Sent", (await sale.Owner.Client.FinishedAsync(invoice.Id(), wantsQrCode: false)).Text("deliveryStatus"));
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.PhoneNumber = null);
 
-        var resent = await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
+        var resent = await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Not sent", "MSG-SALE-16"), (resent.Text("deliveryStatus"), resent.Text("messageCode")));
         Assert.Equal("Not sent", resent.GetProperty("invoice").Text("deliveryStatus"));
@@ -76,16 +76,16 @@ public class InvoiceSendingQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
-        var traded = await sale.Manager.Client.SoldAsync(sale, sale.LotId, customerId: trader.Profile.Id);
-        var noAccount = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId);
+        var traded = await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: trader.Profile.Id);
+        var noAccount = await sale.Owner.Client.SoldAsync(sale, sale.OtherLotId);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.Client.FinishAsync(traded.Id(), false)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.Client.ResendAsync(traded.Id())).StatusCode);
         Assert.Empty(await api.InvoiceSendingsAsync(traded.Id()));
 
-        await sale.Manager.Client.FinishedAsync(traded.Id(), wantsQrCode: false);
-        (await sale.Manager.Client.ResendAsync(traded.Id())).EnsureSuccessStatusCode();
-        await sale.Manager.Client.FinishedAsync(noAccount.Id(), wantsQrCode: false);
+        await sale.Owner.Client.FinishedAsync(traded.Id(), wantsQrCode: false);
+        (await sale.Owner.Client.ResendAsync(traded.Id())).EnsureSuccessStatusCode();
+        await sale.Owner.Client.FinishedAsync(noAccount.Id(), wantsQrCode: false);
 
         var rows = (await api.InvoiceSendingsAsync(traded.Id())).Concat(await api.InvoiceSendingsAsync(noAccount.Id())).ToList();
         Assert.Equal(3, rows.Count);

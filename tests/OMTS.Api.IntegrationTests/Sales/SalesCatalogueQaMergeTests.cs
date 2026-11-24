@@ -14,7 +14,7 @@ public class SalesCatalogueQaMergeTests(AuthApiFactory factory) : IClassFixture<
 {
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
 
-    private async Task<HttpClient> ManagerAsync() => await factory.ZoneManagerAsync(await factory.AddZoneAsync(NewCode()));
+    private async Task<HttpClient> ManagerAsync() => await factory.AccountantAsync(await factory.AddZoneAsync(NewCode()));
 
     public static TheoryData<string> Malformed => new()
     {

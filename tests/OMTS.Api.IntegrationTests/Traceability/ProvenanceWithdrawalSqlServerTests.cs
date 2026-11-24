@@ -43,12 +43,12 @@ public class ProvenanceWithdrawalSqlServerTests
     }
 
     private static async Task<JsonElement> SellAsync(Setup setup, Guid lotId, Guid customerId) =>
-        (await setup.Manager.SellAsync(Invoice(customerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice), lotId))).GetProperty("invoice");
+        (await setup.Owner.SellAsync(Invoice(customerId, [Line(setup.ProductId, lotId, 1m)], Cash(ListPrice), lotId))).GetProperty("invoice");
 
     /// <summary>A new lot of lane 1, sold to the first trader and published from the Trace lot screen.</summary>
     private static async Task<Guid> PublishedLotAsync(Setup setup)
     {
-        var lotId = (await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(1))).Id();
+        var lotId = (await setup.Owner.HarvestLotOfLanesAsync(setup.RaftId, HarvestFields.OfLanes(1))).Id();
         await SellAsync(setup, lotId, setup.CustomerId);
         await (await setup.Owner.PostPublishAsync(lotId)).ReadAsync(HttpStatusCode.OK);
         return lotId;
@@ -116,7 +116,7 @@ public class ProvenanceWithdrawalSqlServerTests
             var lotId = await PublishedLotAsync(setup);
             var invoice = await SellAsync(setup, lotId, setup.OtherCustomerId);
 
-            var answers = await Task.WhenAll(setup.Owner.PostWithdrawAsync(lotId), setup.Manager.FinishAsync(invoice.Id(), true));
+            var answers = await Task.WhenAll(setup.Owner.PostWithdrawAsync(lotId), setup.Owner.FinishAsync(invoice.Id(), true));
 
             var withdrawn = await answers[0].ReadAsync(HttpStatusCode.OK);
             await answers[1].ReadAsync(HttpStatusCode.OK);

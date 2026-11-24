@@ -11,8 +11,8 @@ namespace OMTS.Api.Controllers;
 
 /// <summary>
 /// LABOR-02, LABOR-04 and LABOR-05 – work assignment, attendance and employee requests: the Zone Manager in the zone of the raft (a Staff
-/// employee: in a working zone of the employee) and the Cooperative Owner (§I.4.4). Correcting attendance and reviewing requests are
-/// Owner-only; a Zone Manager only reads the requests. The service checks the zone of the raft of each record.
+/// employee: in a working zone of the employee) and the Cooperative Owner (§I.4.4). Correcting attendance and reviewing requests are the Owner's and,
+/// since 20/11/2026, a Zone Manager's in its zone (ATTENDANCE Edit); never in a locked pay period. The service checks the zone of each record.
 /// </summary>
 [ApiController]
 [Route("api/workforce")]
@@ -112,16 +112,16 @@ public sealed class WorkforceController(
     public async Task<IActionResult> StaffCheckOut(Guid employeeId, RecordAttendanceRequest request, CancellationToken cancellationToken) =>
         (await recording.StaffCheckOutAsync(employeeId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>LABOR-04.4: the attendance and job periods of an employee on a day, for the correction. Cooperative Owner only.</summary>
+    /// <summary>LABOR-04.4: the attendance and job periods of an employee on a day, for the correction. Cooperative Owner, or a Zone Manager of the zone of the day (the service checks the zone).</summary>
     [HttpGet("attendance/{employeeId:guid}/{day}")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Attendance, PermissionAction.Edit, PermissionScope.AnyZone)]
     [ProducesResponseType<AttendanceDayView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDay(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
         (await corrections.GetDayAsync(employeeId, day, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>LABOR-04.4: corrects the check-in, the check-out and the job periods of a day with a reason. Cooperative Owner only. Ask MSG-GEN-04 first.</summary>
+    /// <summary>LABOR-04.4: corrects the check-in, the check-out and the job periods of a day with a reason, in a day outside any locked pay period. Cooperative Owner, or a Zone Manager of the zone of the day. Ask MSG-GEN-04 first.</summary>
     [HttpPut("attendance/{employeeId:guid}/{day}")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Attendance, PermissionAction.Edit, PermissionScope.AnyZone)]
     [ProducesResponseType<AttendanceCorrected>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Correct(Guid employeeId, DateOnly day, CorrectAttendanceRequest request, CancellationToken cancellationToken) =>
         (await corrections.CorrectAsync(employeeId, day, request, cancellationToken)).ToActionResult(Ok);
@@ -136,9 +136,9 @@ public sealed class WorkforceController(
     public async Task<IActionResult> Requests(int? statusId, CancellationToken cancellationToken) =>
         (await queries.ListRequestsAsync(statusId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>LABOR-05: approves or rejects (the note is then mandatory) a request Awaiting review. Cooperative Owner only.</summary>
+    /// <summary>LABOR-05: approves or rejects (the note is then mandatory) a request Awaiting review. Cooperative Owner, or a Zone Manager of a working zone of the employee.</summary>
     [HttpPost("leave-requests/{id:guid}/review")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Attendance, PermissionAction.Edit, PermissionScope.AnyZone)]
     [ProducesResponseType<EmployeeRequestView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Review(Guid id, ReviewEmployeeRequest request, CancellationToken cancellationToken) =>
         (await requests.ReviewAsync(id, request, cancellationToken)).ToActionResult(Ok);

@@ -18,7 +18,7 @@ public class CustomerDebtInvoiceMessageTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.SetReceivingAccountAsync();
-        var client = sale.Manager.Client;
+        var client = sale.Owner.Client;
         var older = (await client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
         await api.BackDateAsync(older.Id(), 2);
         await client.FinishedAsync(older.Id(), wantsQrCode: false);

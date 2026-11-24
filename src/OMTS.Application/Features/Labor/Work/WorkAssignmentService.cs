@@ -278,11 +278,15 @@ public sealed class WorkAssignmentService(
         {
             assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId });
         }
-        else if (!place.Holds(last) || last.JobTypeId != jobType.Id)
+        else
         {
+            // The earlier session ends at the old check-out and a new period starts now, even on the same raft and job, so the gap between the two sessions is not counted as work (L1, BR-LABOR-05).
+            last.EndsAt ??= record.CheckOutAt;
+            var sameWork = place.Holds(last) && last.JobTypeId == jobType.Id;
             assignments.Add(new WorkAssignment
             {
-                EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = WorkRules.Now(timeProvider), AssignedByAccountId = account, HarvestPlanLineId = planLineId,
+                EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = WorkRules.Now(timeProvider), AssignedByAccountId = account,
+                HarvestPlanLineId = planLineId ?? (sameWork ? last.HarvestPlanLineId : null),
             });
         }
 

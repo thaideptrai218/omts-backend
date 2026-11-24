@@ -39,17 +39,57 @@ public sealed class LotTraceService(
 
         var lotCode = Trimmed(query.LotCode);
         var invoiceCode = Trimmed(query.InvoiceCode);
-        if (lotCode is null && invoiceCode is null)
+        var raftCode = Trimmed(query.RaftCode);
+        var productName = Trimmed(query.ProductName);
+        if (lotCode is null && invoiceCode is null && raftCode is null && productName is null && query.HarvestFrom is null && query.HarvestTo is null)
         {
             return AppError.Invalid("Lot code");
         }
 
-        var found = await traces.SearchAsync(lotCode, invoiceCode, zones, MaxSearchResults, cancellationToken);
+        if (query.HarvestFrom > query.HarvestTo)
+        {
+            return AppError.Invalid("Harvest date");
+        }
+
+        var found = await traces.SearchAsync(lotCode, invoiceCode, query.HarvestFrom, query.HarvestTo, raftCode, productName, zones, MaxSearchResults, cancellationToken);
         var items = found.Select(l => new LotTraceSearchItem(
                 l.Id, l.LotCode, l.HarvestedAt, l.HarvestDate, l.RaftId, l.Raft.Code, l.Raft.ZoneId, l.Raft.Zone.Code, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), l.OriginState))
             .ToList();
         var empty = items.Count == 0 ? UserMessages.NoDataForFilters(invoiceCode is null ? "lot code" : lotCode is null ? "sales invoice" : "lot code and sales invoice") : null;
         return new LotTraceSearchResult(items, empty?.Text, empty?.Code);
+    }
+
+    /// <summary>
+    /// Reverse trace for a recall: the lots of the caller's zones that grew from a seed lot (or from a supplier), the invoices that sold them and their customers. The customer follows the
+    /// right to view the sales invoices of the invoice's zone, like the prices of the trace. No term: 400 MSG-GEN-01; nothing found: MSG-GEN-10 with an empty list; no right to trace: 403.
+    /// </summary>
+    public async Task<Result<SeedForwardTrace>> TraceFromSeedAsync(SeedLotTraceQuery query, CancellationToken cancellationToken)
+    {
+        var access = await views.AccessAsync(cancellationToken);
+        var zones = access?.PermittedZonesFor(PermissionFunctions.LotTracing, PermissionAction.View) ?? PermittedZones.None;
+        if (zones.IsEmpty)
+        {
+            return AppError.Forbidden;
+        }
+
+        var term = Trimmed(query.Term);
+        if (term is null || term.Length > 100)
+        {
+            return AppError.Invalid("Seed lot");
+        }
+
+        var found = await traces.LotsOfSeedAsync(term, zones, MaxSearchResults, cancellationToken);
+        var invoices = (await traces.InvoicesOfLotsAsync(found.Select(l => l.Id).ToList(), cancellationToken)).ToLookup(i => i.LotId);
+        var lots = found.Select(l => new SeedForwardLot(
+                new LotTraceSearchItem(l.Id, l.LotCode, l.HarvestedAt, l.HarvestDate, l.RaftId, l.Raft.Code, l.Raft.ZoneId, l.Raft.Zone.Code, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), l.OriginState),
+                invoices[l.Id].Select(i =>
+                {
+                    var customer = LotTraceBuilder.Allows(access, PermissionFunctions.SalesInvoices, PermissionAction.View, i.ZoneId);
+                    return new SeedForwardInvoice(i.InvoiceId, i.InvoiceCode, i.InvoiceDate, i.ZoneCode, customer ? i.CustomerName : null, customer ? i.CustomerPhone : null, i.WalkIn, i.Kg);
+                }).ToList()))
+            .ToList();
+        var empty = lots.Count == 0 ? UserMessages.NoDataForFilters("seed lot") : null;
+        return new SeedForwardTrace(lots, empty?.Text, empty?.Code);
     }
 
     /// <summary>TRACE-02.0 steps 2-3 with TRACE-02.1: 404 for an unknown lot, 403 MSG-GEN-08 outside the caller's zones.</summary>
@@ -95,7 +135,8 @@ public sealed class LotTraceService(
         var actors = corrections.Where(c => c.ActorAccountId is not null).Select(c => c.ActorAccountId!.Value).Distinct().ToList();
         var names = await accounts.GetDisplayNamesAsync(actors, cancellationToken);
         var returns = await traces.SaleReturnsAsync(lot.Id, cancellationToken);
-        return LotTraceBuilder.Build(new LotTraceSource(lot, sessions, lines, corrections, names, returns), access, statusCatalog);
+        var context = await traces.ContextAsync(lot.Id, cancellationToken);
+        return LotTraceBuilder.Build(new LotTraceSource(lot, sessions, lines, corrections, names, returns, context), access, statusCatalog);
     }
 
     private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

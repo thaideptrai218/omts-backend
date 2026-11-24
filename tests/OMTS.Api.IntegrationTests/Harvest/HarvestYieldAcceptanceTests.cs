@@ -53,7 +53,7 @@ public class HarvestYieldAcceptanceTests
         var setup = await api.YieldSetupAsync();
         var manager = await api.ManagerAsync(setup.Raft.ZoneId);
         var lot = await setup.Owner.HarvestLotAsync(setup.Raft.RaftId);
-        await manager.Client.SellKgAsync(setup, lot.Id(), 120m, soldWholeLot: false);
+        await setup.Owner.SellKgAsync(setup, lot.Id(), 120m, soldWholeLot: false);
 
         var forSale = await manager.Client.YieldAsync();
         Assert.Equal((400m, 120m, 0m, 280m, true), forSale.Group(setup.Raft.RaftId).Figures());
