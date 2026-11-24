@@ -37,7 +37,9 @@ public sealed class BankAccountQaTestsAccess
         await factory.GrantAsync(staff, role, allZones ? null : await factory.AddZoneAsync(NewCode()));
         var client = await SignInAsync(api, staff.Username, password);
 
-        await AssertRefusedEverywhereAsync(client);
+        // The list of banks is a reference list that any staff account reads; the receiving account itself is the Owner's.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/banks")).StatusCode);
+        await AssertRefusedEverywhereAsync(client, banksOpen: true);
 
         Assert.Equal(0, service.Calls);
     }
@@ -192,10 +194,16 @@ public sealed class BankAccountQaTestsAccess
         Assert.Equal(SweepNumber, (await AccountAsync(owner)).GetProperty("accountNumber").GetString());
     }
 
-    private static async Task AssertRefusedEverywhereAsync(HttpClient client)
+    private static async Task AssertRefusedEverywhereAsync(HttpClient client, bool banksOpen = false)
     {
         var body = Body("AAAA");
-        foreach (var response in new[] { await client.GetAsync("/api/banks"), await client.GetAsync(Route), await client.PutAsJsonAsync(Route, body) })
+        var routes = new List<HttpResponseMessage> { await client.GetAsync(Route), await client.PutAsJsonAsync(Route, body) };
+        if (!banksOpen)
+        {
+            routes.Add(await client.GetAsync("/api/banks"));
+        }
+
+        foreach (var response in routes)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
             Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());

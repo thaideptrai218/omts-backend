@@ -25,7 +25,7 @@ public sealed class CashAccountsController(CashAccountService accounts) : Contro
     public async Task<IActionResult> List(CashAccountKind? kind, bool includeInactive = false, CancellationToken cancellationToken = default) =>
         Ok(await accounts.ListAsync(kind, includeInactive, cancellationToken));
 
-    /// <summary>The list of banks for the form: the one of <c>api/banks</c> is Owner-only, and the Accountant who keeps these accounts is not the Owner.</summary>
+    /// <summary>The list of banks for the form, for whoever keeps the accounts of the cash book (the same list as <c>api/banks</c>, which any staff account reads).</summary>
     [HttpGet("banks")]
     [RequirePermission(PermissionFunctions.CashBookSettings, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<IReadOnlyList<BankView>>(StatusCodes.Status200OK)]

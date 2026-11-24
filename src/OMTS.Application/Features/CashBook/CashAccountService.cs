@@ -28,7 +28,7 @@ public sealed class CashAccountService(
 {
     private const string RecordType = nameof(CashAccount);
 
-    /// <summary>The list of banks for the account form; open to whoever may manage or read the cash book, as the Owner-only bank list is not.</summary>
+    /// <summary>The list of banks for the account form.</summary>
     public static IReadOnlyList<BankView> Banks() => BankCatalog.All;
 
     public async Task<IReadOnlyList<CashAccountView>> ListAsync(CashAccountKind? kind, bool includeInactive, CancellationToken cancellationToken)

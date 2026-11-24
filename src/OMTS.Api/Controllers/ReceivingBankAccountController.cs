@@ -12,11 +12,6 @@ namespace OMTS.Api.Controllers;
 [RequireCooperativeOwner]
 public sealed class ReceivingBankAccountController(ReceivingBankAccountService accounts) : ControllerBase
 {
-    /// <summary>The list of banks of the form.</summary>
-    [HttpGet("api/banks")]
-    [ProducesResponseType<IReadOnlyList<BankView>>(StatusCodes.Status200OK)]
-    public IActionResult Banks() => Ok(BankCatalog.All);
-
     /// <summary>The current account, with <c>account</c> null when none is set yet, and the <c>rowVersion</c> to save with.</summary>
     [HttpGet("api/cooperative/receiving-bank-account")]
     [ProducesResponseType<ReceivingBankAccountView>(StatusCodes.Status200OK)]
