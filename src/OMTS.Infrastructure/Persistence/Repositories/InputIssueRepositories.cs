@@ -8,6 +8,14 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class InputIssueRepository(OmtsDbContext db) : IInputIssueRepository
 {
+    public async Task<IReadOnlyDictionary<Guid, string>> CodesOfAsync(IReadOnlyCollection<Guid> issueIds, CancellationToken cancellationToken)
+    {
+        var ids = issueIds.Distinct().ToList();
+        return ids.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.InputIssues.AsNoTracking().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.Code, cancellationToken);
+    }
+
     public Task<InputIssue?> GetForEditAsync(Guid issueId, CancellationToken cancellationToken) =>
         db.InputIssues
             .Include(i => i.Zone)

@@ -39,6 +39,9 @@ public interface IInputIssueRepository
     /// <summary>The issue with its zone, raft, type, receiver and lines (items with their units, seed lots, rafts), tracked.</summary>
     Task<InputIssue?> GetForEditAsync(Guid issueId, CancellationToken cancellationToken);
 
+    /// <summary>The codes of these issues by id, in one read, without loading the issues; an id that is not an issue is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> CodesOfAsync(IReadOnlyCollection<Guid> issueIds, CancellationToken cancellationToken);
+
     /// <summary>The issue that has the code ignoring case (any kind and status), other than the given one.</summary>
     Task<InputIssue?> FindByCodeAsync(string code, Guid? exceptIssueId, CancellationToken cancellationToken);
 
