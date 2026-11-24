@@ -131,14 +131,23 @@ public static class HarvestTestKit
         // A harvest is recorded only from a line of a harvest plan (MSG-HARVEST-06): a test that names no line gets a plan of the raft with the lanes it sent.
         if (fields.PlanLineId is null && !fields.WithoutPlan)
         {
-            var lanes = fields.Lanes.Select(l => int.TryParse(l, out var n) ? n : 0).Where(n => n > 0).ToList();
-            if (await HarvestPlanTestKit.PlannedLineForAsync(raftId, lanes) is { } lineId)
+            if (await HarvestPlanTestKit.PlannedLineForAsync(raftId) is { } lineId)
             {
                 fields = fields.FromPlanLine(lineId);
             }
         }
 
-        return await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
+        var answer = await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
+        // A lot harvests the raft and finishes no lane (owner decision of 18/11/2026): the lanes a test marks finished are finished by their own action, as a client does.
+        if (answer.StatusCode == HttpStatusCode.Created && fields.Finished.Count > 0)
+        {
+            foreach (var lane in fields.Finished)
+            {
+                (await client.PostAsync($"/api/rafts/{raftId}/lanes/{lane}/finish-harvest", null)).EnsureSuccessStatusCode();
+            }
+        }
+
+        return answer;
     }
 
     /// <summary>Records a harvest and returns the whole answer.</summary>
