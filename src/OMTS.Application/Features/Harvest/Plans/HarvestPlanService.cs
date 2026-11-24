@@ -1,4 +1,4 @@
-using OMTS.Application.Common;
+﻿using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -402,6 +402,17 @@ public sealed class HarvestPlanService(
                 || ((raft.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse) && !keptRafts.Contains(raft.Id)))
             {
                 invalid.Add($"{field} raft");
+            }
+        }
+
+        // A line is one whole raft, and a raft is on a plan once. A plan stored before that rule keeps the lines it has on the same raft (they may hold lots), but no line may join them.
+        var storedRaftOf = stored?.Lines.ToDictionary(l => l.Id, l => l.RaftId) ?? new Dictionary<Guid, Guid>();
+        foreach (var group in entries.Lines.Where(l => l.RaftId != Guid.Empty).GroupBy(l => l.RaftId).Where(g => g.Count() > 1))
+        {
+            var kept = group.Where(l => l.Id is { } id && storedRaftOf.TryGetValue(id, out var storedRaft) && storedRaft == l.RaftId).ToList();
+            foreach (var repeated in group.Except(kept).Skip(kept.Count == 0 ? 1 : 0))
+            {
+                invalid.Add($"Line {repeated.LineNumber} raft");
             }
         }
 
