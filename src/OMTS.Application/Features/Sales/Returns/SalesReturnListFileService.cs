@@ -12,8 +12,6 @@ namespace OMTS.Application.Features.Sales.Returns;
 /// </summary>
 public sealed class SalesReturnListFileService(SalesReturnListService list, ISpreadsheetWriter spreadsheets, TimeProvider timeProvider)
 {
-    private const int PageSize = 100;
-
     /// <summary>The most rows one file holds; a wider period is exported in parts.</summary>
     public const int MaxRows = 10_000;
 
@@ -24,30 +22,16 @@ public sealed class SalesReturnListFileService(SalesReturnListService list, ISpr
 
     public async Task<Result<ExportedFile>> ExportAsync(SalesReturnListQuery query, CancellationToken cancellationToken)
     {
-        var rows = new List<IReadOnlyList<object?>>();
-        SalesReturnListTotals? totals = null;
-        for (var page = 1; rows.Count < MaxRows; page++)
+        // One read of the first MaxRows returns, as the orders and disposals exports do.
+        var found = await list.ExportRowsAsync(query, MaxRows, cancellationToken);
+        if (!found.IsSuccess)
         {
-            var found = await list.SearchAsync(query with { Page = page, PageSize = PageSize }, cancellationToken);
-            if (!found.IsSuccess)
-            {
-                return found.Error!;
-            }
-
-            var value = found.Value!;
-            totals = value.Totals;
-            rows.AddRange(value.Items.Select(Row));
-            if (page * PageSize >= value.Total)
-            {
-                break;
-            }
+            return found.Error!;
         }
 
-        rows = rows.Take(MaxRows).ToList();
-        if (totals is not null)
-        {
-            rows.Add(["Total of the returns that stand", null, null, null, null, null, null, null, totals.Value, totals.BackForSaleKg, totals.DiscardedKg, null, null, null]);
-        }
+        var value = found.Value!;
+        var rows = value.Items.Select(Row).ToList();
+        rows.Add(["Total of the returns that stand", null, null, null, null, null, null, null, value.Totals.Value, value.Totals.BackForSaleKg, value.Totals.DiscardedKg, null, null, null]);
 
         try
         {

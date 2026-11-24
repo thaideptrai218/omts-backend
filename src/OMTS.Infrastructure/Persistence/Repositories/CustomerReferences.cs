@@ -93,7 +93,11 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
             return rows.Select(r => r.Id).ToList();
         }
 
-        private Expression<Func<TRow, bool>> Naming(Guid customerId) => Expression.Lambda<Func<TRow, bool>>(
-            Expression.Equal(column.Body, Expression.Constant((Guid?)customerId, typeof(Guid?))), column.Parameters);
+        // The id is read from a closure, so the query sends it as a parameter: one SQL text for every customer, not one per customer.
+        private Expression<Func<TRow, bool>> Naming(Guid customerId)
+        {
+            Expression<Func<Guid?>> id = () => customerId;
+            return Expression.Lambda<Func<TRow, bool>>(Expression.Equal(column.Body, id.Body), column.Parameters);
+        }
     }
 }
