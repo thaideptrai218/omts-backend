@@ -15,7 +15,10 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 /// </summary>
 public sealed record HarvestFields
 {
-    public IReadOnlyList<string> Lanes { get; init; } = ["1"];
+    /// <summary>
+    /// The <c>laneNumbers</c> sent; none by default. A lot recorded from a plan line holds the whole raft and ignores them (owner decision of 18/11/2026), a correction that sends none keeps the lanes of the lot.
+    /// </summary>
+    public IReadOnlyList<string>? Lanes { get; init; }
     public IReadOnlyList<string> Finished { get; init; } = [];
     public string? Cages { get; init; } = "8";
     public string? EstimatedKg { get; init; }
@@ -54,7 +57,7 @@ public sealed record HarvestFields
     public MultipartFormDataContent ToForm()
     {
         var form = new MultipartFormDataContent();
-        foreach (var lane in Lanes)
+        foreach (var lane in Lanes ?? [])
         {
             form.Add(new StringContent(lane), "laneNumbers");
         }

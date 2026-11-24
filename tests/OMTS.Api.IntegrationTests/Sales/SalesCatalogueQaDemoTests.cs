@@ -49,7 +49,7 @@ public class SalesCatalogueQaDemoTests
                 var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
                 var products = await db.Products.AsNoTracking().OrderBy(p => p.UnitPrice).Select(p => new { p.Name, p.UnitPrice, p.StatusId }).ToListAsync();
                 Assert.Equal(
-                    [("Hàu sống loại nhỏ", 45_000m, StatusIds.Usage.InUse), ("Hàu sữa", 60_000m, StatusIds.Usage.InUse), ("Hàu béo", 75_000m, StatusIds.Usage.InUse), ("Hàu thịt tách vỏ", 120_000m, StatusIds.Usage.Discontinued)],
+                    [("Hàu bản địa Vân Đồn", 25_000m, StatusIds.Usage.InUse), ("Hàu Thái Bình Dương", 35_000m, StatusIds.Usage.InUse), ("Hàu thịt tách vỏ", 120_000m, StatusIds.Usage.Discontinued)],
                     products.Select(p => (p.Name, p.UnitPrice, p.StatusId)));
                 var offline = await db.Customers.AsNoTracking().Where(c => c.AccountId == null).OrderBy(c => c.PhoneNumber).Select(c => c.PhoneNumber).ToListAsync();
                 Assert.Equal(["0900000041", "0900000042", "0900000043", "0900000044", "0900000045"], offline);

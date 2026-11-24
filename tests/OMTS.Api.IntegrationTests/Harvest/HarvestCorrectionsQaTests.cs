@@ -53,7 +53,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var recorder = await factory.ManagerAsync(raft.ZoneId);
         var successor = await factory.ManagerAsync(raft.ZoneId);
         var elsewhere = await factory.ZoneEntityAsync((await owner.CreateZoneAsync()).Id());
-        var lot = await recorder.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(recorder.Client, raft.RaftId, HarvestFields.OfLanes(1));
 
         await RevokeAsync(factory, recorder.Grant!.Id);
         await factory.GrantAsync(recorder.Account, StaffRole.ZoneManager, elsewhere);
@@ -80,7 +80,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var here = await factory.ZoneEntityAsync(raft.ZoneId);
         var recorder = await factory.ManagerAsync(raft.ZoneId);
-        var lot = await recorder.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(recorder.Client, raft.RaftId, HarvestFields.OfLanes(1));
 
         await factory.GrantAsync(recorder.Account, StaffRole.Accountant, null);
         await factory.CorrectLotAsync(recorder.Client, lot.Id(), HarvestFields.OfLanes(1) with { Cages = "6" });
@@ -101,8 +101,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var owner = raft.Owner.Client;
         var manager = await factory.ManagerAsync(raft.ZoneId);
         var allZones = await factory.StaffAsync(null);
-        var ofOwner = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var ofAllZones = await allZones.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        var ofOwner = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
+        var ofAllZones = await factory.HarvestLotOfLanesAsync(allZones.Client, raft.RaftId, HarvestFields.OfLanes(2));
         var secondOwner = await factory.OwnerAsync();
 
         await AssertRefusedEverywhereAsync(factory, manager.Client, ofOwner.Id());
@@ -120,7 +120,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         using var api = new SalesDoubleApiFactory();
         var raft = await api.SeededRaftAsync();
-        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(raft.Owner.Client, raft.RaftId, HarvestFields.OfLanes(1));
         api.Sales.OnInvoice.Add(lot.Id());
         var zone = await api.ZoneEntityAsync(raft.ZoneId);
         var callers = new[]
@@ -150,7 +150,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         using var api = new CycleLogsQaFaultFactory();
         var raft = await api.SeededRaftAsync();
         var manager = await api.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(manager.Client, raft.RaftId, HarvestFields.OfLanes(1));
         var version = await api.LotVersionAsync(lot.Id());
         api.Hold.Arm();
 
@@ -173,7 +173,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(manager.Client, raft.RaftId, HarvestFields.OfLanes(1));
         await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c =>
         {
             c.StatusId = StatusIds.CultivationCycle.Closed;
@@ -199,7 +199,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(manager.Client, raft.RaftId, HarvestFields.OfLanes(1));
         await factory.UpdateAsync<HarvestLot>(lot.Id(), l =>
         {
             l.StatusId = reopened ? StatusIds.HarvestLot.Reopened : StatusIds.HarvestLot.Closed;
@@ -226,14 +226,17 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
         // Not weighed: the figures count from the estimate, which the correction changes (a weighed lot keeps the weighed kg, which only weighing again changes).
-        var lot = await owner.RecordLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await api.RecordLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         api.Sales.OnInvoice.Add(lot.Id());
         api.Sales.Figures[lot.Id()] = new LotSalesFigures(350m, 0m, 0m, 0m);
 
         var corrected = (await api.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(1) with { Cages = "6" })).GetProperty("lot");
 
         Assert.Equal(300m, corrected.Kg("estimatedKg"));
-        Assert.Equal((350m, 0m, -50m), (corrected.GetProperty("figures").Kg("invoicedKg"), corrected.GetProperty("figures").Kg("remainingKg"), corrected.GetProperty("figures").Kg("differenceKg")));
+        // Awaiting weighing, a lot shows no remaining kg or difference from its estimate (owner decision of 18/11/2026): they come with the weighing.
+        Assert.Equal((350m, 0m, 0m), (corrected.GetProperty("figures").Kg("invoicedKg"), corrected.GetProperty("figures").Kg("remainingKg"), corrected.GetProperty("figures").Kg("differenceKg")));
+        var weighed = await owner.WeighAtEstimateAsync(corrected);
+        Assert.Equal((350m, 0m, -50m), (weighed.GetProperty("figures").Kg("invoicedKg"), weighed.GetProperty("figures").Kg("remainingKg"), weighed.GetProperty("figures").Kg("differenceKg")));
         var refused = await api.SendRemovalAsync(owner, lot.Id());
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
         Assert.Equal("MSG-GEN-09", await refused.ErrorCodeAsync());
@@ -261,7 +264,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(manager.Client, raft.RaftId, HarvestFields.OfLanes(1));
         if (zoneToo)
         {
             await factory.UpdateAsync<FarmingZone>(raft.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
@@ -288,7 +291,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
         await AssertStatesAsync(raft, ("Harvested", 1), ("BeingHarvested", 2), ("Growing", 3));
 
         await factory.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(2, 3).FinishedLanes(3));
@@ -325,8 +328,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
         var other = await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([3]));
-        var keeper = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(3));
+        var keeper = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(3));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.RemoveSeedingAsync(other.Id())).StatusCode);
 
         await factory.RemoveLotAsync(owner, lot.Id());
@@ -335,7 +338,9 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         await AssertStatesAsync(raft, ("BeingHarvested", 1), ("Growing", 2), ("NotSeeded", 3));
         var refused = await (await factory.SendCorrectionAsync(owner, keeper.Id(), HarvestFields.OfLanes(1, 3))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("Lanes", "Lanes 3 cannot be harvested now."), (refused.Text("field"), refused.Text("hint")));
-        await AssertFieldRefusedAsync(await owner.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(3)), "Lanes");
+        // A lane with no seed is not in the next lot either: a lot holds the lanes of the raft that can be harvested.
+        var next = await owner.HarvestLotAsync(raft.RaftId);
+        Assert.Equal([1, 2], next.Numbers("laneNumbers"));
     }
 
     // BR-CYCLE-02: a session is free while no lane of it is in a lot. A correction moves that line both ways, and a session with a lane still in a lot stays locked.
@@ -345,7 +350,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
         var other = await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([3]));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         Assert.False((await owner.GetSeedingAsync(raft.Session.Id())).Flag("canCorrect"));
         Assert.True((await owner.GetSeedingAsync(other.Id())).Flag("canCorrect"));
 
@@ -367,7 +372,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync(1);
         var owner = raft.Owner.Client;
         var other = await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([2]));
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(2));
         var session = await owner.GetSeedingAsync(raft.Session.Id());
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutSeedingAsync(session.Id(), session.AsCorrection() with { LaneNumbers = [1, 2] })).StatusCode);
 
@@ -387,7 +392,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var owner = raft.Owner.Client;
         // Lane 1 holds half, so a second session can hang the rest once it is out of its lot (a lane never holds more than 100 %).
         await owner.HalveLaneAsync(raft.Session, 1);
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2));
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today).Percents(50m, 1))).StatusCode);
 
         await factory.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(2));
@@ -401,7 +406,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2));
         Assert.False((await owner.HarvestScreenAsync(raft.RaftId)).Flag("canRecordHarvest"));
 
         await factory.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(1, 2).FinishedLanes(1));
@@ -422,8 +427,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var earlier = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var later = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        var earlier = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
+        var later = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
         // A lane that a later lot holds and finished stays allowed, and other fields can change.
         await factory.CorrectLotAsync(owner, earlier.Id(), HarvestFields.OfLanes(1) with { Cages = "9" });
@@ -461,14 +466,15 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
+        var corrections = await AuditRowsAsync(HarvestLotAudit.Corrected, lot.Id());
 
         await AssertFieldRefusedAsync(await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Lanes = lanes, Finished = finished }), field);
 
         var read = await owner.GetHarvestLotAsync(lot.Id());
         Assert.Equal([1], read.Numbers("laneNumbers"));
         Assert.Empty(read.Numbers("finishedLaneNumbers"));
-        Assert.Equal(0, await AuditRowsAsync(HarvestLotAudit.Corrected, lot.Id()));
+        Assert.Equal(corrections, await AuditRowsAsync(HarvestLotAudit.Corrected, lot.Id()));
     }
 
     // BR-HARVEST-02: the copy of the lot, not the setting. Cages unchanged: the estimate stays, also by hand. Cages changed with none sent: worked out again. Sent: as sent.
@@ -478,7 +484,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Lanes = ["1"], Cages = "8", EstimatedKg = "450" });
+        var lot = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, new HarvestFields { Lanes = ["1"], Cages = "8", EstimatedKg = "450" });
         Assert.Equal((50m, 450m), (lot.Kg("kgPerCage"), lot.Kg("estimatedKg")));
         await owner.SetHarvestSettingsAsync(60m, 3);
 
@@ -516,7 +522,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
 
         await AssertFieldRefusedAsync(await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Cages = cages, EstimatedKg = estimate }), field);
 
@@ -530,7 +536,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot()).ToForm();
         form.Add(new StringContent("99"), "kgPerCage");
         form.Add(new StringContent("HACKED"), "lotCode");
@@ -560,7 +566,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var seed = await owner.SeedLotAsync(received: new DateOnly(2026, 10, 1));
         await owner.RecordSeedingAsync(cycleId, seed.Session([1], new DateOnly(2026, 10, 1)));
         api.Clock.At = HarvestLotCorrectionTestKit.InVietnam(10, 5);
-        var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1));
         await owner.RecordSeedingAsync(cycleId, seed.Session([2], new DateOnly(2026, 10, 5)));
         api.Clock.At = HarvestLotCorrectionTestKit.InVietnam(10, 6);
         await owner.RecordSeedingAsync(cycleId, seed.Session([3], new DateOnly(2026, 10, 6)));
@@ -582,7 +588,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         using var api = new CyclesQaClockApiFactory();
         var (owner, _, raftId, cycleId) = await api.ClockedRaftAsync("B01", "KV92");
         api.Clock.At = HarvestLotCorrectionTestKit.InVietnam(10, 5);
-        var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        var lot = await api.HarvestLotOfLanesAsync(owner, raftId, HarvestFields.OfLanes(1).FinishedLanes(1));
         api.Clock.At = HarvestLotCorrectionTestKit.InVietnam(10, 10);
 
         async Task<string> StateAsync(int lane, string date) => (await owner.ProgressAsync(raftId, $"?date={date}")).GetProperty("lanes").EnumerateArray().Single(l => l.GetProperty("laneNumber").GetInt32() == lane).Text("state");
@@ -605,7 +611,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var (first, second) = (await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1)), await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2)));
+        var (first, second) = (await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1)), await factory.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(2)));
         var before = await (await owner.CancelCycleAsync(raft.CycleId, "")).ReadAsync(HttpStatusCode.Conflict);
 
         await factory.RemoveLotAsync(owner, first.Id());
@@ -624,7 +630,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         // Not weighed: the figures count from the estimate the correction lowers.
-        var lot = await owner.RecordLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        var lot = await factory.RecordLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(1));
         await factory.UpdateAsync<HarvestLot>(lot.Id(), l =>
         {
             l.StatusId = StatusIds.HarvestLot.Closed;

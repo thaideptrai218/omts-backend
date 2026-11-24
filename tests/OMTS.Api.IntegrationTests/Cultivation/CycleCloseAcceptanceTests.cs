@@ -57,7 +57,7 @@ public class CycleCloseAcceptanceTests
         using var api = new CyclesQaClockApiFactory();
         var (owner, manager, _, raftId, cycleId) = await TenLanesAsync(api);
         api.Clock.At = InVietnam(10, 26);
-        await manager.Client.HarvestLotAsync(raftId, Lanes1To9);
+        await api.HarvestLotOfLanesAsync(manager.Client, raftId, Lanes1To9);
 
         api.Clock.At = InVietnam(10, 28);
         var preview = await manager.Client.ClosePreviewAsync(cycleId);
@@ -103,7 +103,7 @@ public class CycleCloseAcceptanceTests
         var (owner, ownerId) = await OwnerOfAsync(api);
         var (_, manager, _, raftId, cycleId) = await TenLanesAsync(api, owner);
         api.Clock.At = InVietnam(10, 26);
-        await manager.Client.HarvestLotAsync(raftId, Lanes1To9);
+        await api.HarvestLotOfLanesAsync(manager.Client, raftId, Lanes1To9);
         api.Clock.At = InVietnam(10, 27);
         await manager.Client.HarvestLotAsync(raftId, HarvestFields.OfLanes(10).FinishedLanes(10) with { Cages = "1", EstimatedKg = "45.5" });
 

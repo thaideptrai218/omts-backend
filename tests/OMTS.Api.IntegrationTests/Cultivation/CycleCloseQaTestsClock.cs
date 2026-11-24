@@ -74,7 +74,7 @@ public class CycleCloseQaTestsClock
         var s = await ArrangeAsync(api);
         var owner = s.Owner.Client;
         api.Clock.At = InVietnam(10, 10);
-        await owner.HarvestLotAsync(s.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "300" });
+        await api.HarvestLotOfLanesAsync(owner, s.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "300" });
         api.Clock.At = InVietnam(10, 12);
         var atClose = (await owner.CloseCycleAsync(s.CycleId)).GetProperty("summary");
         Assert.Equal((10, On(10, 10), 300m, 50m), (atClose.GetProperty("daysOfFarming").GetInt32(), atClose.Date("lastHarvestDate"), atClose.Number("kgHarvested"), atClose.Number("seedHung")));
@@ -84,7 +84,7 @@ public class CycleCloseQaTestsClock
         var lot = await owner.SeedLotAsync(received: On(10, 13));
         await owner.RecordSeedingAsync(next, lot.Session([1, 2, 3, 4, 5], On(10, 13), 70m));
         api.Clock.At = InVietnam(10, 25);
-        await owner.HarvestLotAsync(s.RaftId, HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with { EstimatedKg = "999" });
+        await api.HarvestLotOfLanesAsync(owner, s.RaftId, HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with { EstimatedKg = "999" });
         api.Clock.At = InVietnam(11, 5);
 
         Assert.Equal(atClose.GetRawText(), (await owner.CycleSummaryAsync(s.CycleId)).GetRawText());
@@ -115,7 +115,7 @@ public class CycleCloseQaTestsClock
         using var api = new CyclesQaClockApiFactory();
         var s = await ArrangeAsync(api);
         api.Clock.At = InVietnam(10, 10);
-        await s.Manager.Client.HarvestLotAsync(s.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "300" });
+        await api.HarvestLotOfLanesAsync(s.Manager.Client, s.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { EstimatedKg = "300" });
         api.Clock.At = InVietnam(10, 12);
 
         await s.Manager.Client.CloseCycleAsync(s.CycleId, ownerApproved: true);

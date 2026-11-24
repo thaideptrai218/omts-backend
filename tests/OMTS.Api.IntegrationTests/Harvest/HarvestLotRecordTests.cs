@@ -73,8 +73,11 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var raft = await factory.SeededRaftAsync();
 
-        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId, new HarvestFields { Lanes = [sent, sent], Finished = [sent] });
+        var fields = await new HarvestFields { Lanes = [sent, sent], Finished = [sent], Photos = [Jpeg] }.PlannedAsync(raft.RaftId);
 
+        var saved = await (await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", fields.ToForm())).ReadAsync(HttpStatusCode.Created);
+
+        var lot = saved.GetProperty("lot");
         Assert.Equal([1, 2, 3, 4, 5], lot.Numbers("laneNumbers"));
         Assert.Empty(lot.Numbers("finishedLaneNumbers"));
     }

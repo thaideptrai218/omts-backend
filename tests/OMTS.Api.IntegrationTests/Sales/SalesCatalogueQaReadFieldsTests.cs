@@ -39,8 +39,8 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         var trader = await factory.LoginAsync(traderAccount.Username, StaffPassword);
         string[] productFields =
         [
-            "categoryId", "categoryName", "code", "createdAt", "createdBy", "description", "id", "isUsed", "maxKg", "minKg", "name", "note", "onHandKg", "photoUrl", "rowVersion", "status",
-            "statusId", "unit", "unitPrice", "units",
+            "categoryId", "categoryName", "code", "createdAt", "createdBy", "description", "id", "isUsed", "maxKg", "minKg", "name", "note", "onHandKg", "photoUrl", "rowVersion", "sizeMaxCm", "sizeMinCm",
+            "status", "statusId", "unit", "unitPrice", "units",
         ];
         // A seller also reads the photos and the seed items a product comes from.
         string[] sellerFields = [.. productFields, "photos", "sourceSeeds"];

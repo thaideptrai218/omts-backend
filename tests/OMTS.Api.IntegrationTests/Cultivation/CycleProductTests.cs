@@ -134,7 +134,7 @@ public sealed class CycleProductTests
         Assert.Equal(1, await api.LotCountAsync(raft.RaftId));
 
         // A form that sends no line gets the one line of the cycle product, with its cages.
-        var built = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2));
+        var built = await api.HarvestLotOfLanesAsync(owner, raft.RaftId, HarvestFields.OfLanes(2));
         var line = Assert.Single(built.GetProperty("productLines").EnumerateArray());
         Assert.Equal((product, 8m), (line.GetProperty("productId").GetGuid(), line.Kg("cageCount")));
     }

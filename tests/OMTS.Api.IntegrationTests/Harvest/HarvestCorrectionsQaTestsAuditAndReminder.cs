@@ -32,12 +32,12 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
     public async Task A_correction_writes_one_row_with_only_what_changed_the_trimmed_reason_the_actor_and_the_zone()
     {
         using var api = new AuthApiFactory();
-        var raft = await api.SeededRaftAsync();
+        var raft = await api.SeededRaftAsync(1, 2);
         var manager = await api.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, new HarvestFields { Lanes = ["1", "2"], Finished = ["2"], Photos = [Jpeg] });
+        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, new HarvestFields { Finished = ["2"], Photos = [Jpeg] });
         var keys = lot.PhotoKeysOfLot();
 
-        await (await api.SendCorrectionAsync(manager.Client, lot.Id(), new HarvestFields { Lanes = ["1", "2"], Finished = ["2"], Cages = "9" }, "  Counted again  ", keys)).ReadAsync(HttpStatusCode.OK);
+        await (await api.SendCorrectionAsync(manager.Client, lot.Id(), new HarvestFields { Finished = ["2"], Cages = "9" }, "  Counted again  ", keys)).ReadAsync(HttpStatusCode.OK);
 
         var row = Assert.Single(await AuditRowsAsync(api, "HarvestLot.Corrected", lot.Id()));
         Assert.Equal(("Counted again", manager.Account.Id, raft.ZoneId, lot.Text("lotCode"), "HarvestLot"), (row.Reason, row.ActorAccountId, row.ZoneId, row.RecordCode, row.RecordType));
@@ -53,9 +53,9 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
     public async Task A_save_of_the_same_values_in_another_spelling_writes_nothing()
     {
         using var api = new AuthApiFactory();
-        var raft = await api.SeededRaftAsync();
+        var raft = await api.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Lanes = ["1", "2", "3"], Finished = ["1", "3"], Photos = [Jpeg, Png] });
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Finished = ["1", "3"], Photos = [Jpeg, Png] });
         var keys = lot.PhotoKeysOfLot();
 
         var fields = new HarvestFields { Lanes = ["3", "2", "1"], Finished = ["3", "1"], Cages = "08", EstimatedKg = "400.00" };
@@ -157,11 +157,11 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
         var raft = await api.SeededRaftAsync(1);
         var owner = raft.Owner.Client;
         var manager = await api.ManagerAsync(raft.ZoneId);
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(1));
         await owner.RecordSeedingAsync(raft.CycleId, raft.Lot.Session([2]));
 
         await api.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1));
-        await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
+        await api.HarvestLotOfLanesAsync(manager.Client, raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
         await api.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1).FinishedLanes(1));
 
         Assert.Equal(2, await RemindersAsync(api, raft.CycleId, manager.Account.Id));
