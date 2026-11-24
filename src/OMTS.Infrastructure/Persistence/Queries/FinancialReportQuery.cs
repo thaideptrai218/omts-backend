@@ -46,14 +46,26 @@ internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQ
         // saving) and cuts the date, so the lines are added up per kind and day there instead of being read one by one.
         var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
         var endExclusive = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
-        var issueSums = await db.InputIssues.AsNoTracking()
-            .Where(i => i.StatusId == StatusIds.InputIssue.Completed && i.IssuedAt >= start && i.IssuedAt < endExclusive)
-            .SelectMany(i => i.Lines, (i, l) => new { i.Kind, Day = EF.Functions.AtTimeZone(i.IssuedAt, VietnamTimeZone).Date, l.Value })
-            .GroupBy(x => new { x.Kind, x.Day })
-            .Select(g => new { g.Key.Kind, g.Key.Day, Value = g.Sum(x => x.Value) })
-            .ToListAsync(cancellationToken);
-        entries.AddRange(issueSums.Select(d => new FinancialEntry(
-            d.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, DateOnly.FromDateTime(d.Day), d.Value)));
+        var issues = db.InputIssues.AsNoTracking()
+            .Where(i => i.StatusId == StatusIds.InputIssue.Completed && i.IssuedAt >= start && i.IssuedAt < endExclusive);
+        if (db.Database.IsRelational())
+        {
+            var issueSums = await issues
+                .SelectMany(i => i.Lines, (i, l) => new { i.Kind, Day = EF.Functions.AtTimeZone(i.IssuedAt, VietnamTimeZone).Date, l.Value })
+                .GroupBy(x => new { x.Kind, x.Day })
+                .Select(g => new { g.Key.Kind, g.Key.Day, Value = g.Sum(x => x.Value) })
+                .ToListAsync(cancellationToken);
+            entries.AddRange(issueSums.Select(d => new FinancialEntry(
+                d.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, DateOnly.FromDateTime(d.Day), d.Value)));
+        }
+        else
+        {
+            // A provider without AT TIME ZONE (the in-memory test database) reads the lines and cuts the business date here.
+            var issueLines = await issues.SelectMany(i => i.Lines.Select(l => new { i.Kind, i.IssuedAt, l.Value })).ToListAsync(cancellationToken);
+            entries.AddRange(issueLines
+                .GroupBy(l => (l.Kind, Date: BusinessClock.ToBusinessDate(l.IssuedAt)))
+                .Select(g => new FinancialEntry(g.Key.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, g.Key.Date, g.Sum(l => l.Value))));
+        }
 
         // Wages count in the expense month chosen when the sheet was finalized: whole months, from the month of the first day to that of the last. The cost is the gross income of the payslips
         // (main pay + bonus): an advance already paid is a receivable settled against the payslip, not a cost that disappears (decision of 19/11/2026, REP-01).
