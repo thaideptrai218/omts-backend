@@ -98,11 +98,38 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
         return trips.Length;
     }
 
-    /// <summary>The weighing of a recorded lot as the Zone Manager does it: 98 % of the estimate, of each product line or of the lot, so the lot is for sale.</summary>
+    /// <summary>
+    /// The weighing of a recorded lot as the Zone Manager does it at the port: cage by cage, 98 % of the estimate of each product line (or of the lot) shared over its cages, then completed, so the lot is
+    /// for sale.
+    /// </summary>
     private static async Task WeighAsync(DemoSeedContext context, HarvestLotView lot, string raftCode, CancellationToken cancellationToken)
     {
-        var lines = lot.ProductLines.Select((line, index) => new WeighedLineInput(index + 1, decimal.Round(line.Kg * 0.98m, 3))).ToList();
-        var request = new WeighHarvestLotRequest(lot.RowVersion, null, lines, decimal.Round(lot.EstimatedKg * 0.98m, 3));
+        var cages = context.Get<HarvestLotCageService>();
+        var shares = lot.ProductLines.Count == 0
+            ? [((Guid?)null, lot.CageCount, lot.EstimatedKg)]
+            : lot.ProductLines.Select(line => ((Guid?)line.ProductId, line.CageCount, line.Kg)).ToList();
+        foreach (var (productId, cageCount, kg) in shares)
+        {
+            foreach (var cageKg in CageKgs(decimal.Round(kg * 0.98m, 3), cageCount))
+            {
+                DemoSeedContext.Ensure(await cages.AddAsync(lot.Id, new AddLotCageRequest(null, productId, cageKg), cancellationToken), $"a cage of the harvest of raft {raftCode}");
+            }
+        }
+
+        var request = new WeighHarvestLotRequest(lot.RowVersion, null);
         DemoSeedContext.Ensure(await context.Get<HarvestLotWeighingService>().WeighAsync(lot.Id, request, cancellationToken), $"weighing of the harvest of raft {raftCode}");
+    }
+
+    /// <summary>The kg of each cage of a share: one cage per cage counted (half a cage is one more), the kg shared evenly and the last cage taking what rounding left.</summary>
+    private static IEnumerable<decimal> CageKgs(decimal kg, decimal cageCount)
+    {
+        var count = (int)Math.Clamp(Math.Ceiling(cageCount), 1m, 50m);
+        var each = decimal.Round(kg / count, 3, MidpointRounding.ToZero);
+        for (var i = 1; i < count; i++)
+        {
+            yield return each;
+        }
+
+        yield return kg - each * (count - 1);
     }
 }

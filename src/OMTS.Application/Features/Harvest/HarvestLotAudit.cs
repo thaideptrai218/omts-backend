@@ -15,6 +15,7 @@ public static class HarvestLotAudit
     public const string Reopened = "HarvestLot.Reopened";
     public const string Weighed = "HarvestLot.Weighed";
     public const string Reweighed = "HarvestLot.Reweighed";
+    public const string WeighingAgreed = "HarvestLot.WeighingAgreed";
     public const string RecordType = nameof(HarvestLot);
 
     /// <param name="zoneId">The zone of the raft of the lot.</param>

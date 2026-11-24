@@ -269,6 +269,10 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotForSaleService>();
         services.AddScoped<HarvestLotStatusService>();
         services.AddScoped<HarvestLotWeighingService>();
+        services.AddScoped<HarvestLotCageService>();
+        services.AddScoped<LotWeighingSheetBuilder>();
+        services.AddScoped<TraderWeighingService>();
+        services.AddScoped<HarvestLotAgreementGuard>();
         services.AddScoped<HarvestLotReopeningService>();
         services.AddScoped<HarvestLotRegisterService>();
         services.AddScoped<HarvestLotRegisterFileService>();

@@ -9,17 +9,17 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Purchasing.Receipts;
-using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>
-/// Weighs a lot: the actual kg of each product line (or of the lot, when it has no lines) replace the estimate for every figure, and the lot becomes for sale (Awaiting weighing to Open). A Zone Manager of the
-/// lot's zone, any of them and not only who recorded it, or the Cooperative Owner; never an Accountant (§I.4.4). A lot that is Open or Reopened is weighed again the same way: the Harvest rows of the product
-/// ledger are undone and written at the new kg, and nothing else on the ledger changes. The weighing is audited with its before and after values; the days before automatic close count from the day of the
-/// latest weighing of a lot that was never reopened. The crew is not checked out by a weighing.
+/// Completes the weighing of a lot from the cages weighed at the port (owner decision of 24/11/2026; <see cref="HarvestLotCageService"/> saves them one by one): the kg of each product line is the sum of
+/// its cages (or the kg of the lot the sum of every cage, when it has no lines), they replace the estimate for every figure, and the lot becomes for sale (Awaiting weighing to Open). A Zone Manager of the
+/// lot's zone, any of them and not only who recorded it, or the Cooperative Owner; never an Accountant (§I.4.4). A lot that is Open or Reopened is completed again the same way after a cage was corrected:
+/// the Harvest rows of the product ledger are undone and written at the new kg, and nothing else on the ledger changes. The weighing is audited with its before and after values; the days before automatic
+/// close count from the day of the latest weighing of a lot that was never reopened. The crew is not checked out by a weighing.
 /// </summary>
 public sealed class HarvestLotWeighingService(
     IHarvestLotRepository lots,
@@ -35,7 +35,7 @@ public sealed class HarvestLotWeighingService(
 {
     public const string WeighedAtField = "Weighed at";
     public const string WeighedKgField = "Weighed kg";
-    public const string LinesField = "Lines";
+    public const string CagesField = "Cages";
 
     public async Task<Result<HarvestLotChanged>> WeighAsync(Guid lotId, WeighHarvestLotRequest request, CancellationToken cancellationToken)
     {
@@ -91,37 +91,44 @@ public sealed class HarvestLotWeighingService(
         return new HarvestLotChanged(await views.ViewAsync(lot, lot.Raft, cancellationToken), saved.Text, saved.Code);
     }
 
-    /// <summary>MSG-GEN-01 naming each invalid field: the time of the weighing, and the weighed kg of every line (or of the lot); else the values to weigh with.</summary>
+    /// <summary>
+    /// MSG-GEN-01 naming each invalid field: the time of the weighing, no cage weighed (<c>Cages</c>), a cage whose product is not a line of the lot (<c>Cage {number} product</c>, after a correction of
+    /// the lines) and a line with no cage (<c>Line {n} cages</c>); else the kg of each line, summed from its cages, and of the lot.
+    /// </summary>
     private static Result<(DateTimeOffset At, IReadOnlyDictionary<int, decimal> KgByLine, decimal TotalKg)> Read(HarvestLot lot, WeighHarvestLotRequest request, DateTimeOffset now)
     {
         var check = new FieldCheck();
         var at = request.WeighedAt?.ToOffset(BusinessClock.UtcOffset) ?? now.ToOffset(BusinessClock.UtcOffset);
         check.Check(at >= lot.HarvestedAt && at <= now + PurchaseReceiptValidator.ClockTolerance, WeighedAtField);
 
+        var cages = lot.Cages.OrderBy(c => c.Number).ToList();
+        check.Check(cages.Count > 0, CagesField);
         var kgByLine = new Dictionary<int, decimal>();
         decimal total;
         if (lot.ProductLines.Count == 0)
         {
-            check.Check(InvoiceMoney.IsKg(request.WeighedKg), WeighedKgField);
-            total = request.WeighedKg ?? 0m;
+            // A lot with no lines weighs as one: every cage counts, and none can name a product.
+            foreach (var cage in cages.Where(c => c.ProductId is not null))
+            {
+                check.Check(false, HarvestLotCageService.CageProductField(cage.Number));
+            }
+
+            total = cages.Sum(c => c.Kg);
         }
         else
         {
-            var sent = request.Lines ?? [];
-            // Every line of the lot exactly once; a number that is not a line of the lot, or twice, is a mistake of the form.
-            check.Check(sent.All(l => l is not null) && sent.Count == lot.ProductLines.Count && sent.Select(l => l?.LineNumber).Distinct().Count() == sent.Count, LinesField);
+            var products = lot.ProductLines.Select(l => l.ProductId).ToHashSet();
+            foreach (var cage in cages.Where(c => c.ProductId is not { } productId || !products.Contains(productId)))
+            {
+                check.Check(false, HarvestLotCageService.CageProductField(cage.Number));
+            }
+
+            // Every line needs at least one cage: its weighed kg is above 0, as the ledger writes one Harvest row per line.
             foreach (var line in lot.ProductLines.OrderBy(l => l.LineNumber))
             {
-                var weighed = sent.FirstOrDefault(l => l?.LineNumber == line.LineNumber);
-                var field = $"Line {line.LineNumber} weighed kg";
-                if (weighed is null)
-                {
-                    check.Check(false, field);
-                    continue;
-                }
-
-                check.Check(InvoiceMoney.IsKg(weighed.WeighedKg), field);
-                kgByLine[line.LineNumber] = weighed.WeighedKg ?? 0m;
+                var kg = cages.Where(c => c.ProductId == line.ProductId).Sum(c => c.Kg);
+                check.Check(kg > 0m, $"Line {line.LineNumber} cages");
+                kgByLine[line.LineNumber] = kg;
             }
 
             total = kgByLine.Values.Sum();

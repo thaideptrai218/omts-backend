@@ -34,6 +34,7 @@ public sealed class SalesInvoiceEditPlanner(
     ISalesOrderRepository orders,
     IHarvestLotRepository lots,
     HarvestLotStatusService lotStatuses,
+    HarvestLotAgreementGuard agreements,
     CustomerDebtReader debts)
 {
     internal async Task<Result<SalesInvoiceEditPlan>> PlanAsync(SalesInvoice invoice, SalesInvoiceEditEntries entries, CancellationToken cancellationToken)
@@ -143,6 +144,12 @@ public sealed class SalesInvoiceEditPlanner(
         if (lotStatuses.EnsureForSale(added) is { } closed)
         {
             return closed;
+        }
+
+        // A lot added for a trader needs the trader's agreement to its weighing (owner decision of 24/11/2026); a lot already on the invoice keeps its place.
+        if (await agreements.EnsureAgreedAsync(added, cancellationToken) is { } notAgreed)
+        {
+            return notAgreed;
         }
 
         var lines = new List<EditedLine>();
