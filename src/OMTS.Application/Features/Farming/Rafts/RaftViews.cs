@@ -8,6 +8,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Farming.Zones;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 
@@ -64,11 +65,17 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
         })
         .ToList();
 
-    /// <summary>The raft with MSG-GEN-05 "{what} saved." (FARM-04.0 step 6).</summary>
+    /// <summary>
+    /// The raft with MSG-GEN-05 "{what} saved." (FARM-04.0 step 6) and its soft warnings: a pin far from the zone pin or
+    /// outside the zone boundary (PM decision 25/11/2026: warn, never block), then its geometry.
+    /// </summary>
     public async Task<RaftSaved> SavedAsync(Raft raft, string what, CancellationToken cancellationToken)
     {
         var saved = UserMessages.Saved(what);
-        var warnings = CoordinateRules.ForRaft(raft.Latitude, raft.Longitude, raft.Zone.Latitude, raft.Zone.Longitude).Concat(RaftGeometry.Warnings(raft)).ToList();
+        var warnings = CoordinateRules.ForRaft(raft.Latitude, raft.Longitude, raft.Zone.Latitude, raft.Zone.Longitude)
+            .Concat(ZoneBoundaryRules.ForRaft(raft.Latitude, raft.Longitude, ZoneBoundaryJson.Read(raft.Zone.BoundaryGeoJson)))
+            .Concat(RaftGeometry.Warnings(raft))
+            .ToList();
         return new RaftSaved(await ViewAsync(raft, cancellationToken), saved.Text, saved.Code, warnings);
     }
 

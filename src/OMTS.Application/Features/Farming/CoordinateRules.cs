@@ -1,7 +1,7 @@
 namespace OMTS.Application.Features.Farming;
 
 /// <summary>A non-blocking remark on a saved record: the save went through, the client shows <paramref name="Message"/>.</summary>
-/// <param name="Code">Stable code: <c>COORDINATES_OUTSIDE_VIETNAM</c> or <c>RAFT_FAR_FROM_ZONE</c>.</param>
+/// <param name="Code">Stable code, e.g. <c>COORDINATES_OUTSIDE_VIETNAM</c>, <c>RAFT_FAR_FROM_ZONE</c> or <c>RAFT_OUTSIDE_ZONE_BOUNDARY</c>.</param>
 public sealed record FarmingWarning(string Code, string Message, IReadOnlyDictionary<string, object?>? Details = null);
 
 /// <summary>

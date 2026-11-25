@@ -193,6 +193,17 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
   edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` .
   The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
+- Zone boundary (PM decision 25/11/2026, warn, never block): `PUT /api/zones/{id}/boundary` (Owner, In Use zone, `rowVersion`
+  as the edit) with `{ boundary, rowVersion }` saves the licensed sea area the app read from the photographed map, as RFC 7946
+  GeoJSON in WGS84 (positions `[longitude, latitude]`): a `FeatureCollection` of 1 to 10 `Feature`s, each a `Polygon` of one
+  ring (no holes) of 3 to 100 distinct corners, inside Vietnam; `properties` `{ name, corners }` is optional (name up to 100
+  characters, one label of up to 20 per corner). The server rounds to 6 decimals, drops an altitude, closes an open ring and
+  keeps the ring order; `boundary: null` clears it. A refusal is MSG-GEN-01 naming `Boundary`, `Boundary coordinates`,
+  `Boundary name` or `Boundary corners`. The answer is `{ zone, message, messageCode, warnings }`; `zone.boundary`, also in
+  `GET /api/zones/{id}` and `GET /api/zones/map`, is the saved GeoJSON or null. `RAFTS_OUTSIDE_ZONE_BOUNDARY`
+  (`details: { count, raftCodes }`) names the In Use rafts pinned outside the new boundary. A raft create or edit pinned more
+  than 1 m outside every area answers `RAFT_OUTSIDE_ZONE_BOUNDARY` (`details: { distanceM }`, whole metres to the nearest
+  edge), besides `RAFT_FAR_FROM_ZONE`.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
