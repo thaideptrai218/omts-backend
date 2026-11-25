@@ -16,7 +16,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <!-- 6.8+ looks the XML comments up in a dictionary. 6.6.2 scanned the whole file for every type and endpoint: swagger.json took
+         20+ s (585 endpoints, 3 MB of comments), longer than CloudFront waits (504) and enough to pin a core on the 2-vCPU staging host. -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
   </ItemGroup>
 
   <ItemGroup>
