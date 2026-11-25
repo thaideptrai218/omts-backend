@@ -236,7 +236,8 @@ public sealed class ZaloLinkService(
             nameof(Account),
             account.Username,
             isMandatory: false,
-            cancellationToken);
+            cancellationToken,
+            account.Id);
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);

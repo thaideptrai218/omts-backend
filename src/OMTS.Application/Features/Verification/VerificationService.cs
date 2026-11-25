@@ -12,8 +12,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Verification;
 
 /// <summary>
-/// ACS-06 – verify contact information: one-time 6-digit codes by SMS or email, shared by registration,
-/// recovery, password change, profile changes and phone verification after login. Codes and tokens are
+/// ACS-06 – verify contact information: one-time 6-digit codes by SMS or email, shared by recovery,
+/// password change, profile changes and phone verification after login. Codes and tokens are
 /// stored hashed and never returned, logged or audited. It never creates accounts or grants permissions.
 /// </summary>
 public sealed class VerificationService(
@@ -44,6 +44,12 @@ public sealed class VerificationService(
     public async Task<Result<VerificationStarted>> StartAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
     {
+        // Nobody registers with a code any more (the Owner makes a trader's account), so no new request has this purpose.
+        if (purpose == VerificationPurpose.Registration)
+        {
+            return AppError.Invalid("Purpose", "A verification code is no longer sent for registration.");
+        }
+
         using (await startGate.EnterAsync($"{purpose}|{target}", cancellationToken))
         {
             return await StartInTurnAsync(purpose, channel, target, accountId, cancellationToken);
@@ -204,7 +210,7 @@ public sealed class VerificationService(
     /// Validates a token for the calling use case and marks it used; the caller's save stores that together
     /// with its own change. A token of another purpose, account or target is refused like a wrong code.
     /// </summary>
-    /// <param name="accountId">The account the request must belong to (null: no account, i.e. registration).</param>
+    /// <param name="accountId">The account the request must belong to (null: no account).</param>
     /// <param name="anyAccount">Password recovery: the token itself names the account.</param>
     public async Task<Result<VerificationCode>> ConsumeTokenAsync(
         string? token,
@@ -258,9 +264,9 @@ public sealed class VerificationService(
     private static AppError Cancelled(VerificationCode request) =>
         request.Purpose == VerificationPurpose.AccountRecovery ? VerificationErrors.WrongCode() : VerificationErrors.CancelledByWrongEntries();
 
-    // Registration and recovery run before login; every other request belongs to its account only.
+    // Recovery runs before login; every other request belongs to its account only. A Registration request (an old row) belongs to nobody: it has no account, so it must not match a caller who has none either.
     private static bool MayUse(VerificationCode request, Guid? callerAccountId) =>
-        request.Purpose is VerificationPurpose.Registration or VerificationPurpose.AccountRecovery || request.AccountId == callerAccountId;
+        request.Purpose == VerificationPurpose.AccountRecovery || (request.Purpose != VerificationPurpose.Registration && request.AccountId == callerAccountId);
 
     private Task<DeliveryResult> SendAsync(VerificationChannel channel, string target, string code, CancellationToken cancellationToken) =>
         channel == VerificationChannel.Sms

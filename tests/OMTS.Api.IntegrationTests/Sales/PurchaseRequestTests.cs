@@ -180,7 +180,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     [Fact]
     public async Task Catalogue_is_real_owner_managed_and_traders_only_see_active_products()
     {
-        var owner = await OwnerClientAsync(); var code = NewCode(); var body = new SaveSalesProduct(code, "Oyster cages", "Large oysters");
+        var owner = await OwnerClientAsync(); var code = NewCode(); var body = new SaveSalesProduct(code, "Oyster cages " + code, "Large oysters", UnitPrice: 60_000m);
         var created = await owner.PostAsJsonAsync("/api/sales-products", body);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode); var product = (await created.Content.ReadFromJsonAsync<SalesProductView>())!;
         var (trader, _, _) = await BuyerAsync();

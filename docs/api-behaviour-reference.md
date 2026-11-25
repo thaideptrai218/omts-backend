@@ -205,7 +205,7 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   than 1 m outside every area answers `RAFT_OUTSIDE_ZONE_BOUNDARY` (`details: { distanceM }`, whole metres to the nearest
   edge), besides `RAFT_FAR_FROM_ZONE`.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
-  the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
+  the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
 
 ### Notifications

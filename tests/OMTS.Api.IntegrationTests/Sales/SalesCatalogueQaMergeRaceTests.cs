@@ -75,40 +75,6 @@ public class SalesCatalogueQaMergeRaceTests
         }
     }
 
-    // BR-SALE-04: the merged profile must have no account. A registration that links it at the same moment must conflict.
-    [SqlServerFact]
-    public async Task A_merge_and_a_registration_linking_the_merged_profile_at_once_never_leave_a_merged_profile_with_an_account()
-    {
-        await using var host = await FarmingHost.StartAsync();
-        var owner = host.Owner.Client;
-        for (var round = 0; round < Rounds; round++)
-        {
-            var phone = NewPhone();
-            var kept = await owner.CreateCustomerAsync();
-            var merged = await owner.CreateCustomerAsync(phone: phone);
-            var anonymous = host.Api.CreateClient();
-            var started = await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone });
-            var code = Regex.Match(host.Api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone)[0].Text, @"\d{6}").Value;
-            var token = await VerifyAsync(anonymous, await VerificationIdAsync(started), code);
-            var password = NewPassword();
-
-            var responses = await InParallelAsync(2, i => i == 0
-                ? owner.PostMergeAsync(kept.Id(), merged.Id(), kept.RowVersion(), merged.RowVersion())
-                : anonymous.PostAsJsonAsync("/api/auth/register", new { channel = "Sms", identifier = phone, password, passwordConfirmation = password, verificationToken = token }));
-
-            await AssertAnswersAsync([responses[0]], Allowed);
-            Assert.True((int)responses[1].StatusCode < 500, await responses[1].Content.ReadAsStringAsync());
-            await AssertConsistentAsync(host);
-
-            // A trader who lost the race is not stuck: the same verification still registers, with a new profile if the merge won.
-            if (responses[1].StatusCode != HttpStatusCode.Created)
-            {
-                var retry = await anonymous.PostAsJsonAsync("/api/auth/register", new { channel = "Sms", identifier = phone, password, passwordConfirmation = password, verificationToken = token });
-                await retry.ReadAsync(HttpStatusCode.Created);
-            }
-        }
-    }
-
     // Merge against a new profile that takes the number being released: the unique index and the pre-check decide.
     [SqlServerFact]
     public async Task A_merge_and_a_new_profile_with_the_released_number_at_once_answer_2xx_or_409()

@@ -20,9 +20,6 @@ internal static class AccountRulesQaTestsKit
     public static Task<HttpResponseMessage> EnterAsync(this HttpClient client, Guid verificationId, string code) =>
         client.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code });
 
-    public static Task<HttpResponseMessage> StartRegistrationAsync(this HttpClient client, string channel, string target) =>
-        client.PostAsJsonAsync("/api/verifications", new { channel, target });
-
     public static Task AgeAsync(this AuthApiFactory factory, Guid verificationId, TimeSpan age) =>
         factory.UpdateAsync<VerificationCode>(verificationId, c => c.AgeBy(age));
 

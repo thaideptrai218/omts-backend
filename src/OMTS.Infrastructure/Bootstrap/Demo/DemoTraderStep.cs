@@ -11,10 +11,9 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// ACS-01: two trader accounts, one Active and one Locked. Self-registration needs a verification code
-/// from an SMS, so the account and its customer profile are built here the way <c>RegistrationService</c>
-/// builds them (verified phone, same customer linking, same audit row); the Locked one is then locked as the
-/// System Administrator would. Matched by username.
+/// ACS-01: two trader accounts, one Active and one Locked. A real trader account is made by the Owner from a
+/// trader account request, so the account and its customer profile are built here directly (verified phone, same
+/// customer linking, an audit row); the Locked one is then locked as the System Administrator would. Matched by username.
 /// </summary>
 internal sealed class DemoTraderStep : IDemoSeedStep
 {
