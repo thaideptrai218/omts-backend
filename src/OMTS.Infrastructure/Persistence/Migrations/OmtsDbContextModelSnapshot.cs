@@ -433,9 +433,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly?>("ExpectedHarvestDate")
-                        .HasColumnType("date");
-
                     b.Property<decimal?>("ExpectedSeedQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
@@ -443,10 +440,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
-
-                    b.Property<decimal?>("NurseryAllocatedQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid?>("NurseryBatchId")
                         .HasColumnType("uniqueidentifier");
@@ -878,59 +871,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_NurseryBatch_QuantityIn", "[QuantityIn] > 0");
 
                             t.HasCheckConstraint("CK_NurseryBatch_Survivors", "[Survivors] IS NULL OR ([Survivors] >= 0 AND [Survivors] <= [QuantityIn])");
-                        });
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchAllocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CycleId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("NurseryBatchId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<Guid>("RaftId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CycleId")
-                        .IsUnique();
-
-                    b.HasIndex("RaftId");
-
-                    b.HasIndex("NurseryBatchId", "RaftId")
-                        .IsUnique();
-
-                    b.ToTable("NurseryBatchAllocations", t =>
-                        {
-                            t.HasCheckConstraint("CK_NurseryBatchAllocation_Quantity", "[Quantity] > 0");
                         });
                 });
 
@@ -1858,9 +1798,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<Guid?>("PurchaseRequestId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1930,8 +1867,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LotCode")
                         .IsUnique();
-
-                    b.HasIndex("PurchaseRequestId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -2535,9 +2470,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AllowNegativeInputQuantity")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("AutomaticPayroll")
-                        .HasColumnType("bit");
-
                     b.Property<decimal>("AverageKgPerCage")
                         .HasPrecision(9, 2)
                         .HasColumnType("decimal(9,2)");
@@ -2633,9 +2565,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<int>("PayPeriodStartDay")
-                        .HasColumnType("int");
-
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -2686,8 +2615,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Cooperative_CustomerMaxDebtDays", "[CustomerMaxDebtDays] IS NULL OR [CustomerMaxDebtDays] >= 1");
 
                             t.HasCheckConstraint("CK_Cooperative_DaysBeforeAutoClose", "[DaysBeforeAutoClose] >= 1");
-
-                            t.HasCheckConstraint("CK_Cooperatives_PayPeriodStartDay", "[PayPeriodStartDay] BETWEEN 1 AND 28");
                         });
                 });
 
@@ -3281,9 +3208,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<long>("LastQrStep")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("datetimeoffset");
 
@@ -3712,9 +3636,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("CreatedBySystem")
-                        .HasColumnType("bit");
-
                     b.Property<string>("ExpenseMonth")
                         .HasMaxLength(7)
                         .HasColumnType("nvarchar(7)");
@@ -3751,22 +3672,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("SendBackNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTimeOffset?>("SentAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset?>("SentBackAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("SentBackByAccountId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("SentByAccountId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
@@ -3787,10 +3692,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("FinalizedByAccountId");
 
                     b.HasIndex("PeriodEnd");
-
-                    b.HasIndex("SentBackByAccountId");
-
-                    b.HasIndex("SentByAccountId");
 
                     b.HasIndex("StatusId");
 
@@ -4396,10 +4297,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("DisplayColor")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -4412,13 +4309,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsFinal")
                         .HasColumnType("bit");
-
-                    b.Property<bool>("IsInitial")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Meaning")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -4438,8 +4328,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "In Use",
                             Group = "USAGE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Selectable for new records.",
                             SortOrder = 1
                         },
                         new
@@ -4449,8 +4337,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Discontinued",
                             Group = "USAGE",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Not shown when selecting new records; old data stays unchanged.",
                             SortOrder = 2
                         },
                         new
@@ -4460,8 +4346,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Active",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Can log in according to effective zone–role pairs.",
                             SortOrder = 1
                         },
                         new
@@ -4471,8 +4355,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Locked",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Cannot log in; data and history stay unchanged.",
                             SortOrder = 2
                         },
                         new
@@ -4482,8 +4364,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Pending approval",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
                             SortOrder = 3
                         },
                         new
@@ -4493,8 +4373,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Rejected",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The Cooperative Owner refused the request; the trader may ask again.",
                             SortOrder = 4
                         },
                         new
@@ -4504,8 +4382,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Employed",
                             Group = "EMPLOYEE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The employee is working and can be assigned work and recorded in attendance.",
                             SortOrder = 1
                         },
                         new
@@ -4515,8 +4391,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Left",
                             Group = "EMPLOYEE",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "No new work or attendance; wage and salary history stays unchanged.",
                             SortOrder = 2
                         },
                         new
@@ -4526,8 +4400,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Effective",
                             Group = "ACCESS_GRANT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The account has the role's permissions in the assigned zone.",
                             SortOrder = 1
                         },
                         new
@@ -4537,8 +4409,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Revoked",
                             Group = "ACCESS_GRANT",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The grant no longer applies; re-granting creates a new grant.",
                             SortOrder = 2
                         },
                         new
@@ -4548,8 +4418,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Open",
                             Group = "CULTIVATION_CYCLE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The cycle is in progress; seeding, logging and harvesting are allowed.",
                             SortOrder = 1
                         },
                         new
@@ -4559,8 +4427,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Closed",
                             Group = "CULTIVATION_CYCLE",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The cycle has ended; the raft can open a new cycle.",
                             SortOrder = 2
                         },
                         new
@@ -4570,8 +4436,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Active",
                             Group = "WATER_MEASUREMENT_RECORD",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Counts in the charts and the water alert of the zone.",
                             SortOrder = 1
                         },
                         new
@@ -4581,8 +4445,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Voided",
                             Group = "WATER_MEASUREMENT_RECORD",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Kept in the history with its reason; no longer counts.",
                             SortOrder = 2
                         },
                         new
@@ -4592,8 +4454,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Sending",
                             Group = "MESSAGE_DELIVERY",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Handed to the SMS Service or Zalo OA, no answer yet.",
                             SortOrder = 1
                         },
                         new
@@ -4603,8 +4463,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Sent",
                             Group = "MESSAGE_DELIVERY",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Accepted by the service; this does not mean that the trader has read it.",
                             SortOrder = 2
                         },
                         new
@@ -4614,8 +4472,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Not sent",
                             Group = "MESSAGE_DELIVERY",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Not accepted by the service; nothing that was saved is undone (GFR-06).",
                             SortOrder = 3
                         },
                         new
@@ -4625,8 +4481,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "PURCHASE_RECEIPT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared; counts nowhere and creates no seed lot. Removed, never cancelled.",
                             SortOrder = 1
                         },
                         new
@@ -4636,8 +4490,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "PURCHASE_RECEIPT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Counts in the supplier debt; each Seed line is a seed lot. May be edited, never its supplier, and every edit is audited.",
                             SortOrder = 2
                         },
                         new
@@ -4647,8 +4499,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "PURCHASE_RECEIPT",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Kept with its reason; counts nowhere; its Seed lines are no longer seed lots.",
                             SortOrder = 3
                         },
                         new
@@ -4658,8 +4508,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Recorded",
                             Group = "SUPPLIER_PAYMENT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Counts in the supplier debt; cannot be edited.",
                             SortOrder = 1
                         },
                         new
@@ -4669,8 +4517,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "SUPPLIER_PAYMENT",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake; no longer counts in the supplier debt.",
                             SortOrder = 2
                         },
                         new
@@ -4680,8 +4526,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Recorded",
                             Group = "PURCHASE_RETURN",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Lowers the supplier debt. May be edited within the quantity left, never below the money paid back, and every edit is audited.",
                             SortOrder = 1
                         },
                         new
@@ -4691,8 +4535,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "PURCHASE_RETURN",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake; no longer counts.",
                             SortOrder = 2
                         },
                         new
@@ -4702,8 +4544,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "PURCHASE_RETURN",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared; counts nowhere and holds no quantity. Removed, never cancelled.",
                             SortOrder = 3
                         },
                         new
@@ -4713,8 +4553,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "In Use",
                             Group = "LANE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Seeded and harvested.",
                             SortOrder = 1
                         },
                         new
@@ -4724,8 +4562,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Removed",
                             Group = "LANE",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Removed at the end of the raft; keeps its number and records.",
                             SortOrder = 2
                         },
                         new
@@ -4735,8 +4571,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting response",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Sent by the trader; not answered yet.",
                             SortOrder = 1
                         },
                         new
@@ -4746,8 +4580,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Accepted",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it.",
                             SortOrder = 2
                         },
                         new
@@ -4757,8 +4589,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Declined",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Declined by the Cooperative Owner with a note.",
                             SortOrder = 3
                         },
                         new
@@ -4768,8 +4598,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Cancelled by the trader; no invoice can be linked to it.",
                             SortOrder = 4
                         },
                         new
@@ -4779,8 +4607,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Ordered",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The Cooperative Owner made an order (DH) from the request; the order carries on from here.",
                             SortOrder = 6
                         },
                         new
@@ -4790,8 +4616,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting response",
                             Group = "QUALITY_CLAIM",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Sent by the trader; not answered yet.",
                             SortOrder = 1
                         },
                         new
@@ -4801,8 +4625,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Rejected",
                             Group = "QUALITY_CLAIM",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Rejected by the Cooperative Owner with a note.",
                             SortOrder = 2
                         },
                         new
@@ -4812,8 +4634,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Accepted",
                             Group = "QUALITY_CLAIM",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The trader accepted the offer of the Cooperative Owner (a return of all the goods or a price cut of the whole invoice).",
                             SortOrder = 3
                         },
                         new
@@ -4823,8 +4643,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Offer made",
                             Group = "QUALITY_CLAIM",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The Cooperative Owner proposed a return of all the goods or a price cut of the whole invoice; the trader has not answered yet.",
                             SortOrder = 4
                         },
                         new
@@ -4834,8 +4652,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Offer declined",
                             Group = "QUALITY_CLAIM",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The trader declined the offer of the Cooperative Owner.",
                             SortOrder = 5
                         },
                         new
@@ -4845,31 +4661,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "PAYROLL",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared; its lines are calculated from the current records.",
                             SortOrder = 1
-                        },
-                        new
-                        {
-                            Id = 3402,
-                            Code = "AWAITING_FINALIZATION",
-                            DisplayName = "Awaiting finalization",
-                            Group = "PAYROLL",
-                            IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Sent to the Cooperative Owner; the records of the period are locked.",
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            Id = 3403,
-                            Code = "SENT_BACK",
-                            DisplayName = "Sent back",
-                            Group = "PAYROLL",
-                            IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Returned with a note for correction; the records of the period can change again.",
-                            SortOrder = 3
                         },
                         new
                         {
@@ -4878,8 +4670,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Finalized",
                             Group = "PAYROLL",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The amounts are saved; never changed or reopened.",
                             SortOrder = 4
                         },
                         new
@@ -4889,8 +4679,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Creating",
                             Group = "PAYROLL",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The sheet is being made.",
                             SortOrder = 5
                         },
                         new
@@ -4900,8 +4688,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "PAYROLL",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Dropped before it was finalized; it no longer counts.",
                             SortOrder = 6
                         },
                         new
@@ -4911,8 +4697,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting review",
                             Group = "EMPLOYEE_REQUEST",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Sent by the employee; not reviewed yet.",
                             SortOrder = 1
                         },
                         new
@@ -4922,8 +4706,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Approved",
                             Group = "EMPLOYEE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.",
                             SortOrder = 2
                         },
                         new
@@ -4933,8 +4715,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Rejected",
                             Group = "EMPLOYEE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Rejected by the Cooperative Owner with a note.",
                             SortOrder = 3
                         },
                         new
@@ -4944,8 +4724,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "EMPLOYEE_REQUEST",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Cancelled by the employee while it was awaiting review; kept in the list.",
                             SortOrder = 4
                         },
                         new
@@ -4955,8 +4733,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting weighing",
                             Group = "HARVEST_LOT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Recorded with its estimated kg (Chờ cân); not for sale and in no stock until it is weighed. It can be corrected or removed.",
                             SortOrder = 4
                         },
                         new
@@ -4966,8 +4742,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Open",
                             Group = "HARVEST_LOT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "For sale: it can be chosen on a sales invoice. Weighed; it can be weighed again.",
                             SortOrder = 1
                         },
                         new
@@ -4977,8 +4751,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Reopened",
                             Group = "HARVEST_LOT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Closed earlier and for sale again; the days before automatic close count from the day it was reopened.",
                             SortOrder = 2
                         },
                         new
@@ -4988,8 +4760,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Closed",
                             Group = "HARVEST_LOT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "No longer for sale; its close reason is kept and what was left of its products is taken off the stock. The system can reopen it; a lot closed by hand or by the time limit is also reopened by hand.",
                             SortOrder = 3
                         },
                         new
@@ -4999,8 +4769,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "SALES_INVOICE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The sale is saved; only the Cooperative Owner corrects or cancels it.",
                             SortOrder = 1
                         },
                         new
@@ -5010,8 +4778,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "SALES_INVOICE",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "The sale did not happen; kept with its reason and counts nowhere.",
                             SortOrder = 2
                         },
                         new
@@ -5021,8 +4787,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting confirmation",
                             Group = "CUSTOMER_PAYMENT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.",
                             SortOrder = 1
                         },
                         new
@@ -5032,8 +4796,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "CUSTOMER_PAYMENT",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The money has arrived or was recorded by the Accountant; counts in the debt.",
                             SortOrder = 2
                         },
                         new
@@ -5043,8 +4805,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "CUSTOMER_PAYMENT",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake or never received; no longer counts.",
                             SortOrder = 3
                         },
                         new
@@ -5054,8 +4814,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Awaiting staff confirmation",
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Legacy (31/10/2026 flow): requests sent before 24/11/2026 may still wait here for employees to answer; new staffing plans keep the request Awaiting response and make the work assignments at once.",
                             SortOrder = 5
                         },
                         new
@@ -5065,8 +4823,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Pending transfer",
                             Group = "CUSTOMER_PAYMENT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.",
                             SortOrder = 4
                         },
                         new
@@ -5076,8 +4832,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "INPUT_ISSUE",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared; holds no quantity. Removed, never cancelled.",
                             SortOrder = 1
                         },
                         new
@@ -5087,8 +4841,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "INPUT_ISSUE",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The quantities have left the stock; may still be edited, which writes them again.",
                             SortOrder = 2
                         },
                         new
@@ -5098,8 +4850,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "INPUT_ISSUE",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake; the quantities are back in the stock and it counts nowhere.",
                             SortOrder = 3
                         },
                         new
@@ -5109,8 +4859,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "PRODUCT_DISPOSAL",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared; holds no kg. Removed, never cancelled.",
                             SortOrder = 1
                         },
                         new
@@ -5120,8 +4868,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "PRODUCT_DISPOSAL",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The kg have left the stock of their products; may still be edited, which writes them again.",
                             SortOrder = 2
                         },
                         new
@@ -5131,8 +4877,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "PRODUCT_DISPOSAL",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake; the kg are back in the stock and it counts nowhere.",
                             SortOrder = 3
                         },
                         new
@@ -5142,8 +4886,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "SALES_ORDER",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The order is agreed with the buyer; no invoice has been made from it yet. Its advance is reserved for it.",
                             SortOrder = 1
                         },
                         new
@@ -5153,8 +4895,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Delivering",
                             Group = "SALES_ORDER",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "At least one invoice was made from the order; goods are still to be delivered. Its advance is reserved for it.",
                             SortOrder = 2
                         },
                         new
@@ -5164,8 +4904,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "SALES_ORDER",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Finished by hand or fully delivered; what is left of its advance is general credit of the customer. A cancelled invoice reopens it.",
                             SortOrder = 3
                         },
                         new
@@ -5175,8 +4913,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "SALES_ORDER",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Cancelled with a reason; what is left of its advance is general credit of the customer.",
                             SortOrder = 4
                         },
                         new
@@ -5186,8 +4922,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Draft",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Being prepared by the Owner; the Zone Managers do not see it yet.",
                             SortOrder = 1
                         },
                         new
@@ -5197,8 +4931,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Assigned",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "Handed to the Zone Managers of its zone; none of them has pressed Receive yet, so no lot is recorded and no lane left out.",
                             SortOrder = 2
                         },
                         new
@@ -5208,8 +4940,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Harvesting",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "A lot is recorded from a line of the plan, or a lane is left out; it stays here until a Zone Manager hands the plan over.",
                             SortOrder = 3
                         },
                         new
@@ -5219,8 +4949,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The Owner closed a plan the Zone Manager handed over; removing a lot or putting a lane back opens it again.",
                             SortOrder = 4
                         },
                         new
@@ -5230,8 +4958,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "HARVEST_PLAN",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Cancelled with a reason before any lot was recorded.",
                             SortOrder = 5
                         },
                         new
@@ -5241,8 +4967,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Đã nhận",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on.",
                             SortOrder = 6
                         },
                         new
@@ -5252,8 +4976,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Đã bàn giao",
                             Group = "HARVEST_PLAN",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan.",
                             SortOrder = 7
                         },
                         new
@@ -5263,8 +4985,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Nursing",
                             Group = "NURSERY_BATCH",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "The pieces left the stock and are in the nursery; it can be edited or cancelled.",
                             SortOrder = 1
                         },
                         new
@@ -5274,8 +4994,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Completed",
                             Group = "NURSERY_BATCH",
                             IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The survivors are recorded (Đã ươm xong): the batch is a pool that cycles seed from; the survivors can still be corrected, not below what is seeded. It is closed once the rafts are seeded.",
                             SortOrder = 2
                         },
                         new
@@ -5285,8 +5003,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "NURSERY_BATCH",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake before it was completed; the pieces are back in the stock.",
                             SortOrder = 3
                         },
                         new
@@ -5296,8 +5012,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Closed",
                             Group = "NURSERY_BATCH",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.",
                             SortOrder = 4
                         },
                         new
@@ -5307,8 +5021,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Recorded",
                             Group = "SALES_RETURN",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Takes the invoice out of the customer debt and counts in the lots and the reports; cannot be edited.",
                             SortOrder = 1
                         },
                         new
@@ -5318,923 +5030,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Cancelled",
                             Group = "SALES_RETURN",
                             IsFinal = true,
-                            IsInitial = false,
-                            Meaning = "Recorded by mistake; counts nowhere.",
                             SortOrder = 2
-                        });
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Platform.StatusTransition", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("int");
-
-                    b.Property<string>("AllowedPerformers")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("FromStatusId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("GuardCondition")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("ReasonRequired")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ToStatusId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TriggerEvent")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("UseCases")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ToStatusId");
-
-                    b.HasIndex("FromStatusId", "ToStatusId")
-                        .IsUnique();
-
-                    b.ToTable("StatusTransitions");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 101,
-                            GuardCondition = "Not blocked by the entity's Discontinued condition (section 3.4.3).",
-                            ReasonRequired = false,
-                            ToStatusId = 102,
-                            TriggerEvent = "Action",
-                            UseCases = "UC12, UC15, UC18, UC20, UC22, UC42, UC55"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 102,
-                            GuardCondition = "Return the item to use.",
-                            ReasonRequired = false,
-                            ToStatusId = 101,
-                            TriggerEvent = "Action",
-                            UseCases = "UC12, UC15, UC18, UC20, UC22, UC42, UC55"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            AllowedPerformers = "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)",
-                            FromStatusId = 301,
-                            GuardCondition = "Lock the account.",
-                            ReasonRequired = true,
-                            ToStatusId = 302,
-                            TriggerEvent = "Action",
-                            UseCases = "ACS-09"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            AllowedPerformers = "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)",
-                            FromStatusId = 302,
-                            GuardCondition = "Unlock after verification; trader accounts are unlocked only by the System Administrator.",
-                            ReasonRequired = true,
-                            ToStatusId = 301,
-                            TriggerEvent = "Action",
-                            UseCases = "ACS-09"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
-                            FromStatusId = 401,
-                            GuardCondition = "The last working day has passed: at once for an earlier day, by the system on the next day for today (BR-LABOR-01).",
-                            ReasonRequired = false,
-                            ToStatusId = 402,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-01"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 402,
-                            GuardCondition = "No Employed employee has the phone number; needs no new approval (BR-LABOR-01).",
-                            ReasonRequired = false,
-                            ToStatusId = 401,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-01"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 501,
-                            GuardCondition = "Revoke the zone–role pair; Cooperative Owner only.",
-                            ReasonRequired = true,
-                            ToStatusId = 502,
-                            TriggerEvent = "Action",
-                            UseCases = "UC11"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 601,
-                            GuardCondition = "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).",
-                            ReasonRequired = false,
-                            ToStatusId = 602,
-                            TriggerEvent = "Action",
-                            UseCases = "CYCLE-06"
-                        },
-                        new
-                        {
-                            Id = 53,
-                            AllowedPerformers = "System",
-                            FromStatusId = 1601,
-                            GuardCondition = "The SMS Service or Zalo OA accepts the message.",
-                            ReasonRequired = false,
-                            ToStatusId = 1602,
-                            TriggerEvent = "System",
-                            UseCases = "SALE-06, SALE-03, CLAIM-02, TRACE-04"
-                        },
-                        new
-                        {
-                            Id = 54,
-                            AllowedPerformers = "System",
-                            FromStatusId = 1601,
-                            GuardCondition = "The SMS Service or Zalo OA does not accept the message.",
-                            ReasonRequired = false,
-                            ToStatusId = 1603,
-                            TriggerEvent = "System",
-                            UseCases = "SALE-06, SALE-03, CLAIM-02, TRACE-04"
-                        },
-                        new
-                        {
-                            Id = 80,
-                            AllowedPerformers = "Zone Manager (own); Cooperative Owner",
-                            FromStatusId = 2101,
-                            GuardCondition = "Void a wrong measurement with a reason.",
-                            ReasonRequired = true,
-                            ToStatusId = 2102,
-                            TriggerEvent = "Action",
-                            UseCases = "WATER-02"
-                        },
-                        new
-                        {
-                            Id = 70,
-                            AllowedPerformers = "Zone Manager (own drafts); Cooperative Owner",
-                            FromStatusId = 1701,
-                            GuardCondition = "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.",
-                            ReasonRequired = false,
-                            ToStatusId = 1702,
-                            TriggerEvent = "Action",
-                            UseCases = "PURCHASE-01"
-                        },
-                        new
-                        {
-                            Id = 72,
-                            AllowedPerformers = "Zone Manager (own receipts); Cooperative Owner",
-                            FromStatusId = 1702,
-                            GuardCondition = "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.",
-                            ReasonRequired = true,
-                            ToStatusId = 1703,
-                            TriggerEvent = "Action",
-                            UseCases = "PURCHASE-06"
-                        },
-                        new
-                        {
-                            Id = 73,
-                            AllowedPerformers = "Accountant; Cooperative Owner",
-                            FromStatusId = 1801,
-                            GuardCondition = "A payment recorded by mistake; payments are never cancelled with a purchase receipt.",
-                            ReasonRequired = true,
-                            ToStatusId = 1802,
-                            TriggerEvent = "Action",
-                            UseCases = "PURCHASE-05"
-                        },
-                        new
-                        {
-                            Id = 74,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 1901,
-                            GuardCondition = "A return recorded by mistake; it no longer counts in the supplier debt or the quantity returned.",
-                            ReasonRequired = true,
-                            ToStatusId = 1902,
-                            TriggerEvent = "Action",
-                            UseCases = "PURCHASE-02"
-                        },
-                        new
-                        {
-                            Id = 30077,
-                            AllowedPerformers = "Zone Manager (own drafts); Cooperative Owner",
-                            FromStatusId = 1903,
-                            GuardCondition = "The return is complete and within the quantity left on each line of its receipt; dated the day it is completed.",
-                            ReasonRequired = false,
-                            ToStatusId = 1901,
-                            TriggerEvent = "Action",
-                            UseCases = "PURCHASE-02"
-                        },
-                        new
-                        {
-                            Id = 76,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 2001,
-                            GuardCondition = "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).",
-                            ReasonRequired = false,
-                            ToStatusId = 2002,
-                            TriggerEvent = "Action",
-                            UseCases = "FARM-04"
-                        },
-                        new
-                        {
-                            Id = 77,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 2002,
-                            GuardCondition = "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).",
-                            ReasonRequired = false,
-                            ToStatusId = 2001,
-                            TriggerEvent = "Action",
-                            UseCases = "FARM-04"
-                        },
-                        new
-                        {
-                            Id = 180,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3201,
-                            GuardCondition = "A staffing plan exists (employees assigned at once, no agreement to wait for); the accepted cages are above 0, not more than the requested cages and equal to the planned cages; the pickup date is not before today and equals the planned pickup.",
-                            ReasonRequired = false,
-                            ToStatusId = 3202,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
-                            Id = 181,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3201,
-                            GuardCondition = "A note gives the reason.",
-                            ReasonRequired = true,
-                            ToStatusId = 3203,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
-                            Id = 182,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 3201,
-                            GuardCondition = "The trader cancels; a reason is optional.",
-                            ReasonRequired = false,
-                            ToStatusId = 3204,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-02"
-                        },
-                        new
-                        {
-                            Id = 183,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 3202,
-                            GuardCondition = "The request is not Fulfilled; a reason is optional.",
-                            ReasonRequired = false,
-                            ToStatusId = 3204,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-02"
-                        },
-                        new
-                        {
-                            Id = 220,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3701,
-                            GuardCondition = "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.",
-                            ReasonRequired = false,
-                            ToStatusId = 3704,
-                            TriggerEvent = "Action",
-                            UseCases = "CLAIM-02"
-                        },
-                        new
-                        {
-                            Id = 221,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3701,
-                            GuardCondition = "A note gives the reason.",
-                            ReasonRequired = true,
-                            ToStatusId = 3702,
-                            TriggerEvent = "Action",
-                            UseCases = "CLAIM-02"
-                        },
-                        new
-                        {
-                            Id = 222,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 3704,
-                            GuardCondition = "The trader of the claim accepts the offer; the Owner then runs the return (CLAIM-03) or the price cut (SALE-07).",
-                            ReasonRequired = false,
-                            ToStatusId = 3703,
-                            TriggerEvent = "Action",
-                            UseCases = "CLAIM-02"
-                        },
-                        new
-                        {
-                            Id = 223,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 3704,
-                            GuardCondition = "The trader of the claim declines the offer; a note is optional.",
-                            ReasonRequired = false,
-                            ToStatusId = 3705,
-                            TriggerEvent = "Action",
-                            UseCases = "CLAIM-02"
-                        },
-                        new
-                        {
-                            Id = 240,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4101,
-                            GuardCondition = "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.",
-                            ReasonRequired = true,
-                            ToStatusId = 4102,
-                            TriggerEvent = "Action",
-                            UseCases = "CLAIM-03"
-                        },
-                        new
-                        {
-                            Id = 150,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
-                            FromStatusId = 2901,
-                            GuardCondition = "Sold whole lot, closed with the leftover kg, or the time limit reached.",
-                            ReasonRequired = false,
-                            ToStatusId = 2903,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03"
-                        },
-                        new
-                        {
-                            Id = 151,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
-                            FromStatusId = 2902,
-                            GuardCondition = "Closed again in the same four ways.",
-                            ReasonRequired = false,
-                            ToStatusId = 2903,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03"
-                        },
-                        new
-                        {
-                            Id = 152,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
-                            FromStatusId = 2903,
-                            GuardCondition = "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick (the system); a Zone Manager or the Owner reopens a lot closed Unsold, Spoiled or by the time limit, not by an invoice, with a reason. The kg taken off the stock at the close come back.",
-                            ReasonRequired = false,
-                            ToStatusId = 2902,
-                            TriggerEvent = "System",
-                            UseCases = "CLAIM-03, SALE-07, SALE-08, HARVEST-REOPEN"
-                        },
-                        new
-                        {
-                            Id = 30117,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 2904,
-                            GuardCondition = "The lot is weighed: each product line has its weighed kg, which go into the stock of the products.",
-                            ReasonRequired = false,
-                            ToStatusId = 2901,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-WEIGH"
-                        },
-                        new
-                        {
-                            Id = 200,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3501,
-                            GuardCondition = "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.",
-                            ReasonRequired = true,
-                            ToStatusId = 3502,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-08"
-                        },
-                        new
-                        {
-                            Id = 210,
-                            AllowedPerformers = "Accountant",
-                            FromStatusId = 3601,
-                            GuardCondition = "The cash or the transfer that arrived matches the payment.",
-                            ReasonRequired = false,
-                            ToStatusId = 3602,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02"
-                        },
-                        new
-                        {
-                            Id = 211,
-                            AllowedPerformers = "Accountant; Cooperative Owner",
-                            FromStatusId = 3601,
-                            GuardCondition = "The customer did not pay, or the cash was given back when the invoice was cancelled.",
-                            ReasonRequired = true,
-                            ToStatusId = 3603,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02, SALE-08"
-                        },
-                        new
-                        {
-                            Id = 212,
-                            AllowedPerformers = "Accountant",
-                            FromStatusId = 3602,
-                            GuardCondition = "Recorded by mistake, or the money never arrived.",
-                            ReasonRequired = true,
-                            ToStatusId = 3603,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02"
-                        },
-                        new
-                        {
-                            Id = 213,
-                            AllowedPerformers = "Accountant; Cooperative Owner",
-                            FromStatusId = 3602,
-                            GuardCondition = "The money paid back that settled a payment without a customer was cancelled, so the payment is settled again.",
-                            ReasonRequired = false,
-                            ToStatusId = 3601,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02.4, DEBT-02.6"
-                        },
-                        new
-                        {
-                            Id = 30078,
-                            AllowedPerformers = "System; Accountant",
-                            FromStatusId = 3604,
-                            GuardCondition = "The transfer with the payment code arrived; the payment takes the amount received.",
-                            ReasonRequired = false,
-                            ToStatusId = 3602,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02, GFR-08"
-                        },
-                        new
-                        {
-                            Id = 30079,
-                            AllowedPerformers = "Accountant; Cooperative Owner",
-                            FromStatusId = 3604,
-                            GuardCondition = "The customer did not transfer, or the code was made by mistake.",
-                            ReasonRequired = true,
-                            ToStatusId = 3603,
-                            TriggerEvent = "Action",
-                            UseCases = "DEBT-02"
-                        },
-                        new
-                        {
-                            Id = 30080,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 3901,
-                            GuardCondition = "The issue is complete and no item or seed lot would go below zero when that is not allowed.",
-                            ReasonRequired = false,
-                            ToStatusId = 3902,
-                            TriggerEvent = "Action",
-                            UseCases = "INPUT-ISSUE"
-                        },
-                        new
-                        {
-                            Id = 30081,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 3902,
-                            GuardCondition = "An issue recorded by mistake; its quantities go back in the stock.",
-                            ReasonRequired = true,
-                            ToStatusId = 3903,
-                            TriggerEvent = "Action",
-                            UseCases = "INPUT-ISSUE"
-                        },
-                        new
-                        {
-                            Id = 30100,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4301,
-                            GuardCondition = "The disposal has a reason and its lines are complete.",
-                            ReasonRequired = false,
-                            ToStatusId = 4302,
-                            TriggerEvent = "Action",
-                            UseCases = "PRODUCT-DISPOSAL"
-                        },
-                        new
-                        {
-                            Id = 30101,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4302,
-                            GuardCondition = "A disposal recorded by mistake; its kg go back in the stock.",
-                            ReasonRequired = true,
-                            ToStatusId = 4303,
-                            TriggerEvent = "Action",
-                            UseCases = "PRODUCT-DISPOSAL"
-                        },
-                        new
-                        {
-                            Id = 30102,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4401,
-                            GuardCondition = "The first invoice of the order is saved with goods still to deliver.",
-                            ReasonRequired = false,
-                            ToStatusId = 4402,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30103,
-                            AllowedPerformers = "System; Cooperative Owner",
-                            FromStatusId = 4401,
-                            GuardCondition = "An invoice covers every line of the order, or the Owner finishes the order.",
-                            ReasonRequired = false,
-                            ToStatusId = 4403,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30104,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
-                            FromStatusId = 4402,
-                            GuardCondition = "The Owner or a Zone Manager of the zone finishes the order, or every line is delivered.",
-                            ReasonRequired = false,
-                            ToStatusId = 4403,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30105,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4401,
-                            GuardCondition = "A reason is given.",
-                            ReasonRequired = true,
-                            ToStatusId = 4404,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30106,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4402,
-                            GuardCondition = "A reason is given and no invoice of the order is left uncancelled; otherwise the order is finished instead.",
-                            ReasonRequired = true,
-                            ToStatusId = 4404,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30107,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4403,
-                            GuardCondition = "An invoice of the finished order is cancelled: the order is open again.",
-                            ReasonRequired = false,
-                            ToStatusId = 4402,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30118,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4402,
-                            GuardCondition = "The only invoice of the order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.",
-                            ReasonRequired = false,
-                            ToStatusId = 4401,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30119,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4403,
-                            GuardCondition = "The only invoice of the finished order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.",
-                            ReasonRequired = false,
-                            ToStatusId = 4401,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30108,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3201,
-                            GuardCondition = "The Owner saves an order made from the request.",
-                            ReasonRequired = false,
-                            ToStatusId = 3206,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30109,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3202,
-                            GuardCondition = "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.",
-                            ReasonRequired = false,
-                            ToStatusId = 3206,
-                            TriggerEvent = "Action",
-                            UseCases = "SALES-ORDER"
-                        },
-                        new
-                        {
-                            Id = 30110,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4201,
-                            GuardCondition = "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.",
-                            ReasonRequired = false,
-                            ToStatusId = 4202,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30111,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4206,
-                            GuardCondition = "The first lot is recorded from a line of the plan, or the first lane is left out.",
-                            ReasonRequired = false,
-                            ToStatusId = 4203,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30112,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4207,
-                            GuardCondition = "The plan was handed over by a Zone Manager; only the Owner completes it. The system never completes a plan by itself.",
-                            ReasonRequired = false,
-                            ToStatusId = 4204,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30120,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4202,
-                            GuardCondition = "A Zone Manager of a zone of the plan presses Receive; there is no refusal.",
-                            ReasonRequired = false,
-                            ToStatusId = 4206,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30121,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4203,
-                            GuardCondition = "Every line of the plan has its lot or has every lane left out; a Zone Manager presses Hand over.",
-                            ReasonRequired = false,
-                            ToStatusId = 4207,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30122,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4207,
-                            GuardCondition = "A lot of a handed over plan is removed, or a lane left out is put back: a line is open again.",
-                            ReasonRequired = false,
-                            ToStatusId = 4203,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30123,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4206,
-                            GuardCondition = "A reason is given and no lot was recorded from the plan.",
-                            ReasonRequired = true,
-                            ToStatusId = 4205,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30114,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4201,
-                            GuardCondition = "A reason is given.",
-                            ReasonRequired = true,
-                            ToStatusId = 4205,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30115,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 4202,
-                            GuardCondition = "A reason is given and no lot was recorded from the plan.",
-                            ReasonRequired = true,
-                            ToStatusId = 4205,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30116,
-                            AllowedPerformers = "System",
-                            FromStatusId = 4204,
-                            GuardCondition = "The Owner completed the plan and a lot is removed or a lane left out is put back: a line is open again.",
-                            ReasonRequired = false,
-                            ToStatusId = 4203,
-                            TriggerEvent = "Action",
-                            UseCases = "HARVEST-PLAN"
-                        },
-                        new
-                        {
-                            Id = 30090,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4001,
-                            GuardCondition = "The survivors are not above the pieces put in; no share and no cycle is created (v2, 13/11/2026).",
-                            ReasonRequired = false,
-                            ToStatusId = 4002,
-                            TriggerEvent = "Action",
-                            UseCases = "NURSERY-03"
-                        },
-                        new
-                        {
-                            Id = 30091,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4001,
-                            GuardCondition = "The batch is still Nursing; the pieces go back in the stock.",
-                            ReasonRequired = true,
-                            ToStatusId = 4003,
-                            TriggerEvent = "Action",
-                            UseCases = "NURSERY-02"
-                        },
-                        new
-                        {
-                            Id = 30092,
-                            AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 4002,
-                            GuardCondition = "The batch is Completed and pieces are left in the pool; they are written off as an estimated loss.",
-                            ReasonRequired = false,
-                            ToStatusId = 4004,
-                            TriggerEvent = "Action",
-                            UseCases = "NURSERY-05"
-                        },
-                        new
-                        {
-                            Id = 230,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3801,
-                            GuardCondition = "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.",
-                            ReasonRequired = false,
-                            ToStatusId = 3802,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-05"
-                        },
-                        new
-                        {
-                            Id = 231,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3801,
-                            GuardCondition = "A note gives the reason.",
-                            ReasonRequired = true,
-                            ToStatusId = 3803,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-05"
-                        },
-                        new
-                        {
-                            Id = 232,
-                            AllowedPerformers = "Employee",
-                            FromStatusId = 3801,
-                            GuardCondition = "The employee cancels their own request before it is reviewed.",
-                            ReasonRequired = false,
-                            ToStatusId = 3804,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-10"
-                        },
-                        new
-                        {
-                            Id = 233,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3405,
-                            GuardCondition = "The lines of the period are calculated.",
-                            ReasonRequired = false,
-                            ToStatusId = 3401,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-12"
-                        },
-                        new
-                        {
-                            Id = 234,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3401,
-                            GuardCondition = "The period has ended, no attendance of it is incomplete, no hours lack a rate and no request for it awaits review.",
-                            ReasonRequired = false,
-                            ToStatusId = 3404,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-13"
-                        },
-                        new
-                        {
-                            Id = 235,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3401,
-                            GuardCondition = "A payroll sheet dropped before it is finalized.",
-                            ReasonRequired = false,
-                            ToStatusId = 3406,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-12"
-                        },
-                        new
-                        {
-                            Id = 236,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3405,
-                            GuardCondition = "A sheet still being made is dropped.",
-                            ReasonRequired = false,
-                            ToStatusId = 3406,
-                            TriggerEvent = "Action",
-                            UseCases = "LABOR-12"
-                        },
-                        new
-                        {
-                            Id = 30082,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3201,
-                            GuardCondition = "Legacy, no longer made: since 24/11/2026 the Owner picks the employees, their shifts become work assignments at once and the request stays Awaiting response.",
-                            ReasonRequired = false,
-                            ToStatusId = 3205,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
-                            Id = 30083,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3205,
-                            GuardCondition = "The Owner declines with a reason.",
-                            ReasonRequired = true,
-                            ToStatusId = 3203,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
-                            Id = 30084,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 3205,
-                            GuardCondition = "Only the requesting customer may cancel; release shift reservations.",
-                            ReasonRequired = false,
-                            ToStatusId = 3204,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-02"
-                        },
-                        new
-                        {
-                            Id = 30085,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 3205,
-                            GuardCondition = "A staffing plan exists (employees chosen, assignments made); cages and pickup match it. No employee agreement is counted any more.",
-                            ReasonRequired = false,
-                            ToStatusId = 3202,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
-                            Id = 30074,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 303,
-                            GuardCondition = "Approve the trader's request.",
-                            ReasonRequired = false,
-                            ToStatusId = 301,
-                            TriggerEvent = "Action",
-                            UseCases = "ACS-01 (Zalo)"
-                        },
-                        new
-                        {
-                            Id = 30075,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 303,
-                            GuardCondition = "Refuse the trader's request.",
-                            ReasonRequired = true,
-                            ToStatusId = 304,
-                            TriggerEvent = "Action",
-                            UseCases = "ACS-01 (Zalo)"
-                        },
-                        new
-                        {
-                            Id = 30076,
-                            AllowedPerformers = "Trader",
-                            FromStatusId = 304,
-                            GuardCondition = "The trader asks again from the Zalo Mini App.",
-                            ReasonRequired = false,
-                            ToStatusId = 303,
-                            TriggerEvent = "Action",
-                            UseCases = "ACS-01 (Zalo)"
                         });
                 });
 
@@ -6267,10 +5063,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("IllustrationUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("IsHidden")
                         .HasColumnType("bit");
@@ -9701,33 +8493,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchAllocation", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
-                        .WithMany()
-                        .HasForeignKey("CycleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", "NurseryBatch")
-                        .WithMany("Allocations")
-                        .HasForeignKey("NurseryBatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
-                        .WithMany()
-                        .HasForeignKey("RaftId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Cycle");
-
-                    b.Navigation("NurseryBatch");
-
-                    b.Navigation("Raft");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchPhoto", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", "NurseryBatch")
@@ -10046,11 +8811,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestPlanLineId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
-                        .WithMany()
-                        .HasForeignKey("PurchaseRequestId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany()
                         .HasForeignKey("RaftId")
@@ -10082,8 +8842,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Cycle");
 
                     b.Navigation("HarvestPlanLine");
-
-                    b.Navigation("PurchaseRequest");
 
                     b.Navigation("Raft");
 
@@ -10713,16 +9471,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("FinalizedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
-                        .WithMany()
-                        .HasForeignKey("SentBackByAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
-                        .WithMany()
-                        .HasForeignKey("SentByAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
@@ -10951,25 +9699,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("DeliveryStatus");
 
                     b.Navigation("RecipientAccount");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Platform.StatusTransition", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "FromStatus")
-                        .WithMany()
-                        .HasForeignKey("FromStatusId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "ToStatus")
-                        .WithMany()
-                        .HasForeignKey("ToStatusId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("FromStatus");
-
-                    b.Navigation("ToStatus");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.FarmingInputItem", b =>
@@ -12031,8 +10760,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatch", b =>
                 {
-                    b.Navigation("Allocations");
-
                     b.Navigation("Crew");
 
                     b.Navigation("Photos");

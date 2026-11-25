@@ -5,270 +5,131 @@ using S = OMTS.Domain.Constants.StatusIds;
 namespace OMTS.Infrastructure.Persistence.Seed;
 
 /// <summary>
-/// Fixed Status catalog (SRS Table 3.4-1, section 3.4.3) and permitted transitions (Table 3.4-2 plus
-/// the two USAGE transitions). Codes and transitions change only with an SRS revision (BR-29, BR-30).
+/// Fixed Status catalog (SRS Table 3.4-1, section 3.4.3). Codes change only with an SRS revision (BR-29). The moves between
+/// statuses are enforced by the rules of each feature, not by the catalog.
 /// </summary>
 internal static class StatusCatalogSeed
 {
-    private const string Owner = "Cooperative Owner";
-    private const string OwnerOrZoneManager = "Cooperative Owner; Zone Manager";
-    private const string OwnerForStaffAdminForTraders =
-        "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
-    private const string Trader = "Trader";
-    private const string SystemActor = "System";
-    private const string LotCloser = "Cooperative Owner; Zone Manager; System";
-    private const string Accountant = "Accountant";
-    private const string Action = "Action";
-
     public static readonly Status[] Statuses =
     [
-        NewStatus(S.Usage.InUse, G.Usage, "IN_USE", "In Use", "Selectable for new records.", initial: true),
-        NewStatus(S.Usage.Discontinued, G.Usage, "OUT_OF_USE", "Discontinued", "Not shown when selecting new records; old data stays unchanged."),
+        NewStatus(S.Usage.InUse, G.Usage, "IN_USE", "In Use"),
+        NewStatus(S.Usage.Discontinued, G.Usage, "OUT_OF_USE", "Discontinued"),
 
-        NewStatus(S.Account.Active, G.Account, "ACTIVE", "Active", "Can log in according to effective zone–role pairs.", initial: true),
-        NewStatus(S.Account.Locked, G.Account, "LOCKED", "Locked", "Cannot log in; data and history stay unchanged."),
+        NewStatus(S.Account.Active, G.Account, "ACTIVE", "Active"),
+        NewStatus(S.Account.Locked, G.Account, "LOCKED", "Locked"),
         // Not in the SRS table yet: traders asking for an account from the Zalo Mini App (decision of 28/10/2026).
-        NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval", "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves."),
-        NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected", "The Cooperative Owner refused the request; the trader may ask again."),
+        NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval"),
+        NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected"),
 
-        NewStatus(S.Employee.Working, G.Employee, "WORKING", "Employed", "The employee is working and can be assigned work and recorded in attendance.", initial: true),
-        NewStatus(S.Employee.Left, G.Employee, "LEFT", "Left", "No new work or attendance; wage and salary history stays unchanged."),
+        NewStatus(S.Employee.Working, G.Employee, "WORKING", "Employed"),
+        NewStatus(S.Employee.Left, G.Employee, "LEFT", "Left"),
 
-        NewStatus(S.AccessGrant.Effective, G.AccessGrant, "EFFECTIVE", "Effective", "The account has the role's permissions in the assigned zone.", initial: true),
-        NewStatus(S.AccessGrant.Revoked, G.AccessGrant, "REVOKED", "Revoked", "The grant no longer applies; re-granting creates a new grant.", final: true),
+        NewStatus(S.AccessGrant.Effective, G.AccessGrant, "EFFECTIVE", "Effective"),
+        NewStatus(S.AccessGrant.Revoked, G.AccessGrant, "REVOKED", "Revoked", final: true),
 
-        NewStatus(S.CultivationCycle.Open, G.CultivationCycle, "OPEN", "Open", "The cycle is in progress; seeding, logging and harvesting are allowed.", initial: true),
-        NewStatus(S.CultivationCycle.Closed, G.CultivationCycle, "CLOSED", "Closed", "The cycle has ended; the raft can open a new cycle.", final: true),
+        NewStatus(S.CultivationCycle.Open, G.CultivationCycle, "OPEN", "Open"),
+        NewStatus(S.CultivationCycle.Closed, G.CultivationCycle, "CLOSED", "Closed", final: true),
 
-        NewStatus(S.WaterMeasurement.Active, G.WaterMeasurement, "ACTIVE", "Active", "Counts in the charts and the water alert of the zone.", initial: true),
-        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Kept in the history with its reason; no longer counts.", final: true),
+        NewStatus(S.WaterMeasurement.Active, G.WaterMeasurement, "ACTIVE", "Active"),
+        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", final: true),
 
         // SMS and Zalo OA sendings kept as Notification rows (BR-SALE-09, GFR-06).
-        NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the SMS Service or Zalo OA, no answer yet.", initial: true),
-        NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "Accepted by the service; this does not mean that the trader has read it.", final: true),
-        NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", "Not accepted by the service; nothing that was saved is undone (GFR-06).", final: true),
+        NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending"),
+        NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", final: true),
+        NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", final: true),
 
-        NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being prepared; counts nowhere and creates no seed lot. Removed, never cancelled.", initial: true),
-        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in the supplier debt; each Seed line is a seed lot. May be edited, never its supplier, and every edit is audited."),
-        NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Kept with its reason; counts nowhere; its Seed lines are no longer seed lots.", final: true),
+        NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft"),
+        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed"),
+        NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", final: true),
 
-        NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Counts in the supplier debt; cannot be edited.", initial: true),
-        NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
+        NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded"),
+        NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", final: true),
 
-        NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded", "Lowers the supplier debt. May be edited within the quantity left, never below the money paid back, and every edit is audited.", initial: true),
-        NewStatus(S.PurchaseReturn.Cancelled, G.PurchaseReturn, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts.", final: true),
-        NewStatus(S.PurchaseReturn.Draft, G.PurchaseReturn, "DRAFT", "Draft", "Being prepared; counts nowhere and holds no quantity. Removed, never cancelled.", initial: true),
+        NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded"),
+        NewStatus(S.PurchaseReturn.Cancelled, G.PurchaseReturn, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.PurchaseReturn.Draft, G.PurchaseReturn, "DRAFT", "Draft"),
 
-        NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),
-        NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
+        NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use"),
+        NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed"),
         // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
-        NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
-        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it."),
-        NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
-        NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
-        NewStatus(S.PurchaseRequest.Ordered, G.PurchaseRequest, "ORDERED", "Ordered", "The Cooperative Owner made an order (DH) from the request; the order carries on from here.", final: true),
+        NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response"),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted"),
+        NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", final: true),
+        NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.PurchaseRequest.Ordered, G.PurchaseRequest, "ORDERED", "Ordered", final: true),
 
         // STD-QUALITY-CLAIM: a response cannot be changed (BR-CLAIM-02).
-        NewStatus(S.QualityClaim.AwaitingResponse, G.QualityClaim, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
-        NewStatus(S.QualityClaim.Rejected, G.QualityClaim, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
-        NewStatus(S.QualityClaim.Accepted, G.QualityClaim, "ACCEPTED", "Accepted", "The trader accepted the offer of the Cooperative Owner (a return of all the goods or a price cut of the whole invoice).", final: true),
-        NewStatus(S.QualityClaim.OfferMade, G.QualityClaim, "OFFER_MADE", "Offer made", "The Cooperative Owner proposed a return of all the goods or a price cut of the whole invoice; the trader has not answered yet."),
-        NewStatus(S.QualityClaim.OfferDeclined, G.QualityClaim, "OFFER_DECLINED", "Offer declined", "The trader declined the offer of the Cooperative Owner.", final: true),
+        NewStatus(S.QualityClaim.AwaitingResponse, G.QualityClaim, "AWAITING_RESPONSE", "Awaiting response"),
+        NewStatus(S.QualityClaim.Rejected, G.QualityClaim, "REJECTED", "Rejected", final: true),
+        NewStatus(S.QualityClaim.Accepted, G.QualityClaim, "ACCEPTED", "Accepted", final: true),
+        NewStatus(S.QualityClaim.OfferMade, G.QualityClaim, "OFFER_MADE", "Offer made"),
+        NewStatus(S.QualityClaim.OfferDeclined, G.QualityClaim, "OFFER_DECLINED", "Offer declined", final: true),
 
-        // The transitions of a payroll come with LABOR-12 and LABOR-13, which perform them.
-        NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft", "Being prepared; its lines are calculated from the current records.", initial: true),
-        NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
-        NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
-        NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
+        NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft"),
+        NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", final: true),
         // The web contract's Creating and Cancelled (PAYROLL_API_CONTRACT); its Provisional is the Draft above.
-        NewStatus(S.Payroll.Creating, G.Payroll, "CREATING", "Creating", "The sheet is being made."),
-        NewStatus(S.Payroll.Cancelled, G.Payroll, "CANCELLED", "Cancelled", "Dropped before it was finalized; it no longer counts.", final: true),
+        NewStatus(S.Payroll.Creating, G.Payroll, "CREATING", "Creating"),
+        NewStatus(S.Payroll.Cancelled, G.Payroll, "CANCELLED", "Cancelled", final: true),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.
-        NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review", "Sent by the employee; not reviewed yet.", initial: true),
-        NewStatus(S.EmployeeRequest.Approved, G.EmployeeRequest, "APPROVED", "Approved", "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.", final: true),
-        NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
-        NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", "Cancelled by the employee while it was awaiting review; kept in the list.", final: true),
+        NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review"),
+        NewStatus(S.EmployeeRequest.Approved, G.EmployeeRequest, "APPROVED", "Approved", final: true),
+        NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", final: true),
+        NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", final: true),
 
         // Chờ cân: a new lot is recorded here and is not for sale until its weighing (decision of 17/11/2026).
-        NewStatus(S.HarvestLot.AwaitingWeighing, G.HarvestLot, "AWAITING_WEIGHING", "Awaiting weighing", "Recorded with its estimated kg (Chờ cân); not for sale and in no stock until it is weighed. It can be corrected or removed.", initial: true),
-        NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice. Weighed; it can be weighed again."),
-        NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
-        NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept and what was left of its products is taken off the stock. The system can reopen it; a lot closed by hand or by the time limit is also reopened by hand."),
+        NewStatus(S.HarvestLot.AwaitingWeighing, G.HarvestLot, "AWAITING_WEIGHING", "Awaiting weighing"),
+        NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open"),
+        NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened"),
+        NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed"),
 
         // STD-SALES-INVOICE: no draft, as an invoice is saved only when paid or put on the debt (BR-SALE-08).
-        NewStatus(S.SalesInvoice.Completed, G.SalesInvoice, "COMPLETED", "Completed", "The sale is saved; only the Cooperative Owner corrects or cancels it.", initial: true),
-        NewStatus(S.SalesInvoice.Cancelled, G.SalesInvoice, "CANCELLED", "Cancelled", "The sale did not happen; kept with its reason and counts nowhere.", final: true),
+        NewStatus(S.SalesInvoice.Completed, G.SalesInvoice, "COMPLETED", "Completed"),
+        NewStatus(S.SalesInvoice.Cancelled, G.SalesInvoice, "CANCELLED", "Cancelled", final: true),
 
         // STD-CUSTOMER-PAYMENT (BR-DEBT-03): a payment counts in the debt from its recording.
-        NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
-        NewStatus(S.CustomerPayment.Completed, G.CustomerPayment, "COMPLETED", "Completed", "The money has arrived or was recorded by the Accountant; counts in the debt."),
-        NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
-        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "Legacy (31/10/2026 flow): requests sent before 24/11/2026 may still wait here for employees to answer; new staffing plans keep the request Awaiting response and make the work assignments at once."),
-        NewStatus(S.CustomerPayment.PendingTransfer, G.CustomerPayment, "PENDING_TRANSFER", "Pending transfer", "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.", initial: true),
-        NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft", "Being prepared; holds no quantity. Removed, never cancelled.", initial: true),
-        NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed", "The quantities have left the stock; may still be edited, which writes them again."),
-        NewStatus(S.InputIssue.Cancelled, G.InputIssue, "CANCELLED", "Cancelled", "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", final: true),
-        NewStatus(S.ProductDisposal.Draft, G.ProductDisposal, "DRAFT", "Draft", "Being prepared; holds no kg. Removed, never cancelled.", initial: true),
-        NewStatus(S.ProductDisposal.Completed, G.ProductDisposal, "COMPLETED", "Completed", "The kg have left the stock of their products; may still be edited, which writes them again."),
-        NewStatus(S.ProductDisposal.Cancelled, G.ProductDisposal, "CANCELLED", "Cancelled", "Recorded by mistake; the kg are back in the stock and it counts nowhere.", final: true),
-        NewStatus(S.SalesOrder.Draft, G.SalesOrder, "DRAFT", "Draft", "The order is agreed with the buyer; no invoice has been made from it yet. Its advance is reserved for it.", initial: true),
-        NewStatus(S.SalesOrder.Delivering, G.SalesOrder, "DELIVERING", "Delivering", "At least one invoice was made from the order; goods are still to be delivered. Its advance is reserved for it."),
-        NewStatus(S.SalesOrder.Completed, G.SalesOrder, "COMPLETED", "Completed", "Finished by hand or fully delivered; what is left of its advance is general credit of the customer. A cancelled invoice reopens it."),
-        NewStatus(S.SalesOrder.Cancelled, G.SalesOrder, "CANCELLED", "Cancelled", "Cancelled with a reason; what is left of its advance is general credit of the customer.", final: true),
-        NewStatus(S.HarvestPlan.Draft, G.HarvestPlan, "DRAFT", "Draft", "Being prepared by the Owner; the Zone Managers do not see it yet.", initial: true),
-        NewStatus(S.HarvestPlan.Assigned, G.HarvestPlan, "ASSIGNED", "Assigned", "Handed to the Zone Managers of its zone; none of them has pressed Receive yet, so no lot is recorded and no lane left out."),
-        NewStatus(S.HarvestPlan.Harvesting, G.HarvestPlan, "HARVESTING", "Harvesting", "A lot is recorded from a line of the plan, or a lane is left out; it stays here until a Zone Manager hands the plan over."),
-        NewStatus(S.HarvestPlan.Completed, G.HarvestPlan, "COMPLETED", "Completed", "The Owner closed a plan the Zone Manager handed over; removing a lot or putting a lane back opens it again."),
-        NewStatus(S.HarvestPlan.Cancelled, G.HarvestPlan, "CANCELLED", "Cancelled", "Cancelled with a reason before any lot was recorded.", final: true),
-        NewStatus(S.HarvestPlan.Received, G.HarvestPlan, "RECEIVED", "Đã nhận", "A Zone Manager of the plan's zone pressed Receive (Nhận); lots can be recorded and lanes left out from now on."),
-        NewStatus(S.HarvestPlan.HandedOver, G.HarvestPlan, "HANDED_OVER", "Đã bàn giao", "A Zone Manager pressed Hand over (Bàn giao): every line has its lot or all its lanes left out; waits for the Owner to complete the plan."),
+        NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation"),
+        NewStatus(S.CustomerPayment.Completed, G.CustomerPayment, "COMPLETED", "Completed"),
+        NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation"),
+        NewStatus(S.CustomerPayment.PendingTransfer, G.CustomerPayment, "PENDING_TRANSFER", "Pending transfer"),
+        NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft"),
+        NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed"),
+        NewStatus(S.InputIssue.Cancelled, G.InputIssue, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.ProductDisposal.Draft, G.ProductDisposal, "DRAFT", "Draft"),
+        NewStatus(S.ProductDisposal.Completed, G.ProductDisposal, "COMPLETED", "Completed"),
+        NewStatus(S.ProductDisposal.Cancelled, G.ProductDisposal, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.SalesOrder.Draft, G.SalesOrder, "DRAFT", "Draft"),
+        NewStatus(S.SalesOrder.Delivering, G.SalesOrder, "DELIVERING", "Delivering"),
+        NewStatus(S.SalesOrder.Completed, G.SalesOrder, "COMPLETED", "Completed"),
+        NewStatus(S.SalesOrder.Cancelled, G.SalesOrder, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.HarvestPlan.Draft, G.HarvestPlan, "DRAFT", "Draft"),
+        NewStatus(S.HarvestPlan.Assigned, G.HarvestPlan, "ASSIGNED", "Assigned"),
+        NewStatus(S.HarvestPlan.Harvesting, G.HarvestPlan, "HARVESTING", "Harvesting"),
+        NewStatus(S.HarvestPlan.Completed, G.HarvestPlan, "COMPLETED", "Completed"),
+        NewStatus(S.HarvestPlan.Cancelled, G.HarvestPlan, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.HarvestPlan.Received, G.HarvestPlan, "RECEIVED", "Đã nhận"),
+        NewStatus(S.HarvestPlan.HandedOver, G.HarvestPlan, "HANDED_OVER", "Đã bàn giao"),
 
         // STD-NURSERY-BATCH (ươm giống, decision of 12/11/2026): a Completed batch is not cancelled.
-        NewStatus(S.NurseryBatch.Nursing, G.NurseryBatch, "NURSING", "Nursing", "The pieces left the stock and are in the nursery; it can be edited or cancelled.", initial: true),
-        NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", "The survivors are recorded (Đã ươm xong): the batch is a pool that cycles seed from; the survivors can still be corrected, not below what is seeded. It is closed once the rafts are seeded.", final: false),
-        NewStatus(S.NurseryBatch.Cancelled, G.NurseryBatch, "CANCELLED", "Cancelled", "Recorded by mistake before it was completed; the pieces are back in the stock.", final: true),
-        NewStatus(S.NurseryBatch.Closed, G.NurseryBatch, "CLOSED", "Closed", "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.", final: true),
+        NewStatus(S.NurseryBatch.Nursing, G.NurseryBatch, "NURSING", "Nursing"),
+        NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", final: false),
+        NewStatus(S.NurseryBatch.Cancelled, G.NurseryBatch, "CANCELLED", "Cancelled", final: true),
+        NewStatus(S.NurseryBatch.Closed, G.NurseryBatch, "CLOSED", "Closed", final: true),
 
         // STD-SALES-RETURN (BR-CLAIM-03).
-        NewStatus(S.SalesReturn.Recorded, G.SalesReturn, "RECORDED", "Recorded", "Takes the invoice out of the customer debt and counts in the lots and the reports; cannot be edited.", initial: true),
-        NewStatus(S.SalesReturn.Cancelled, G.SalesReturn, "CANCELLED", "Cancelled", "Recorded by mistake; counts nowhere.", final: true),
+        NewStatus(S.SalesReturn.Recorded, G.SalesReturn, "RECORDED", "Recorded"),
+        NewStatus(S.SalesReturn.Cancelled, G.SalesReturn, "CANCELLED", "Cancelled", final: true),
     ];
 
-    public static readonly StatusTransition[] Transitions =
-    [
-        NewTransition(1, S.Usage.InUse, S.Usage.Discontinued, "UC12, UC15, UC18, UC20, UC22, UC42, UC55", OwnerOrZoneManager, Action, "Not blocked by the entity's Discontinued condition (section 3.4.3).", false),
-        NewTransition(2, S.Usage.Discontinued, S.Usage.InUse, "UC12, UC15, UC18, UC20, UC22, UC42, UC55", OwnerOrZoneManager, Action, "Return the item to use.", false),
-
-        // Id 3 (cooperative Preliminary → Completed) is no longer used: the cooperative has no status (SRS 27/10).
-
-        NewTransition(4, S.Account.Active, S.Account.Locked, "ACS-09", OwnerForStaffAdminForTraders, Action, "Lock the account.", true),
-        NewTransition(5, S.Account.Locked, S.Account.Active, "ACS-09", OwnerForStaffAdminForTraders, Action, "Unlock after verification; trader accounts are unlocked only by the System Administrator.", true),
-
-        NewTransition(6, S.Employee.Working, S.Employee.Left, "LABOR-01", $"{OwnerOrZoneManager}; {SystemActor}", Action, "The last working day has passed: at once for an earlier day, by the system on the next day for today (BR-LABOR-01).", false),
-        NewTransition(7, S.Employee.Left, S.Employee.Working, "LABOR-01", OwnerOrZoneManager, Action, "No Employed employee has the phone number; needs no new approval (BR-LABOR-01).", false),
-
-        NewTransition(8, S.AccessGrant.Effective, S.AccessGrant.Revoked, "UC11", Owner, Action, "Revoke the zone–role pair; Cooperative Owner only.", true),
-
-        NewTransition(9, S.CultivationCycle.Open, S.CultivationCycle.Closed, "CYCLE-06", OwnerOrZoneManager, Action, "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).", false),
-
-        // 10–11, 55–56 were the water transitions of the SRS 22/10 model (OMTS-219); their ids are not reused.
-        // 12–52 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.
-        NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA accepts the message.", false),
-        NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.NotSent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA does not accept the message.", false),
-
-        NewTransition(80, S.WaterMeasurement.Active, S.WaterMeasurement.Voided, "WATER-02", "Zone Manager (own); Cooperative Owner", Action, "Void a wrong measurement with a reason.", true),
-
-        // A Draft receipt is removed, never cancelled (BR-PURCHASE-09): transition 71 no longer exists.
-        NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
-        NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "PURCHASE-06", "Zone Manager (own receipts); Cooperative Owner", Action, "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.", true),
-        NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
-        NewTransition(74, S.PurchaseReturn.Recorded, S.PurchaseReturn.Cancelled, "PURCHASE-02", Owner, Action, "A return recorded by mistake; it no longer counts in the supplier debt or the quantity returned.", true),
-
-        NewTransition(30077, S.PurchaseReturn.Draft, S.PurchaseReturn.Recorded, "PURCHASE-02", "Zone Manager (own drafts); Cooperative Owner", Action, "The return is complete and within the quantity left on each line of its receipt; dated the day it is completed.", false),
-
-        NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
-        NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
-        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "A staffing plan exists (employees assigned at once, no agreement to wait for); the accepted cages are above 0, not more than the requested cages and equal to the planned cages; the pickup date is not before today and equals the planned pickup.", false),
-        NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
-        NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
-        NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
-        NewTransition(220, S.QualityClaim.AwaitingResponse, S.QualityClaim.OfferMade, "CLAIM-02", Owner, Action, "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.", false),
-        NewTransition(221, S.QualityClaim.AwaitingResponse, S.QualityClaim.Rejected, "CLAIM-02", Owner, Action, "A note gives the reason.", true),
-        NewTransition(222, S.QualityClaim.OfferMade, S.QualityClaim.Accepted, "CLAIM-02", Trader, Action, "The trader of the claim accepts the offer; the Owner then runs the return (CLAIM-03) or the price cut (SALE-07).", false),
-        NewTransition(223, S.QualityClaim.OfferMade, S.QualityClaim.OfferDeclined, "CLAIM-02", Trader, Action, "The trader of the claim declines the offer; a note is optional.", false),
-        NewTransition(240, S.SalesReturn.Recorded, S.SalesReturn.Cancelled, "CLAIM-03", Owner, Action, "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.", true),
-
-        // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot closed by a sale; a Zone Manager or the Owner reopens one closed otherwise. 80–140 are taken or reserved on other branches.
-        NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),
-        NewTransition(151, S.HarvestLot.Reopened, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Closed again in the same four ways.", false),
-        NewTransition(152, S.HarvestLot.Closed, S.HarvestLot.Reopened, "CLAIM-03, SALE-07, SALE-08, HARVEST-REOPEN", LotCloser, SystemActor, "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick (the system); a Zone Manager or the Owner reopens a lot closed Unsold, Spoiled or by the time limit, not by an invoice, with a reason. The kg taken off the stock at the close come back.", false),
-        NewTransition(30117, S.HarvestLot.AwaitingWeighing, S.HarvestLot.Open, "HARVEST-WEIGH", OwnerOrZoneManager, Action, "The lot is weighed: each product line has its weighed kg, which go into the stock of the products.", false),
-
-        // STD-SALES-INVOICE and STD-CUSTOMER-PAYMENT; the creation of each is SALE-05 (and GFR-08 for a VietQR payment).
-        NewTransition(200, S.SalesInvoice.Completed, S.SalesInvoice.Cancelled, "SALE-08", Owner, Action, "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.", true),
-        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Completed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
-        NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
-        NewTransition(212, S.CustomerPayment.Completed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
-        NewTransition(213, S.CustomerPayment.Completed, S.CustomerPayment.AwaitingConfirmation, "DEBT-02.4, DEBT-02.6", $"{Accountant}; {Owner}", Action, "The money paid back that settled a payment without a customer was cancelled, so the payment is settled again.", false),
-        NewTransition(30078, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Completed, "DEBT-02, GFR-08", $"{SystemActor}; {Accountant}", Action, "The transfer with the payment code arrived; the payment takes the amount received.", false),
-        NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
-        NewTransition(30080, S.InputIssue.Draft, S.InputIssue.Completed, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false),
-        NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
-        NewTransition(30100, S.ProductDisposal.Draft, S.ProductDisposal.Completed, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "The disposal has a reason and its lines are complete.", false),
-        NewTransition(30101, S.ProductDisposal.Completed, S.ProductDisposal.Cancelled, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "A disposal recorded by mistake; its kg go back in the stock.", true),
-        NewTransition(30102, S.SalesOrder.Draft, S.SalesOrder.Delivering, "SALES-ORDER", SystemActor, Action, "The first invoice of the order is saved with goods still to deliver.", false),
-        NewTransition(30103, S.SalesOrder.Draft, S.SalesOrder.Completed, "SALES-ORDER", $"{SystemActor}; {Owner}", Action, "An invoice covers every line of the order, or the Owner finishes the order.", false),
-        NewTransition(30104, S.SalesOrder.Delivering, S.SalesOrder.Completed, "SALES-ORDER", $"{OwnerOrZoneManager}; {SystemActor}", Action, "The Owner or a Zone Manager of the zone finishes the order, or every line is delivered.", false),
-        NewTransition(30105, S.SalesOrder.Draft, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given.", true),
-        NewTransition(30106, S.SalesOrder.Delivering, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given and no invoice of the order is left uncancelled; otherwise the order is finished instead.", true),
-        NewTransition(30107, S.SalesOrder.Completed, S.SalesOrder.Delivering, "SALES-ORDER", SystemActor, Action, "An invoice of the finished order is cancelled: the order is open again.", false),
-        NewTransition(30118, S.SalesOrder.Delivering, S.SalesOrder.Draft, "SALES-ORDER", SystemActor, Action, "The only invoice of the order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.", false),
-        NewTransition(30119, S.SalesOrder.Completed, S.SalesOrder.Draft, "SALES-ORDER", SystemActor, Action, "The only invoice of the finished order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.", false),
-        NewTransition(30108, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The Owner saves an order made from the request.", false),
-        NewTransition(30109, S.PurchaseRequest.Accepted, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.", false),
-        NewTransition(30110, S.HarvestPlan.Draft, S.HarvestPlan.Assigned, "HARVEST-PLAN", Owner, Action, "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.", false),
-        NewTransition(30111, S.HarvestPlan.Received, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The first lot is recorded from a line of the plan, or the first lane is left out.", false),
-        NewTransition(30112, S.HarvestPlan.HandedOver, S.HarvestPlan.Completed, "HARVEST-PLAN", Owner, Action, "The plan was handed over by a Zone Manager; only the Owner completes it. The system never completes a plan by itself.", false),
-        NewTransition(30120, S.HarvestPlan.Assigned, S.HarvestPlan.Received, "HARVEST-PLAN", OwnerOrZoneManager, Action, "A Zone Manager of a zone of the plan presses Receive; there is no refusal.", false),
-        NewTransition(30121, S.HarvestPlan.Harvesting, S.HarvestPlan.HandedOver, "HARVEST-PLAN", OwnerOrZoneManager, Action, "Every line of the plan has its lot or has every lane left out; a Zone Manager presses Hand over.", false),
-        NewTransition(30122, S.HarvestPlan.HandedOver, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "A lot of a handed over plan is removed, or a lane left out is put back: a line is open again.", false),
-        NewTransition(30123, S.HarvestPlan.Received, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given and no lot was recorded from the plan.", true),
-        NewTransition(30114, S.HarvestPlan.Draft, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given.", true),
-        NewTransition(30115, S.HarvestPlan.Assigned, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given and no lot was recorded from the plan.", true),
-        NewTransition(30116, S.HarvestPlan.Completed, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The Owner completed the plan and a lot is removed or a lane left out is put back: a line is open again.", false),
-
-        // NURSERY-03 and NURSERY-02 (ươm giống); there is no way back from either.
-        NewTransition(30090, S.NurseryBatch.Nursing, S.NurseryBatch.Completed, "NURSERY-03", OwnerOrZoneManager, Action, "The survivors are not above the pieces put in; no share and no cycle is created (v2, 13/11/2026).", false),
-        NewTransition(30091, S.NurseryBatch.Nursing, S.NurseryBatch.Cancelled, "NURSERY-02", OwnerOrZoneManager, Action, "The batch is still Nursing; the pieces go back in the stock.", true),
-        NewTransition(30092, S.NurseryBatch.Completed, S.NurseryBatch.Closed, "NURSERY-05", OwnerOrZoneManager, Action, "The batch is Completed and pieces are left in the pool; they are written off as an estimated loss.", false),
-
-        // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
-        NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
-        NewTransition(231, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Rejected, "LABOR-05", Owner, Action, "A note gives the reason.", true),
-        NewTransition(232, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Cancelled, "LABOR-10", "Employee", Action, "The employee cancels their own request before it is reviewed.", false),
-
-        // Payroll sheets (LABOR-12, LABOR-13; the Draft is the web contract's Provisional). Not in SRS v8, which sends a payroll to the Owner and back.
-        NewTransition(233, S.Payroll.Creating, S.Payroll.Draft, "LABOR-12", Owner, Action, "The lines of the period are calculated.", false),
-        NewTransition(234, S.Payroll.Draft, S.Payroll.Finalized, "LABOR-13", Owner, Action, "The period has ended, no attendance of it is incomplete, no hours lack a rate and no request for it awaits review.", false),
-        NewTransition(235, S.Payroll.Draft, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A payroll sheet dropped before it is finalized.", false),
-        NewTransition(236, S.Payroll.Creating, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A sheet still being made is dropped.", false),
-
-        // STD-PURCHASE-REQUEST: the staffing plan before the response (decision of 31/10/2026).
-        NewTransition(30082, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.AwaitingStaff, "SALE-03", Owner, Action, "Legacy, no longer made: since 24/11/2026 the Owner picks the employees, their shifts become work assignments at once and the request stays Awaiting response.", false),
-        NewTransition(30083, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "The Owner declines with a reason.", true),
-        NewTransition(30084, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "Only the requesting customer may cancel; release shift reservations.", false),
-        NewTransition(30085, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "A staffing plan exists (employees chosen, assignments made); cages and pickup match it. No employee agreement is counted any more.", false),
-
-        // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
-        NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),
-        NewTransition(30075, S.Account.PendingApproval, S.Account.Rejected, "ACS-01 (Zalo)", Owner, Action, "Refuse the trader's request.", true),
-        NewTransition(30076, S.Account.Rejected, S.Account.PendingApproval, "ACS-01 (Zalo)", "Trader", Action, "The trader asks again from the Zalo Mini App.", false),
-    ];
-
-    private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>
+    private static Status NewStatus(int id, string group, string code, string displayName, bool final = false) =>
         new()
         {
             Id = id,
             Group = group,
             Code = code,
             DisplayName = displayName,
-            Meaning = meaning,
-            IsInitial = initial,
             IsFinal = final,
             SortOrder = id % 100,
-        };
-
-    private static StatusTransition NewTransition(int id, int from, int to, string useCases, string performers, string trigger, string guard, bool reasonRequired) =>
-        new()
-        {
-            Id = id,
-            FromStatusId = from,
-            ToStatusId = to,
-            UseCases = useCases,
-            AllowedPerformers = performers,
-            TriggerEvent = trigger,
-            GuardCondition = guard,
-            ReasonRequired = reasonRequired,
         };
 }

@@ -126,7 +126,7 @@ public class RaftsV2SqlServerTests
         Assert.Equal($"{zone.Text("code")}-B01", (await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zone.Id()}/rafts/next-code")).Text("code"));
         var rows = (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{zone.Id()}/rafts")).EnumerateArray().ToList();
         Assert.Contains(rows, r => r.Id() == pinned.Id() && r.GetProperty("laneCount").GetInt32() == 1);
-        var today = await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{pinned.Id()}/lanes/today");
+        var today = await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{pinned.Id()}/progress");
         Assert.Equal(["In Use", "Removed", "Removed"], today.GetProperty("lanes").EnumerateArray().Select(l => l.Text("status")));
     }
 }

@@ -160,7 +160,7 @@ public static class HarvestLotCorrectionTestKit
     public static List<string> ForSaleCodes(this JsonElement list) => list.GetProperty("lots").EnumerateArray().Select(l => l.Text("lotCode")).ToList();
 
     public static async Task<int> ForSaleCountAsync(this HttpClient client, Guid? zoneId = null) =>
-        (await client.GetFromJsonAsync<JsonElement>($"/api/harvest-lots/for-sale/count{(zoneId is null ? string.Empty : $"?zoneId={zoneId}")}")).GetProperty("count").GetInt32();
+        (await client.LotsForSaleAsync(zoneId)).GetProperty("lots").GetArrayLength();
 
     /// <summary>Zone KV01, a raft and seed on every lane by the clock's first day of October: lot codes and dates are exact, and a run may cross midnight.</summary>
     public static async Task<(HttpClient Owner, Guid ZoneId, Guid RaftId, Guid CycleId)> ClockedRaftAsync(this CyclesQaClockApiFactory api, string raftCode = "KV01-B01", string zoneCode = "KV01")

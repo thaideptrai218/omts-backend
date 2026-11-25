@@ -39,7 +39,7 @@ public sealed class NurseryCycleStartTests
         Assert.Equal(5, started.GetProperty("lanes").GetArrayLength());
         Assert.Equal(2, api.StoredFiles(FileCategories.CyclePlanPhotos).Count);
         var row = await api.QueryAsync(db => db.CultivationCycles.SingleAsync(c => c.Id == cycle.Id()));
-        Assert.Equal((batch.Id(), 2000.5m, (decimal?)null), (row.NurseryBatchId, row.TargetYieldKg, row.NurseryAllocatedQuantity));
+        Assert.Equal((batch.Id(), 2000.5m), (row.NurseryBatchId, row.TargetYieldKg));
         var audit = await api.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.Action == "CultivationCycle.Started" && e.RecordId == cycle.Id()));
         Assert.Contains(batch.Text("code"), audit.After!);
 

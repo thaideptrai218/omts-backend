@@ -52,9 +52,6 @@ public class CultivationCyclesV2MigrationTests
         Assert.Null(await db.CultivationCycles.AsNoTracking().Where(c => c.Id == closed).Select(c => c.Assessment).SingleAsync());
         Assert.Null(await db.CultivationCycles.AsNoTracking().Where(c => c.Id == closed).Select(c => c.SeedingCompletedOn).SingleAsync());
 
-        var transition = await db.StatusTransitions.AsNoTracking().SingleAsync(t => t.Id == 9);
-        Assert.Equal(("CYCLE-06", TransitionGuard), (transition.UseCases, transition.GuardCondition));
-
         // Only the new model can hold these; Down does not keep them.
         await db.CultivationCycles.Where(c => c.Id == open).ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpectedSeedQuantity, 5m).SetProperty(c => c.Assessment, "good"));
 

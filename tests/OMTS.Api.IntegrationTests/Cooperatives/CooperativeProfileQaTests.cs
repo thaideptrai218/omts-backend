@@ -62,7 +62,6 @@ public class CooperativeProfileQaTests
         Assert.DoesNotContain(outcome.Messages, m => m.Contains("Preliminary", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(HttpStatusCode.OK, (await api.CreateClient().GetAsync("/health/ready")).StatusCode);
         Assert.False(await QueryAsync(api, db => db.Statuses.AnyAsync(s => s.Group == "COOPERATIVE" || s.Id == 201 || s.Id == 202)));
-        Assert.False(await QueryAsync(api, db => db.StatusTransitions.AnyAsync(t => t.Id == 3)));
     }
 
     // GBR-02 / SRS 27/10: the audit row of the cooperative created at deployment records no status, since the

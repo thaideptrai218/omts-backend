@@ -33,22 +33,6 @@ internal sealed class NurseryBatchConfiguration : IEntityTypeConfiguration<Nurse
     }
 }
 
-internal sealed class NurseryBatchAllocationConfiguration : IEntityTypeConfiguration<NurseryBatchAllocation>
-{
-    public void Configure(EntityTypeBuilder<NurseryBatchAllocation> builder)
-    {
-        builder.HasOne(x => x.NurseryBatch).WithMany(b => b.Allocations).HasForeignKey(x => x.NurseryBatchId);
-        builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
-        builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
-        builder.Property(x => x.Quantity).HasPrecision(18, 3);
-
-        // A raft appears once in a batch, and a cycle belongs to one allocation.
-        builder.HasIndex(x => new { x.NurseryBatchId, x.RaftId }).IsUnique();
-        builder.HasIndex(x => x.CycleId).IsUnique();
-        builder.ToTable(t => t.HasCheckConstraint("CK_NurseryBatchAllocation_Quantity", "[Quantity] > 0"));
-    }
-}
-
 internal sealed class NurseryBatchPhotoConfiguration : IEntityTypeConfiguration<NurseryBatchPhoto>
 {
     public void Configure(EntityTypeBuilder<NurseryBatchPhoto> builder)

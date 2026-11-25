@@ -304,7 +304,7 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.OK, (await owner.Client.GetAsync($"/api/zones/{zone.Id()}/licenses")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.Client.GetAsync($"/api/zone-licenses/{license.Id()}")).StatusCode);
 
-        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         await owner.Client.CreateLicenseAsync(fields);
     }
 

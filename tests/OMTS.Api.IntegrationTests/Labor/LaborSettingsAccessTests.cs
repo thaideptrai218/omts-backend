@@ -32,9 +32,6 @@ public class LaborSettingsAccessTests(AuthApiFactory factory) : IClassFixture<Au
     [
         await client.GetAsync(AttendanceSettings),
         await client.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "None", effectiveFrom = "2020-01-01", rowVersion = "" }),
-        await client.GetAsync(PayrollSettings),
-        await client.GetAsync($"{PayrollSettings}/preview?startDay=26"),
-        await client.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = true, rowVersion = "" }),
     ];
 
     private static async Task AssertAllForbiddenAsync(IEnumerable<HttpResponseMessage> responses)

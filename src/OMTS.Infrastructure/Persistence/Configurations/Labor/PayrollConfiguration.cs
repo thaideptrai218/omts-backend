@@ -17,11 +17,9 @@ internal sealed class PayrollConfiguration : IEntityTypeConfiguration<Payroll>
         builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
         builder.Property(x => x.ExpenseMonth).HasMaxLength(7);
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
-        builder.Property(x => x.SendBackNote).HasMaxLength(Lengths.Reason);
         builder.Ignore(x => x.IsLocked);
         builder.Ignore(x => x.IsOpen);
-        builder.ReferencesAccount(
-            nameof(Payroll.SentByAccountId), nameof(Payroll.SentBackByAccountId), nameof(Payroll.FinalizedByAccountId), nameof(Payroll.CancelledByAccountId));
+        builder.ReferencesAccount(nameof(Payroll.FinalizedByAccountId), nameof(Payroll.CancelledByAccountId));
         builder.HasMany(x => x.Lines).WithOne(x => x.Payroll).HasForeignKey(x => x.PayrollId);
         builder.HasMany(x => x.SelectedEmployees).WithOne(x => x.Payroll).HasForeignKey(x => x.PayrollId);
         builder.ToTable(t => t.HasCheckConstraint("CK_Payrolls_Period", "[PeriodEnd] >= [PeriodStart]"));

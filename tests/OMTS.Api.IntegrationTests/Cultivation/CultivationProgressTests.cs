@@ -136,7 +136,7 @@ public class CultivationProgressTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Empty(view.LaneNumbers(StatusIds.Lane.Removed));
         Assert.Equal([1, 2], NotSeeded(view));
 
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today");
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress");
         Assert.Equal([3], today.LaneNumbers(StatusIds.Lane.Removed));
         Assert.Equal(["NotSeeded", "NotSeeded", "NotSeeded"], States(today));
     }
@@ -148,7 +148,7 @@ public class CultivationProgressTests(AuthApiFactory factory) : IClassFixture<Au
         var (owner, raft) = await OwnerWithRaftAsync(lanes: 2);
         await owner.StartCycleAsync(raft.Id());
 
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today");
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress");
 
         Assert.Equal((raft.Id(), raft.Text("code"), Today), (today.GetProperty("raftId").GetGuid(), today.Text("raftCode"), today.Date("date")));
         var lane = today.GetProperty("lanes")[0];

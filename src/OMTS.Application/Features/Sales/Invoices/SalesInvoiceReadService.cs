@@ -5,7 +5,6 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
-using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -14,19 +13,14 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
-/// One invoice (SALE-09.1, also opened from the sale notice or after the save; the list is <see cref="SalesInvoiceSearchService"/>), and what SALE-05 reads besides the products and the lots
-/// for sale: the requests of a profile the invoice can be linked to (SALE-05.3).
+/// One invoice (SALE-09.1, also opened from the sale notice or after the save; the list is <see cref="SalesInvoiceSearchService"/>), and the check that comes before the QR code of a finished sale.
 /// </summary>
 public sealed class SalesInvoiceReadService(
     ISalesInvoiceRepository invoices,
-    ICustomerRepository customers,
-    IPurchaseRequestRepository requests,
-    IPurchaseRequestFulfilment fulfilment,
     SalesInvoiceViews views,
     IProvenancePublisher provenance,
     ZoneAccessGuard zoneAccess,
-    IStatusCatalog statusCatalog,
-    TimeProvider timeProvider)
+    IStatusCatalog statusCatalog)
 {
     /// <summary>The invoice in a zone the caller may view invoices of (BR-SALE-08): another zone answers 403 MSG-GEN-08.</summary>
     public async Task<Result<SalesInvoiceView>> GetAsync(Guid invoiceId, CancellationToken cancellationToken)
@@ -81,24 +75,4 @@ public sealed class SalesInvoiceReadService(
     /// <summary>The caller may view invoices of the zone of <paramref name="invoice"/> (BR-SALE-08, GFR-02): GET answers 403 MSG-GEN-08 when not, and so does a repeated save.</summary>
     public Task<bool> MayViewAsync(SalesInvoice invoice, CancellationToken cancellationToken) =>
         zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.View, invoice.ZoneId, cancellationToken);
-
-    /// <summary>SALE-05.3 step 1: Accepted, not Fulfilled, pickup date not more than 3 days ago; with the accepted kg, pickup date and agreement to pay later.</summary>
-    public async Task<Result<IReadOnlyList<OpenPurchaseRequestView>>> OpenRequestsAsync(Guid customerId, CancellationToken cancellationToken)
-    {
-        if (await customers.GetForEditAsync(customerId, cancellationToken) is null)
-        {
-            return AppError.NotFound;
-        }
-
-        var earliest = timeProvider.Today().AddDays(-SalesInvoiceFactsReader.RequestPickupDaysBack);
-        var accepted = await requests.ListAcceptedOfCustomerAsync(customerId, earliest, cancellationToken);
-        var ids = accepted.Select(r => r.Id).ToList();
-        var fulfilled = await fulfilment.FulfilledAmongAsync(ids, cancellationToken);
-        IReadOnlyList<OpenPurchaseRequestView> open = accepted
-            .Where(r => !fulfilled.Contains(r.Id))
-            .Select(r => new OpenPurchaseRequestView(
-                r.Id, r.ProductId, r.Product.Name, r.RequestedCages, r.AcceptedCages!.Value, r.AgreedPickupDate!.Value, r.PayLaterAgreed == true, r.ResponseNote))
-            .ToList();
-        return Result<IReadOnlyList<OpenPurchaseRequestView>>.Success(open);
-    }
 }

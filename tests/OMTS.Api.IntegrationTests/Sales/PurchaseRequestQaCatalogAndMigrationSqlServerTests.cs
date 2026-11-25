@@ -73,27 +73,18 @@ public class PurchaseRequestQaCatalogAndMigrationSqlServerTests
         Assert.Contains("saved", outcomes);
     }
 
-    // §I.3 STD-PURCHASE-REQUEST as BR-SALE-01 and BR-SALE-02 state it: the moves the routes make are the rows the database holds.
+    // §I.3 STD-PURCHASE-REQUEST as BR-SALE-01 and BR-SALE-02 state it: the statuses the routes use are the rows the database holds.
     [SqlServerFact]
-    public async Task The_status_group_and_its_transitions_match_the_srs()
+    public async Task The_status_group_matches_the_srs()
     {
         await using var host = await FarmingHost.StartAsync();
 
         var statuses = await host.Api.DbAsync(db => db.Statuses.AsNoTracking().Where(s => s.Group == StatusGroups.PurchaseRequest).OrderBy(s => s.Id).ToListAsync());
         Assert.Equal(
             // Awaiting staff is the staffing step before the response (decision of 31/10/2026); the SRS has to add it.
-            [(3201, "AWAITING_RESPONSE", "Awaiting response", true, false), (3202, "ACCEPTED", "Accepted", false, false), (3203, "DECLINED", "Declined", false, true), (3204, "CANCELLED", "Cancelled", false, true),
-                (3205, "AWAITING_STAFF", "Awaiting staff confirmation", false, false), (3206, "ORDERED", "Ordered", false, true)],
-            statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsInitial, s.IsFinal)).ToList());
-
-        var ids = statuses.Select(s => s.Id).ToList();
-        var transitions = await host.Api.DbAsync(db => db.StatusTransitions.AsNoTracking().Where(t => ids.Contains(t.FromStatusId) || ids.Contains(t.ToStatusId)).OrderBy(t => t.Id).ToListAsync());
-        Assert.Equal(
-            [(3201, 3202, "Cooperative Owner", false), (3201, 3203, "Cooperative Owner", true), (3201, 3204, "Trader", false), (3202, 3204, "Trader", false),
-                (3201, 3205, "Cooperative Owner", false), (3205, 3203, "Cooperative Owner", true), (3205, 3204, "Trader", false), (3205, 3202, "Cooperative Owner", false),
-                // The Owner's order made from the request (sales orders).
-                (3201, 3206, "Cooperative Owner", false), (3202, 3206, "Cooperative Owner", false)],
-            transitions.Select(t => (t.FromStatusId, t.ToStatusId, t.AllowedPerformers, t.ReasonRequired)).ToList());
+            [(3201, "AWAITING_RESPONSE", "Awaiting response", false), (3202, "ACCEPTED", "Accepted", false), (3203, "DECLINED", "Declined", true), (3204, "CANCELLED", "Cancelled", true),
+                (3205, "AWAITING_STAFF", "Awaiting staff confirmation", false), (3206, "ORDERED", "Ordered", true)],
+            statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsFinal)).ToList());
     }
 
     // Up, Down, Up with rows of every kind present, and the model matches the last migration.

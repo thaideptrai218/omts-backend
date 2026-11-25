@@ -252,7 +252,5 @@ public class SalesInvoiceFromOrderTests
         Assert.Equal(("MSG-GEN-02", "Code", first.Id()), (taken.Text("code"), taken.Text("field"), taken.GetProperty("existingId").GetGuid()));
         Assert.Equal(["Code"], await (await manager.PostAsJsonAsync("/api/sales-invoices", FromOrder(plan, [KgLine(plan, 1m)], Cash(50_000m)).With("code", "bad code!"))).InvalidFieldsAsync());
         Assert.Equal(["Code"], await (await manager.PostAsJsonAsync("/api/sales-invoices", FromOrder(plan, [KgLine(plan, 1m)], new { cashAmount = 0, rest = "VietQr" }).With("code", new string('A', 26)))).InvalidFieldsAsync());
-        var deprecated = await manager.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/open-purchase-requests?customerId={plan.Sale.CustomerId}");
-        Assert.Empty(deprecated.EnumerateArray());
     }
 }

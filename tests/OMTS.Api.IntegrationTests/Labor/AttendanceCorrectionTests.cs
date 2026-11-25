@@ -201,7 +201,7 @@ public class AttendanceCorrectionTests
         Assert.Equal("MSG-GEN-08", await (await s.Manager.PutAsJsonAsync(Url(foreign, PastDay), Body("06:00", "11:00", [Period(s.Harvest, s.OtherRaft.Id, null)]))).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await s.Manager.GetAsync(Url(foreign, PastDay))).ErrorCodeAsync());
 
-        await factory.AddPayrollAsync("2026-03-01", "2026-03-31", StatusIds.Payroll.AwaitingFinalization);
+        await factory.AddPayrollAsync("2026-03-01", "2026-03-31", StatusIds.Payroll.Finalized);
         // Nothing of a locked pay period changes, whoever corrects it (BR-LABOR-13).
         foreach (var client in new[] { s.Owner, s.Manager })
         {

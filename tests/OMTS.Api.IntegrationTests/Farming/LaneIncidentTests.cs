@@ -62,7 +62,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal([1, 3, 4, 5], lot.Numbers("laneNumbers"));
         Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
 
-        var history = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/2/incidents");
+        var history = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lane-history?laneNumber=2");
         var entry = Assert.Single(history.GetProperty("incidents").EnumerateArray());
         Assert.Equal((2, "Damaged"), (entry.GetProperty("laneNumber").GetInt32(), entry.Text("kind")));
         Assert.Equal(raft.Owner.Account.Id, entry.GetProperty("recordedByAccountId").GetGuid());
@@ -175,7 +175,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(("MSG-INPUT-01", -1m), (refused.Text("code"), refused.GetProperty("balanceAfter").GetDecimal()));
         Assert.Equal(0, await factory.QueryAsync(db => db.MaterialUsages.CountAsync(u => u.RaftId == raft.RaftId)));
         Assert.Equal(0, await factory.QueryAsync(db => db.LaneIncidents.CountAsync(i => i.Lane.RaftId == raft.RaftId && i.Kind == LaneIncidentKind.Repaired)));
-        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today"), 5).Flag("isDamaged"));
+        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/progress"), 5).Flag("isDamaged"));
     }
 
     [Fact]
@@ -386,7 +386,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var notAPhoto = await owner.PostAsync(url, new MultipartFormDataContent { { FileContent(TextPretendingToBeAFile, "image/png"), "file", "lane.png" } });
         Assert.Equal(HttpStatusCode.BadRequest, notAPhoto.StatusCode);
         Assert.Equal(filesBefore + 3, factory.StoredFiles("lane-incident-photos").Count);
-        var history = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/2/incidents")).GetProperty("incidents")[0];
+        var history = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lane-history?laneNumber=2")).GetProperty("incidents")[0];
         Assert.Equal(3, history.GetProperty("photos").GetArrayLength());
     }
 
@@ -446,7 +446,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         Assert.Equal(("MSG-GEN-09", "LANE_HOLDS_SEED"), (refused.Text("code"), refused.Text("reasonCode")));
         Assert.StartsWith("Làn 3 chưa thể", refused.Text("detail"));
-        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today"), 3).Flag("isOutOfService"));
+        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/progress"), 3).Flag("isOutOfService"));
     }
 
     [Fact]
@@ -466,7 +466,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
             restored.GetProperty("lane").Flag("isOutOfService"), restored.GetProperty("lane").Flag("isDamaged")));
         var material = Assert.Single(restored.GetProperty("incident").GetProperty("materials").EnumerateArray());
         Assert.StartsWith("XD", material.Text("issueCode"));
-        var kinds = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/3/incidents")).GetProperty("incidents").EnumerateArray().Select(i => i.Text("kind")).ToList();
+        var kinds = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lane-history?laneNumber=3")).GetProperty("incidents").EnumerateArray().Select(i => i.Text("kind")).ToList();
         Assert.Equal(["Restored", "OutOfService"], kinds);
         Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(a => a.Action == "Lane.Restored" && a.RecordId == restored.GetProperty("lane").Id())));
         var again = await (await RestoreAsync(owner, raft.RaftId, 3)).ReadAsync(HttpStatusCode.Conflict);
@@ -485,7 +485,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         var refused = await (await RestoreAsync(owner, raft.RaftId, 5, materials: [new { itemId = item, quantity = 4m }])).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-INPUT-01", refused.Text("code"));
-        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today"), 5).Flag("isOutOfService"));
+        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/progress"), 5).Flag("isOutOfService"));
 
         var ok = await (await RestoreAsync(owner, raft.RaftId, 5)).ReadAsync(HttpStatusCode.OK);
         Assert.False(ok.GetProperty("lane").Flag("isOutOfService"));

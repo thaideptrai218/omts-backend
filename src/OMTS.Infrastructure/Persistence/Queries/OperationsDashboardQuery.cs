@@ -47,7 +47,6 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
     {
         var requests = db.PurchaseRequests.AsNoTracking().Where(r => r.StatusId == StatusIds.PurchaseRequest.AwaitingResponse);
         var claims = db.QualityClaims.AsNoTracking().Where(c => c.StatusId == StatusIds.QualityClaim.AwaitingResponse);
-        var payrolls = db.Payrolls.AsNoTracking().Where(p => p.StatusId == StatusIds.Payroll.AwaitingFinalization);
         var employeeRequests = db.EmployeeRequests.AsNoTracking().Where(r => r.StatusId == StatusIds.EmployeeRequest.AwaitingReview);
         // The label fields are read in SQL and put together here, so no formatting has to be translated.
         var oldestRequests = (await requests
@@ -62,13 +61,6 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
                 .ToListAsync(cancellationToken))
             .Select(c => new PendingTaskRecord(c.Id, c.Code, $"{c.Customer} – invoice {c.Invoice}", c.SentAt))
             .ToList();
-        // A payroll waits from the moment it was sent; the header written by the system or an older row has no sending time, so it waits from its creation.
-        var oldestPayrolls = (await payrolls
-                .OrderBy(p => p.SentAt ?? p.CreatedAt).ThenBy(p => p.Id).Take(oldestCount)
-                .Select(p => new { p.Id, p.PeriodStart, p.PeriodEnd, Since = p.SentAt ?? p.CreatedAt })
-                .ToListAsync(cancellationToken))
-            .Select(p => new PendingTaskRecord(p.Id, null, $"Payroll {Date(p.PeriodStart)}–{Date(p.PeriodEnd)}", p.Since))
-            .ToList();
         // An employee request waits from the moment the employee sent it; the label names the employee, the kind and the day or the days of leave.
         var oldestEmployeeRequests = (await employeeRequests
                 .OrderBy(r => r.SentAt).ThenBy(r => r.Id).Take(oldestCount)
@@ -80,7 +72,6 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
         [
             new(PendingTaskKinds.PurchaseRequest, await requests.CountAsync(cancellationToken), oldestRequests),
             new(PendingTaskKinds.QualityClaim, await claims.CountAsync(cancellationToken), oldestClaims),
-            new(PendingTaskKinds.Payroll, await payrolls.CountAsync(cancellationToken), oldestPayrolls),
             new(PendingTaskKinds.EmployeeRequest, await employeeRequests.CountAsync(cancellationToken), oldestEmployeeRequests),
         ];
     }

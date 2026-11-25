@@ -59,9 +59,7 @@ internal sealed class DeploymentReadinessCheck(OmtsDbContext db, ReadinessCheckK
     private async Task<bool> HasCompleteStatusCatalogAsync(CancellationToken cancellationToken)
     {
         var statusIds = (await db.Statuses.Select(s => s.Id).ToListAsync(cancellationToken)).ToHashSet();
-        var transitionIds = (await db.StatusTransitions.Select(t => t.Id).ToListAsync(cancellationToken)).ToHashSet();
-        return StatusCatalogSeed.Statuses.All(s => statusIds.Contains(s.Id))
-            && StatusCatalogSeed.Transitions.All(t => transitionIds.Contains(t.Id));
+        return StatusCatalogSeed.Statuses.All(s => statusIds.Contains(s.Id));
     }
 
     // The rows of the fixed roles, by code (BR-FARM-07): nothing the Owner does can remove them.

@@ -85,8 +85,7 @@ public sealed class SuppliersController(SupplierService suppliers, SupplierFileS
     public async Task<IActionResult> Discontinue(Guid id, CancellationToken cancellationToken) =>
         (await suppliers.DiscontinueAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Resume (PURCHASE-07.2). <c>/reactivate</c> is the older route of the same action.</summary>
-    [HttpPost("{id:guid}/resume")]
+    /// <summary>Resume (PURCHASE-07.2).</summary>
     [HttpPost("{id:guid}/reactivate")]
     [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierView>(StatusCodes.Status200OK)]

@@ -86,8 +86,7 @@ public class LaborSettingsQaDemoTests
         var payrolls = await db.Payrolls.OrderBy(p => p.PeriodStart).Select(p => new { p.PeriodStart, p.PeriodEnd, p.StatusId, p.UpdatedAt }).ToListAsync();
         var links = await db.EmployeeJobTypes.CountAsync();
         var audits = await db.AuditEvents.CountAsync();
-        var cooperative = await db.Cooperatives.Select(c => new { c.PayPeriodStartDay, c.AutomaticPayroll }).SingleAsync();
-        return JsonSerializer.Serialize(new { jobTypes, rates, settings, payrolls, links, audits, cooperative });
+        return JsonSerializer.Serialize(new { jobTypes, rates, settings, payrolls, links, audits });
     });
 
     [SqlServerFact]

@@ -17,7 +17,7 @@ namespace OMTS.Api.IntegrationTests.Labor;
 public class LaborSettingsQaPayrollHeaderTests
 {
     [SqlServerFact]
-    public async Task The_statuses_are_the_six_of_the_entity_in_their_own_group()
+    public async Task The_statuses_are_the_four_of_the_entity_in_their_own_group()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -27,27 +27,24 @@ public class LaborSettingsQaPayrollHeaderTests
 
         Assert.Equal(
             [
-                (3401, "DRAFT", "Draft", true, false),
-                (3402, "AWAITING_FINALIZATION", "Awaiting finalization", false, false),
-                (3403, "SENT_BACK", "Sent back", false, false),
-                (3404, "FINALIZED", "Finalized", false, true),
+                (3401, "DRAFT", "Draft", false),
+                (3404, "FINALIZED", "Finalized", true),
                 // The web contract adds Creating and Cancelled (LABOR-12, OMTS-227).
-                (3405, "CREATING", "Creating", false, false),
-                (3406, "CANCELLED", "Cancelled", false, true),
+                (3405, "CREATING", "Creating", false),
+                (3406, "CANCELLED", "Cancelled", true),
             ],
-            statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsInitial, s.IsFinal)));
-        Assert.Equal(6, sameIds);
-        Assert.Equal((3401, 3402, 3403, 3404), (StatusIds.Payroll.Draft, StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.SentBack, StatusIds.Payroll.Finalized));
+            statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsFinal)));
+        Assert.Equal(4, sameIds);
+        Assert.Equal((3401, 3404), (StatusIds.Payroll.Draft, StatusIds.Payroll.Finalized));
         using var scope = api.Services.CreateScope();
-        Assert.Equal("Awaiting finalization", scope.ServiceProvider.GetRequiredService<IStatusCatalog>().DisplayNameOf(3402));
+        Assert.Equal("Finalized", scope.ServiceProvider.GetRequiredService<IStatusCatalog>().DisplayNameOf(3404));
     }
 
     [Theory]
     [InlineData(StatusIds.Payroll.Draft, false)]
-    [InlineData(StatusIds.Payroll.AwaitingFinalization, true)]
-    [InlineData(StatusIds.Payroll.SentBack, false)]
+    [InlineData(StatusIds.Payroll.Creating, false)]
     [InlineData(StatusIds.Payroll.Finalized, true)]
-    public void A_payroll_locks_while_awaiting_finalization_and_once_finalized(int statusId, bool locked) =>
+    public void A_payroll_locks_once_finalized(int statusId, bool locked) =>
         Assert.Equal(locked, new Payroll { StatusId = statusId }.IsLocked);
 
     [SqlServerFact]
@@ -60,7 +57,7 @@ public class LaborSettingsQaPayrollHeaderTests
         await ChangeAsync(api, db => db.Payrolls.Add(payroll));
 
         var stored = await QueryAsync(api, db => db.Payrolls.AsNoTracking().SingleAsync());
-        Assert.Equal((StatusIds.Payroll.Draft, false), (stored.StatusId, stored.CreatedBySystem));
+        Assert.Equal(StatusIds.Payroll.Draft, stored.StatusId);
         // The period is not a unique key of the table any more: a period that overlaps another is refused when the payroll is made (LABOR-12), see the next test.
     }
 
@@ -85,18 +82,12 @@ public class LaborSettingsQaPayrollHeaderTests
         await using var api = await StartAsync(database);
         var (owner, account, _) = await OwnerWithCooperativeAsync(api);
         var jobType = await AddJobTypeAsync(owner, from: "2019-01-01");
-        var at = new DateTimeOffset(2020, 11, 2, 1, 2, 3, TimeSpan.Zero);
         var payroll = new Payroll
         {
             PeriodStart = new(2020, 10, 1),
             PeriodEnd = new(2020, 10, 31),
-            StatusId = StatusIds.Payroll.SentBack,
-            CreatedBySystem = true,
-            SentAt = at,
-            SentByAccountId = account.Id,
-            SendBackNote = "Sửa lại ngày 15",
-            SentBackAt = at,
-            SentBackByAccountId = account.Id,
+            StatusId = StatusIds.Payroll.Draft,
+            Note = "Sửa lại ngày 15",
         };
         await ChangeAsync(api, db => db.Payrolls.Add(payroll));
         var before = await QueryAsync(api, db => db.Payrolls.AsNoTracking().SingleAsync());
@@ -108,21 +99,19 @@ public class LaborSettingsQaPayrollHeaderTests
         Assert.NotEqual(before.RowVersion, after.RowVersion);
         Assert.Equal(account.Id, after.UpdatedBy);
         Assert.Equal(
-            (before.PeriodStart, before.PeriodEnd, before.StatusId, before.CreatedBySystem, before.SentAt, before.SentByAccountId, before.SendBackNote, before.SentBackAt, before.SentBackByAccountId, before.FinalizedAt, before.FinalizedByAccountId, before.CreatedAt, before.CreatedBy),
-            (after.PeriodStart, after.PeriodEnd, after.StatusId, after.CreatedBySystem, after.SentAt, after.SentByAccountId, after.SendBackNote, after.SentBackAt, after.SentBackByAccountId, after.FinalizedAt, after.FinalizedByAccountId, after.CreatedAt, after.CreatedBy));
+            (before.PeriodStart, before.PeriodEnd, before.StatusId, before.FinalizedAt, before.FinalizedByAccountId, before.CreatedAt, before.CreatedBy),
+            (after.PeriodStart, after.PeriodEnd, after.StatusId, after.FinalizedAt, after.FinalizedByAccountId, after.CreatedAt, after.CreatedBy));
         Assert.Equal(audits, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.RecordType == nameof(Payroll))));
     }
 
     [Fact]
-    public async Task The_payroll_settings_routes_are_unchanged_and_no_pay_period_route_exists()
+    public async Task No_pay_period_or_payroll_settings_route_exists()
     {
         await using var factory = new AuthApiFactory();
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().Select(e => e.RoutePattern.RawText ?? string.Empty).ToList();
 
         Assert.DoesNotContain(endpoints, p => p.Contains("pay-periods", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(
-            ["api/payroll-settings", "api/payroll-settings", "api/payroll-settings/preview"],
-            endpoints.Where(p => p.StartsWith("api/payroll-settings", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(endpoints, p => p.StartsWith("api/payroll-settings", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
             [
                 "api/job-types", "api/job-types", "api/job-types/options", "api/job-types/{id:guid}", "api/job-types/{id:guid}/discontinue",

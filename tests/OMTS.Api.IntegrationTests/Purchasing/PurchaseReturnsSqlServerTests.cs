@@ -137,12 +137,10 @@ public class PurchaseReturnsSqlServerTests
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
         var returnId = (await world.ReturnAsync(receipt.Id(), receipt.LineOf(world.Other), 1)).GetProperty("returns")[0].Id();
 
-        var group = await host.QueryAsync(db => db.Statuses.Where(s => s.Group == StatusGroups.PurchaseReturn).OrderBy(s => s.Id).Select(s => new { s.Id, s.Code, s.IsInitial, s.IsFinal }).ToListAsync());
+        var group = await host.QueryAsync(db => db.Statuses.Where(s => s.Group == StatusGroups.PurchaseReturn).OrderBy(s => s.Id).Select(s => new { s.Id, s.Code, s.IsFinal }).ToListAsync());
         Assert.Equal(
-            [(StatusIds.PurchaseReturn.Recorded, "RECORDED", true, false), (StatusIds.PurchaseReturn.Cancelled, "CANCELLED", false, true), (StatusIds.PurchaseReturn.Draft, "DRAFT", true, false)],
-            group.Select(s => (s.Id, s.Code, s.IsInitial, s.IsFinal)).ToList());
-        var transition = await host.QueryAsync(db => db.StatusTransitions.SingleAsync(t => t.FromStatusId == StatusIds.PurchaseReturn.Recorded));
-        Assert.Equal((StatusIds.PurchaseReturn.Cancelled, "PURCHASE-02", "Cooperative Owner", true), (transition.ToStatusId, transition.UseCases, transition.AllowedPerformers, transition.ReasonRequired));
+            [(StatusIds.PurchaseReturn.Recorded, "RECORDED", false), (StatusIds.PurchaseReturn.Cancelled, "CANCELLED", true), (StatusIds.PurchaseReturn.Draft, "DRAFT", false)],
+            group.Select(s => (s.Id, s.Code, s.IsFinal)).ToList());
 
         await using var db = host.Database.CreateContext();
         var failure = await Assert.ThrowsAsync<SqlException>(() => db.Database.ExecuteSqlAsync($"UPDATE PurchaseReturns SET StatusId = 999999 WHERE Id = {returnId}"));
@@ -163,7 +161,7 @@ public class PurchaseReturnsSqlServerTests
         var corrected = await owner.CreateReceiptAsync(world.Body(world.MaterialForRaft(10, 10_000)) with { ReceiptDate = Today.AddDays(-10), Complete = true });
         var line = corrected.LineOf(world.Material);
         var kept = await world.ReturnAsync(corrected.Id(), line, 10);
-        await (await owner.CorrectAsync(corrected.Id(), "Invoice price", new { lineId = line, unitPrice = 9_950 })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.EditLineAsync(corrected.Id(), line, unitPrice: 9_950)).ReadAsync(HttpStatusCode.OK);
         var mistaken = await world.CompletedAsync(new LineBody(world.Other, 2, 7_000));
         var mistakenReturn = (await world.ReturnAsync(mistaken.Id(), mistaken.LineOf(world.Other), 1)).GetProperty("returns")[0].Id();
         await (await owner.CancelReturnAsync(mistakenReturn, "Not sent back")).ReadAsync(HttpStatusCode.OK);

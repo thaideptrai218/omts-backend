@@ -34,9 +34,6 @@ public class HarvestLotForm
     /// <summary>Accepted and ignored, like <see cref="ConfirmOverPlan"/>.</summary>
     public string? OverPlanReason { get; set; }
 
-    /// <summary>Accepted and ignored: a lot is tied to a line of a harvest plan (<see cref="HarvestPlanLineId"/>), not to a purchase request.</summary>
-    public string? PurchaseRequestId { get; set; }
-
     /// <summary>Left out when recording: cages times the average kg per cage. Left out when correcting: it stays, or when the cages changed, cages times the kg per cage of the lot.</summary>
     public string? EstimatedKg { get; set; }
 

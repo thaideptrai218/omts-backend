@@ -136,28 +136,6 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal("MSG-GEN-09", await revokedTwice.ErrorCodeAsync());
     }
 
-    // The preview runs the same rules as the checks: for an Accountant pair in one zone, the functions on records with
-    // no zone are open everywhere (BR-FARM-08), the others only in that zone.
-    [Fact]
-    public async Task Permission_preview_equals_the_enforced_permissions()
-    {
-        var (owner, _) = await OwnerAsync();
-        var zone = await factory.AddZoneAsync(NewCode());
-        var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var draft = new { zoneId = zone.Id, role = FixedRoles.AccountantCode };
-
-        var preview = await (await owner.PostAsJsonAsync("/api/accounts/permission-preview", new { grants = new[] { draft } })).Content.ReadFromJsonAsync<JsonElement>();
-        await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants", draft);
-        var enforced = (await (await factory.LoginAsync(staff.Username)).GetFromJsonAsync<JsonElement>("/api/me/permissions")).GetProperty("functions");
-
-        Assert.Equal(Normalize(enforced), Normalize(preview));
-        var byFunction = preview.EnumerateArray().ToDictionary(f => f.Text("function")!);
-        Assert.True(byFunction[PermissionFunctions.SupplierPayments].GetProperty("allZones").GetBoolean());
-        Assert.False(byFunction[PermissionFunctions.SalesInvoices].GetProperty("allZones").GetBoolean());
-        Assert.DoesNotContain(Water, byFunction.Keys);
-        Assert.DoesNotContain(byFunction.Keys, f => f.StartsWith("DASHBOARD_", StringComparison.Ordinal));
-    }
-
     // BR-FARM-07, AC-02: the two fixed roles are listed with their code and the §I.4.4 permissions; nothing writes them.
     [Fact]
     public async Task Roles_are_the_two_fixed_roles_and_read_only()

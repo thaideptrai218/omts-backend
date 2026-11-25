@@ -149,20 +149,15 @@ public class RaftsV2QaTestsSqlServer
         Assert.Equal(["Latitude"], await (await owner.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Latitude = 90.0000001m, RowVersion = read.Text("rowVersion") })).InvalidFieldsAsync());
     }
 
-    // The status catalogue as migrated: LANE is 2001 and 2002, transitions 76 and 77 are the only ones of the group, Owner only.
+    // The status catalogue as migrated: LANE is 2001 and 2002.
     [SqlServerFact]
-    public async Task The_lane_statuses_and_transitions_are_exactly_the_agreed_ids()
+    public async Task The_lane_statuses_are_exactly_the_agreed_ids()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
 
         var statuses = await host.QueryAsync(db => db.Statuses.AsNoTracking().Where(s => s.Group == StatusGroups.Lane).OrderBy(s => s.Id).ToListAsync());
-        Assert.Equal([(2001, "IN_USE", "In Use", true), (2002, "REMOVED", "Removed", false)], statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsInitial)));
-        var transitions = await host.QueryAsync(db => db.StatusTransitions.AsNoTracking()
-            .Where(t => t.FromStatusId == 2001 || t.FromStatusId == 2002 || t.ToStatusId == 2001 || t.ToStatusId == 2002).OrderBy(t => t.Id).ToListAsync());
-        Assert.Equal([(76, 2001, 2002), (77, 2002, 2001)], transitions.Select(t => (t.Id, t.FromStatusId, t.ToStatusId)));
-        Assert.All(transitions, t => Assert.Equal("Cooperative Owner", t.AllowedPerformers));
+        Assert.Equal([(2001, "IN_USE", "In Use"), (2002, "REMOVED", "Removed")], statuses.Select(s => (s.Id, s.Code, s.DisplayName)));
         Assert.Equal(2, await host.QueryAsync(db => db.Statuses.CountAsync(s => s.Id == 2001 || s.Id == 2002)));
-        Assert.Equal(1, await host.QueryAsync(db => db.StatusTransitions.CountAsync(t => t.Id == 76)));
     }
 
     // Each answer is saved or a clean refusal, never a 500, whatever else happens to the raft at the same moment.

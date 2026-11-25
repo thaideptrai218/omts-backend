@@ -237,9 +237,6 @@ public static class PurchasingTestKit
     public static Task<HttpResponseMessage> CancelReturnAsync(this HttpClient client, Guid returnId, string? reason, string? rowVersion = null) =>
         client.PostAsJsonAsync($"/api/purchase-returns/{returnId}/cancel", new { reason, rowVersion });
 
-    public static Task<HttpResponseMessage> CorrectAsync(this HttpClient client, Guid receiptId, string? reason, params object[] lines) =>
-        client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/correct", new { reason, lines });
-
     public static Task<HttpResponseMessage> PostPaymentAsync(this HttpClient client, PaymentBody body) =>
         client.PostAsJsonAsync("/api/supplier-payments", body);
 
@@ -254,6 +251,37 @@ public static class PurchasingTestKit
 
     public static Task<HttpResponseMessage> EditAsync(this HttpClient client, JsonElement draft, ReceiptBody body) =>
         client.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", body with { RowVersion = draft.GetProperty("rowVersion").GetString() });
+
+    /// <summary>
+    /// The edit of a Completed receipt that changes the quantity and/or the unit price of one line, read from the receipt as it is now; every other line, the supplier and the time stay as they are.
+    /// </summary>
+    public static async Task<HttpResponseMessage> EditLineAsync(this HttpClient client, Guid receiptId, Guid lineId, decimal? quantity = null, decimal? unitPrice = null)
+    {
+        var receipt = await client.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receiptId}");
+        var lines = receipt.GetProperty("lines").EnumerateArray().Select(l =>
+        {
+            var id = l.GetProperty("id").GetGuid();
+            var changed = id == lineId;
+            return new LineBody(
+                l.GetProperty("itemId").GetGuid(),
+                changed && quantity is not null ? quantity : l.GetProperty("quantity").GetDecimal(),
+                changed && unitPrice is not null ? unitPrice : l.GetProperty("unitPrice").GetDecimal(),
+                l.GetProperty("supplierLotCode").GetString(),
+                l.GetProperty("raft").ValueKind == JsonValueKind.Object ? l.GetProperty("raft").Id() : null,
+                l.GetProperty("discount").GetDecimal(),
+                id,
+                l.GetProperty("itemUnitId").ValueKind == JsonValueKind.String ? l.GetProperty("itemUnitId").GetGuid() : null);
+        }).ToList();
+        var body = new ReceiptBody
+        {
+            SupplierId = receipt.GetProperty("supplier").Id(),
+            ReceiptDate = null,
+            Lines = lines,
+            Complete = true,
+            Discount = receipt.GetProperty("discount").GetDecimal(),
+        };
+        return await client.EditAsync(receipt, body);
+    }
 
     /// <summary>The seed lot code (GBR-04) of the line of <paramref name="itemId"/>, or null.</summary>
     public static string? SeedLotCodeOf(this JsonElement receipt, Guid itemId) => receipt.LineViewOf(itemId).GetProperty("seedLotCode").GetString();

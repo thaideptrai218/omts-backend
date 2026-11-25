@@ -45,9 +45,6 @@ public class EmployeeDevice : Entity
 
     public DateTimeOffset LastSeenAt { get; set; }
 
-    /// <summary>The last attendance QR step a scan used on this device, so a QR code photographed earlier cannot be scanned again (LABOR-07, L5).</summary>
-    public long LastQrStep { get; set; }
-
     public byte[] RowVersion { get; set; } = [];
 
     public bool IsLinked => UnlinkedAt is null;

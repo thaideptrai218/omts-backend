@@ -17,7 +17,7 @@ namespace OMTS.Application.Features.Labor;
 
 /// <param name="BreakStart"><c>HH:mm</c>; both times, or neither for no break.</param>
 /// <param name="BreakEnd"><c>HH:mm</c>, after the start.</param>
-/// <param name="EffectiveFrom">After the last day of every pay period whose payroll is Awaiting finalization or Finalized.</param>
+/// <param name="EffectiveFrom">After the last day of every pay period whose payroll is Finalized.</param>
 /// <param name="RowVersion">The version the screen was read from.</param>
 public sealed record SaveAttendanceSettingsRequest(
     string? BreakStart, string? BreakEnd, AttendanceRoundingUnit? RoundingUnit, DateOnly? EffectiveFrom, string? RowVersion);

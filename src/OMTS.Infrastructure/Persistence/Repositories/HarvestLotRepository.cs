@@ -30,7 +30,7 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
+        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Where(l => l.CycleId == cycleId)
             .OrderByDescending(l => l.HarvestedAt)
@@ -213,22 +213,6 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .Select(l => l.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<HarvestLot>> ListOfPurchaseRequestAsync(Guid purchaseRequestId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Raft).ThenInclude(r => r.Zone)
-            .Where(l => l.PurchaseRequestId == purchaseRequestId)
-            .OrderBy(l => l.HarvestedAt).ThenBy(l => l.LotCode)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken)
-    {
-        var ids = purchaseRequestIds.Distinct().ToList();
-        return await db.HarvestLots.AsNoTracking()
-            .Where(l => l.PurchaseRequestId != null && ids.Contains(l.PurchaseRequestId.Value))
-            .GroupBy(l => l.PurchaseRequestId!.Value)
-            .Select(g => new { Id = g.Key, Cages = g.Sum(l => l.CageCount) })
-            .ToDictionaryAsync(g => g.Id, g => g.Cages, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
         var ids = lotIds.Distinct().ToList();
@@ -318,7 +302,6 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .Include(l => l.Photos)
             .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
-            .Include(l => l.PurchaseRequest)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Include(l => l.Cages)
             .Include(l => l.TraderCages)

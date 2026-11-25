@@ -91,9 +91,7 @@ public static class DependencyInjection
         services.AddScoped<AdministrativeUnitService>();
         services.AddScoped<TaxLookupService>();
         services.AddScoped<PartyAddressVerifier>();
-        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
-        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
         services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
         services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
@@ -166,7 +164,7 @@ public static class DependencyInjection
         services.AddScoped<ReceivingAccountAcceptance>();
         services.AddScoped<ReceivingBankAccountService>();
 
-        // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
+        // LABOR-11 job types and rates, LABOR-15 attendance settings, the pay period lock (BR-LABOR-13)
         services.AddScoped<PayPeriodLock>();
 
         // LABOR-02 work assignment, LABOR-04 attendance, LABOR-05 and LABOR-10 employee requests, LABOR-08 my work
@@ -186,7 +184,6 @@ public static class DependencyInjection
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
         services.AddScoped<AttendanceSettingsService>();
-        services.AddScoped<PayrollSettingsService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
@@ -342,7 +339,6 @@ public static class DependencyInjection
         services.AddScoped<SalesOrderViews>();
         services.AddScoped<SalesOrderService>();
         services.AddScoped<SalesOrderFromRequestService>();
-        services.AddScoped<SalesOrderAdvanceService>();
         services.AddScoped<SalesOrderReadService>();
         services.AddScoped<HarvestLotProductLineService>();
         services.AddScoped<HarvestPlanAccess>();
@@ -464,7 +460,6 @@ public static class DependencyInjection
         services.AddScoped<PurchaseDocumentCodeService>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
-        services.AddScoped<PurchaseReceiptCorrectionService>();
         services.AddScoped<PurchaseReceiptEditService>();
         services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();

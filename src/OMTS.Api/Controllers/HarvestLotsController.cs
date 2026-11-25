@@ -53,7 +53,6 @@ public sealed class HarvestLotsController(
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
-            Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
             FormNumbers.Crew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
             LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable,
             productLines, linesAreUnreadable, planLineId, planLineGiven && planLineId is null);
@@ -238,11 +237,4 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestLotsForSale>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, [FromQuery] Guid? salesOrderId, CancellationToken cancellationToken) =>
         (await forSale.ListAsync(zoneId, salesOrderId, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>How many lots are for sale now, of one zone or of every zone: the open harvest lots of the operations dashboard, for the Owner alone (FARM-06, BR-FARM-10).</summary>
-    [HttpGet("api/harvest-lots/for-sale/count")]
-    [RequireCooperativeOwner]
-    [ProducesResponseType<HarvestLotForSaleCount>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ForSaleCount([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
-        Ok(await forSale.CountAsync(zoneId, cancellationToken));
 }

@@ -20,7 +20,7 @@ namespace OMTS.Application.Features.Labor.Work;
 /// LABOR-04: a Zone Manager records one check-in when work starts at the raft and one check-out when it ends, by the attendance QR code
 /// of the employee or by hand, for today (BR-LABOR-06); a Staff employee is checked in from the staff list; the start time of a crew can
 /// be entered with a reason. Each time keeps its recording method. A check-out without a check-in is saved and the day stays incomplete.
-/// Nothing is recorded in a pay period whose payroll is Awaiting finalization or Finalized (BR-LABOR-13).
+/// Nothing is recorded in a pay period whose payroll is Finalized (BR-LABOR-13).
 /// </summary>
 public sealed class AttendanceRecordingService(
     IWorkAssignmentRepository assignments,

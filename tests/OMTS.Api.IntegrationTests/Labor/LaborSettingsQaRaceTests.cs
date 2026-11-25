@@ -121,7 +121,7 @@ public class LaborSettingsQaRaceTests
     }
 
     [SqlServerFact]
-    public async Task Mixed_writes_on_drafts_and_a_send_and_send_back_loop_never_answer_500()
+    public async Task Mixed_writes_on_drafts_and_a_finalize_and_reopen_loop_never_answer_500()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -159,14 +159,13 @@ public class LaborSettingsQaRaceTests
             calls.AddRange(currentTypes.Select((j, i) => owner.PostRateAsync(j, 50_000 + round + i, day)));
             calls.AddRange(currentEmployees.Select(e => PutTypeAsync(owner, e, day)));
             calls.Add(owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = day, rowVersion = version }));
-            calls.Add(owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 2 + round, automaticPayroll = false, rowVersion = version }));
             calls.Add(owner.PostAsJsonAsync(JobTypes, new { name = $"Song song {round} {NewCode()}", hourlyRate = 1, effectiveFrom = day }));
             calls.Add(owner.PutAsJsonAsync($"{JobTypes}/{currentTypes[0].IdOf()}/name", new { name = $"Đổi {NewCode()}", rowVersion = currentTypes[0].VersionOf() }));
             calls.Add(owner.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile($"Thêm {round} {NewCode()}", NewPhone(), zone.Id)));
             calls.Add(owner.PutAsJsonAsync("/api/cooperative/profile", OMTS.Api.IntegrationTests.Cooperatives.CooperativeProfileRequests.Valid(version)));
-            var send = Task.Run(() => ToggleAsync(api, september.Id));
+            var toggle = Task.Run(() => ToggleAsync(api, september.Id));
             var responses = await Task.WhenAll(calls);
-            await send;
+            await toggle;
 
             await AssertNo500Async(responses, api.Logs);
             await ConflictsAsync(responses, "MSG06", "MSG-LABOR-04", "MSG-GEN-02");
@@ -175,10 +174,10 @@ public class LaborSettingsQaRaceTests
         Assert.DoesNotContain(api.Logs.Lines, line => line.Contains("deadlock", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The send and the send-back that LABOR-12 and LABOR-13 will do: each updates the row under the version it read.</summary>
+    /// <summary>A finalization and a reopening of the payroll: each updates the row under the version it read.</summary>
     private static async Task ToggleAsync(SqlServerApiFactory api, Guid payrollId)
     {
-        foreach (var status in new[] { StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.SentBack })
+        foreach (var status in new[] { StatusIds.Payroll.Finalized, StatusIds.Payroll.Draft })
         {
             for (var attempt = 0; attempt < 50; attempt++)
             {
@@ -365,7 +364,7 @@ public class LaborSettingsQaRaceTests
         await OwnerWithCooperativeAsync(api);
         var (owner, _) = await LoginNewAsync(app);
         var jobType = await AddJobTypeAsync(owner, from: "2019-01-01");
-        moments.BeforeSave = () => AddPayrollElsewhereAsync(database.ConnectionString, "2020-10-01", "2020-10-31", StatusIds.Payroll.AwaitingFinalization);
+        moments.BeforeSave = () => AddPayrollElsewhereAsync(database.ConnectionString, "2020-10-01", "2020-10-31", StatusIds.Payroll.Finalized);
 
         var saved = await owner.PostRateAsync(jobType, 50_000, "2020-10-15");
 
@@ -373,9 +372,9 @@ public class LaborSettingsQaRaceTests
         Assert.Equal("MSG-LABOR-04", await (await owner.PostRateAsync(await owner.ReadJobTypeAsync(jobType.IdOf()), 60_000, "2020-10-16")).ErrorCodeAsync());
     }
 
-    // Draft touched in the window of a send: the save loses with MSG06 through the API, not a 500, and the send stands.
+    // Draft touched in the window of a finalization: the save loses with MSG06 through the API, not a 500, and the finalization stands.
     [SqlServerFact]
-    public async Task A_send_landing_in_the_window_of_a_rate_answers_msg06_and_a_retry_answers_msg_labor_04()
+    public async Task A_finalization_landing_in_the_window_of_a_rate_answers_msg06_and_a_retry_answers_msg_labor_04()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -390,7 +389,7 @@ public class LaborSettingsQaRaceTests
         {
             await using var other = database.CreateContext();
             var row = await other.Payrolls.SingleAsync(p => p.Id == payroll.Id);
-            row.StatusId = StatusIds.Payroll.AwaitingFinalization;
+            row.StatusId = StatusIds.Payroll.Finalized;
             await other.SaveChangesAsync();
         };
 

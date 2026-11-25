@@ -68,7 +68,7 @@ public sealed class OperationsDashboardService(
         var (receivables, owedBack) = CustomerDebtService.TotalsOf(debtOf);
         var lots = await lotsForSale.CountAsync(zoneId, cancellationToken);
         var alerts = await WaterAlertsAsync(zoneId, cancellationToken);
-        // The pending decisions (claims, payrolls, purchase requests, employee requests) are the Owner's: an Accountant sees none.
+        // The pending decisions (claims, purchase requests, employee requests) are the Owner's: an Accountant sees none.
         var tasks = (await zoneAccess.IsCooperativeOwnerAsync(cancellationToken)
                 ? await queries.PendingTasksAsync(PendingTaskSample, cancellationToken)
                 : Array.Empty<PendingTaskFigures>())

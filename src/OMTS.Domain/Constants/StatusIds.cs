@@ -63,8 +63,6 @@ public static class StatusIds
     public static class Payroll
     {
         public const int Draft = 3401;
-        public const int AwaitingFinalization = 3402;
-        public const int SentBack = 3403;
         public const int Finalized = 3404;
 
         /// <summary>The web contract's "Creating": a sheet being made. Sheets are made in one step, so a stored one is never in it.</summary>

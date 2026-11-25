@@ -43,7 +43,7 @@ public class RaftsV2QaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthAp
     [
         client.GetAsync($"/api/zones/{zoneId}/rafts"),
         client.GetAsync($"/api/rafts/{raftId}"),
-        client.GetAsync($"/api/rafts/{raftId}/lanes/today"),
+        client.GetAsync($"/api/rafts/{raftId}/progress"),
     ];
 
     [Fact]
@@ -128,7 +128,7 @@ public class RaftsV2QaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthAp
         }
 
         var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()));
-        await (await staff.Client.GetAsync($"/api/rafts/{raft.Id()}/lanes/today")).ReadAsync(HttpStatusCode.OK);
+        await (await staff.Client.GetAsync($"/api/rafts/{raft.Id()}/progress")).ReadAsync(HttpStatusCode.OK);
 
         await factory.UpdateAsync<AccessGrant>(staff.Grant!.Id, g =>
         {
@@ -136,7 +136,7 @@ public class RaftsV2QaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthAp
             g.RevokedAt = DateTimeOffset.UtcNow;
         });
 
-        var refused = await staff.Client.GetAsync($"/api/rafts/{raft.Id()}/lanes/today");
+        var refused = await staff.Client.GetAsync($"/api/rafts/{raft.Id()}/progress");
         Assert.Contains(refused.StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
     }
 

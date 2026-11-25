@@ -70,10 +70,4 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
     [ProducesResponseType<GrantRow>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Revoke(Guid id, Guid grantId, ReasonRequest request, CancellationToken cancellationToken) =>
         (await grants.RevokeAsync(id, grantId, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>What draft zone–role rows would allow, by the same rules that enforce permissions.</summary>
-    [HttpPost("permission-preview")]
-    [ProducesResponseType<IReadOnlyList<FunctionAccess>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Preview(PermissionPreviewRequest request, CancellationToken cancellationToken) =>
-        (await grants.PreviewAsync(request, cancellationToken)).ToActionResult(Ok);
 }

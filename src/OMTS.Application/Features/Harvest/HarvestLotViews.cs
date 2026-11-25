@@ -109,8 +109,6 @@ public sealed class HarvestLotViews(
             ProductLines(lot, catalogue),
             plan is null ? null : new HarvestLotPlanRef(plan.PlanId, plan.PlanCode),
             lot.OverPlanReason,
-            lot.PurchaseRequestId,
-            lot.PurchaseRequest?.Code,
             await crewAttendance.ViewAsync(lot.Crew, lot.HarvestDate, cancellationToken),
             lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList(),
             lot.WeighedKg,
@@ -165,7 +163,7 @@ public sealed class HarvestLotViews(
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
                     canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id),
-                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, crews[lot.Id]);
+                    crews[lot.Id]);
             })
             .ToList();
     }

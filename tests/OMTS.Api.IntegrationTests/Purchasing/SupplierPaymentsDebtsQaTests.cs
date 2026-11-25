@@ -157,7 +157,7 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
         var later = await world.Owner.CreateReceiptAsync(Dated(world, Today.AddDays(-3), 2_000));
         var line = later.LineOf(world.Other);
         await world.ReturnAsync(later.Id(), line, 1);
-        await (await world.Owner.CorrectAsync(later.Id(), "Invoice price", new { lineId = line, unitPrice = 1_500 })).ReadAsync(HttpStatusCode.OK);
+        await (await world.Owner.EditLineAsync(later.Id(), line, unitPrice: 1_500)).ReadAsync(HttpStatusCode.OK);
 
         var detail = await (await world.Owner.GetAsync($"{Debts}/{world.SupplierId}")).ReadAsync(HttpStatusCode.OK);
 

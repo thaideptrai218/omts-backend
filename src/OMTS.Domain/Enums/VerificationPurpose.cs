@@ -10,5 +10,7 @@ public enum VerificationPurpose
     VerifyEmail,
     ChangePhone,
     ChangeEmail,
+
+    /// <summary>Retired: a password is changed with the current password or the temporary one, no longer with a code sent by email. The value stays because rows of it are stored; nothing creates one.</summary>
     ChangePassword,
 }

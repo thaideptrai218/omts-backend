@@ -94,7 +94,6 @@ public class HarvestLotsMigrationAndDemoTests
 
         // A lot is first Awaiting weighing (harvest weighing).
         Assert.Equal(["AWAITING_WEIGHING", "CLOSED", "OPEN", "REOPENED"], await db.Statuses.Where(s => s.Group == StatusGroups.HarvestLot).Select(s => s.Code).OrderBy(c => c).ToListAsync());
-        Assert.Equal([150, 151, 152], await db.StatusTransitions.Where(t => t.Id >= 150 && t.Id <= 152).Select(t => t.Id).OrderBy(i => i).ToListAsync());
 
         // Rows of a lot on both sides of the Down: it goes, and what it pointed to stays.
         var coop = await db.Cooperatives.FirstAsync();

@@ -161,25 +161,21 @@ public class OperationsDashboardTileTests
         var waitingClaim = await api.AddQualityClaimAsync(await api.AddInvoiceAsync(sale.ZoneId, account, 1_000m, customerId: sale.CustomerId));
         await api.AddQualityClaimAsync(await api.AddInvoiceAsync(sale.ZoneId, account, 1_000m, customerId: sale.CustomerId), StatusIds.QualityClaim.Rejected);
         await api.AddQualityClaimAsync(await api.AddInvoiceAsync(sale.ZoneId, account, 1_000m, customerId: sale.CustomerId), StatusIds.QualityClaim.Accepted);
-        var waitingPayroll = await api.AddPayrollAsync(StatusIds.Payroll.AwaitingFinalization, 1);
         await api.AddPayrollAsync(StatusIds.Payroll.Draft, 2);
-        await api.AddPayrollAsync(StatusIds.Payroll.SentBack, 3);
         await api.AddPayrollAsync(StatusIds.Payroll.Finalized, 4);
 
         foreach (var query in new[] { "", Query(("zoneId", otherZone.Id), ("from", Today.AddDays(-9)), ("to", Today.AddDays(-8))) })
         {
             var dashboard = await sale.Owner.Client.DashboardAsync(query);
-            Assert.Equal((3, 1, 1, 1), (dashboard.PendingTotal(), dashboard.PendingCount(PendingTaskKinds.PurchaseRequest), dashboard.PendingCount(PendingTaskKinds.QualityClaim), dashboard.PendingCount(PendingTaskKinds.Payroll)));
+            Assert.Equal((2, 1, 1), (dashboard.PendingTotal(), dashboard.PendingCount(PendingTaskKinds.PurchaseRequest), dashboard.PendingCount(PendingTaskKinds.QualityClaim)));
             Assert.Equal([waitingRequest.Id], dashboard.PendingIds(PendingTaskKinds.PurchaseRequest));
             Assert.Equal([waitingClaim.Id], dashboard.PendingIds(PendingTaskKinds.QualityClaim));
-            Assert.Equal([waitingPayroll.Id], dashboard.PendingIds(PendingTaskKinds.Payroll));
             Assert.Equal(waitingClaim.Code, dashboard.PendingGroup(PendingTaskKinds.QualityClaim).GetProperty("oldest")[0].GetProperty("code").GetString());
 
             // Each record has a label to show it without opening it.
             string Label(string kind) => dashboard.PendingGroup(kind).GetProperty("oldest")[0].GetProperty("label").GetString()!;
             Assert.Matches(@" – \d+ cages .+, pickup \d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.PurchaseRequest));
             Assert.Matches(@" – invoice \S+$", Label(PendingTaskKinds.QualityClaim));
-            Assert.Matches(@"^Payroll \d{2}/\d{2}/\d{4}–\d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.Payroll));
         }
     }
 
@@ -225,6 +221,6 @@ public class OperationsDashboardTileTests
         Assert.Equal(7, dashboard.PendingCount(PendingTaskKinds.PurchaseRequest));
         Assert.Equal(OperationsDashboardService.PendingTaskSample, dashboard.PendingIds(PendingTaskKinds.PurchaseRequest).Count);
         Assert.Equal(requests.AsEnumerable().Reverse().Take(OperationsDashboardService.PendingTaskSample).Select(r => r.Id), dashboard.PendingIds(PendingTaskKinds.PurchaseRequest));
-        Assert.Equal((0, 0), (dashboard.PendingCount(PendingTaskKinds.QualityClaim), dashboard.PendingCount(PendingTaskKinds.Payroll)));
+        Assert.Equal(0, dashboard.PendingCount(PendingTaskKinds.QualityClaim));
     }
 }

@@ -77,12 +77,12 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var (owner, _, raft) = await OwnerWithRaftAsync();
         var fewer = await owner.EditRaftAsync(raft.Id(), NewRaftBody(raft.Text("code"), lanes: 2) with { RowVersion = raft.Text("rowVersion") });
 
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today");
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress");
         Assert.Equal((Today, 3), (today.Date("date"), today.GetProperty("lanes").GetArrayLength()));
         Assert.All(today.GetProperty("lanes").EnumerateArray(), l => Assert.Equal("NotSeeded", l.Text("state")));
 
         await (await owner.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = fewer.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(3, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).GetProperty("lanes").GetArrayLength());
+        Assert.Equal(3, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).GetProperty("lanes").GetArrayLength());
         Assert.Equal(2, (await owner.ProgressAsync(raft.Id())).GetProperty("notSeededLanes").GetArrayLength());
     }
 
@@ -196,7 +196,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var today = await owner.ProgressAsync(raft.Id());
         Assert.Equal([1, 2, 3, 4, 5], today.LaneNumbers(StatusIds.Lane.InUse));
         Assert.Equal([1, 2, 3, 4, 5], today.GetProperty("notSeededLanes").EnumerateArray().Select(n => n.GetInt32()));
-        Assert.Equal([1, 2, 3, 4, 5], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3, 4, 5], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).LaneNumbers(StatusIds.Lane.InUse));
         Assert.Empty((await owner.ProgressAsync(raft.Id(), $"?date={Today.AddDays(-5):yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
     }
 
@@ -215,7 +215,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
             Assert.Equal([1, 2, 3], view.GetProperty("notSeededLanes").EnumerateArray().Select(n => n.GetInt32()));
         }
 
-        Assert.Equal(3, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).GetProperty("lanes").GetArrayLength());
+        Assert.Equal(3, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).GetProperty("lanes").GetArrayLength());
         Assert.Empty((await owner.ProgressAsync(raft.Id(), $"?date={start.AddDays(-1):yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
     }
 

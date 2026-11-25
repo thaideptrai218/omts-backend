@@ -220,13 +220,13 @@ public class EmployeeRequestTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     [Fact]
-    public async Task A_request_for_a_day_of_a_finalized_payroll_is_refused_and_approval_waits_for_a_payroll_awaiting_finalization()
+    public async Task A_request_for_a_day_of_a_finalized_payroll_is_refused_and_a_pending_one_cannot_be_approved()
     {
         await using var own = new AuthApiFactory();
         var s = await SetupWorkAsync(own);
         var (_, mine) = await AddLinkedEmployeeAsync(s);
         var pending = await (await SubmitAsync(mine, Leave(Today().AddDays(1), Today().AddDays(1)))).BodyAsync(HttpStatusCode.Created);
-        var awaiting = await own.AddPayrollAsync(Day(Today().AddDays(-30)), Day(Today().AddDays(30)), StatusIds.Payroll.AwaitingFinalization);
+        await own.AddPayrollAsync(Day(Today().AddDays(-30)), Day(Today().AddDays(30)), StatusIds.Payroll.Finalized);
 
         // MSG-LABOR-16: the Owner can still reject it with a note.
         var cannot = await ReviewAsync(s.Owner, pending, true);
@@ -234,9 +234,7 @@ public class EmployeeRequestTests(AuthApiFactory factory) : IClassFixture<AuthAp
         Assert.Contains("the payroll of", (await ProblemAsync(cannot)).Detail());
         await (await ReviewAsync(s.Owner, pending, false, "Chờ chốt lương")).BodyAsync(HttpStatusCode.OK);
 
-        // A request for a day of a payroll Awaiting finalization is sent; one of a Finalized payroll is not.
-        await (await SubmitAsync(mine, Leave(Today(), Today()))).BodyAsync(HttpStatusCode.Created);
-        await own.UpdateAsync<OMTS.Domain.Entities.Labor.Payroll>(awaiting.Id, p => p.StatusId = StatusIds.Payroll.Finalized);
+        // A request for a day of a Finalized payroll is not sent.
         var refused = await SubmitAsync(mine, Leave(Today().AddDays(-2), Today().AddDays(-1)));
         Assert.Equal(("MSG-LABOR-25", HttpStatusCode.Conflict), (await refused.ErrorCodeAsync(), refused.StatusCode));
         var afterPeriod = await SubmitAsync(mine, Leave(Today().AddDays(40), Today().AddDays(41)));

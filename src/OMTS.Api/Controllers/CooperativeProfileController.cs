@@ -89,13 +89,6 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
     public async Task<IActionResult> Brand(CancellationToken cancellationToken) =>
         (await profiles.GetBrandAsync(cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>The logo shown on the public provenance page (anonymous).</summary>
-    [HttpGet(CooperativePublicFiles.CurrentLogoPath)]
-    [AllowAnonymous]
-    [ResponseCache(Duration = 300)]
-    public async Task<IActionResult> PublicLogo(CancellationToken cancellationToken) =>
-        FileOrNotFound(await profiles.OpenLogoAsync(cancellationToken));
-
     /// <summary>
     /// One logo file, current or replaced (anonymous). This is the URL the profile returns and a published
     /// provenance version stores: it always shows the same image.

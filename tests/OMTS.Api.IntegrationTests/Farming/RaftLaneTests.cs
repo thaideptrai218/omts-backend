@@ -47,7 +47,7 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task List_counts_lanes_in_use_and_the_view_of_today_shows_status_and_state()
+    public async Task List_counts_lanes_in_use()
     {
         var owner = (await factory.OwnerAsync()).Client;
         var zone = await owner.CreateZoneAsync();
@@ -57,11 +57,6 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
         var row = (await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zone.Id()}/rafts")).EnumerateArray().Single();
         Assert.Equal(2, row.GetProperty("laneCount").GetInt32());
-
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today");
-        Assert.Equal((raft.Id(), raft.Text("code"), Today.ToString("yyyy-MM-dd")), (today.GetProperty("raftId").GetGuid(), today.Text("raftCode"), today.Text("date")));
-        Assert.Equal(["In Use", "In Use", "Removed"], today.GetProperty("lanes").EnumerateArray().Select(l => l.Text("status")));
-        Assert.All(today.GetProperty("lanes").EnumerateArray(), l => Assert.Equal("NotSeeded", l.Text("state")));
     }
 
     // FARM-04.2.E1: nothing is saved, the cycle is named, and the same edit with the old number goes through.

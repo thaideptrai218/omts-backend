@@ -14,7 +14,7 @@ namespace OMTS.Api.Controllers;
 /// <summary>
 /// SALE-03 (SCR-SALE-02): the Owner responds; Zone Managers only view, every request, since requests have no zone (§I.4.4 R,
 /// PM 03/11). The Accountant has no right here. Before accepting, the Owner or the planner of the work day plan asks staff for
-/// the shifts (decision of 31/10/2026); after it, the Owner marks the harvest of the request done (decision of 11/11/2026).
+/// the shifts (decision of 31/10/2026).
 /// </summary>
 [ApiController]
 [Route("api/purchase-requests")]
@@ -22,7 +22,6 @@ namespace OMTS.Api.Controllers;
 public sealed class PurchaseRequestsController(
     PurchaseRequestReadService reads,
     PurchaseRequestResponseService responses,
-    PurchaseHarvestService harvests,
     PurchaseStaffingService staffing) : ControllerBase
 {
     /// <summary>Those still to be answered first, then newest first. <c>customerId</c> gives the requests of a profile (SALE-04.1).</summary>
@@ -49,22 +48,6 @@ public sealed class PurchaseRequestsController(
     [ProducesResponseType<PurchaseRequestView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Decline(Guid id, DeclinePurchaseRequest request, CancellationToken cancellationToken) =>
         (await responses.DeclineAsync(id, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>
-    /// The Owner marks the harvest of an Accepted request done once it has a lot: no lot is recorded for it after this. Body: <c>rowVersion</c> of the request.
-    /// </summary>
-    [HttpPost("{id:guid}/harvest-done")]
-    [RequireCooperativeOwner]
-    [ProducesResponseType<PurchaseRequestView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> MarkHarvestDone(Guid id, MarkHarvestDone request, CancellationToken cancellationToken) =>
-        (await harvests.MarkDoneAsync(id, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>Clears the mark, for a raft still to harvest. Body: <c>rowVersion</c> of the request.</summary>
-    [HttpPost("{id:guid}/harvest-done/clear")]
-    [RequireCooperativeOwner]
-    [ProducesResponseType<PurchaseRequestView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ClearHarvestDone(Guid id, MarkHarvestDone request, CancellationToken cancellationToken) =>
-        (await harvests.ClearDoneAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The staff that can be asked for a shift on <c>day</c>, each with the reason it cannot when it cannot.</summary>
     [HttpGet("staffing-employees")]

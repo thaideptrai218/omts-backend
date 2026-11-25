@@ -133,7 +133,7 @@ public class PurchaseReturnsQaSqlServerTests
         var line = receipt.LineOf(world.Other);
         await world.ReturnAsync(receipt.Id(), line, 1);
         await using var api = HoldingAt(host, DocumentSequenceKeys.PurchaseReturn, async () =>
-            await (await world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 1 })).ReadAsync(HttpStatusCode.OK));
+            await (await world.Owner.EditLineAsync(receipt.Id(), line, quantity: 1)).ReadAsync(HttpStatusCode.OK));
 
         await (await ClientOf(api, world.Owner).PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 9)] })).ProblemAsync(HttpStatusCode.Conflict, "MSG06");
 
@@ -150,7 +150,7 @@ public class PurchaseReturnsQaSqlServerTests
         var line = receipt.LineOf(world.Other);
         await world.ReturnAsync(receipt.Id(), line, 1);
         await using var api = HoldingAt(host, DocumentSequenceKeys.PurchaseReturn, async () =>
-            await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 700 })).ReadAsync(HttpStatusCode.OK));
+            await (await world.Owner.EditLineAsync(receipt.Id(), line, unitPrice: 700)).ReadAsync(HttpStatusCode.OK));
         var client = ClientOf(api, world.Owner);
         var body = new ReturnBody { Lines = [new ReturnLineBody(line, 1)] };
 
@@ -373,7 +373,7 @@ public class PurchaseReturnsQaSqlServerTests
 
             var responses = await InParallelAsync(3, i => i switch
             {
-                0 => world.Owner.CorrectAsync(receipt.Id(), "Counted again", new { lineId = line, quantity = 2 }),
+                0 => world.Owner.EditLineAsync(receipt.Id(), line, quantity: 2),
                 1 => world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 8)] }),
                 _ => world.Owner.CancelReturnAsync(standing, "Not sent back"),
             });

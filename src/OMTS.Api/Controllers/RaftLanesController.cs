@@ -50,10 +50,8 @@ public sealed class RaftLanesController(LaneIncidentService commands, LaneIncide
     /// <summary>
     /// Records the repair of a damaged lane: <c>reason</c> (what was done) and optional <c>materials</c> (<c>itemId</c>, <c>quantity</c>, <c>unit</c>), each checked against the stock on hand
     /// (409 MSG-INPUT-01) and taken out of it in the same save; the lane returns to the state it had. 409 <c>LANE_NOT_DAMAGED</c> when it is not damaged.
-    /// <c>/repair-done</c> is the same action under the name of the first draft.
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/repair")]
-    [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/repair-done")]
     [ProducesResponseType<LaneIncidentSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Repair(Guid raftId, int laneNumber, RepairLaneRequest request, CancellationToken cancellationToken) =>
         (await commands.RepairAsync(raftId, laneNumber, request, cancellationToken)).ToActionResult(Ok);
@@ -97,12 +95,6 @@ public sealed class RaftLanesController(LaneIncidentService commands, LaneIncide
         return (await photos.AddAsync(raftId, laneNumber, incidentId, await file.ToIncomingFileAsync(cancellationToken), cancellationToken))
             .ToActionResult(v => StatusCode(StatusCodes.Status201Created, v));
     }
-
-    /// <summary>The history of one lane, newest first: who, when, what, why, the materials and the use issue of a repair.</summary>
-    [HttpGet("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/incidents")]
-    [ProducesResponseType<LaneHistory>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> LaneHistory(Guid raftId, int laneNumber, CancellationToken cancellationToken) =>
-        (await reads.HistoryAsync(raftId, laneNumber, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The history of every lane of the raft, or of one lane with <c>laneNumber</c>, newest first.</summary>
     [HttpGet("api/rafts/{raftId:guid}/lane-history")]

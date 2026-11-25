@@ -89,16 +89,4 @@ internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseReq
 
     public Task<PurchaseRequest?> GetForEditAsync(Guid requestId, CancellationToken cancellationToken) =>
         db.PurchaseRequests.Include(r => r.Customer).Include(r => r.Product).FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
-
-    public async Task<IReadOnlyList<PurchaseRequest>> ListOpenForHarvestAsync(CancellationToken cancellationToken) =>
-        await db.PurchaseRequests.AsNoTracking().Include(r => r.Customer).Include(r => r.WorkDayPlan)
-            .Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.HarvestCompletedAt == null)
-            .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<PurchaseRequest>> ListAcceptedOfCustomerAsync(Guid customerId, DateOnly earliestPickup, CancellationToken cancellationToken) =>
-        await db.PurchaseRequests.AsNoTracking().Include(r => r.Product)
-            .Where(r => r.CustomerId == customerId && r.StatusId == StatusIds.PurchaseRequest.Accepted && r.AgreedPickupDate >= earliestPickup)
-            .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
-            .ToListAsync(cancellationToken);
 }
