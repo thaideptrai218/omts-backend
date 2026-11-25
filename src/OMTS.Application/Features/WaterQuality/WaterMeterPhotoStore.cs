@@ -57,8 +57,7 @@ public sealed class WaterMeterPhotoStore(IFileStorage storage, IWaterMeasurement
             return WaterPhotoCheck.AlreadyUsed;
         }
 
-        await using var stored = await storage.OpenReadAsync(key, cancellationToken);
-        return stored is null ? WaterPhotoCheck.Refused : WaterPhotoCheck.Usable;
+        return await storage.ExistsAsync(key, cancellationToken) ? WaterPhotoCheck.Usable : WaterPhotoCheck.Refused;
     }
 
     private static string OwnerFolder(Guid accountId) => $"{FileCategories.WaterMeterPhotos}/{accountId:N}";

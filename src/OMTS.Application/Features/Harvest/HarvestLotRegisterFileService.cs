@@ -13,8 +13,6 @@ namespace OMTS.Application.Features.Harvest;
 /// </summary>
 public sealed class HarvestLotRegisterFileService(HarvestLotRegisterService register, ZoneAccessGuard zoneAccess, ISpreadsheetWriter spreadsheets, TimeProvider timeProvider)
 {
-    private const int PageSize = 100;
-
     /// <summary>The most rows one file holds; a wider period is exported in parts.</summary>
     public const int MaxRows = 10_000;
 
@@ -31,26 +29,17 @@ public sealed class HarvestLotRegisterFileService(HarvestLotRegisterService regi
             return AppError.Forbidden;
         }
 
-        var rows = new List<IReadOnlyList<object?>>();
-        for (var page = 1; rows.Count < MaxRows; page++)
+        var found = await register.FirstRowsAsync(query, MaxRows, cancellationToken);
+        if (!found.IsSuccess)
         {
-            var found = await register.SearchAsync(query with { Page = page, PageSize = PageSize }, cancellationToken);
-            if (!found.IsSuccess)
-            {
-                return found.Error!;
-            }
-
-            var value = found.Value!;
-            rows.AddRange(value.Items.Select(Row));
-            if (page * PageSize >= value.Total)
-            {
-                break;
-            }
+            return found.Error!;
         }
+
+        var rows = found.Value!.Items.Select(Row).ToList();
 
         try
         {
-            var sheet = new SpreadsheetSheet("Harvest lots", Headers, rows.Take(MaxRows).ToList());
+            var sheet = new SpreadsheetSheet("Harvest lots", Headers, rows);
             return new ExportedFile($"harvest-lots-{timeProvider.Today():yyyyMMdd}.xlsx", ISpreadsheetWriter.ContentType, spreadsheets.Write([sheet]));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

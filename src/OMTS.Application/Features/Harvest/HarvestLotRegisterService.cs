@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.Harvest;
 
 /// <summary>
 /// The harvest lot list (all lots of the zones the caller can read, any status) and the product ledger of one lot, for a Zone Manager of the zone and the Cooperative Owner (Harvests View). The figures
-/// of a lot come from the sales side, so the sums, the order by remaining kg and the page are worked out over the lots the filters match; only the page reads the products, plans and names.
+/// of a lot come from the sales side: the count, the sums and the order by remaining kg are worked out by SQL over the lots the filters match, and only the page reads its figures, products, plans and names.
 /// </summary>
 public sealed class HarvestLotRegisterService(
     IHarvestLotRepository lots,
@@ -24,7 +24,14 @@ public sealed class HarvestLotRegisterService(
 {
     private const int MaxPageSize = 100;
 
-    public async Task<Result<HarvestLotRegisterPage>> SearchAsync(HarvestLotListQuery query, CancellationToken cancellationToken)
+    public Task<Result<HarvestLotRegisterPage>> SearchAsync(HarvestLotListQuery query, CancellationToken cancellationToken) =>
+        ReadAsync(query, query.Page, query.PageSize, MaxPageSize, cancellationToken);
+
+    /// <summary>The first <paramref name="maxRows"/> lots the filters match, in the list's order and with the same checks, read as one page: what the file of the list is made from.</summary>
+    public Task<Result<HarvestLotRegisterPage>> FirstRowsAsync(HarvestLotListQuery query, int maxRows, CancellationToken cancellationToken) =>
+        ReadAsync(query, 1, maxRows, maxRows, cancellationToken);
+
+    private async Task<Result<HarvestLotRegisterPage>> ReadAsync(HarvestLotListQuery query, int requestedPage, int requestedSize, int maxPageSize, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.Harvests, PermissionAction.View, cancellationToken);
         if (zones.IsEmpty || (query.ZoneId is { } chosen && !zones.Allows(chosen)))
@@ -48,11 +55,11 @@ public sealed class HarvestLotRegisterService(
             closeReason = parsed;
         }
 
-        var sort = query.Sort?.Trim().ToLowerInvariant() switch
+        HarvestLotSort? sort = query.Sort?.Trim().ToLowerInvariant() switch
         {
-            null or "" or "code" => "code",
-            "harvestedat" => "harvestedat",
-            "remainingkg" => "remainingkg",
+            null or "" or "code" => HarvestLotSort.Code,
+            "harvestedat" => HarvestLotSort.HarvestedAt,
+            "remainingkg" => HarvestLotSort.RemainingKg,
             _ => null,
         };
         if (sort is null)
@@ -66,27 +73,22 @@ public sealed class HarvestLotRegisterService(
         }
 
         var descending = !string.Equals(query.SortDir?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
-        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
+        var (page, pageSize) = (Math.Clamp(requestedPage, 1, int.MaxValue / maxPageSize), Math.Clamp(requestedSize, 1, maxPageSize));
         var filter = new HarvestLotFilter(
             query.From, query.To, query.ZoneId, zones.AllZones ? null : zones.ZoneIds.ToHashSet(), query.RaftId, query.ProductId, query.StatusId, query.Weighed, closeReason, query.HasPlan, query.Search);
-        var rows = await lots.SearchAsync(filter, cancellationToken);
+        return await ReadPageAsync(filter, sort.Value, descending, page, pageSize, cancellationToken);
+    }
+
+    private async Task<HarvestLotRegisterPage> ReadPageAsync(HarvestLotFilter filter, HarvestLotSort sort, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        // The count and the sums come from one aggregate over every matching lot; only the page is read row by row, and only the page asks the sales side for its figures.
+        var sums = await lots.SumsAsync(filter, cancellationToken);
+        var rows = sums.Count == 0 ? [] : await lots.SearchPageAsync(filter, sort, descending, (page - 1) * pageSize, pageSize, cancellationToken);
         var figures = await sales.FiguresAsync(rows.Select(r => r.Id).ToList(), cancellationToken);
-        var worked = rows
+        var pageRows = rows
             .Select(r => (Row: r, Figures: HarvestLotFigures.Shown(r.StatusId, r.EstimatedKg, r.WeighedKg, r.LeftoverKg, figures[r.Id])))
             .ToList();
-        var totals = new HarvestLotRegisterTotals(
-            worked.Sum(w => w.Row.CageCount), worked.Sum(w => w.Row.EstimatedKg), worked.Sum(w => w.Row.WeighedKg ?? 0m), worked.Sum(w => w.Figures.SoldKg),
-            worked.Sum(w => w.Figures.RemainingKg), worked.Sum(w => w.Figures.LostKg));
-
-        // The lot code then breaks every tie, so a page never repeats or skips a lot.
-        var ordered = sort switch
-        {
-            "harvestedat" => descending ? worked.OrderByDescending(w => w.Row.HarvestedAt) : worked.OrderBy(w => w.Row.HarvestedAt),
-            "remainingkg" => descending ? worked.OrderByDescending(w => w.Figures.RemainingKg) : worked.OrderBy(w => w.Figures.RemainingKg),
-            _ => descending ? worked.OrderByDescending(w => w.Row.LotCode, StringComparer.Ordinal) : worked.OrderBy(w => w.Row.LotCode, StringComparer.Ordinal),
-        };
-        var pageRows = (descending ? ordered.ThenByDescending(w => w.Row.LotCode, StringComparer.Ordinal) : ordered.ThenBy(w => w.Row.LotCode, StringComparer.Ordinal))
-            .Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var totals = new HarvestLotRegisterTotals(sums.CageCount, sums.EstimatedKg, sums.WeighedKg, sums.SoldKg, sums.RemainingKg, sums.LostKg);
 
         var ids = pageRows.Select(w => w.Row.Id).ToList();
         var productsOf = (await lots.ProductLinesOfAsync(ids, cancellationToken)).ToLookup(l => l.LotId);
@@ -99,13 +101,13 @@ public sealed class HarvestLotRegisterService(
             w.Row.CageCount, w.Row.EstimatedKg, w.Row.WeighedKg, w.Row.WeighedAt, w.Figures, w.Row.StatusId, statusCatalog.DisplayNameOf(w.Row.StatusId), w.Row.CloseReason, w.Row.CloseDate,
             planOf.TryGetValue(w.Row.Id, out var plan) ? new HarvestLotPlanRef(plan.PlanId, plan.PlanCode) : null,
             names.GetValueOrDefault(w.Row.RecordedByAccountId))).ToList();
-        return new HarvestLotRegisterPage(items, rows.Count, page, pageSize, totals);
+        return new HarvestLotRegisterPage(items, sums.Count, page, pageSize, totals);
     }
 
     /// <summary>The ledger rows of one lot, oldest first: the harvest at its weighed kg, the sales (with the order of their invoice) and disposals, the sales returns, what the close took off, and the reversals that undid any of them.</summary>
     public async Task<Result<IReadOnlyList<HarvestLotMovementView>>> MovementsAsync(Guid lotId, CancellationToken cancellationToken)
     {
-        var lot = await lots.GetAsync(lotId, cancellationToken);
+        var lot = await lots.GetHeaderAsync(lotId, cancellationToken);
         if (lot is null)
         {
             return AppError.NotFound;

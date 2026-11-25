@@ -74,6 +74,25 @@ internal sealed class AzureBlobFileStorage(
         }
     }
 
+    public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        // The SDK normalizes "." segments and backslashes: without this check another spelling finds the same blob.
+        if (!StorageKeys.IsValid(key))
+        {
+            return false;
+        }
+
+        try
+        {
+            return (await Container.GetBlobClient(key).ExistsAsync(cancellationToken)).Value;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(exception, "Blob existence check of {Key} failed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
+    }
+
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default)
     {
         var blob = Container.GetBlobClient(key);

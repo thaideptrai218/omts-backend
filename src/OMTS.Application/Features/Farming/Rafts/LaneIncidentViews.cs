@@ -17,14 +17,7 @@ public sealed class LaneIncidentViews(IAccountRepository accounts, IFarmingInput
         var names = await accounts.GetDisplayNamesAsync(incidents.Select(i => i.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         var itemIds = incidents.SelectMany(i => i.Materials).Select(m => m.ItemId).Distinct().ToList();
         var itemsById = itemIds.Count == 0 ? [] : (await items.GetByIdsAsync(itemIds, cancellationToken)).ToDictionary(i => i.Id);
-        var issueCodes = new Dictionary<Guid, string>();
-        foreach (var issueId in incidents.SelectMany(i => i.Materials).Select(m => m.IssueId).OfType<Guid>().Distinct())
-        {
-            if (await issues.GetForEditAsync(issueId, cancellationToken) is { } issue)
-            {
-                issueCodes[issueId] = issue.Code;
-            }
-        }
+        var issueCodes = await issues.CodesOfAsync(incidents.SelectMany(i => i.Materials).Select(m => m.IssueId).OfType<Guid>().Distinct().ToList(), cancellationToken);
 
         var views = new List<LaneIncidentView>(incidents.Count);
         foreach (var incident in incidents)

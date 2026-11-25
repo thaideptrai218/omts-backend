@@ -17,6 +17,9 @@ public interface ISeedingRecordRepository
     /// <summary>Each lane of each session of the cycle with its date: what the lane states are worked out from (BR-FARM-03).</summary>
     Task<IReadOnlyList<LaneSeeding>> LaneSeedingsAsync(Guid cycleId, CancellationToken cancellationToken);
 
+    /// <summary>The same for several cycles in one read; each row carries its cycle.</summary>
+    Task<IReadOnlyList<LaneSeeding>> LaneSeedingsOfCyclesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     /// <summary>The total seeded quantity of each cycle and the unit of its seed items (the catalogue base unit), read only; a cycle with no session is left out.</summary>
     Task<IReadOnlyDictionary<Guid, CycleSeedTotal>> SeedTotalsByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
 

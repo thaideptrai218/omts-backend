@@ -608,6 +608,12 @@ public class WaterModelQaStorageTests
             return _empty.OpenReadAsync(key, cancellationToken);
         }
 
+        public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _reads);
+            return _empty.ExistsAsync(key, cancellationToken);
+        }
+
         public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>
             _empty.GetReadUrlAsync(key, lifetime, cancellationToken);
 
