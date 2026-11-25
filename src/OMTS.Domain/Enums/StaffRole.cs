@@ -8,4 +8,7 @@ public enum StaffRole
 {
     ZoneManager,
     Accountant,
+
+    /// <summary>A field employee's login (seasonal workers first): no business function, only the right to sign in; own work is read with the employee app token.</summary>
+    Employee,
 }

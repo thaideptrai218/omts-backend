@@ -88,7 +88,9 @@ internal sealed class EmployeeRequestRepository(OmtsDbContext db) : IEmployeeReq
         var query = db.EmployeeRequests.AsNoTracking().Include(r => r.Employee).Where(r => statusId == null || r.StatusId == statusId);
         if (zoneIds is not null)
         {
-            query = query.Where(r => r.Employee.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+            var visible = EmployeeZoneScope.InZones(zoneIds, true, DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)));
+            var visibleIds = await db.Employees.AsNoTracking().Where(visible).Select(e => e.Id).ToListAsync(cancellationToken);
+            query = query.Where(r => visibleIds.Contains(r.EmployeeId));
         }
 
         // Awaiting review first (the lowest status id), the oldest first; the others newest first (SCR-LABOR-03).
@@ -134,7 +136,8 @@ internal sealed class WorkEmployeeReader(OmtsDbContext db) : IWorkEmployeeReader
             .Where(e => e.StatusId == StatusIds.Employee.Working && (e.LastWorkingDay == null || e.LastWorkingDay >= day));
         if (zoneIds is not null)
         {
-            query = query.Where(e => e.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+            // Every seasonal worker too: no fixed zone, assigned in any zone (decision of 25/11/2026).
+            query = query.Where(EmployeeZoneScope.InZones(zoneIds, true, day));
         }
 
         return await query.Include(e => e.WorkingZones).Include(e => e.TypePeriods).Include(e => e.JobTypes)

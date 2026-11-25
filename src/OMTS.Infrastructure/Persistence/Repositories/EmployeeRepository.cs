@@ -25,6 +25,15 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
     public Task<Employee?> GetByAccountIdAsync(Guid accountId, CancellationToken cancellationToken) =>
         db.Employees.FirstOrDefaultAsync(e => e.AccountId == accountId, cancellationToken);
 
+    public async Task<bool> IsSeasonalWorkerAccountAsync(Guid accountId, DateOnly day, CancellationToken cancellationToken)
+    {
+        var current = CurrentType(day);
+        return await db.Employees.AsNoTracking().Where(e => e.AccountId == accountId)
+            .Where(Expression.Lambda<Func<Employee, bool>>(
+                Expression.Equal(current.Body, Expression.Constant(EmployeeType.SeasonalWorker, typeof(EmployeeType?))), current.Parameters))
+            .AnyAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Guid?>> GetIdsByAccountIdsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
         await db.Employees.AsNoTracking()
             .Where(e => e.AccountId != null && accountIds.Contains(e.AccountId.Value))
@@ -56,7 +65,7 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
 
         if (filter.VisibleZoneIds is { } visible)
         {
-            query = query.Where(e => e.WorkingZones.Any(w => visible.Contains(w.ZoneId)));
+            query = query.Where(EmployeeZoneScope.InZones(visible, filter.IncludeSeasonal, filter.Today));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))

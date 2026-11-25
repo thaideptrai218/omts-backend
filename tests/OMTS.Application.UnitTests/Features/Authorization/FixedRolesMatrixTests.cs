@@ -184,10 +184,12 @@ public class FixedRolesMatrixTests
     }
 
     [Fact]
-    public void There_are_exactly_two_fixed_staff_roles_found_by_their_code()
+    public void There_are_exactly_three_fixed_staff_roles_found_by_their_code()
     {
-        Assert.Equal([StaffRole.ZoneManager, StaffRole.Accountant], FixedRoles.All.Select(r => r.Role));
-        Assert.Equal(["ZONE_MANAGER", "ACCOUNTANT"], FixedRoles.All.Select(r => r.Code));
+        Assert.Equal([StaffRole.ZoneManager, StaffRole.Accountant, StaffRole.Employee], FixedRoles.All.Select(r => r.Role));
+        Assert.Equal(["ZONE_MANAGER", "ACCOUNTANT", "EMPLOYEE"], FixedRoles.All.Select(r => r.Code));
+        // The field employee (owner decision of 25/11/2026) opens no function of the matrix: it is the pair that lets a seasonal worker sign in.
+        Assert.Empty(FixedRoles.Employee.Permissions);
         Assert.Same(FixedRoles.ZoneManager, FixedRoles.FindByCode(" zone_manager "));
         Assert.Same(FixedRoles.Accountant, FixedRoles.Of(StaffRole.Accountant));
         Assert.Null(FixedRoles.FindByCode("COOPERATIVE_OWNER"));

@@ -114,9 +114,9 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
         var zone = await factory.AddZoneAsync(NewCode());
 
-        var saved = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile(
+        var saved = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.StaffProfile(
             $"Nhân viên {NewCode()}", NewPhone(), zone.Id, body => body["account"] = new { username = $"nv{NewCode()}" }));
-        var noAccount = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile($"Nhân viên {NewCode()}", NewPhone(), zone.Id));
+        var noAccount = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.StaffProfile($"Nhân viên {NewCode()}", NewPhone(), zone.Id));
         var noAccountBody = await noAccount.BodyAsync();
         var later = await owner.PostAsJsonAsync($"/api/employees/{noAccountBody.GetProperty("employee").GetProperty("id").GetGuid()}/account", new { username = $"nv{NewCode()}" });
 

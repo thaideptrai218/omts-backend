@@ -84,6 +84,8 @@ public static partial class AcsTestKit
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        // The deployment seed creates the rows of the fixed roles with the cooperative: a seasonal worker's account holds the EMPLOYEE one.
+        await factory.EnsureFixedRolesAsync();
         if (await db.Cooperatives.FirstOrDefaultAsync() is { } existing)
         {
             return existing;

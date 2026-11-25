@@ -31,6 +31,7 @@ public sealed class DeploymentBootstrapper(
     AuditLogService audit,
     TimeProvider timeProvider,
     AddressCodeBackfill addressCodes,
+    SeasonalAccountBackfill seasonalAccounts,
     IServiceProvider services)
 {
     public const int Success = 0;
@@ -120,6 +121,7 @@ public sealed class DeploymentBootstrapper(
         }
 
         // Last, and never a reason to fail: it only needs the outside list of provinces and wards, which may be out of reach.
+        messages.Add(await seasonalAccounts.RunAsync(cancellationToken));
         messages.Add(await addressCodes.RunAsync(cancellationToken));
 
         return new BootstrapOutcome(Success, messages);

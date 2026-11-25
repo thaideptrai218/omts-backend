@@ -21,7 +21,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var (owner, zone, _) = await SetupAsync(factory);
         var name = $"Trần Thị {NewCode()}";
 
-        var body = await CreateAsync(owner, Profile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank()));
+        var body = await CreateAsync(owner, SeasonalProfile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank()));
         var id = IdOf(body);
         var found = await owner.GetFromJsonAsync<JsonElement>($"/api/employees?search={Uri.EscapeDataString(name)}&zoneId={zone.Id}");
 
@@ -51,7 +51,12 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal(JsonValueKind.Null, noPhone.GetProperty("employee").GetProperty("phoneNumber").ValueKind);
         Assert.Equal(JsonValueKind.Null, blankPhone.GetProperty("employee").GetProperty("phoneNumber").ValueKind);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Equal(["Full name", "Phone number", "Employee type", "Working zones"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
+        // A Staff employee needs a working zone; a seasonal worker has none fixed (owner decision of 25/11/2026), so with no type sent only the type is named.
+        Assert.Equal(["Full name", "Phone number", "Employee type"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
+        var staffNoZone = await ProblemAsync(await owner.PostAsJsonAsync("/api/employees", StaffProfile($"Staff {NewCode()}", null, null)));
+        Assert.Equal(["Working zones"], staffNoZone.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
+        var seasonalNoZone = await CreateAsync(owner, SeasonalProfile($"Seasonal {NewCode()}", null, null));
+        Assert.Empty(seasonalNoZone.GetProperty("employee").GetProperty("workingZones").EnumerateArray());
     }
 
     // LABOR-01 step 5: the Zone Manager confirms the approval in person; the Owner is only asked to confirm (MSG-GEN-04, on the client).
@@ -81,8 +86,8 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     {
         var (owner, zone, _) = await SetupAsync(factory);
 
-        var byDefault = await CreateAsync(owner, Profile($"Default {NewCode()}", null, zone.Id));
-        var dated = await CreateAsync(owner, Profile($"Dated {NewCode()}", null, zone.Id, b => { b["employeeType"] = "Staff"; b["employeeTypeFrom"] = "2026-01-15"; }));
+        var byDefault = await CreateAsync(owner, SeasonalProfile($"Default {NewCode()}", null, zone.Id));
+        var dated = await CreateAsync(owner, SeasonalProfile($"Dated {NewCode()}", null, zone.Id, b => { b["employeeType"] = "Staff"; b["employeeTypeFrom"] = "2026-01-15"; }));
 
         var firstDay = byDefault.GetProperty("employee").GetProperty("typeHistory")[0];
         Assert.Equal(("SeasonalWorker", Today().ToString("yyyy-MM-dd")), (firstDay.GetProperty("type").GetString(), firstDay.GetProperty("effectiveFrom").GetString()));
@@ -96,9 +101,9 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"Type {NewCode()}", NewPhone());
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id, b => b["employeeTypeFrom"] = "2026-01-01"));
+        var saved = await CreateAsync(owner, SeasonalProfile(name, phone, zone.Id, b => b["employeeTypeFrom"] = "2026-01-01"));
         var id = IdOf(saved);
-        object Edit(string? type, string? from) => Profile(name, phone, zone.Id, b => { b["employeeType"] = type; b["employeeTypeFrom"] = from; b["rowVersion"] = RowVersionOf(saved); });
+        object Edit(string? type, string? from) => SeasonalProfile(name, phone, zone.Id, b => { b["employeeType"] = type; b["employeeTypeFrom"] = from; b["rowVersion"] = RowVersionOf(saved); });
 
         var noDate = await owner.PutAsJsonAsync($"/api/employees/{id}", Edit("Staff", null));
         var noType = await owner.PutAsJsonAsync($"/api/employees/{id}", Edit(null, "2026-03-01"));

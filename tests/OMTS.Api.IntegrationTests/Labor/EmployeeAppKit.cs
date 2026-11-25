@@ -41,10 +41,10 @@ internal static class EmployeeAppKit
     }
 
     /// <summary>An Employed seasonal worker of the zone, with a phone number of its own unless <paramref name="withoutPhone"/>.</summary>
-    public static async Task<Worker> AddWorkerAsync(World world, bool withoutPhone = false)
+    public static async Task<Worker> AddWorkerAsync(World world, bool withoutPhone = false, bool staff = false)
     {
         var (name, phone) = ($"Worker {NewCode()}", withoutPhone ? null : NewPhone());
-        var id = IdOf(await CreateAsync(world.Owner, Profile(name, phone, world.Zone.Id)));
+        var id = IdOf(await CreateAsync(world.Owner, Profile(name, phone, world.Zone.Id, b => b["employeeType"] = staff ? nameof(OMTS.Domain.Enums.EmployeeType.Staff) : nameof(OMTS.Domain.Enums.EmployeeType.SeasonalWorker))));
         return new Worker(id, phone ?? string.Empty, name);
     }
 

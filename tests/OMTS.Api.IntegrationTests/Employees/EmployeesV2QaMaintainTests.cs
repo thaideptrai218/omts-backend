@@ -33,8 +33,8 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
         Assert.Equal("MSG-GEN-08", await (await mixed.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zoneA).With("rowVersion", version))).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await mixed.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneA.Id })).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await mixed.PostEndAsync(id, new { lastWorkingDay = Today().ToString("yyyy-MM-dd"), rowVersion = version })).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await mixed.PostAsJsonAsync("/api/employees", ApprovedProfile($"New {NewCode()}", NewPhone(), zoneA.Id))).ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.Created, (await mixed.PostAsJsonAsync("/api/employees", ApprovedProfile($"New {NewCode()}", NewPhone(), zoneB.Id))).StatusCode);
+        Assert.Equal("MSG-GEN-08", await (await mixed.PostAsJsonAsync("/api/employees", ApprovedStaffProfile($"New {NewCode()}", NewPhone(), zoneA.Id))).ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.Created, (await mixed.PostAsJsonAsync("/api/employees", ApprovedStaffProfile($"New {NewCode()}", NewPhone(), zoneB.Id))).StatusCode);
     }
 
     // LABOR-01.1 step 2: the zones outside theirs stay, whatever is sent; the manager's own zone can go.
@@ -77,7 +77,7 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
         Assert.Equal([zoneB.Id], await ZonesAsync(id));
         Assert.True(moved.GetProperty("employee").GetProperty("canMaintain").GetBoolean());
         Assert.Equal("MSG-GEN-08", await (await everywhere.PostAsJsonAsync($"/api/employees/{id}/account", AccountBlock($"nv{NewCode()}", zoneB, role))).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await everywhere.PostAsJsonAsync("/api/employees", ApprovedProfile($"New {NewCode()}", NewPhone(), zoneB.Id).With("account", new { username = $"nv{NewCode()}" }))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await everywhere.PostAsJsonAsync("/api/employees", ApprovedStaffProfile($"New {NewCode()}", NewPhone(), zoneB.Id).With("account", new { username = $"nv{NewCode()}" }))).ErrorCodeAsync());
     }
 
     // GBR-01, BR-FARM-08: the pair of a Discontinued zone stays Effective; the zone cannot be given anew, and stays on a profile.
@@ -95,7 +95,7 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
         Assert.True(view.GetProperty("canMaintain").GetBoolean());
         await (await manager.PutAsJsonAsync($"/api/employees/{id}", FullProfile(name, phone, zone).With("notes", "Vẫn sửa được").With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
 
-        var added = await manager.PostAsJsonAsync("/api/employees", ApprovedProfile($"New {NewCode()}", NewPhone(), zone.Id));
+        var added = await manager.PostAsJsonAsync("/api/employees", ApprovedStaffProfile($"New {NewCode()}", NewPhone(), zone.Id));
         Assert.Equal(("MSG-GEN-01", "Working zones"), (await added.ErrorCodeAsync(), await FieldAsync(added)));
     }
 
@@ -128,8 +128,8 @@ public class EmployeesV2QaMaintainTests(AuthApiFactory factory) : IClassFixture<
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
-        var employed = IdOf(await CreateAsync(owner, Profile($"Order {NewCode()}", NewPhone(), zoneA.Id)));
-        var left = IdOf(await CreateAsync(owner, Profile($"Order {NewCode()}", NewPhone(), zoneA.Id)));
+        var employed = IdOf(await CreateAsync(owner, StaffProfile($"Order {NewCode()}", NewPhone(), zoneA.Id)));
+        var left = IdOf(await CreateAsync(owner, StaffProfile($"Order {NewCode()}", NewPhone(), zoneA.Id)));
         await EndAsync(owner, left);
         var other = (await StaffAsync(factory, (StaffRole.ZoneManager, zoneB))).Client;
 

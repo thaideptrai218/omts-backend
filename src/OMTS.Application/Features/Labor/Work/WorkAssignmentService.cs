@@ -562,10 +562,13 @@ public sealed class WorkAssignmentService(
         return await payPeriods.CheckAsync(assignment.Date, cancellationToken);
     }
 
-    /// <summary>The zone of the work joins the working zones of an employee who does not have it (LABOR-02 step 9, BR-LABOR-01).</summary>
+    /// <summary>
+    /// The zone of the work joins the working zones of an employee who does not have it (LABOR-02 step 9, BR-LABOR-01), unless the employee is a
+    /// seasonal worker: a seasonal worker has no fixed zone (today zone A, tomorrow zone B by assignment, decision of 25/11/2026).
+    /// </summary>
     private void AddWorkingZone(Employee employee, Guid zoneId)
     {
-        if (employee.WorkingZones.Any(w => w.ZoneId == zoneId))
+        if (employee.WorkingZones.Any(w => w.ZoneId == zoneId) || WorkRules.TypeOn(employee, timeProvider.Today()) == OMTS.Domain.Enums.EmployeeType.SeasonalWorker)
         {
             return;
         }

@@ -150,7 +150,7 @@ public sealed class EmployeeQueryService(
         }
 
         return Result<EmployeeSearchFilter?>.Success(new EmployeeSearchFilter(
-            text, PhoneNumbers.Normalize(text), statusId, zoneId, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids, caller.VisibleZoneIds));
+            text, PhoneNumbers.Normalize(text), statusId, zoneId, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids, caller.VisibleZoneIds, caller.SeesSeasonalWorkers));
     }
 
     public async Task<Result<EmployeeView>> GetAsync(Guid id, CancellationToken cancellationToken)

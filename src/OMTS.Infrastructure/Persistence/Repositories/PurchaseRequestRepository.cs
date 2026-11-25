@@ -69,7 +69,7 @@ internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseReq
         var query = db.Employees.Include(e => e.Account).Where(e => e.StatusId == StatusIds.Employee.Working);
         if (zoneIds is not null)
         {
-            query = query.Where(e => e.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+            query = query.Where(EmployeeZoneScope.InZones(zoneIds, true, DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))));
         }
 
         return await query.OrderBy(e => e.FullName).ToListAsync(ct);

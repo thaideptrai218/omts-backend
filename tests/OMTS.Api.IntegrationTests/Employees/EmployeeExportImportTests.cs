@@ -136,8 +136,8 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
         var (owner, zone, _) = await SetupAsync(factory);
         var tag = NewCode();
         var job = await AddJobTypeAsync(factory);
-        await CreateAsync(owner, Profile($"{tag} S", null, zone.Id, b => b["employeeType"] = "Staff"));
-        await CreateAsync(owner, Profile($"{tag} W", null, zone.Id, b => b["jobTypeIds"] = new[] { job.Id }));
+        await CreateAsync(owner, SeasonalProfile($"{tag} S", null, zone.Id, b => b["employeeType"] = "Staff"));
+        await CreateAsync(owner, SeasonalProfile($"{tag} W", null, zone.Id, b => b["jobTypeIds"] = new[] { job.Id }));
 
         var staff = Sheet(await BytesAsync(await owner.GetAsync($"{Url}/export?search={tag}&employeeType=Staff"))).Rows;
         var byJob = Sheet(await BytesAsync(await owner.GetAsync($"{Url}/export?search={tag}&jobTypeId={job.Id}"))).Rows;
@@ -222,8 +222,8 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
 
         var result = await (await owner.PostAsync($"{Url}/import", Upload(file))).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(3, result.GetProperty("imported").GetInt32());
         Assert.Empty(result.GetProperty("errors").EnumerateArray());
+        Assert.Equal(3, result.GetProperty("imported").GetInt32());
         var saved = await factory.QueryAsync(db => db.Employees
             .Include(e => e.WorkingZones).Include(e => e.JobTypes).Include(e => e.TypePeriods)
             .Where(e => e.FullName.StartsWith(tag)).OrderBy(e => e.FullName).ToListAsync());

@@ -98,10 +98,10 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var manager = await host.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var locked = await host.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.StatusId = StatusIds.Account.Locked);
         var name = $"Reminder {NewCode()}";
-        var withAccount = IdOf(await CreateAsync(owner, Profile(name, manager.PhoneNumber, zone.Id)));
-        var withLocked = IdOf(await CreateAsync(owner, Profile($"Locked {NewCode()}", locked.PhoneNumber, zone.Id)));
-        var plain = IdOf(await CreateAsync(owner, Profile($"Plain {NewCode()}", NewPhone(), zone.Id)));
-        var noPhone = IdOf(await CreateAsync(owner, Profile($"No phone {NewCode()}", null, zone.Id)));
+        var withAccount = IdOf(await CreateAsync(owner, StaffProfile(name, manager.PhoneNumber, zone.Id)));
+        var withLocked = IdOf(await CreateAsync(owner, StaffProfile($"Locked {NewCode()}", locked.PhoneNumber, zone.Id)));
+        var plain = IdOf(await CreateAsync(owner, StaffProfile($"Plain {NewCode()}", NewPhone(), zone.Id)));
+        var noPhone = IdOf(await CreateAsync(owner, StaffProfile($"No phone {NewCode()}", null, zone.Id)));
         var day = Today().AddDays(-1);
 
         foreach (var id in new[] { withLocked, plain, noPhone })

@@ -26,7 +26,7 @@ public sealed partial record EmployeeInput(
     DateOnly? StartDate = null)
 {
     /// <summary>The normalised input, or the names of every invalid field.</summary>
-    /// <param name="adding">A new employee needs a type and a working zone; an edit may leave the type out, and its zones are checked with those it keeps.</param>
+    /// <param name="adding">A new employee needs a type, and a Staff one a working zone (a seasonal worker has none fixed: today zone A, tomorrow zone B by assignment); an edit may leave the type out, and its zones are checked with those it keeps.</param>
     public static (EmployeeInput? Input, List<string> Invalid) From(SaveEmployeeRequest request, DateOnly today, bool adding)
     {
         var invalid = new List<string>();
@@ -60,7 +60,7 @@ public sealed partial record EmployeeInput(
         var notes = Optional(request.Notes, 1000, "Notes", invalid);
 
         var zones = request.WorkingZoneIds ?? [];
-        if (zones.Distinct().Count() != zones.Count || (adding && zones.Count == 0))
+        if (zones.Distinct().Count() != zones.Count || (adding && zones.Count == 0 && request.EmployeeType == EmployeeType.Staff))
         {
             invalid.Add("Working zones");
         }

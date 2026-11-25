@@ -25,23 +25,23 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"Type {NewCode()}", NewPhone());
         var today = Today();
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id).With("employeeTypeFrom", Day(today.AddDays(-30))));
+        var saved = await CreateAsync(owner, SeasonalProfile(name, phone, zone.Id).With("employeeTypeFrom", Day(today.AddDays(-30))));
         var id = IdOf(saved);
         Assert.Equal("SeasonalWorker", saved.GetProperty("employee").GetProperty("employeeType").GetString());
         Assert.Contains("SeasonalWorker", await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Created").Select(e => e.After).SingleAsync()));
 
         // A date in the past: applies now, the first stays.
-        var past = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("employeeType", "Staff").With("employeeTypeFrom", Day(today.AddDays(-5))).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
+        var past = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile(name, phone, zone.Id).With("employeeType", "Staff").With("employeeTypeFrom", Day(today.AddDays(-5))).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
         Assert.Equal("Staff", past.GetProperty("employee").GetProperty("employeeType").GetString());
         Assert.Equal([("SeasonalWorker", Day(today.AddDays(-30))), ("Staff", Day(today.AddDays(-5)))], History(past.GetProperty("employee")));
 
         // A date in the future: today's type stands until then.
-        var future = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("employeeType", "SeasonalWorker").With("employeeTypeFrom", Day(today.AddDays(10))).With("rowVersion", RowVersionOf(past)))).JsonAsync(HttpStatusCode.OK);
+        var future = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile(name, phone, zone.Id).With("employeeType", "SeasonalWorker").With("employeeTypeFrom", Day(today.AddDays(10))).With("rowVersion", RowVersionOf(past)))).JsonAsync(HttpStatusCode.OK);
         Assert.Equal("Staff", future.GetProperty("employee").GetProperty("employeeType").GetString());
         Assert.Equal(3, History(future.GetProperty("employee")).Count);
 
         // The same date replaces that period; the audit row keeps the old type.
-        var replaced = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("employeeType", "SeasonalWorker").With("employeeTypeFrom", Day(today.AddDays(-5))).With("rowVersion", RowVersionOf(future)))).JsonAsync(HttpStatusCode.OK);
+        var replaced = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile(name, phone, zone.Id).With("employeeType", "SeasonalWorker").With("employeeTypeFrom", Day(today.AddDays(-5))).With("rowVersion", RowVersionOf(future)))).JsonAsync(HttpStatusCode.OK);
         Assert.Equal("SeasonalWorker", replaced.GetProperty("employee").GetProperty("employeeType").GetString());
         Assert.Equal(("SeasonalWorker", Day(today.AddDays(-5))), History(replaced.GetProperty("employee"))[1]);
         var audit = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Updated").OrderBy(e => e.OccurredAt).Select(e => e.Before).ToListAsync());
@@ -50,8 +50,8 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
 
         // The type in force, with or without a date on which it already holds, changes nothing.
         var version = RowVersionOf(replaced);
-        var same = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("rowVersion", version))).JsonAsync(HttpStatusCode.OK);
-        var dated = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("employeeTypeFrom", Day(today)).With("rowVersion", version))).JsonAsync(HttpStatusCode.OK);
+        var same = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile(name, phone, zone.Id).With("rowVersion", version))).JsonAsync(HttpStatusCode.OK);
+        var dated = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile(name, phone, zone.Id).With("employeeTypeFrom", Day(today)).With("rowVersion", version))).JsonAsync(HttpStatusCode.OK);
         Assert.Equal(version, RowVersionOf(same));
         Assert.Equal(version, RowVersionOf(dated));
     }
@@ -62,9 +62,9 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"Before {NewCode()}", NewPhone());
         var today = Today();
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id));
+        var saved = await CreateAsync(owner, SeasonalProfile(name, phone, zone.Id));
 
-        var earlier = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, phone, zone.Id).With("employeeType", "Staff").With("employeeTypeFrom", Day(today.AddDays(-9))).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
+        var earlier = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", SeasonalProfile(name, phone, zone.Id).With("employeeType", "Staff").With("employeeTypeFrom", Day(today.AddDays(-9))).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
 
         Assert.Equal("SeasonalWorker", earlier.GetProperty("employee").GetProperty("employeeType").GetString());
         Assert.Equal([("Staff", Day(today.AddDays(-9))), ("SeasonalWorker", Day(today))], History(earlier.GetProperty("employee")));

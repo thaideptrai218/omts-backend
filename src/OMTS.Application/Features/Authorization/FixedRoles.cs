@@ -28,6 +28,7 @@ public static class FixedRoles
 {
     public const string ZoneManagerCode = "ZONE_MANAGER";
     public const string AccountantCode = "ACCOUNTANT";
+    public const string EmployeeCode = "EMPLOYEE";
 
     /// <summary>
     /// Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce. Selling is not the Zone Manager's
@@ -82,13 +83,25 @@ public static class FixedRoles
             new(Suppliers, [View, Export]),
         ]);
 
-    public static readonly IReadOnlyList<FixedRole> All = [ZoneManager, Accountant];
+    /// <summary>
+    /// The field employee (owner decision of 25/11/2026): every seasonal worker gets a login account holding this role at All zones. It opens no
+    /// business function of the matrix (an employee is not zone-bound and sees only the own work, which is read with the employee app token);
+    /// the pair exists so that the account may sign in (a staff account without an Effective pair cannot, MSG-ACCOUNT-07).
+    /// </summary>
+    public static readonly FixedRole Employee = new(
+        StaffRole.Employee,
+        EmployeeCode,
+        "Employee",
+        "A field employee (seasonal worker): signs in and works on the own assignments, attendance and requests; holds no function of the staff matrix.",
+        []);
+
+    public static readonly IReadOnlyList<FixedRole> All = [ZoneManager, Accountant, Employee];
 
     /// <summary>
     /// The codes of the fixed roles. A role row with any other code (an Owner-made role kept by the FixedRoles migration
     /// with a placeholder code) is not a role: its pairs give no access, no login and no zone (persistence filters on this).
     /// </summary>
-    public static readonly IReadOnlyList<string> Codes = [ZoneManagerCode, AccountantCode];
+    public static readonly IReadOnlyList<string> Codes = [ZoneManagerCode, AccountantCode, EmployeeCode];
 
     public static FixedRole Of(StaffRole role) => All.Single(r => r.Role == role);
 

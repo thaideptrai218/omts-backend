@@ -138,7 +138,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
     // BR-FARM-07, AC-02: the two fixed roles are listed with their code and the §I.4.4 permissions; nothing writes them.
     [Fact]
-    public async Task Roles_are_the_two_fixed_roles_and_read_only()
+    public async Task Roles_are_the_fixed_roles_and_read_only()
     {
         var (owner, _) = await OwnerAsync();
         await factory.EnsureFixedRolesAsync();
@@ -157,7 +157,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
             await owner.GetAsync($"/api/roles/{zoneManagerId}/impact"),
         };
 
-        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
+        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.EmployeeCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
         Assert.Equal(FixedRoles.ZoneManagerCode, one.Text("code"));
         var permissions = one.GetProperty("permissions").EnumerateArray().ToDictionary(p => p.Text("functionCode")!, p => p.GetProperty("actions").EnumerateArray().Select(a => a.GetString()).ToList());
         Assert.Equal(FixedRoles.ZoneManager.Permissions.Count, permissions.Count);
@@ -169,7 +169,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.False(one.TryGetProperty("status", out _));
         Assert.All(writes, w => Assert.True(w.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, $"{w.RequestMessage!.Method} {w.RequestMessage.RequestUri}: {(int)w.StatusCode}"));
         Assert.Equal(PermissionFunctions.All.Count, catalog.GetArrayLength());
-        Assert.Equal(2, await factory.QueryAsync(db => Task.FromResult(db.Roles.Count())));
+        Assert.Equal(FixedRoles.All.Count, await factory.QueryAsync(db => Task.FromResult(db.Roles.Count())));
     }
 
     private async Task<(HttpClient Client, Account Account)> OwnerAsync()

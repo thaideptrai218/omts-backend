@@ -38,7 +38,7 @@ public class WorkAssignmentTests(AuthApiFactory factory) : IClassFixture<AuthApi
     public async Task The_zone_of_the_raft_joins_the_working_zones_of_an_employee_who_does_not_have_it()
     {
         var s = await SetupWorkAsync(factory);
-        var farAway = await AddEmployeeAsync(s, zone: s.OtherZone);
+        var farAway = await AddEmployeeAsync(s, staff: true, zone: s.OtherZone);
 
         await AssignTodayAsync(s, s.Raft, s.Harvest, farAway);
 
@@ -214,7 +214,7 @@ public class WorkAssignmentTests(AuthApiFactory factory) : IClassFixture<AuthApi
     public async Task The_lookups_list_the_jobs_in_use_and_the_employees_of_the_zones_with_their_leave_and_raft()
     {
         var s = await SetupWorkAsync(factory);
-        var (onRaft, free, foreign) = (await AddEmployeeAsync(s, "Có bè"), await AddEmployeeAsync(s, "Rảnh"), await AddEmployeeAsync(s, "Khác vùng", zone: s.OtherZone));
+        var (onRaft, free, foreign) = (await AddEmployeeAsync(s, "Có bè"), await AddEmployeeAsync(s, "Rảnh"), await AddEmployeeAsync(s, "Khác vùng", staff: true, zone: s.OtherZone));
         await AssignTodayAsync(s, s.Raft, s.Harvest, onRaft);
         await s.Factory.UseDbAsync(db => db.EmployeeRequests.Add(new OMTS.Domain.Entities.Labor.EmployeeRequest
         {

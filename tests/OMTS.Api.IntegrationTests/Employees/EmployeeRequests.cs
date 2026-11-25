@@ -28,7 +28,7 @@ internal static class EmployeeRequests
         return await factory.LoginAsync(account.Username);
     }
 
-    /// <summary>A valid profile of a seasonal worker; <paramref name="change"/> overrides single fields.</summary>
+    /// <summary>A valid profile of a seasonal worker (no fixed working zone, a login account of their own when there is a phone number); <paramref name="change"/> overrides single fields.</summary>
     public static Dictionary<string, object?> Profile(string name, string? phone, Guid? zoneId = null, Action<Dictionary<string, object?>>? change = null)
     {
         var body = new Dictionary<string, object?>
@@ -42,6 +42,21 @@ internal static class EmployeeRequests
         change?.Invoke(body);
         return body;
     }
+
+    /// <summary>A valid profile of a seasonal worker: the same as <see cref="Profile"/>, named for the tests of the seasonal rules.</summary>
+    public static Dictionary<string, object?> SeasonalProfile(string name, string? phone, Guid? zoneId = null, Action<Dictionary<string, object?>>? change = null) =>
+        Profile(name, phone, zoneId, change);
+
+    /// <summary>
+    /// A valid profile of a Staff employee, who has fixed working zones: the zone scope of the list and of the edit rules applies to Staff only (every caller who may assign work
+    /// sees the seasonal workers, who have no fixed zone).
+    /// </summary>
+    public static Dictionary<string, object?> StaffProfile(string name, string? phone, Guid? zoneId = null, Action<Dictionary<string, object?>>? change = null) =>
+        Profile(name, phone, zoneId, b => { b["employeeType"] = nameof(EmployeeType.Staff); change?.Invoke(b); });
+
+    /// <summary>What a Zone Manager sends for a Staff employee: the profile with the confirmation of LABOR-01 step 5.</summary>
+    public static Dictionary<string, object?> ApprovedStaffProfile(string name, string? phone, Guid zoneId) =>
+        StaffProfile(name, phone, zoneId, b => b["ownerApproved"] = true);
 
     /// <summary>What a Zone Manager sends: the profile with the confirmation of LABOR-01 step 5.</summary>
     public static Dictionary<string, object?> ApprovedProfile(string name, string? phone, Guid zoneId) =>

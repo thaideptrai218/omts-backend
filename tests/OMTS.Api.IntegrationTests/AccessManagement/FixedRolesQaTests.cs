@@ -118,7 +118,7 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
     // BR-FARM-07, client change list §1: GET /api/roles is "always the 2 fixed roles"; a row kept from before is not one.
     [Fact]
-    public async Task Roles_api_shows_only_the_two_fixed_roles_when_an_old_row_remains()
+    public async Task Roles_api_shows_only_the_fixed_roles_when_an_old_row_remains()
     {
         var owner = await OwnerAsync();
         var legacy = await LegacyRoleAsync();
@@ -126,7 +126,7 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var roles = await owner.GetFromJsonAsync<JsonElement>("/api/roles");
         var one = await owner.GetAsync($"/api/roles/{legacy.Id}");
 
-        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
+        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.EmployeeCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
         Assert.Equal(HttpStatusCode.NotFound, one.StatusCode);
     }
 

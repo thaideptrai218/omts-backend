@@ -127,7 +127,7 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
             Assert.Equal(0, found.GetProperty("total").GetInt32());
         }
 
-        var taken = await other.PostAsJsonAsync("/api/employees", ApprovedProfile($"Same {NewCode()}", phone, zoneB.Id));
+        var taken = await other.PostAsJsonAsync("/api/employees", ApprovedStaffProfile($"Same {NewCode()}", phone, zoneB.Id));
         var body = await taken.JsonAsync(HttpStatusCode.Conflict);
 
         Assert.Equal("MSG-LABOR-03", body.GetProperty("code").GetString());
@@ -189,7 +189,7 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         var crafted = await owner.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "STAFF_ACCOUNT_LOCK_REMINDER", push = true } } });
         Assert.True((int)crafted.StatusCode < 500);
         var second = await host.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Staff);
-        var again = IdOf(await CreateAsync(owner, Profile($"Again {NewCode()}", second.PhoneNumber, zone.Id)));
+        var again = IdOf(await CreateAsync(owner, StaffProfile($"Again {NewCode()}", second.PhoneNumber, zone.Id)));
         await EndAsync(owner, again);
         Assert.Empty(host.Services.GetRequiredService<FakePushSender>().Inbox.List());
 
