@@ -95,8 +95,14 @@ internal sealed class AuditEventQuery(OmtsDbContext db) : IAuditEventQuery
 
     public async Task<AuditFacetRows> FacetsAsync(CancellationToken cancellationToken)
     {
-        var actions = await db.AuditEvents.Select(e => e.Action).Distinct().OrderBy(a => a).ToListAsync(cancellationToken);
-        var recordTypes = await db.AuditEvents.Select(e => e.RecordType).Distinct().OrderBy(t => t).ToListAsync(cancellationToken);
+        // The actions and the record types are free text written by every module, so the lists are read from the log. Both come in one command, each from the index that leads with it (an
+        // index on Action or RecordType ends with the time), so the log is read from two narrow indexes and not from its rows. The accounts and the employees below are one seek each.
+        var values = await db.AuditEvents.AsNoTracking().Select(e => new { Kind = 0, Value = e.Action }).Distinct()
+            .Concat(db.AuditEvents.AsNoTracking().Select(e => new { Kind = 1, Value = e.RecordType }).Distinct())
+            .OrderBy(v => v.Kind).ThenBy(v => v.Value)
+            .ToListAsync(cancellationToken);
+        var actions = values.Where(v => v.Kind == 0).Select(v => v.Value).ToList();
+        var recordTypes = values.Where(v => v.Kind == 1).Select(v => v.Value).ToList();
         var accounts = await db.Accounts.AsNoTracking()
             .Where(a => db.AuditEvents.Any(e => e.ActorAccountId == a.Id))
             .OrderBy(a => a.DisplayName).ThenBy(a => a.Username)

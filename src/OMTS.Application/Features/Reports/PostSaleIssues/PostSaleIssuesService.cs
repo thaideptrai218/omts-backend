@@ -42,7 +42,10 @@ public sealed class PostSaleIssuesService(ReportFilterResolver filters, IPostSal
 
         // Both are known to be given: a missing grouping or key is an invalid field above.
         var (f, groupBy, key) = (filter.Value!, grouping!.Value, request.GroupKey!.Trim());
-        var items = PostSaleIssuesCalculator.ItemsOf(await query.FactsAsync(f, cancellationToken), groupBy, key);
+        var group = PostSaleIssuesCalculator.GroupOf(groupBy, key);
+        var items = group is null
+            ? []
+            : PostSaleIssuesCalculator.ItemsOf(await query.FactsOfGroupAsync(f, group, cancellationToken), groupBy, key);
         var empty = items.Count == 0 ? UserMessages.NoDataForFilters("group") : null;
         return new PostSaleItemList(f.From, f.To, Name(groupBy), key, items, empty?.Text, empty?.Code);
     }

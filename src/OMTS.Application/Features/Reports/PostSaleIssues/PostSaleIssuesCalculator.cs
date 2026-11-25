@@ -78,6 +78,25 @@ public static class PostSaleIssuesCalculator
         return new PostSaleCalculation(groups, total.ToGroup(false));
     }
 
+    /// <summary>
+    /// What the events of the group a report row names have in common, for the database to read only them (REPORT-03.2); null when the key names no group of this grouping, which has no
+    /// event. An id is compared as its hyphenated text in any letter case, the walk-in name in any letter case.
+    /// </summary>
+    public static PostSaleGroupFilter? GroupOf(PostSaleGrouping grouping, string groupKey)
+    {
+        if (grouping == PostSaleGrouping.Customer && string.Equals(groupKey, WalkInKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return new PostSaleGroupFilter(PostSaleGroupKind.WalkIn);
+        }
+
+        if (!Guid.TryParseExact(groupKey, "D", out var id))
+        {
+            return null;
+        }
+
+        return new PostSaleGroupFilter(grouping switch { PostSaleGrouping.Zone => PostSaleGroupKind.Zone, PostSaleGrouping.Lot => PostSaleGroupKind.Lot, _ => PostSaleGroupKind.Customer }, id);
+    }
+
     /// <summary>The events of the group a report row names, newest first (REPORT-03.2). A key that names no group of this grouping gives none.</summary>
     public static IReadOnlyList<PostSaleItemRow> ItemsOf(PostSaleFacts facts, PostSaleGrouping grouping, string groupKey)
     {

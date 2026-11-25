@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Reports;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
 
@@ -11,7 +12,22 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 /// </summary>
 internal sealed class PriceTrendsQuery(OmtsDbContext db) : IPriceTrendsQuery
 {
-    public async Task<IReadOnlyList<PriceTrendLine>> LinesAsync(ReportFilter filter, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PriceTrendDay>> DaysAsync(ReportFilter filter, CancellationToken cancellationToken) =>
+        await LinesOf(filter)
+            .GroupBy(l => new { l.ProductId, ProductName = l.Product.Name, l.Invoice.InvoiceDate })
+            .Select(g => new PriceTrendDay(
+                g.Key.ProductId, g.Key.ProductName, g.Key.InvoiceDate, g.Sum(l => l.Kg), g.Sum(l => l.Amount), g.Min(l => l.UnitPrice), g.Max(l => l.UnitPrice)))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PriceTrendLine>> LinesAsync(ReportFilter filter, Guid productId, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
+        await LinesOf(filter)
+            .Where(l => l.ProductId == productId && l.Invoice.InvoiceDate >= from && l.Invoice.InvoiceDate <= to)
+            .Select(l => new PriceTrendLine(
+                l.InvoiceId, l.Invoice.Code, l.Invoice.InvoiceDate, l.Invoice.CustomerId, l.Invoice.Customer == null ? null : l.Invoice.Customer.Name,
+                l.ProductId, l.Product.Name, l.Kg, l.UnitPrice, l.Amount))
+            .ToListAsync(cancellationToken);
+
+    private IQueryable<SalesInvoiceLine> LinesOf(ReportFilter filter)
     {
         var (from, to) = (filter.From, filter.To);
         var invoices = db.SalesInvoices.AsNoTracking().Where(i =>
@@ -30,10 +46,6 @@ internal sealed class PriceTrendsQuery(OmtsDbContext db) : IPriceTrendsQuery
             lines = lines.Where(l => products.Contains(l.ProductId));
         }
 
-        return await lines
-            .Select(l => new PriceTrendLine(
-                l.InvoiceId, l.Invoice.Code, l.Invoice.InvoiceDate, l.Invoice.CustomerId, l.Invoice.Customer == null ? null : l.Invoice.Customer.Name,
-                l.ProductId, l.Product.Name, l.Kg, l.UnitPrice, l.Amount))
-            .ToListAsync(cancellationToken);
+        return lines;
     }
 }

@@ -24,6 +24,14 @@ public static class ReportPeriodBuckets
         _ => new DateOnly(date.Year, date.Month, 1),
     };
 
+    /// <summary>The last day of the bucket that starts on <paramref name="start"/> (the end of the calendar when the bucket would run past it).</summary>
+    public static DateOnly EndOf(DateOnly start, ReportPeriodUnit unit) => unit switch
+    {
+        ReportPeriodUnit.Day => start,
+        ReportPeriodUnit.Week => DateOnly.FromDayNumber(Math.Min(start.DayNumber + 6, DateOnly.MaxValue.DayNumber)),
+        _ => new DateOnly(start.Year, start.Month, DateTime.DaysInMonth(start.Year, start.Month)),
+    };
+
     /// <summary>The key of a bucket: its first day as yyyy-MM-dd, which sorts in time order and is what a drill-down sends back.</summary>
     public static string Key(DateOnly start) => start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
