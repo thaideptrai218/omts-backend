@@ -16,8 +16,7 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
 
     public Task<HarvestPlan?> FindByCodeAsync(string code, Guid? exceptPlanId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.HarvestPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Code.ToUpper() == upper && p.Id != exceptPlanId, cancellationToken);
+        return db.HarvestPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Code == code && p.Id != exceptPlanId, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<HarvestPlan> Items, int Total)> SearchAsync(HarvestPlanFilter filter, int page, int pageSize, CancellationToken cancellationToken)

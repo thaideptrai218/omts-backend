@@ -64,8 +64,7 @@ public class StackMergeQaTestsMigrations
         """;
 
     private const string CatalogQuery = """
-        SELECT CONCAT('status ', Id, '|', Code, '|', [Group], '|', DisplayName, '|', IsInitial, '|', IsFinal, '|', SortOrder, '|', Meaning) AS [Value] FROM Statuses
-        UNION ALL SELECT CONCAT('transition ', Id, '|', FromStatusId, '|', ToStatusId, '|', UseCases, '|', AllowedPerformers, '|', TriggerEvent, '|', ReasonRequired, '|', GuardCondition) FROM StatusTransitions
+        SELECT CONCAT('status ', Id, '|', Code, '|', [Group], '|', DisplayName, '|', IsFinal, '|', SortOrder) AS [Value] FROM Statuses
         """;
 
     private static async Task<List<string>> ReadAsync(OmtsDbContext db, string query) =>
@@ -238,44 +237,27 @@ public class StackMergeQaTestsMigrations
         AssertSameLines(await ReadAsync(model, CatalogQuery), await ReadAsync(db, CatalogQuery), $"status catalog from the {side}");
     }
 
-    // The catalog holds both sides with no collision and transitions that stay inside a status group, each named once and never out of a final status.
+    // The catalog holds both sides with no collision, one id range per status group.
     [SqlServerFact]
-    public async Task The_status_catalog_holds_both_sides_and_its_transitions_stay_consistent()
+    public async Task The_status_catalog_holds_both_sides_with_no_collision()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         await db.Database.MigrateAsync();
 
         var statuses = await db.Statuses.AsNoTracking().ToListAsync();
-        var transitions = await db.StatusTransitions.AsNoTracking().ToListAsync();
 
         Assert.Equal(statuses.Count, statuses.Select(s => s.Id).Distinct().Count());
         Assert.Equal(statuses.Count, statuses.Select(s => (s.Group, s.Code)).Distinct().Count());
         foreach (var group in statuses.GroupBy(s => s.Group))
         {
-            // A purchase return starts as a Draft or is recorded at once (PURCHASE-02), and a customer payment starts Awaiting confirmation or Pending transfer (VietQR), so those groups have two initial statuses.
-            var initials = group.Key is StatusGroups.PurchaseReturn or StatusGroups.CustomerPayment ? 2 : 1;
-            Assert.True(group.Count(s => s.IsInitial) == initials, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
             Assert.Equal(group.Count(), group.Select(s => s.SortOrder).Distinct().Count());
             Assert.Single(group.Select(s => s.Id / 100).Distinct());
         }
 
-        var byId = statuses.ToDictionary(s => s.Id);
-        foreach (var transition in transitions)
-        {
-            Assert.Equal(byId[transition.FromStatusId].Group, byId[transition.ToStatusId].Group);
-            Assert.False(byId[transition.FromStatusId].IsFinal, $"transition {transition.Id} leaves a final status");
-            Assert.False(string.IsNullOrWhiteSpace(transition.UseCases));
-        }
-
-        Assert.Equal(transitions.Count, transitions.Select(t => (t.FromStatusId, t.ToStatusId)).Distinct().Count());
-
-        // Both sides are there, and the Draft is removed rather than cancelled: transition 71 went away with the purchase side.
+        // Both sides are there.
         Assert.Contains(statuses, s => s.Id == 1901 && s.Group == "PURCHASE_RETURN");
         Assert.Contains(statuses, s => s.Id == 2001 && s.Group == "LANE");
-        Assert.Contains(transitions, t => t.Id == 74);
-        Assert.Contains(transitions, t => t.Id == 76);
-        Assert.DoesNotContain(transitions, t => t.Id == 71);
     }
 
     // SeedingRecords drops SeedingEvents: rows there do not stop the Up, and Down gives back an empty old table with the schema it had (client list: no screen wrote it).

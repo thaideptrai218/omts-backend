@@ -188,9 +188,9 @@ public class AttendanceRecordingTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Nothing_is_recorded_while_the_payroll_of_the_pay_period_is_awaiting_finalization_or_finalized()
+    public async Task Nothing_is_recorded_once_the_payroll_of_the_pay_period_is_finalized()
     {
-        foreach (var status in new[] { StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.Finalized })
+        foreach (var status in new[] { StatusIds.Payroll.Finalized })
         {
             await using var own = new AuthApiFactory();
             var s = await SetupWorkAsync(own);

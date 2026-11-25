@@ -81,23 +81,6 @@ public class SalesOrderApiTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task A_second_advance_added_later_cannot_take_the_advances_above_the_total()
-    {
-        var sale = await factory.SaleSetupAsync();
-        var client = sale.Owner.Client;
-        var unit = await client.BaseUnitIdAsync(sale.ProductId);
-        var order = (await client.CreateOrderAsync(OrderBody(sale.CustomerId, sale.ProductId, unit, quantity: 10m).WithField("advance", new { amount = 200_000, method = "Cash" }))).GetProperty("order");
-
-        var tooMuch = await client.PostAsJsonAsync($"{Route}/{order.Id()}/advances", new { amount = 150_000, method = "Cash" });
-        var fits = await client.PostAsJsonAsync($"{Route}/{order.Id()}/advances", new { amount = 100_000, method = "Cash" });
-
-        Assert.Equal("Advance amount", await tooMuch.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        var added = await fits.ReadAsync(HttpStatusCode.Created);
-        Assert.Equal(300_000m, added.GetProperty("order").Money("customerPaid"));
-        Assert.Equal(2, (await factory.AdvancesOfOrderAsync(order.Id())).Count);
-    }
-
-    [Fact]
     public async Task An_order_has_no_zone_the_owner_takes_a_buyer_at_the_port_and_a_zone_sent_is_ignored()
     {
         var sale = await factory.SaleSetupAsync();

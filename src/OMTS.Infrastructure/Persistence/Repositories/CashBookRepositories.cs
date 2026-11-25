@@ -27,16 +27,14 @@ internal sealed class CashAccountRepository(OmtsDbContext db) : ICashAccountRepo
     public Task<CashAccount?> FindDuplicateAsync(
         CashAccountKind kind, string providerName, string accountNumber, Guid? exceptAccountId, CancellationToken cancellationToken)
     {
-        var (provider, number) = (providerName.ToUpperInvariant(), accountNumber.ToUpperInvariant());
         return db.CashAccounts.AsNoTracking().FirstOrDefaultAsync(
-            a => a.Kind == kind && a.ProviderName.ToUpper() == provider && a.AccountNumber.ToUpper() == number && a.Id != exceptAccountId, cancellationToken);
+            a => a.Kind == kind && a.ProviderName == providerName && a.AccountNumber == accountNumber && a.Id != exceptAccountId, cancellationToken);
     }
 
     public Task<CashAccount?> FindBankAccountAsync(string bankBin, string accountNumber, CancellationToken cancellationToken)
     {
-        var number = accountNumber.ToUpperInvariant();
         return db.CashAccounts.FirstOrDefaultAsync(
-            a => a.Kind == CashAccountKind.Bank && a.BankBin == bankBin && a.AccountNumber.ToUpper() == number, cancellationToken);
+            a => a.Kind == CashAccountKind.Bank && a.BankBin == bankBin && a.AccountNumber == accountNumber, cancellationToken);
     }
 
     public async Task<bool> IsUsedAsync(Guid accountId, CancellationToken cancellationToken) =>
@@ -66,9 +64,8 @@ internal sealed class CashVoucherTypeRepository(OmtsDbContext db) : ICashVoucher
 
     public Task<CashVoucherType?> FindByNameAsync(CashDirection direction, string name, Guid? exceptTypeId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
         return db.CashVoucherTypes.AsNoTracking().FirstOrDefaultAsync(
-            t => t.IsActive && t.Direction == direction && t.Name.ToUpper() == upper && t.Id != exceptTypeId, cancellationToken);
+            t => t.IsActive && t.Direction == direction && t.Name == name && t.Id != exceptTypeId, cancellationToken);
     }
 
     public Task<bool> IsUsedAsync(Guid typeId, CancellationToken cancellationToken) =>
@@ -86,9 +83,8 @@ internal sealed class CashVoucherRepository(OmtsDbContext db) : ICashVoucherRepo
 
     public async Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptVoucherId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
         return await db.CashVouchers.AsNoTracking()
-            .Where(v => v.Code.ToUpper() == upper && v.Id != exceptVoucherId)
+            .Where(v => v.Code == code && v.Id != exceptVoucherId)
             .Select(v => (Guid?)v.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }

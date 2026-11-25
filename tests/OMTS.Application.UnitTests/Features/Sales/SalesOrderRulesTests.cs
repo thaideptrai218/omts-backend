@@ -121,6 +121,16 @@ public class SalesOrderRulesTests
     public void A_request_waiting_for_the_owner_or_accepted_and_not_fulfilled_may_be_ordered(int status, bool fulfilled, bool allowed) =>
         Assert.Equal(allowed, SalesOrderRules.RequestAllowsOrder(status, fulfilled));
 
+    [Theory]
+    [InlineData(StatusIds.PurchaseRequest.AwaitingResponse, true)]
+    [InlineData(StatusIds.PurchaseRequest.AwaitingStaff, false)]
+    [InlineData(StatusIds.PurchaseRequest.Accepted, false)]
+    [InlineData(StatusIds.PurchaseRequest.Declined, false)]
+    [InlineData(StatusIds.PurchaseRequest.Cancelled, false)]
+    [InlineData(StatusIds.PurchaseRequest.Ordered, false)]
+    public void Confirming_the_draft_order_of_a_request_answers_it_only_while_it_waits_for_the_answer(int status, bool ordersRequest) =>
+        Assert.Equal(ordersRequest, SalesOrderRules.ConfirmationOrdersRequest(status));
+
     // ---- Who may press what ----
 
     private static void Check(int status, SalesOrderCaller caller, bool hasLiveInvoice, bool hasCustomer, params SalesOrderAction[] expected) =>

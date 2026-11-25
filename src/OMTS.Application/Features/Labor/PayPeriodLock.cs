@@ -8,11 +8,10 @@ using OMTS.Domain.Entities.Labor;
 namespace OMTS.Application.Features.Labor;
 
 /// <summary>
-/// BR-LABOR-13: while a payroll is Awaiting finalization, and for good once it is Finalized, nothing dated on or before its
-/// last day changes (MSG-LABOR-04: "the payroll of that pay period, or of a later one"). The check runs before a dated change
-/// is put on the unit of work. A payroll that can still be sent or finalized is touched by that same save (PR #13's pattern):
-/// whichever of the change and the send comes second meets a new row version and answers MSG06, so neither is lost on the
-/// other. A payroll created and sent between this read and the save is not seen; LABOR-12 takes that window when it sends.
+/// BR-LABOR-13: once a payroll is Finalized, nothing dated on or before its last day changes (MSG-LABOR-04: "the payroll of
+/// that pay period, or of a later one"). The check runs before a dated change is put on the unit of work. A payroll that can
+/// still be finalized is touched by that same save: whichever of the change and the finalization comes second meets a new row
+/// version and answers MSG06, so neither is lost on the other.
 /// </summary>
 public sealed class PayPeriodLock(IPayrollRepository payrolls, IStatusCatalog statusCatalog, IUnitOfWork unitOfWork)
 {
@@ -46,8 +45,7 @@ public sealed class PayPeriodLock(IPayrollRepository payrolls, IStatusCatalog st
     }
 
     /// <summary>
-    /// Names the latest locked payroll, as a date after it is what the user can enter; sending back helps only when none is
-    /// Finalized. A date outside the payroll means the change reaches its last day through the first-row rule, so that day is
+    /// Names the latest locked payroll, as a date after it is what the user can enter. A date outside the payroll means the change reaches its last day through the first-row rule, so that day is
     /// the one named, and the date to choose is also after the first type's.
     /// </summary>
     private AppError Refusal(DateOnly date, DateOnly? firstTypeDate, IReadOnlyList<Payroll> locked)
@@ -59,8 +57,7 @@ public sealed class PayPeriodLock(IPayrollRepository payrolls, IStatusCatalog st
                 PayPeriod.NameOf(latest.PeriodEnd),
                 statusCatalog.DisplayNameOf(latest.StatusId),
                 date <= latest.PeriodEnd ? date : latest.PeriodEnd,
-                dateAfter,
-                canBeSentBack: locked.All(p => p.StatusId == StatusIds.Payroll.AwaitingFinalization)),
+                dateAfter),
             new Dictionary<string, object?> { ["lockedUntil"] = dateAfter });
     }
 }

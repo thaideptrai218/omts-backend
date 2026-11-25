@@ -164,7 +164,7 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
 
             var answers = await InParallelAsync(2, i => i == 0
                 ? owner.PostSeedingAsync(cycle.Id(), lot.Session([2], quantity: 40m))
-                : owner.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 20m }));
+                : owner.EditLineAsync(lot.ReceiptId, lot.LineId, quantity: 20m));
 
             await AssertAnsweredAsync($"round {round}", answers);
             Assert.Equal(answers[0].StatusCode == HttpStatusCode.Created ? 50m : 10m, await SeededAsync(host, lot.LineId));
@@ -329,7 +329,7 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
             Assert.Equal(2, (await client.ProgressAsync(raftId)).GetProperty("seedLots").GetArrayLength());
             Assert.Single((await client.ProgressAsync(raftId, $"?date={Today.AddDays(-4):yyyy-MM-dd}")).GetProperty("seedLots").EnumerateArray().Single(l => l.GetProperty("laneNumber").GetInt32() == 2).GetProperty("seedLots").EnumerateArray());
             await (await client.CompletionPreviewAsync(cycle.Id())).ReadAsync(HttpStatusCode.OK);
-            await (await client.GetAsync($"/api/rafts/{raftId}/lanes/today")).ReadAsync(HttpStatusCode.OK);
+            await (await client.GetAsync($"/api/rafts/{raftId}/progress")).ReadAsync(HttpStatusCode.OK);
             Assert.False((await client.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycle.Id()}")).Flag("canCancel"));
         }
 

@@ -35,7 +35,7 @@ public sealed class SeedingReadService(
     /// <summary>CYCLE-02.0 step 3. With no lot to choose: MSG-CYCLE-03 (CYCLE-02.0.E1).</summary>
     public async Task<Result<SeedLotList>> SeedLotsAsync(Guid raftId, CancellationToken cancellationToken)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
         if (raft is null)
         {
             return AppError.NotFound;
@@ -66,7 +66,7 @@ public sealed class SeedingReadService(
             return AppError.Forbidden;
         }
 
-        var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
+        var raft = await rafts.GetForReadAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
         var day = await laneStates.ReadAsync(raft, cycle.CloseDate ?? timeProvider.Today(), cancellationToken);
         var ofCycle = await records.ListByCycleAsync(cycle.Id, cancellationToken);
         var figures = SeedingViews.Figures(raft, day.States);
@@ -135,7 +135,7 @@ public sealed class SeedingReadService(
             return AppError.Forbidden;
         }
 
-        var raft = await rafts.GetForEditAsync(record.Cycle.RaftId, cancellationToken) ?? record.Cycle.Raft;
+        var raft = await rafts.GetForReadAsync(record.Cycle.RaftId, cancellationToken) ?? record.Cycle.Raft;
         var day = await laneStates.ReadAsync(raft, record.Cycle.CloseDate ?? timeProvider.Today(), cancellationToken);
         return await views.ViewAsync(record, day.States, cancellationToken);
     }
@@ -143,7 +143,7 @@ public sealed class SeedingReadService(
     /// <summary>CYCLE-05.0 step 3: without a cycle, the Open cycle of the raft, else the one started last.</summary>
     public async Task<Result<LaneProgressView>> LaneProgressAsync(Guid raftId, int laneNumber, Guid? cycleId, CancellationToken cancellationToken)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
         var lane = raft?.Lanes.FirstOrDefault(l => l.LaneNumber == laneNumber);
         if (raft is null || lane is null)
         {

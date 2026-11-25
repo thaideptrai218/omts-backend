@@ -39,12 +39,6 @@ public sealed class RaftsController(RaftReadService reads, RaftService rafts, Ra
     public async Task<IActionResult> Get(Guid raftId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(raftId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Every lane of the raft today with its status In Use or Removed and its state of the day (BR-FARM-03).</summary>
-    [HttpGet("api/rafts/{raftId:guid}/lanes/today")]
-    [ProducesResponseType<RaftLanesToday>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> LanesToday(Guid raftId, CancellationToken cancellationToken) =>
-        (await reads.LanesTodayAsync(raftId, cancellationToken)).ToActionResult(Ok);
-
     /// <summary>A Discontinued raft answers MSG-GEN-09; a new number of lanes answers MSG-GEN-06 while a cycle is open.</summary>
     [HttpPut("api/rafts/{raftId:guid}")]
     [RequireCooperativeOwner]

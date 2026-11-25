@@ -27,7 +27,7 @@ public sealed class LotPublishService(
 
     public async Task<Result<LotPublishCheck>> CheckAsync(Guid lotId, CancellationToken cancellationToken)
     {
-        var lot = await lots.GetAsync(lotId, cancellationToken);
+        var lot = await lots.GetHeaderAsync(lotId, cancellationToken);
         if (lot is null)
         {
             return AppError.NotFound;

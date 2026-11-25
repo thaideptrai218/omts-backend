@@ -72,7 +72,7 @@ public class LaborSettingsMigrationTests
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
         Assert.Empty(Added.Except(await TablesAsync(db)));
-        Assert.Equal(1, await db.Cooperatives.Select(c => c.PayPeriodStartDay).SingleAsync());
+        Assert.Equal(1, await db.Cooperatives.CountAsync());
     }
 
     private static async Task AssertRefusedAsync(OmtsDbContext db, string sql, string constraint)

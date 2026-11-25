@@ -54,10 +54,8 @@ public class LaborSettingsQaLockTests
         }));
 
     [Theory]
-    [InlineData(StatusIds.Payroll.AwaitingFinalization, true)]
     [InlineData(StatusIds.Payroll.Finalized, true)]
     [InlineData(StatusIds.Payroll.Draft, false)]
-    [InlineData(StatusIds.Payroll.SentBack, false)]
     public async Task Every_dated_write_at_every_boundary_day_follows_the_status_of_the_payroll(int statusId, bool locks)
     {
         await using var factory = new AuthApiFactory();
@@ -106,7 +104,7 @@ public class LaborSettingsQaLockTests
         var jobType = await AddJobTypeAsync(owner, from: "2019-01-01");
         var employee = await AddEmployeeAsync(factory, owner);
         var draft = await factory.AddPayrollAsync("2020-09-01", "2020-09-30", StatusIds.Payroll.Draft);
-        await factory.AddAwaitingPayrollAsync("2020-10-01", "2020-10-31");
+        await factory.AddFinalizedPayrollAsync("2020-10-01", "2020-10-31");
         var audits = await factory.QueryAsync(db => db.AuditEvents.CountAsync());
 
         Assert.Equal("MSG-LABOR-04", await (await owner.PostRateAsync(jobType, 50_000, "2020-09-15")).ErrorCodeAsync());
@@ -124,14 +122,14 @@ public class LaborSettingsQaLockTests
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
         await factory.AddPayrollAsync("2020-10-01", "2020-10-31", StatusIds.Payroll.Finalized);
-        await factory.AddAwaitingPayrollAsync("2020-12-01", "2020-12-31");
+        await factory.AddFinalizedPayrollAsync("2020-12-01", "2020-12-31");
 
         var refused = await WriteRateAsync(owner, "2020-11-15");
         var saved = await WriteRateAsync(owner, "2021-01-01");
 
         var problem = await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null);
         Assert.Equal(
-            "The payroll of 12/2020 is Awaiting finalization, so this change cannot apply to 15/11/2020. Choose a date after 31/12/2020, or ask the Cooperative Owner to send the payroll back first.",
+            "The payroll of 12/2020 is Finalized, so this change cannot apply to 15/11/2020. Choose a date after 31/12/2020.",
             problem.Detail());
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
     }
@@ -168,7 +166,7 @@ public class LaborSettingsQaLockTests
         Assert.Equal(HttpStatusCode.OK, (await WriteRateAsync(owner, saved)).StatusCode);
     }
 
-    // Nothing dated: a locked payroll stops none of these, and LABOR-16 keeps the stored periods (BR-LABOR-13).
+    // Nothing dated: a locked payroll stops none of these (BR-LABOR-13).
     [Fact]
     public async Task What_is_not_dated_goes_on_while_a_payroll_is_locked()
     {
@@ -181,13 +179,9 @@ public class LaborSettingsQaLockTests
         var renamed = (await (await owner.PutAsJsonAsync($"{JobTypes}/{jobType.IdOf()}/name", new { name = $"Đổi {NewCode()}", rowVersion = jobType.VersionOf() })).BodyAsync(HttpStatusCode.OK)).GetProperty("jobType");
         var stopped = (await (await owner.PostAsJsonAsync($"{JobTypes}/{jobType.IdOf()}/discontinue", new { rowVersion = renamed.VersionOf() })).BodyAsync(HttpStatusCode.OK)).GetProperty("jobType");
         await (await owner.PostAsJsonAsync($"{JobTypes}/{jobType.IdOf()}/resume", new { rowVersion = stopped.VersionOf() })).BodyAsync(HttpStatusCode.OK);
-        var version = (await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).VersionOf();
-        var settings = await (await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = true, rowVersion = version })).BodyAsync(HttpStatusCode.OK);
         var edited = await owner.PutAsJsonAsync($"/api/employees/{EmployeeRequests.IdOf(employee.Saved)}", EmployeeRequests.Profile($"{employee.Name} sửa", employee.Phone, employee.Zone, b => b["rowVersion"] = EmployeeRequests.RowVersionOf(employee.Saved)));
 
         Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
-        Assert.Equal("2020-11-01", settings.GetProperty("settings").GetProperty("nextPeriods")[0].Str("start"));
-        Assert.Equal("2020-11-25", settings.GetProperty("settings").GetProperty("nextPeriods")[0].Str("end"));
     }
 
     [Fact]

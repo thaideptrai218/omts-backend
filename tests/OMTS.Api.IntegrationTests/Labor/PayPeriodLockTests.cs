@@ -28,18 +28,18 @@ public class PayPeriodLockTests
     }
 
     [Fact]
-    public async Task A_rate_on_the_last_day_of_a_payroll_awaiting_finalization_is_refused_and_the_next_day_is_saved()
+    public async Task A_rate_on_the_last_day_of_a_finalized_payroll_is_refused_and_the_next_day_is_saved()
     {
         await using var factory = new AuthApiFactory();
         var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
-        await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
+        await factory.AddFinalizedPayrollAsync(October, OctoberEnd);
 
         var refused = await owner.PostRateAsync(jobType, 50_000, OctoberEnd);
         var saved = await owner.PostRateAsync(jobType, 50_000, NovemberFirst);
 
         var problem = await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null);
         Assert.Equal(
-            "The payroll of 10/2020 is Awaiting finalization, so this change cannot apply to 31/10/2020. Choose a date after 31/10/2020, or ask the Cooperative Owner to send the payroll back first.",
+            "The payroll of 10/2020 is Finalized, so this change cannot apply to 31/10/2020. Choose a date after 31/10/2020.",
             problem.Detail());
         Assert.Equal(OctoberEnd, problem.Str("lockedUntil"));
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
@@ -47,7 +47,7 @@ public class PayPeriodLockTests
     }
 
     [Fact]
-    public async Task A_finalized_payroll_refuses_for_good_and_offers_no_send_back()
+    public async Task A_finalized_payroll_refuses_for_good()
     {
         await using var factory = new AuthApiFactory();
         var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
@@ -61,8 +61,8 @@ public class PayPeriodLockTests
 
     [Theory]
     [InlineData(StatusIds.Payroll.Draft)]
-    [InlineData(StatusIds.Payroll.SentBack)]
-    public async Task A_payroll_not_sent_does_not_lock_its_period_and_the_save_touches_it(int statusId)
+    [InlineData(StatusIds.Payroll.Creating)]
+    public async Task A_payroll_not_finalized_does_not_lock_its_period_and_the_save_touches_it(int statusId)
     {
         await using var factory = new AuthApiFactory();
         var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
@@ -71,7 +71,7 @@ public class PayPeriodLockTests
         var saved = await owner.PostRateAsync(jobType, 50_000, "2020-10-15");
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        // The row is written by the same save, so a parallel send meets a new row version (see the SQL Server tests).
+        // The row is written by the same save, so a parallel finalization meets a new row version (see the SQL Server tests).
         Assert.NotNull(await factory.QueryAsync(db => db.Payrolls.Where(p => p.Id == payroll.Id).Select(p => p.UpdatedAt).SingleAsync()));
     }
 
@@ -88,44 +88,31 @@ public class PayPeriodLockTests
     }
 
     [Fact]
-    public async Task A_date_in_a_draft_period_is_refused_when_a_later_payroll_is_sent()
+    public async Task A_date_in_a_draft_period_is_refused_when_a_later_payroll_is_finalized()
     {
         await using var factory = new AuthApiFactory();
         var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
         await factory.AddPayrollAsync(October, OctoberEnd, StatusIds.Payroll.Draft);
-        await factory.AddAwaitingPayrollAsync(NovemberFirst, "2020-11-30");
+        await factory.AddFinalizedPayrollAsync(NovemberFirst, "2020-11-30");
 
         var refused = await owner.PostRateAsync(jobType, 50_000, "2020-10-15");
 
         var problem = await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null);
-        Assert.StartsWith("The payroll of 11/2020 is Awaiting finalization, so this change cannot apply to 15/10/2020.", problem.Detail());
+        Assert.StartsWith("The payroll of 11/2020 is Finalized, so this change cannot apply to 15/10/2020.", problem.Detail());
         Assert.Equal("2020-11-30", problem.Str("lockedUntil"));
     }
 
     [Fact]
-    public async Task With_a_finalized_payroll_in_the_way_sending_back_a_later_one_is_not_offered()
+    public async Task With_two_finalized_payrolls_in_the_way_the_date_to_choose_follows_the_later_one()
     {
         await using var factory = new AuthApiFactory();
         var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
-        await factory.AddPayrollAsync(October, OctoberEnd, StatusIds.Payroll.Finalized);
-        await factory.AddAwaitingPayrollAsync(NovemberFirst, "2020-11-30");
+        await factory.AddFinalizedPayrollAsync(October, OctoberEnd);
+        await factory.AddFinalizedPayrollAsync(NovemberFirst, "2020-11-30");
 
         var refused = await owner.PostRateAsync(jobType, 50_000, "2020-10-15");
 
         Assert.EndsWith("Choose a date after 30/11/2020.", (await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null)).Detail());
-    }
-
-    [Fact]
-    public async Task A_payroll_sent_back_lets_the_change_through_again()
-    {
-        await using var factory = new AuthApiFactory();
-        var (owner, jobType) = await OwnerWithJobTypeAsync(factory);
-        var payroll = await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
-        Assert.Equal("MSG-LABOR-04", await (await owner.PostRateAsync(jobType, 50_000, October)).ErrorCodeAsync());
-
-        await factory.UpdateAsync<OMTS.Domain.Entities.Labor.Payroll>(payroll.Id, p => p.StatusId = StatusIds.Payroll.SentBack);
-
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostRateAsync(jobType, 50_000, October)).StatusCode);
     }
 
     [Fact]
@@ -146,7 +133,7 @@ public class PayPeriodLockTests
     {
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
-        await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
+        await factory.AddFinalizedPayrollAsync(October, OctoberEnd);
         var name = $"Mới {NewCode()}";
 
         var refused = await owner.PostAsJsonAsync(JobTypes, new { name, hourlyRate = 1, effectiveFrom = OctoberEnd });
@@ -161,7 +148,7 @@ public class PayPeriodLockTests
     {
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
-        await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
+        await factory.AddFinalizedPayrollAsync(October, OctoberEnd);
         var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
 
         var refused = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = OctoberEnd, rowVersion = version });

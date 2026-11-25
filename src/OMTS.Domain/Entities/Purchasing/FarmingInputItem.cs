@@ -50,7 +50,6 @@ public class FarmingInputItem : AuditableEntity, IHasStatus
     public ICollection<InputItemPhoto> Photos { get; set; } = [];
     /// <summary>Optional note, outside the SRS attributes (kept, gap Q17).</summary>
     public string? Description { get; set; }
-    public string? IllustrationUrl { get; set; }
     public int StatusId { get; set; } = StatusIds.Usage.InUse;
     public Status Status { get; set; } = null!;
 }

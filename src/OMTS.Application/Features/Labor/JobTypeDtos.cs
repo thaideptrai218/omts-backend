@@ -2,7 +2,7 @@ namespace OMTS.Application.Features.Labor;
 
 /// <param name="Name">No other job type has it, whatever the letter case (BR-LABOR-12).</param>
 /// <param name="HourlyRate">Whole VND, greater than 0.</param>
-/// <param name="EffectiveFrom">After the last day of every pay period whose payroll is Awaiting finalization or Finalized.</param>
+/// <param name="EffectiveFrom">After the last day of every pay period whose payroll is Finalized.</param>
 public sealed record AddJobTypeRequest(string? Name, decimal? HourlyRate, DateOnly? EffectiveFrom);
 
 /// <param name="HourlyRate">Whole VND, greater than 0.</param>

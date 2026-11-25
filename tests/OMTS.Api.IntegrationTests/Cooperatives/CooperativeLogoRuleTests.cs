@@ -121,17 +121,6 @@ public class CooperativeLogoRuleTests
         Assert.Null(stored.LogoUrl);
     }
 
-    [Fact]
-    public async Task Public_logo_needs_no_login_and_is_404_without_a_logo()
-    {
-        using var api = new AuthApiFactory();
-        await api.EnsureCooperativeAsync();
-
-        var none = await api.CreateClient().GetAsync("/api/public/cooperative/logo");
-
-        Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
-    }
-
     private static Task<string?> LogoKeyAsync(AuthApiFactory api) =>
         api.QueryAsync(db => db.Cooperatives.Select(c => c.LogoUrl).SingleAsync());
 }

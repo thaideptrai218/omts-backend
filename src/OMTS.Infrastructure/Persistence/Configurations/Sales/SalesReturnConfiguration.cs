@@ -25,6 +25,9 @@ internal sealed class SalesReturnConfiguration : IEntityTypeConfiguration<SalesR
             .IsUnique()
             .HasFilter($"[StatusId] = {StatusIds.SalesReturn.Recorded}");
         builder.HasIndex(x => x.InvoiceId);
+        // The reports read the returns of a day or a period, by the date of the return and by the time it was recorded.
+        builder.HasIndex(x => x.ReturnDate);
+        builder.HasIndex(x => x.CreatedAt);
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_SalesReturn_Value_NotNegative", "[Value] >= 0");

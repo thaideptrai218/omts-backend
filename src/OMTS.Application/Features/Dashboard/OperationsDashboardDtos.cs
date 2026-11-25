@@ -9,9 +9,6 @@ public static class PendingTaskKinds
     /// <summary>A quality claim Awaiting response (CLAIM-02).</summary>
     public const string QualityClaim = "QualityClaim";
 
-    /// <summary>A payroll Awaiting finalization (LABOR-13).</summary>
-    public const string Payroll = "Payroll";
-
     /// <summary>An employee request (leave, a missed check-in or check-out) Awaiting review by the Owner (LABOR-05).</summary>
     public const string EmployeeRequest = "EmployeeRequest";
 }

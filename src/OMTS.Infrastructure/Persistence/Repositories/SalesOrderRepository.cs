@@ -19,8 +19,7 @@ internal sealed class SalesOrderRepository(OmtsDbContext db) : ISalesOrderReposi
 
     public Task<SalesOrder?> FindByCodeAsync(string code, Guid? exceptOrderId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.SalesOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Code.ToUpper() == upper && o.Id != exceptOrderId, cancellationToken);
+        return db.SalesOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Code == code && o.Id != exceptOrderId, cancellationToken);
     }
 
     public Task<SalesOrder?> FindByPurchaseRequestAsync(Guid requestId, CancellationToken cancellationToken) =>
@@ -41,10 +40,23 @@ internal sealed class SalesOrderRepository(OmtsDbContext db) : ISalesOrderReposi
         var query = Filtered(filter);
         var total = await query.CountAsync(cancellationToken);
         var ids = await Sorted(query, filter).Skip((page - 1) * pageSize).Take(pageSize).Select(f => f.Id).ToListAsync(cancellationToken);
-        // The sums leave the cancelled orders out; the figures of each match are read and added up here (a decimal sum of whole VND).
-        var live = total == 0 ? [] : await query.Where(f => f.StatusId != StatusIds.SalesOrder.Cancelled).Select(f => new { f.Total, f.CustomerPaid, f.Invoiced }).ToListAsync(cancellationToken);
-        var totals = new SalesOrderTotals(live.Sum(f => f.Total), live.Sum(f => f.Invoiced), live.Sum(f => f.CustomerPaid));
+        // The sums leave the cancelled orders out: one grouped sum per figure over the matching orders and their invoices and payments (a decimal sum of whole VND).
+        var totals = total == 0 ? new SalesOrderTotals(0m, 0m, 0m) : await TotalsAsync(query, cancellationToken);
         return (await RowsAsync(ids, cancellationToken), total, totals);
+    }
+
+    private async Task<SalesOrderTotals> TotalsAsync(IQueryable<Figures> query, CancellationToken cancellationToken)
+    {
+        var live = query.Where(f => f.StatusId != StatusIds.SalesOrder.Cancelled).Select(f => f.Id);
+        var ordered = await db.SalesOrders.AsNoTracking().Where(o => live.Contains(o.Id)).SumAsync(o => (decimal?)o.Total, cancellationToken) ?? 0m;
+        var invoiced = await db.SalesInvoices.AsNoTracking()
+            .Where(i => i.SalesOrderId != null && live.Contains(i.SalesOrderId.Value) && i.StatusId != StatusIds.SalesInvoice.Cancelled)
+            .SumAsync(i => (decimal?)i.Total, cancellationToken) ?? 0m;
+        var paid = await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.SalesOrderId != null && live.Contains(p.SalesOrderId.Value) && p.Kind == CustomerPaymentKind.Payment
+                && (p.StatusId == StatusIds.CustomerPayment.Completed || p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation))
+            .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+        return new SalesOrderTotals(ordered, invoiced, paid);
     }
 
     public async Task<IReadOnlyList<SalesOrderRow>> ListAsync(SalesOrderFilter filter, CancellationToken cancellationToken) =>

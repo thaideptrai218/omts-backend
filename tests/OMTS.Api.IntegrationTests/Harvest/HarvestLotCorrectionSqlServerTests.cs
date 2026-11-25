@@ -232,7 +232,6 @@ public class HarvestLotCorrectionSqlServerTests
         var answers = await Task.WhenAll(
             owner.GetAsync("/api/harvest-lots/for-sale"),
             owner.GetAsync($"/api/harvest-lots/for-sale?zoneId={zoneId}"),
-            owner.GetAsync("/api/harvest-lots/for-sale/count"),
             owner.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(2)),
             owner.PostRemoveLotAsync(lot.Id(), "mistake", lot.Text("rowVersion")));
 

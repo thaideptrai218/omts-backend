@@ -2,9 +2,6 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
-using OMTS.Application.Features.Authorization;
-using OMTS.Application.Features.Sales.Requests;
-using OMTS.Domain.Constants;
 
 namespace OMTS.Application.Features.Sales.PurchaseRequests;
 
@@ -15,9 +12,7 @@ namespace OMTS.Application.Features.Sales.PurchaseRequests;
 public sealed class PurchaseRequestReadService(
     IPurchaseRequestRepository requests,
     ICustomerRepository customers,
-    PurchaseRequestViews views,
-    PurchaseHarvestReader harvest,
-    ZoneAccessGuard access)
+    PurchaseRequestViews views)
 {
     private const int MaxPageSize = 100;
 
@@ -28,7 +23,6 @@ public sealed class PurchaseRequestReadService(
         return new Paged<PurchaseRequestView>(await views.ForStaffAsync(items, cancellationToken), page, pageSize, total);
     }
 
-    /// <summary>The detail of an Accepted request also holds its harvest, and what the Owner may do with it (decision of 11/11/2026).</summary>
     public async Task<Result<PurchaseRequestView>> GetAsync(Guid requestId, CancellationToken cancellationToken)
     {
         if (await requests.GetAsync(requestId, cancellationToken) is not { } request)
@@ -36,10 +30,7 @@ public sealed class PurchaseRequestReadService(
             return AppError.NotFound;
         }
 
-        var view = (await views.ForStaffAsync([request], cancellationToken))[0];
-        return request.StatusId == StatusIds.PurchaseRequest.Accepted
-            ? view with { Harvest = await harvest.ReadAsync(request, await access.IsCooperativeOwnerAsync(cancellationToken), cancellationToken) }
-            : view;
+        return (await views.ForStaffAsync([request], cancellationToken))[0];
     }
 
     /// <summary>SALE-10.0: newest first; MSG-GEN-11 when the profile has no request at all (SALE-10.0.E1).</summary>

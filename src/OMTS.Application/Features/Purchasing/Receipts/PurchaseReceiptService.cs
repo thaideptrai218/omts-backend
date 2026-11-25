@@ -44,8 +44,8 @@ public sealed class PurchaseReceiptService(
     private const int MaxCreateAttempts = 20;
 
     public async Task<Result<PurchaseReceiptView>> GetAsync(Guid receiptId, CancellationToken cancellationToken) =>
-        await receipts.GetForEditAsync(receiptId, cancellationToken) is { } receipt
-            ? await views.ViewAsync(receipt.Id, cancellationToken)
+        await receipts.GetForViewAsync(receiptId, cancellationToken) is { } receipt
+            ? await views.ViewAsync(receipt, cancellationToken)
             : AppError.NotFound;
 
     /// <summary>

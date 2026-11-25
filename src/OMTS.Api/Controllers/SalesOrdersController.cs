@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/sales-orders")]
 [Authorize]
-public sealed class SalesOrdersController(SalesOrderService orders, SalesOrderReadService reads, SalesOrderAdvanceService advances, SalesInvoiceDraftService invoiceDrafts) : ControllerBase
+public sealed class SalesOrdersController(SalesOrderService orders, SalesOrderReadService reads, SalesInvoiceDraftService invoiceDrafts) : ControllerBase
 {
     /// <summary>The orders the caller may see, with filters, sort, paging and the totals of those that are not cancelled.</summary>
     [HttpGet]
@@ -84,15 +84,6 @@ public sealed class SalesOrdersController(SalesOrderService orders, SalesOrderRe
     [ProducesResponseType<SalesOrderSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, SaveSalesOrderRequest request, CancellationToken cancellationToken) =>
         (await orders.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>
-    /// Adds an advance to an open order: SALES_ORDERS Edit or CUSTOMER_PAYMENTS Create (the service checks which). The total of the advances stays at most the total of the order; a buyer with no
-    /// profile pays none (field Advance). <c>method</c> VietQr makes a code that waits for the transfer (<c>qr</c> in the answer).
-    /// </summary>
-    [HttpPost("{id:guid}/advances")]
-    [ProducesResponseType<SalesOrderAdvanceSaved>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> AddAdvance(Guid id, SalesOrderAdvanceInput request, CancellationToken cancellationToken) =>
-        (await advances.AddAsync(id, request, cancellationToken)).ToActionResult(a => StatusCode(StatusCodes.Status201Created, a));
 
     /// <summary>"Kết thúc": a Delivering order becomes Completed; what is left of its advance is general credit of the customer from then on.</summary>
     [HttpPost("{id:guid}/finish")]

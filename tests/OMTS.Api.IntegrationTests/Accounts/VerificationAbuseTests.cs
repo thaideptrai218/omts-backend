@@ -21,7 +21,6 @@ namespace OMTS.Api.IntegrationTests.Accounts;
 /// </summary>
 public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    private const string TraderPassword = "Trader2026";
     private static readonly TimeSpan TwoMinutes = TimeSpan.FromMinutes(2);
 
     // Generated per run, so no password-like literal is committed (secret scanners).
@@ -156,7 +155,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         }
     }
 
-    // Every secret of registration, recovery, staff creation and password changes stays out of
+    // Every secret of recovery, staff creation and password changes stays out of
     // the logs and the audit trail. The flows must succeed, or the check proves nothing.
     [Fact]
     public async Task Codes_tokens_and_passwords_never_reach_the_logs_or_the_audit_trail()
@@ -164,19 +163,6 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         await factory.EnsureCooperativeAsync();
         var anonymous = factory.CreateClient();
         var tokens = new List<string>();
-
-        // Registration (ACS-01) by SMS.
-        var traderPhone = NewPhone();
-        var registrationToken = await RegistrationTokenAsync(anonymous, traderPhone, tokens);
-        var registered = await anonymous.PostAsJsonAsync("/api/auth/register", new
-        {
-            channel = "Sms",
-            identifier = traderPhone,
-            password = TraderPassword,
-            passwordConfirmation = TraderPassword,
-            verificationToken = registrationToken,
-        });
-        Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
 
         // Recovery (ACS-03) by SMS, the only recovery channel.
         var (owner, email) = await OwnerWithPhoneAndEmailAsync();
@@ -222,7 +208,6 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         secrets.AddRange(new[]
         {
             ("temporary password", temporaryPassword, false),
-            ("password", TraderPassword, false),
             ("password", "Reset2026x", false),
             ("password", StaffNewPassword, false),
             ("password", "Owner2026x", false),
@@ -236,7 +221,6 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         var auditText = audit.Select(e => JsonSerializer.Serialize(e)).ToList();
 
         Assert.NotEmpty(logs);
-        Assert.Contains(audit, e => e.Action == "Account.Registered");
         Assert.Contains(audit, e => e.Action == "Account.Created");
         Assert.Contains(audit, e => e.Action == "Account.PasswordReset");
         Assert.DoesNotContain(logs, line => secrets.Any(s => Leaks(line, s.Value, s.IsCode)));
@@ -272,13 +256,6 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         var token = await VerifiedTokenAsync(anonymous, requestId, code, tokens);
         var reset = await anonymous.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = token, newPassword, passwordConfirmation = newPassword });
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
-    }
-
-    /// <summary>Starts a registration for the number and reads the SMS code only after it was sent.</summary>
-    private async Task<string> RegistrationTokenAsync(HttpClient anonymous, string phone, List<string> tokens)
-    {
-        var id = await VerificationIdAsync(await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-        return await VerifiedTokenAsync(anonymous, id, factory.LastSmsCode(phone), tokens);
     }
 
     private static async Task<string> VerifiedTokenAsync(HttpClient anonymous, Guid verificationId, string code, List<string> tokens)

@@ -47,32 +47,32 @@ public sealed class CustomerDebtStandings(ICooperativeRepository cooperatives, C
         }
 
         var debtOf = await debts.DebtsAsync(ids, cancellationToken);
-        var allocations = await debts.AllocationsAsync(ids.Where(id => debtOf[id] > 0m).ToList(), cancellationToken);
-        return ids.ToDictionary(id => id, id => policy.Evaluate(debtOf[id], allocations.GetValueOrDefault(id)?.DebtAgeDays));
+        var ages = await debts.AgesAsync(debtOf.Where(d => d.Value > 0m).ToDictionary(d => d.Key, d => d.Value), cancellationToken);
+        return ids.ToDictionary(id => id, id => policy.Evaluate(debtOf[id], ages.GetValueOrDefault(id)?.DebtAgeDays));
     }
 
     /// <summary>
     /// The dashboard's due debts: how many customers owe more than 0, how many are over the limit (amount or days) and how many reach the days limit within <paramref name="soonDays"/> days.
-    /// The last two are 0 while the warning is off (the invoices have no due date of their own).
+    /// The last two are 0 while the warning is off (the invoices have no due date of their own). <paramref name="debtOf"/> is the debt of every profile, read once by the caller
+    /// (<see cref="CustomerDebtService.DebtOfEveryProfileAsync"/>).
     /// </summary>
-    public async Task<(int Debtors, int Overdue, int DueSoon)> DueSummaryAsync(CustomerDebtPolicy policy, int soonDays, CancellationToken cancellationToken)
+    public async Task<(int Debtors, int Overdue, int DueSoon)> DueSummaryAsync(
+        IReadOnlyDictionary<Guid, decimal> debtOf, CustomerDebtPolicy policy, int soonDays, CancellationToken cancellationToken)
     {
-        var debtOf = (await debtQuery.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
-        var owing = debtOf.Where(d => d.Value > 0m).Select(d => d.Key).ToList();
+        var owing = debtOf.Where(d => d.Value > 0m).ToDictionary(d => d.Key, d => d.Value);
         if (!policy.Enabled || owing.Count == 0)
         {
             return (owing.Count, 0, 0);
         }
 
-        var allocations = policy.MaxDays is null
-            ? new Dictionary<Guid, CustomerDebtAllocation>()
-            : (await debts.AllocationsAsync(owing, cancellationToken)).ToDictionary(a => a.Key, a => a.Value);
+        // A debt above the amount limit is overdue whatever its age, so only the others need one.
+        var ages = await AgesOfAsync(owing.Where(d => !policy.Evaluate(d.Value, null).OverAmount).ToDictionary(d => d.Key, d => d.Value), policy, cancellationToken);
         var overdue = 0;
         var dueSoon = 0;
-        foreach (var id in owing)
+        foreach (var (id, debt) in owing)
         {
-            var days = allocations.GetValueOrDefault(id)?.DebtAgeDays;
-            if (policy.Evaluate(debtOf[id], days).Over)
+            var days = ages.GetValueOrDefault(id)?.DebtAgeDays;
+            if (policy.Evaluate(debt, days).Over)
             {
                 overdue++;
             }
@@ -94,12 +94,13 @@ public sealed class CustomerDebtStandings(ICooperativeRepository cooperatives, C
         }
 
         var debtOf = (await debtQuery.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
-        var owing = debtOf.Where(d => d.Value > 0m).Select(d => d.Key).ToList();
-        var allocations = policy.MaxDays is null
-            ? new Dictionary<Guid, CustomerDebtAllocation>()
-            : (await debts.AllocationsAsync(owing, cancellationToken)).ToDictionary(a => a.Key, a => a.Value);
-        return owing
-            .Where(id => policy.Evaluate(debtOf[id], allocations.GetValueOrDefault(id)?.DebtAgeDays).Over)
-            .ToHashSet();
+        var owing = debtOf.Where(d => d.Value > 0m).ToDictionary(d => d.Key, d => d.Value);
+        var overAmount = owing.Where(d => policy.Evaluate(d.Value, null).OverAmount).Select(d => d.Key).ToHashSet();
+        var ages = await AgesOfAsync(owing.Where(d => !overAmount.Contains(d.Key)).ToDictionary(d => d.Key, d => d.Value), policy, cancellationToken);
+        return owing.Keys.Where(id => overAmount.Contains(id) || policy.Evaluate(owing[id], ages.GetValueOrDefault(id)?.DebtAgeDays).Over).ToHashSet();
     }
+
+    /// <summary>The ages of the debts, read only when the days limit is set: nothing else looks at them.</summary>
+    private async Task<IReadOnlyDictionary<Guid, CustomerDebtAge>> AgesOfAsync(IReadOnlyDictionary<Guid, decimal> owing, CustomerDebtPolicy policy, CancellationToken cancellationToken) =>
+        policy.MaxDays is null ? new Dictionary<Guid, CustomerDebtAge>() : await debts.AgesAsync(owing, cancellationToken);
 }

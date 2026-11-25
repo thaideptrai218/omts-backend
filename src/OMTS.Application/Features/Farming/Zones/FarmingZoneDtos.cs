@@ -34,6 +34,7 @@ public sealed record FarmingZoneListItem(
     int InUseRaftCount,
     LicenseState? LicenseState);
 
+/// <param name="Boundary">The licensed sea area as GeoJSON (<see cref="ZoneBoundary"/>); null when none was saved.</param>
 public sealed record FarmingZoneView(
     Guid Id,
     string Code,
@@ -42,6 +43,7 @@ public sealed record FarmingZoneView(
     decimal? Latitude,
     decimal? Longitude,
     decimal? Area,
+    ZoneBoundary? Boundary,
     int StatusId,
     string Status,
     int InUseRaftCount,
@@ -51,7 +53,10 @@ public sealed record FarmingZoneView(
 /// <summary>Answer of a zone create or edit (FARM-02.0 step 6), in the shape of the FARM-01 saves.</summary>
 /// <param name="Message">MSG-GEN-05 "Farming zone saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
-/// <param name="Warnings">Non-blocking remarks on the pin (e.g. outside Vietnam); empty when there is none.</param>
+/// <param name="Warnings">
+/// Non-blocking remarks on the pin (e.g. outside Vietnam) or, after a boundary save, on the In Use rafts pinned outside it;
+/// empty when there is none.
+/// </param>
 public sealed record FarmingZoneSaved(FarmingZoneView Zone, string Message, string MessageCode, IReadOnlyList<FarmingWarning>? Warnings = null);
 
 /// <summary>Picker row for other modules (water, harvest, sales…).</summary>
@@ -59,4 +64,6 @@ public sealed record ZoneLookupItem(Guid Id, string Code, string Name, int Statu
 
 public sealed record MapRaft(Guid Id, string Code, decimal? Latitude, decimal? Longitude);
 
-public sealed record MapZone(Guid Id, string Code, string Name, decimal? Latitude, decimal? Longitude, int StatusId, string Status, IReadOnlyList<MapRaft> Rafts);
+/// <param name="Boundary">The licensed sea area as GeoJSON (<see cref="ZoneBoundary"/>); null when none was saved.</param>
+public sealed record MapZone(
+    Guid Id, string Code, string Name, decimal? Latitude, decimal? Longitude, ZoneBoundary? Boundary, int StatusId, string Status, IReadOnlyList<MapRaft> Rafts);

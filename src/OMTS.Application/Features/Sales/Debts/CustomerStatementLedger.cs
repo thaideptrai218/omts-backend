@@ -45,13 +45,14 @@ public sealed record CustomerStatementLines(decimal OpeningDebt, IReadOnlyList<C
 /// A cancelled invoice, payment, sales return or adjustment stays on its own date, marked Cancelled, and counts 0, so a past period can change after a later cancellation; so does a
 /// payment that waits for its transfer, until the transfer arrives. A payment with a discount gives two entries (the money and the discount), an invoice with price cuts
 /// one entry for what it was worth and one per cut. Same day: invoices, price cuts, returns, payments, discounts, money paid back and adjustments, each by time, then code.
+/// A caller that summed the debt before the period apart (<c>ICustomerDebtQuery.DebtBeforeAsync</c>) passes it as the opening debt, with only the rows of the period.
 /// </summary>
 public static class CustomerStatementLedger
 {
     public static CustomerStatementLines Build(
         IEnumerable<CustomerLedgerInvoice> invoices, IEnumerable<CustomerLedgerPayment> payments, DateOnly from, DateOnly to,
         IEnumerable<CustomerLedgerAdjustment>? adjustments = null,
-        IReadOnlyDictionary<Guid, IReadOnlyList<SalesInvoiceCorrectionView>>? corrections = null, IEnumerable<CustomerLedgerReturn>? returns = null)
+        IReadOnlyDictionary<Guid, IReadOnlyList<SalesInvoiceCorrectionView>>? corrections = null, IEnumerable<CustomerLedgerReturn>? returns = null, decimal? openingDebt = null)
     {
         var all = new List<CustomerStatementEntry>();
         foreach (var i in invoices)
@@ -103,7 +104,7 @@ public static class CustomerStatementLedger
                 a.CancelledAt, a.RecordedBy, Note: a.Reason, At: a.OccurredAt));
         }
 
-        var opening = all.Where(e => e.Date < from).Sum(e => e.DebtChange);
+        var opening = openingDebt ?? all.Where(e => e.Date < from).Sum(e => e.DebtChange);
         var debt = opening;
         var entries = new List<CustomerStatementEntry>();
         foreach (var entry in all.Where(e => e.Date >= from && e.Date <= to)

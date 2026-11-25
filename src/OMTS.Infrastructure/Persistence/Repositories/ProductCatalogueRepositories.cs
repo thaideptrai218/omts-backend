@@ -131,8 +131,7 @@ internal sealed class ProductCategoryRepository(OmtsDbContext db) : IProductCate
 
     public Task<ProductCategory?> FindByNameAsync(string name, Guid? exceptCategoryId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.ProductCategories.AsNoTracking().FirstOrDefaultAsync(g => g.Name.ToUpper() == upper && g.Id != exceptCategoryId, cancellationToken);
+        return db.ProductCategories.AsNoTracking().FirstOrDefaultAsync(g => g.Name == name && g.Id != exceptCategoryId, cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> ProductCountsAsync(CancellationToken cancellationToken) =>
@@ -159,8 +158,7 @@ internal sealed class ProductDisposalRepository(OmtsDbContext db) : IProductDisp
 
     public Task<ProductDisposal?> FindByCodeAsync(string code, Guid? exceptDisposalId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.ProductDisposals.AsNoTracking().FirstOrDefaultAsync(d => d.Code.ToUpper() == upper && d.Id != exceptDisposalId, cancellationToken);
+        return db.ProductDisposals.AsNoTracking().FirstOrDefaultAsync(d => d.Code == code && d.Id != exceptDisposalId, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<ProductDisposalRow> Rows, int Total, decimal TotalKg)> SearchAsync(ProductDisposalFilter filter, int page, int pageSize, CancellationToken cancellationToken)
@@ -168,9 +166,12 @@ internal sealed class ProductDisposalRepository(OmtsDbContext db) : IProductDisp
         var query = Filtered(filter);
         var total = await query.CountAsync(cancellationToken);
         var ids = await Sorted(query, filter).Skip((page - 1) * pageSize).Take(pageSize).Select(f => f.Id).ToListAsync(cancellationToken);
-        // The total kg counts the Completed disposals only; the kg of each match are read and added up here.
-        var kgs = total == 0 ? [] : await query.Where(f => f.StatusId == StatusIds.ProductDisposal.Completed).Select(f => f.TotalKg).ToListAsync(cancellationToken);
-        return (await RowsAsync(ids, cancellationToken), total, kgs.Sum());
+        // The total kg counts the Completed disposals only: one sum over the lines of the matching disposals.
+        var completed = query.Where(f => f.StatusId == StatusIds.ProductDisposal.Completed).Select(f => f.Id);
+        var totalKg = total == 0
+            ? 0m
+            : await db.ProductDisposalLines.AsNoTracking().Where(l => completed.Contains(l.DisposalId)).SumAsync(l => (decimal?)l.Kg, cancellationToken) ?? 0m;
+        return (await RowsAsync(ids, cancellationToken), total, totalKg);
     }
 
     public async Task<IReadOnlyList<ProductDisposalRow>> ListAsync(ProductDisposalFilter filter, CancellationToken cancellationToken) =>

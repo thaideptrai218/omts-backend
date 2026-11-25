@@ -28,13 +28,13 @@ public static partial class PayrollRules
         _ => PayrollSheetStatus.Provisional,
     };
 
-    /// <summary>The catalog statuses behind the contract statuses: Provisional covers the Draft and the SRS v8 states no endpoint reaches.</summary>
+    /// <summary>The catalog statuses behind the contract statuses: Provisional is the Draft.</summary>
     public static IReadOnlyList<int> StatusIdsOf(IEnumerable<PayrollSheetStatus> statuses) => statuses.Distinct().SelectMany(s => s switch
     {
         PayrollSheetStatus.Creating => new[] { StatusIds.Payroll.Creating },
         PayrollSheetStatus.Finalized => new[] { StatusIds.Payroll.Finalized },
         PayrollSheetStatus.Cancelled => new[] { StatusIds.Payroll.Cancelled },
-        _ => new[] { StatusIds.Payroll.Draft, StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.SentBack },
+        _ => new[] { StatusIds.Payroll.Draft },
     }).ToList();
 
     /// <summary>A Monthly period is a whole calendar month; a Custom one is at most a year (the web sends the month whatever the pay period start day).</summary>

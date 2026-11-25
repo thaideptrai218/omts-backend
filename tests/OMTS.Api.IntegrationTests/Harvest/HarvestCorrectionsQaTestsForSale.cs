@@ -100,7 +100,6 @@ public class HarvestCorrectionsQaTestsForSale
     // MSG-GEN-01 is the code of a value that cannot be read: the same shape as every other refusal, whoever asks.
     [Theory]
     [InlineData("/api/harvest-lots/for-sale?zoneId=abc")]
-    [InlineData("/api/harvest-lots/for-sale/count?zoneId=abc")]
     [InlineData("/api/harvest-lots/for-sale?zoneId=1")]
     public async Task A_malformed_zone_answers_400_with_msg_gen_01_like_every_other_refused_value(string url)
     {

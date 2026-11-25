@@ -129,6 +129,20 @@ public class PostSaleIssuesCalculatorTests
     }
 
     [Fact]
+    public void The_key_of_a_group_names_what_its_events_have_in_common()
+    {
+        Assert.Equal(new PostSaleGroupFilter(PostSaleGroupKind.WalkIn), PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Customer, "WALK-IN"));
+        Assert.Equal(new PostSaleGroupFilter(PostSaleGroupKind.Customer, Buyer), PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Customer, Buyer.ToString().ToUpperInvariant()));
+        Assert.Equal(new PostSaleGroupFilter(PostSaleGroupKind.Zone, ZoneA), PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Zone, ZoneA.ToString()));
+        Assert.Equal(new PostSaleGroupFilter(PostSaleGroupKind.Lot, LotOne), PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Lot, LotOne.ToString()));
+
+        // There is no walk-in zone or lot, and a key that is no id names no group.
+        Assert.Null(PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Zone, PostSaleIssuesCalculator.WalkInKey));
+        Assert.Null(PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Lot, PostSaleIssuesCalculator.WalkInKey));
+        Assert.Null(PostSaleIssuesCalculator.GroupOf(PostSaleGrouping.Customer, "nonsense"));
+    }
+
+    [Fact]
     public void No_event_gives_no_group_and_zero_totals()
     {
         var empty = PostSaleIssuesCalculator.Build(new PostSaleFacts([], [], []), PostSaleGrouping.Customer);

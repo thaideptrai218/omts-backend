@@ -189,13 +189,6 @@ public class HarvestLotForSaleTests
         Assert.Equal(2, await owner.ForSaleCountAsync(raft.ZoneId));
         Assert.Equal(0, await owner.ForSaleCountAsync(emptyZone));
         Assert.Equal(open.Id(), (await owner.LotsForSaleAsync(raft.ZoneId)).GetProperty("lots")[1].Id());
-
-        var manager = await api.ManagerAsync(raft.ZoneId);
-        var accountant = await api.StaffAsync(await api.ZoneEntityAsync(raft.ZoneId), StaffRole.Accountant);
-        foreach (var client in new[] { manager.Client, accountant.Client, await api.TraderAsync() })
-        {
-            Assert.Equal("MSG-GEN-08", await (await client.GetAsync("/api/harvest-lots/for-sale/count")).ErrorCodeAsync());
-        }
     }
 
     private const System.Text.Json.JsonValueKind JsonNull = System.Text.Json.JsonValueKind.Null;

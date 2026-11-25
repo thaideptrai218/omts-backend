@@ -40,7 +40,6 @@ public class ReviewFixQaTests
         Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
         Assert.Equal(JsonValueKind.Null, afterRemoval.GetProperty("logoUrl").ValueKind);
         Assert.Equal(Png, await anonymous.GetByteArrayAsync(url));
-        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync("/api/public/cooperative/logo")).StatusCode);
     }
 
     // A WebP logo: the URL keeps the .webp extension and the file is served as image/webp.
@@ -210,7 +209,6 @@ public class ReviewFixQaTests
         Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
         Assert.Equal(Png, await anonymous.GetByteArrayAsync(first));
         Assert.Equal(PngOther, await anonymous.GetByteArrayAsync(second));
-        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync("/api/public/cooperative/logo")).StatusCode);
     }
 
     private static Task<HttpResponseMessage> UploadAsync(HttpClient owner, byte[] content, string contentType, string fileName)

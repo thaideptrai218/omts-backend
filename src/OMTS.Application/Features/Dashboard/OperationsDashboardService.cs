@@ -57,22 +57,28 @@ public sealed class OperationsDashboardService(
         }
 
         var (start, end) = period.Value;
-        var revenue = await queries.RevenueAsync(start, end, zoneId, cancellationToken);
-        var (receivables, owedBack) = await debts.TotalsAsync(cancellationToken);
+        var today = BusinessClock.ToBusinessDate(computedAt);
+        var todayFigures = await queries.DayAsync(today, zoneId, cancellationToken);
+        // The default period is today: its revenue is the invoices of today's tile, read once.
+        var revenue = start == today && end == today
+            ? new DashboardRevenueFigures(todayFigures.Revenue, todayFigures.InvoiceCount)
+            : await queries.RevenueAsync(start, end, zoneId, cancellationToken);
+        // The debt of every customer is read once: the receivables tile and the due debts tile both come from it.
+        var debtOf = await debts.DebtOfEveryProfileAsync(cancellationToken);
+        var (receivables, owedBack) = CustomerDebtService.TotalsOf(debtOf);
         var lots = await lotsForSale.CountAsync(zoneId, cancellationToken);
         var alerts = await WaterAlertsAsync(zoneId, cancellationToken);
-        // The pending decisions (claims, payrolls, purchase requests, employee requests) are the Owner's: an Accountant sees none.
+        // The pending decisions (claims, purchase requests, employee requests) are the Owner's: an Accountant sees none.
         var tasks = (await zoneAccess.IsCooperativeOwnerAsync(cancellationToken)
                 ? await queries.PendingTasksAsync(PendingTaskSample, cancellationToken)
                 : Array.Empty<PendingTaskFigures>())
             .Select(t => new DashboardPendingTaskGroup(t.Kind, t.Count, t.Oldest.Select(r => new DashboardPendingTask(r.Id, r.Code, r.Label, r.Since)).ToList()))
             .ToList();
-        var today = BusinessClock.ToBusinessDate(computedAt);
-        var todayTile = DayTile(today, await queries.DayAsync(today, zoneId, cancellationToken));
+        var todayTile = DayTile(today, todayFigures);
         var yesterday = today.AddDays(-1);
         var yesterdayTile = DayTile(yesterday, await queries.DayAsync(yesterday, zoneId, cancellationToken));
         var policy = await standings.PolicyAsync(cancellationToken);
-        var (debtors, overdue, dueSoon) = await standings.DueSummaryAsync(policy, DueSoonDays, cancellationToken);
+        var (debtors, overdue, dueSoon) = await standings.DueSummaryAsync(debtOf, policy, DueSoonDays, cancellationToken);
         return new OperationsDashboard(
             computedAt,
             zoneId,
@@ -92,10 +98,11 @@ public sealed class OperationsDashboardService(
     /// <summary>The zones In Use whose latest Active measurement has a value outside its thresholds, as the WATER-03 overview shows them (the alert is worked out, not stored).</summary>
     private async Task<DashboardWaterAlertsTile> WaterAlertsAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
-        var inUse = await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken);
-        var latest = await measurements.LatestActiveByZoneAsync(cancellationToken);
-        var alerting = inUse
+        var inUse = (await measurements.ListZonesAsync(PermittedZones.Everywhere, inUseOnly: true, track: false, cancellationToken))
             .Where(z => zoneId is null || z.Id == zoneId)
+            .ToList();
+        var latest = await measurements.LatestActiveByZoneAsync(inUse.Select(z => z.Id).ToList(), cancellationToken);
+        var alerting = inUse
             .Where(z => latest.TryGetValue(z.Id, out var m) && WaterAlertService.Evaluate(m).ValuesOutside.Count > 0)
             .Select(z => new DashboardAlertZone(z.Id, z.Code, z.Name, latest[z.Id].MeasuredAt))
             .ToList();

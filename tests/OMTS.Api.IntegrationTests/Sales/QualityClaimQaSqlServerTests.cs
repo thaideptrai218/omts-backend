@@ -177,13 +177,11 @@ public class QualityClaimQaSqlServerTests
         Assert.DoesNotContain("QualityClaims", tables);
         Assert.DoesNotContain("QualityClaimPhotos", tables);
         Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 3701 && s.Id <= 3703));
-        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id == 220 || t.Id == 221));
 
         await db.Database.MigrateAsync();
         Assert.Contains("QualityClaims", await TablesAsync(db));
         // Awaiting response, Rejected, Accepted, Offer made and Offer declined (PM answer 12/11).
         Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == "QUALITY_CLAIM"));
-        Assert.Equal(2, await db.StatusTransitions.CountAsync(t => t.Id == 220 || t.Id == 221));
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 

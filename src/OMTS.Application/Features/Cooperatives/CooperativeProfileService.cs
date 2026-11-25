@@ -104,10 +104,6 @@ public sealed class CooperativeProfileService(
             var cooperative => await SetLogoAsync(cooperative, null, cancellationToken),
         };
 
-    /// <summary>The current logo file for the public page, or null when there is none.</summary>
-    public async Task<(Stream Content, string ContentType)?> OpenLogoAsync(CancellationToken cancellationToken) =>
-        await CooperativePublicFiles.OpenAsync(storage, (await cooperatives.GetCurrentAsync(cancellationToken))?.LogoUrl, cancellationToken);
-
     /// <summary>
     /// One logo file by its path below the logo category ("2026/10/{id}.png"), current or replaced. Only
     /// logo files can be reached: the category is fixed here and the path must have the storage key shape.

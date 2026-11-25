@@ -128,9 +128,7 @@ public sealed class DeploymentBootstrapper(
     private async Task<int> MissingStatusCatalogRowsAsync(CancellationToken cancellationToken)
     {
         var statusIds = await db.Statuses.Select(s => s.Id).ToListAsync(cancellationToken);
-        var transitionIds = await db.StatusTransitions.Select(t => t.Id).ToListAsync(cancellationToken);
-        return StatusCatalogSeed.Statuses.Count(s => !statusIds.Contains(s.Id))
-            + StatusCatalogSeed.Transitions.Count(t => !transitionIds.Contains(t.Id));
+        return StatusCatalogSeed.Statuses.Count(s => !statusIds.Contains(s.Id));
     }
 
     private static List<string> Validate(BootstrapSettings settings)

@@ -98,6 +98,9 @@ public sealed class HarvestLanesFinishService(
         var already = new List<int>();
         // Latest is null for a lane Being harvested only by a share entered by hand: it is finished by a manual change, with no lot (QA of 13/11/2026).
         var toFinish = new List<(Lane Lane, int Number, HarvestLotLane? Latest, IReadOnlyList<HarvestLotLane> InLots)>();
+        // The lot rows of every lane asked for, in one read.
+        var wantedLaneIds = numbers.Select(n => raft.Lanes.FirstOrDefault(l => l.LaneNumber == n && l.StatusId == StatusIds.Lane.InUse)?.Id).OfType<Guid>().ToList();
+        var lotRowsOfLane = (await lots.ListOfLanesAsync(cycle.Id, wantedLaneIds, cancellationToken)).ToLookup(r => r.LaneId);
         foreach (var number in numbers.Order())
         {
             var lane = raft.Lanes.FirstOrDefault(l => l.LaneNumber == number && l.StatusId == StatusIds.Lane.InUse);
@@ -107,7 +110,7 @@ public sealed class HarvestLanesFinishService(
                 continue;
             }
 
-            var inLots = await lots.ListOfLaneAsync(cycle.Id, lane.Id, cancellationToken);
+            var inLots = lotRowsOfLane[lane.Id].ToList();
             var latest = inLots.OrderByDescending(l => l.Lot.HarvestedAt).FirstOrDefault();
             if (states[lane.Id] is not (LaneState.BeingHarvested or LaneState.Harvested))
             {
@@ -137,6 +140,8 @@ public sealed class HarvestLanesFinishService(
             return openAttendance;
         }
 
+        // The lots to change, tracked with their lane rows, in one read (the same instance when two lanes share a lot).
+        var trackedLots = await lots.ListWithLanesForEditAsync(toFinish.Where(t => t.Latest is not null).Select(t => t.Latest!.LotId).ToList(), cancellationToken);
         var after = new Dictionary<Guid, LaneState>(states);
         var actorId = toFinish.Count == 0 ? Guid.Empty : currentUser.AccountId ?? throw new InvalidOperationException("A lane finish needs an authenticated caller.");
         foreach (var (lane, number, latest, inLots) in toFinish)
@@ -155,8 +160,8 @@ public sealed class HarvestLanesFinishService(
                 continue;
             }
 
-            // Tracked copy of the lot, to change its lane row (the same instance when two lanes share a lot).
-            var lot = await lots.GetForEditAsync(latest.LotId, cancellationToken) ?? throw new InvalidOperationException("The lot of a lane row must exist.");
+            // Tracked copy of the lot, to change its lane row.
+            var lot = trackedLots.GetValueOrDefault(latest.LotId) ?? throw new InvalidOperationException("The lot of a lane row must exist.");
             var row = lot.Lanes.Single(l => l.LaneId == lane.Id);
             row.IsFinished = true;
             LaneFinishPercent.Apply(row, inLots, current, day.Steps?.Any(s => s.LaneId == lane.Id) == true, progress, cycle.Id, actorId, timeProvider.GetUtcNow(), timeProvider.Today());

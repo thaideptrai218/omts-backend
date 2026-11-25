@@ -9,9 +9,6 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRepository
 {
-    // Completed and Closed both finished nursing: their survivors, and the loss of a Closed one, count in the totals.
-    private static readonly int[] DoneStatuses = [StatusIds.NurseryBatch.Completed, StatusIds.NurseryBatch.Closed];
-
     public Task<NurseryBatch?> GetForEditAsync(Guid batchId, CancellationToken cancellationToken) =>
         Detailed(db.NurseryBatches).AsSplitQuery().FirstOrDefaultAsync(b => b.Id == batchId, cancellationToken);
 
@@ -30,18 +27,26 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
         NurseryBatchFilter filter, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = Filtered(db.NurseryBatches.AsNoTracking(), filter);
-        var total = await query.CountAsync(cancellationToken);
-        var live = query.Where(b => b.StatusId != StatusIds.NurseryBatch.Cancelled);
-        var done = query.Where(b => DoneStatuses.Contains(b.StatusId));
-        var totals = new NurseryListTotals(
-            await live.SumAsync(b => (decimal?)b.QuantityIn, cancellationToken) ?? 0m,
-            await live.Where(b => b.StatusId == StatusIds.NurseryBatch.Nursing).SumAsync(b => (decimal?)b.QuantityIn, cancellationToken) ?? 0m,
-            await done.SumAsync(b => (decimal?)b.QuantityIn, cancellationToken) ?? 0m,
-            await done.SumAsync(b => b.Survivors, cancellationToken) ?? 0m,
-            await query.CountAsync(b => b.StatusId == StatusIds.NurseryBatch.Nursing, cancellationToken),
-            await done.CountAsync(cancellationToken),
-            await done.SumAsync(b => b.CloseLossPieces, cancellationToken) ?? 0m,
-            await query.CountAsync(b => b.StatusId == StatusIds.NurseryBatch.Closed, cancellationToken));
+        // The count and every total of the list come from one aggregate over the matching batches. Completed and Closed both finished nursing: their survivors, and the loss of a Closed one, count in the totals.
+        var sums = await query
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Live = g.Where(b => b.StatusId != StatusIds.NurseryBatch.Cancelled).Sum(b => (decimal?)b.QuantityIn),
+                Nursing = g.Where(b => b.StatusId == StatusIds.NurseryBatch.Nursing).Sum(b => (decimal?)b.QuantityIn),
+                Done = g.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed || b.StatusId == StatusIds.NurseryBatch.Closed).Sum(b => (decimal?)b.QuantityIn),
+                Survivors = g.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed || b.StatusId == StatusIds.NurseryBatch.Closed).Sum(b => b.Survivors),
+                NursingCount = g.Count(b => b.StatusId == StatusIds.NurseryBatch.Nursing),
+                DoneCount = g.Count(b => b.StatusId == StatusIds.NurseryBatch.Completed || b.StatusId == StatusIds.NurseryBatch.Closed),
+                Loss = g.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed || b.StatusId == StatusIds.NurseryBatch.Closed).Sum(b => b.CloseLossPieces),
+                ClosedCount = g.Count(b => b.StatusId == StatusIds.NurseryBatch.Closed),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        var total = sums?.Count ?? 0;
+        var totals = sums is null
+            ? new NurseryListTotals(0m, 0m, 0m, 0m, 0, 0, 0m, 0)
+            : new NurseryListTotals(sums.Live ?? 0m, sums.Nursing ?? 0m, sums.Done ?? 0m, sums.Survivors ?? 0m, sums.NursingCount, sums.DoneCount, sums.Loss ?? 0m, sums.ClosedCount);
         var rows = await Sorted(query, filter)
             .Include(b => b.Zone)
             .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)

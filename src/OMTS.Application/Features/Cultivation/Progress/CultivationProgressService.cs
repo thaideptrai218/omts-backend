@@ -34,7 +34,7 @@ public sealed class CultivationProgressService(
     /// </summary>
     public async Task<Result<CultivationProgressView>> ViewAsync(Guid raftId, DateOnly? date, Guid? cycleId, CancellationToken cancellationToken)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
         if (raft is null)
         {
             return AppError.NotFound;
@@ -47,9 +47,10 @@ public sealed class CultivationProgressService(
 
         var today = timeProvider.Today();
         var shown = date ?? today;
+        CultivationCycle? chosen = null;
         if (cycleId is { } id)
         {
-            var chosen = await cycles.GetAsync(id, cancellationToken);
+            chosen = await cycles.GetAsync(id, cancellationToken);
             if (chosen is null || chosen.RaftId != raft.Id)
             {
                 return AppError.NotFound;
@@ -68,7 +69,7 @@ public sealed class CultivationProgressService(
         }
 
         var day = await laneStates.ReadAsync(raft, shown, cancellationToken);
-        var cycle = day.Cycle is { } span ? await cycles.GetAsync(span.Id, cancellationToken) : null;
+        var cycle = day.Cycle is { } span ? chosen is not null && chosen.Id == span.Id ? chosen : await cycles.GetAsync(span.Id, cancellationToken) : null;
         var onView = raft.Lanes
             .Where(l => (l.StatusId == StatusIds.Lane.InUse && WasOnRaft(l, shown, cycle)) || day.LanesWithRecords.Contains(l.Id))
             .Select(l => l.Id)
@@ -83,7 +84,8 @@ public sealed class CultivationProgressService(
             lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded && !l.IsOutOfService).Select(l => l.LaneNumber).ToList(),
             cycle is null ? [] : await seeding.LaneSeedLotsAsync(cycle.Id, shown, cancellationToken),
             cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken),
-            cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken) : null);
+            // The summary of a Closed cycle is read as of its close date: when that is the day shown, it takes the raft and the lane day read here.
+            cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken, raft, cycle.CloseDate == shown ? day : null) : null);
     }
 
     /// <summary>

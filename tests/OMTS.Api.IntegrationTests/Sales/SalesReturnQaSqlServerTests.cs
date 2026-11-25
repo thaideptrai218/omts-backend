@@ -85,7 +85,6 @@ public class SalesReturnQaSqlServerTests
         Assert.NotEmpty(added);
         Assert.All(added, c => Assert.True(c.StartsWith("SalesReturns.", StringComparison.Ordinal) || c.StartsWith("SalesReturnLines.", StringComparison.Ordinal), c));
         Assert.False(await db.Statuses.AnyAsync(s => s.Group == StatusGroups.SalesReturn));
-        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id == 240));
 
         await migrator.MigrateAsync();
 

@@ -24,6 +24,12 @@ public interface IFileStorage
     Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Whether the key exists, asked without reading the content (a HEAD, not a download). False for a key that is not valid for this adapter. A provider failure throws
+    /// <see cref="Exceptions.FileStorageUnavailableException"/>, as <see cref="OpenReadAsync"/> does.
+    /// </summary>
+    Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// A URL that allows reading the file until it expires (default 10 minutes). A provider failure throws
     /// <see cref="Exceptions.FileStorageUnavailableException"/>.
     /// </summary>

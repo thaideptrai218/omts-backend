@@ -14,14 +14,18 @@ public sealed record SalesInvoicePaidState(bool? IsPaid, decimal Covered, decima
 {
     /// <param name="ownPayments">The payments of the invoice that are not cancelled: read only for a walk-in invoice.</param>
     /// <param name="allocation">The allocation of the profile of the invoice: read only with a profile.</param>
-    public static SalesInvoicePaidState Of(Guid invoiceId, int statusId, decimal total, Guid? customerId, decimal ownPayments, CustomerDebtAllocation? allocation)
+    public static SalesInvoicePaidState Of(Guid invoiceId, int statusId, decimal total, Guid? customerId, decimal ownPayments, CustomerDebtAllocation? allocation) =>
+        OfUnpaid(statusId, total, customerId, ownPayments, customerId is null ? 0m : (allocation ?? CustomerDebtAllocation.None).UnpaidOf(invoiceId));
+
+    /// <summary>The same state when the caller knows what the allocation leaves unpaid of the invoice (0 when it covers it): read only with a profile.</summary>
+    public static SalesInvoicePaidState OfUnpaid(int statusId, decimal total, Guid? customerId, decimal ownPayments, decimal unpaidOfProfileInvoice)
     {
         if (statusId == StatusIds.SalesInvoice.Cancelled)
         {
             return new SalesInvoicePaidState(null, 0m, 0m);
         }
 
-        var unpaid = customerId is null ? Math.Max(0m, total - ownPayments) : (allocation ?? CustomerDebtAllocation.None).UnpaidOf(invoiceId);
+        var unpaid = customerId is null ? Math.Max(0m, total - ownPayments) : unpaidOfProfileInvoice;
         return new SalesInvoicePaidState(unpaid == 0m, total - unpaid, unpaid);
     }
 }

@@ -85,9 +85,5 @@ public class SeedingPurchaseRulesTests(AuthApiFactory factory) : IClassFixture<A
         var line = (await ReceiptAsync(owner, lot.ReceiptId)).LineViewOf(lot.ItemId);
         Assert.Equal((15m, 0m), (line.Money("seeded"), line.Money("returnable")));
         await (await owner.PostReturnAsync(lot.ReceiptId, new ReturnBody { Lines = [new ReturnLineBody(lot.LineId, 1m)] })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
-
-        await (await owner.CorrectAsync(lot.ReceiptId, "Invoice price", new { lineId = lot.LineId, unitPrice = 900 })).ReadAsync(HttpStatusCode.OK);
-        var below = await (await owner.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 14 })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        Assert.Equal(15m, below.Money("minQuantity"));
     }
 }

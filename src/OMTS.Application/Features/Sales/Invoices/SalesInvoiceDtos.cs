@@ -177,6 +177,3 @@ public sealed record SalesInvoiceSaved(
 
 /// <summary>The answer of POST: the saved invoice (201), or the sale awaiting the transfer of its VietQR code (202); exactly one is set.</summary>
 public sealed record SalesInvoiceCreated(SalesInvoiceSaved? Saved, PendingSaleView? Pending);
-
-/// <summary>A purchase request the invoice can be linked to (SALE-05.3): Accepted, not Fulfilled, pickup not more than 3 days ago.</summary>
-public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, int RequestedCages, int AcceptedCages, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);

@@ -19,12 +19,11 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="HarvestPlanLineIsUnreadable">A value was sent for the plan line that is not an id.</param>
 /// <param name="ConfirmOverPlan">Kept so older clients still bind: the cycle target is a plan, not a cap (owner decision 12/11/2026), so nothing asks for it and it is ignored.</param>
 /// <param name="OverPlanReason">As <paramref name="ConfirmOverPlan"/>: accepted and ignored.</param>
-/// <param name="PurchaseRequestId">Accepted and ignored: a lot is tied to a line of a harvest plan, not to a purchase request.</param>
 /// <param name="Crew">The employees who worked on the trip (decision of 12/11/2026), optional: null when none was sent (a correction then leaves the crew as it is); an empty list clears it.</param>
 /// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record RecordHarvestRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
-    bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false,
+    bool ConfirmOverPlan = false, string? OverPlanReason = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false,
     IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false,
     IReadOnlyList<HarvestProductLineInput>? ProductLines = null, bool ProductLinesAreUnreadable = false, Guid? HarvestPlanLineId = null, bool HarvestPlanLineIsUnreadable = false);
 
@@ -80,7 +79,6 @@ public sealed record HarvestLanePercentView(int LaneNumber, decimal? Percent);
 /// <param name="OriginMissing">As on <see cref="HarvestLotView"/>.</param>
 /// <param name="CanPublish">As on <see cref="HarvestLotView"/>.</param>
 /// <param name="CanClose">Show Close lot, as on <see cref="HarvestLotView"/>.</param>
-/// <param name="PurchaseRequestCode">The code of the request the trip harvested for; null on a lot recorded before lots had one.</param>
 public sealed record HarvestLotListItem(
     Guid Id,
     string LotCode,
@@ -104,8 +102,6 @@ public sealed record HarvestLotListItem(
     string RowVersion,
     IReadOnlyList<HarvestLotProductLineView> ProductLines,
     HarvestLotPlanRef? HarvestPlan,
-    Guid? PurchaseRequestId = null,
-    string? PurchaseRequestCode = null,
     IReadOnlyList<CrewMemberView>? Crew = null);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
@@ -118,7 +114,6 @@ public sealed record HarvestLotListItem(
 /// Show Publish (TRACE-01.2): a Not published lot on a sales invoice that is not cancelled, or a Withdrawn lot for the Cooperative Owner, in a zone where the caller publishes. The
 /// publish still answers MSG-TRACE-01 while <paramref name="OriginMissing"/> is not empty.
 /// </param>
-/// <param name="PurchaseRequestCode">As on <see cref="HarvestLotListItem"/>.</param>
 /// <param name="WeighedKg">The kg of the weighing (the sum of the weighed kg of the lines); null until the lot is weighed. The figures count from it once it is set.</param>
 /// <param name="WeighedAt">When the lot was weighed.</param>
 /// <param name="WeighedByName">Who weighed it last.</param>
@@ -163,8 +158,6 @@ public sealed record HarvestLotView(
     IReadOnlyList<HarvestLotProductLineView> ProductLines,
     HarvestLotPlanRef? HarvestPlan,
     string? OverPlanReason = null,
-    Guid? PurchaseRequestId = null,
-    string? PurchaseRequestCode = null,
     IReadOnlyList<CrewMemberView>? Crew = null,
     IReadOnlyList<HarvestLanePercentView>? LanePercents = null,
     decimal? WeighedKg = null,

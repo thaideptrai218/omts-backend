@@ -33,7 +33,6 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
         {
             t.HasCheckConstraint("CK_Cooperative_CustomerMaxDebtAmount", "[CustomerMaxDebtAmount] IS NULL OR [CustomerMaxDebtAmount] > 0");
             t.HasCheckConstraint("CK_Cooperative_CustomerMaxDebtDays", "[CustomerMaxDebtDays] IS NULL OR [CustomerMaxDebtDays] >= 1");
-            t.HasCheckConstraint("CK_Cooperatives_PayPeriodStartDay", "[PayPeriodStartDay] BETWEEN 1 AND 28");
             t.HasCheckConstraint("CK_Cooperative_AverageKgPerCage", "[AverageKgPerCage] > 0");
             t.HasCheckConstraint("CK_Cooperative_DaysBeforeAutoClose", "[DaysBeforeAutoClose] >= 1");
         });

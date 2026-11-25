@@ -135,7 +135,7 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
             await accountant.PostReceiptAsync(new ReceiptBody { SupplierId = world.SupplierId, Lines = [new LineBody(world.Seed, 1m, 1m)] }),
             await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { OwnerApproved = true, Lines = [new ReturnLineBody(line, 1m)] }),
             await accountant.CancelAsync(receipt.Id(), "Wrong"),
-            await accountant.CorrectAsync(receipt.Id(), "Wrong", new { lineId = line, unitPrice = 1 }),
+            await accountant.EditLineAsync(receipt.Id(), line, unitPrice: 1),
             await manager.GetAsync("/api/supplier-debts"),
             await manager.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1m }),
         })

@@ -14,7 +14,7 @@ namespace OMTS.Application.Features.Sales.Orders;
 /// <summary>
 /// A trader's purchase request sent from the Mini App also makes a Draft order (DH) at once, so the Owner does not enter it again. The order is for the customer of the request, from the source App, with one line: the
 /// cages asked in the Lồng unit of the product (see <see cref="SalesOrderRequestLine"/>), priced at the sale price of that unit, to be collected on the pickup date. The request is not answered by it: it stays Awaiting
-/// response until the Owner accepts or declines it, and the trader cancelling it cancels the Draft order too (<see cref="CancelDraftAsync"/>). The order and the request are saved by the caller's save, so one never exists
+/// response until the Owner confirms the order (it becomes Ordered) or declines it, and the Owner declining it or the trader cancelling it cancels the Draft order too (<see cref="CancelDraftAsync"/>). The order and the request are saved by the caller's save, so one never exists
 /// without the other. "Người nhận đặt" is the first active Cooperative Owner, who is also told of the request.
 /// </summary>
 public sealed class SalesOrderFromRequestService(
@@ -122,10 +122,11 @@ public sealed class SalesOrderFromRequestService(
     }
 
     /// <summary>
-    /// The trader cancelled <paramref name="request"/>: the order the request made is cancelled with it, while it is still a Draft (no invoice was made from it). An order the Owner already took further, or one that
+    /// <paramref name="request"/> was cancelled by the trader or declined by the Owner: the order the request made is cancelled with it, while it is still a Draft (no invoice was made from it). An order the Owner already took further, or one that
     /// is no longer there, is left as it is. The order is marked changed, so an invoice saved in the same moment and this save cannot both win; the caller saves. True when an order was cancelled.
     /// </summary>
-    public async Task<bool> CancelDraftAsync(PurchaseRequest request, Guid traderAccountId, string? reason, CancellationToken cancellationToken)
+    /// <param name="actorAccountId">Who cancelled the request: the trader, or the Owner declining it.</param>
+    public async Task<bool> CancelDraftAsync(PurchaseRequest request, Guid actorAccountId, string? reason, CancellationToken cancellationToken)
     {
         if (await orders.FindByPurchaseRequestAsync(request.Id, cancellationToken) is not { StatusId: StatusIds.SalesOrder.Draft } found
             || await orders.GetForEditAsync(found.Id, cancellationToken) is not { StatusId: StatusIds.SalesOrder.Draft } order)
@@ -135,14 +136,14 @@ public sealed class SalesOrderFromRequestService(
 
         order.StatusId = StatusIds.SalesOrder.Cancelled;
         order.CancelledAt = timeProvider.GetUtcNow();
-        order.CancelledByAccountId = traderAccountId;
+        order.CancelledByAccountId = actorAccountId;
         order.CancelReason = reason ?? CancelledWithRequest;
         unitOfWork.MarkChanged(order);
         audit.Record(new AuditEntry("SalesOrder.Cancelled", SalesOrderService.RecordType)
         {
             RecordId = order.Id,
             RecordCode = order.Code,
-            ActorAccountId = traderAccountId,
+            ActorAccountId = actorAccountId,
             Before = new { Status = statusCatalog.CodeOf(StatusIds.SalesOrder.Draft) },
             After = new { Status = statusCatalog.CodeOf(order.StatusId) },
             Reason = order.CancelReason,
@@ -150,6 +151,6 @@ public sealed class SalesOrderFromRequestService(
         return true;
     }
 
-    /// <summary>The reason kept on the order when the trader gave none for cancelling the request.</summary>
-    public const string CancelledWithRequest = "The trader cancelled the purchase request.";
+    /// <summary>The reason kept on the order when no reason was given for cancelling the request.</summary>
+    public const string CancelledWithRequest = "The purchase request was cancelled.";
 }

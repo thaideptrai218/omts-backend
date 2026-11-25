@@ -18,7 +18,6 @@ internal static class LaborSettingsTestKit
 {
     public const string JobTypes = "/api/job-types";
     public const string AttendanceSettings = "/api/attendance-settings";
-    public const string PayrollSettings = "/api/payroll-settings";
 
     public static async Task<HttpClient> OwnerAsync(AuthApiFactory factory)
     {
@@ -104,8 +103,8 @@ internal static class LaborSettingsTestKit
         return payroll;
     }
 
-    public static Task<Payroll> AddAwaitingPayrollAsync(this AuthApiFactory factory, string start, string end) =>
-        factory.AddPayrollAsync(start, end, StatusIds.Payroll.AwaitingFinalization);
+    public static Task<Payroll> AddFinalizedPayrollAsync(this AuthApiFactory factory, string start, string end) =>
+        factory.AddPayrollAsync(start, end, StatusIds.Payroll.Finalized);
 
     public static Task<int> AuditCountAsync(this AuthApiFactory factory, string action) =>
         factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == action));

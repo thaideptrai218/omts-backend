@@ -41,7 +41,7 @@ public class FarmingSqlServerRegressionTests
         Assert.Equal("Replaced", (await owner.GetFromJsonAsync<JsonElement>($"/api/zone-licenses/{old.Id()}")).Text("state"));
         Assert.Equal([due.Id()], await RemindedAsync());
 
-        await (await owner.PostAsJsonAsync($"/api/zones/{stopped.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PostAsJsonAsync($"/api/zones/{stopped.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(1, await job.RunOnceAsync(Today));
         Assert.Equal(0, await job.RunOnceAsync(Today));
         Assert.Equal(new[] { due.Id(), paused.Id() }.Order(), (await RemindedAsync()).Order());

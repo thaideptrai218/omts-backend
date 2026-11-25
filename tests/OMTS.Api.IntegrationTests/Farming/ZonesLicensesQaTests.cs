@@ -71,7 +71,7 @@ public class ZonesLicensesQaTests(AuthApiFactory factory) : IClassFixture<AuthAp
         foreach (var response in new[]
         {
             await anonymous.GetAsync("/api/zones/next-code"),
-            await anonymous.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { }),
+            await anonymous.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { }),
             await anonymous.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { }),
             await anonymous.PostAsync("/api/zone-licenses", new LicenseFields { ZoneId = zone.Id(), EffectiveDate = Today }.ToForm()),
             await anonymous.PostAsync($"/api/zone-licenses/{license.Id()}/replace", new LicenseFields { EffectiveDate = Today }.ToForm()),

@@ -180,26 +180,6 @@ public sealed class AccessGrantService(
         return await RowAsync(accountId, grantId, cancellationToken);
     }
 
-    /// <summary>What the draft rows would allow; computed from the fixed matrix by the same rules that enforce permissions.</summary>
-    public async Task<Result<IReadOnlyList<FunctionAccess>>> PreviewAsync(PermissionPreviewRequest request, CancellationToken cancellationToken)
-    {
-        var zoneGrants = new List<ZoneGrant>();
-        foreach (var draft in request.Grants ?? [])
-        {
-            var resolved = await ResolveRoleAsync(draft, cancellationToken);
-            if (!resolved.IsSuccess)
-            {
-                return resolved.Error!;
-            }
-
-            var (role, fixedRole) = resolved.Value!;
-            zoneGrants.Add(new ZoneGrant(draft.ZoneId, role.Id, role.Code, role.Name, fixedRole.GrantedPermissions));
-        }
-
-        return Result<IReadOnlyList<FunctionAccess>>.Success(
-            new AccountAccess(Guid.Empty, SubjectType.Staff, false, true, zoneGrants).DescribeFunctions());
-    }
-
     /// <summary>
     /// The fixed role row named by id or by code (both must agree when both are sent); anything else is MSG-GEN-01
     /// "Role".

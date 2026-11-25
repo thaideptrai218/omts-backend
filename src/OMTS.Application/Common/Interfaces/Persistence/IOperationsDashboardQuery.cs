@@ -21,6 +21,6 @@ public interface IOperationsDashboardQuery
     /// <summary>The sales result of one business day, of one zone or of every zone.</summary>
     Task<DashboardDayFigures> DayAsync(DateOnly date, Guid? zoneId, CancellationToken cancellationToken);
 
-    /// <summary>Purchase requests and quality claims Awaiting response, payrolls Awaiting finalization, employee requests Awaiting review: always the whole cooperative, <paramref name="oldestCount"/> records of each, oldest first.</summary>
+    /// <summary>Purchase requests and quality claims Awaiting response, employee requests Awaiting review: always the whole cooperative, <paramref name="oldestCount"/> records of each, oldest first.</summary>
     Task<IReadOnlyList<PendingTaskFigures>> PendingTasksAsync(int oldestCount, CancellationToken cancellationToken);
 }

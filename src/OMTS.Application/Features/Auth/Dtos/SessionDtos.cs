@@ -2,25 +2,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Auth.Dtos;
 
-/// <summary>One open login session of the caller, as shown in "Thiết bị đang đăng nhập".</summary>
-/// <param name="DeviceKey">Opaque key of the device (browser or app install) the session was opened on; null when the client sent no device id.</param>
-/// <param name="MaskedIpAddress">Address of the request that opened the session, with its last part hidden.</param>
-/// <param name="LastActiveAt">The last refresh, or the sign-in when the session was never refreshed.</param>
-/// <param name="ExpiresAt">When the session can no longer be refreshed unless it is refreshed again.</param>
-/// <param name="IsCurrent">The session of the request itself.</param>
-public sealed record SessionView(
-    Guid Id,
-    ClientType ClientType,
-    AuthMethod AuthMethod,
-    string? DeviceKey,
-    string? DeviceName,
-    string? UserAgent,
-    string? MaskedIpAddress,
-    DateTimeOffset SignedInAt,
-    DateTimeOffset LastActiveAt,
-    DateTimeOffset ExpiresAt,
-    bool IsCurrent);
-
 /// <summary>
 /// A browser or app install with at least one open session. Sessions without a device key are never grouped: each one is its
 /// own entry with a null <see cref="DeviceKey"/>, ended through its session id.

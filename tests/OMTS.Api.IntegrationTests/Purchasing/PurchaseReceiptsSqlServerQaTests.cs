@@ -55,38 +55,6 @@ public class PurchaseReceiptsSqlServerQaTests
     }
 
     [SqlServerFact]
-    public async Task Parallel_correction_and_return_never_leave_more_seeded_and_returned_than_received()
-    {
-        await using var host = await FarmingHost.StartAsync();
-        var world = await host.WorldAsync();
-        // One open cycle per raft: every round seeds into it.
-        var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
-        await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
-
-        for (var round = 0; round < 4; round++)
-        {
-            var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 10_000));
-            var line = receipt.LineOf(world.Seed);
-            await host.UseDbAsync(db => db.SeedingRecords.Add(new SeedingRecord
-            {
-                CycleId = cycle.Id, SeedLotLineId = line, SeedingDate = Today, Quantity = 30, RecordedByAccountId = host.Owner.Account.Id,
-            }));
-            await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 10)] })).ReadAsync(HttpStatusCode.Created);
-
-            // The correction lowers the line to exactly seeded + returned; the return takes 20 more.
-            var responses = await InParallelAsync(2, i => i == 0
-                ? world.Owner.PostAsJsonAsync($"{Receipts}/{receipt.Id()}/correct", new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 40 } } })
-                : world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 20)] }));
-
-            Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
-            var quantity = await host.QueryAsync(db => db.PurchaseReceiptLines.Where(l => l.Id == line).Select(l => l.Quantity!.Value).SingleAsync());
-            var returned = await host.QueryAsync(db => db.PurchaseReturnLines.Where(l => l.ReceiptLineId == line).SumAsync(l => l.Quantity));
-            Assert.True(30 + returned <= quantity, $"round {round}: 30 seeded + {returned} returned > {quantity} received ({await CodesAsync(responses)})");
-            Assert.Contains(responses, r => r.IsSuccessStatusCode);
-        }
-    }
-
-    [SqlServerFact]
     public async Task Parallel_cancels_of_one_paid_receipt_cancel_it_once_keep_its_payment_and_notify_once()
     {
         await using var host = await FarmingHost.StartAsync();

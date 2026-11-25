@@ -27,6 +27,19 @@ public sealed record PostSaleReturnLot(Guid ReturnId, Guid LotId, string LotCode
 
 public sealed record PostSaleFacts(IReadOnlyList<PostSaleEvent> Events, IReadOnlyList<PostSaleInvoiceLot> InvoiceLots, IReadOnlyList<PostSaleReturnLot> ReturnLots);
 
+/// <summary>What names the events of one group of the report, so the database reads only those (REPORT-03.2).</summary>
+public enum PostSaleGroupKind
+{
+    /// <summary>The events of invoices of walk-in customers (no profile).</summary>
+    WalkIn,
+    Customer,
+    Zone,
+    /// <summary>The returns that take back the lot, and the other events of the invoices that sell it.</summary>
+    Lot,
+}
+
+public sealed record PostSaleGroupFilter(PostSaleGroupKind Kind, Guid? Id = null);
+
 /// <summary>What REPORT-03 reads, in a fixed number of commands whatever the number of events. Read only.</summary>
 public interface IPostSaleIssuesQuery
 {
@@ -35,4 +48,10 @@ public interface IPostSaleIssuesQuery
     /// (the zone and the customer of the invoice), with the lots they concern. Corrections of data-entry errors are not events.
     /// </summary>
     Task<PostSaleFacts> FactsAsync(ReportFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The same events limited to one group of the report. The lots are read only for a group of a lot (the other groups do not use them), so what is returned is for listing the events of
+    /// that group, not for adding them up.
+    /// </summary>
+    Task<PostSaleFacts> FactsOfGroupAsync(ReportFilter filter, PostSaleGroupFilter group, CancellationToken cancellationToken);
 }

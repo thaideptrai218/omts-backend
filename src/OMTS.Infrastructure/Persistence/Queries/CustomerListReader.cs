@@ -28,9 +28,33 @@ internal sealed class CustomerListReader(OmtsDbContext db) : ICustomerListQuery
         var query = Filtered(filter);
         var total = await query.CountAsync(cancellationToken);
         var rows = await Sorted(query, filter).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        // The sums of every match: SQL Server cannot sum an expression that holds a subquery, so the three figures of each match are read and added up here.
-        var figures = total == 0 ? [] : await query.Select(f => new { f.Debt, f.TotalSales, f.NetSales }).ToListAsync(cancellationToken);
-        return (rows.Select(Row).ToList(), total, new CustomerListSums(figures.Sum(f => f.Debt), figures.Sum(f => f.TotalSales), figures.Sum(f => f.NetSales)));
+        var sums = total == 0 ? new CustomerListSums(0m, 0m, 0m) : await SumsAsync(query, filter, cancellationToken);
+        return (rows.Select(Row).ToList(), total, sums);
+    }
+
+    /// <summary>
+    /// The footer sums of every match, one grouped sum per figure over the rows of the matching customers (SQL Server cannot sum an expression that holds a subquery, so the per-customer
+    /// figures are not summed). Same definitions as the figures of each row; like the row's debt, the debt here leaves out sales returns.
+    /// </summary>
+    private async Task<CustomerListSums> SumsAsync(IQueryable<Figures> query, CustomerSearchFilter filter, CancellationToken cancellationToken)
+    {
+        var matching = query.Select(f => f.Customer.Id);
+        var (salesFrom, salesTo) = (filter.SalesFrom, filter.SalesTo);
+        var cancelled = StatusIds.SalesInvoice.Cancelled;
+        var paymentCancelled = StatusIds.CustomerPayment.Cancelled;
+        var paymentPending = StatusIds.CustomerPayment.PendingTransfer;
+        var invoices = db.SalesInvoices.AsNoTracking().Where(i => i.CustomerId != null && matching.Contains(i.CustomerId.Value) && i.StatusId != cancelled);
+        var payments = db.CustomerPayments.AsNoTracking()
+            .Where(p => p.CustomerId != null && matching.Contains(p.CustomerId.Value) && p.StatusId != paymentCancelled && p.StatusId != paymentPending);
+        var inPeriod = invoices.Where(i => (salesFrom == null || i.InvoiceDate >= salesFrom) && (salesTo == null || i.InvoiceDate <= salesTo));
+        var totalSales = await inPeriod.SumAsync(i => (decimal?)(i.Total + i.PriceCutTotal), cancellationToken) ?? 0m;
+        var netSales = await inPeriod.SumAsync(i => (decimal?)i.Total, cancellationToken) ?? 0m;
+        var invoiced = await invoices.SumAsync(i => (decimal?)i.Total, cancellationToken) ?? 0m;
+        var received = await payments.Where(p => p.Kind == Domain.Enums.CustomerPaymentKind.Payment).SumAsync(p => (decimal?)(p.Amount + p.DiscountAmount), cancellationToken) ?? 0m;
+        var paidBack = await payments.Where(p => p.Kind == Domain.Enums.CustomerPaymentKind.PaidBack).SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+        var adjusted = await db.CustomerDebtAdjustments.AsNoTracking()
+            .Where(a => matching.Contains(a.CustomerId) && a.CancelledAt == null).SumAsync(a => (decimal?)a.Amount, cancellationToken) ?? 0m;
+        return new CustomerListSums(invoiced - received + paidBack + adjusted, totalSales, netSales);
     }
 
     public async Task<IReadOnlyList<CustomerFigureRow>> ListAsync(CustomerSearchFilter filter, CancellationToken cancellationToken) =>

@@ -643,7 +643,6 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
                 owner.GetAsync($"/api/harvest-lots/{first.Id()}"),
                 owner.GetAsync($"/api/rafts/{raft.RaftId}/harvest-lots"),
                 owner.GetAsync("/api/harvest-lots/for-sale"),
-                owner.GetAsync("/api/harvest-lots/for-sale/count"),
                 owner.GetAsync($"/api/rafts/{raft.RaftId}/lanes/1/progress"));
 
             await AssertAnsweredAsync(answers);

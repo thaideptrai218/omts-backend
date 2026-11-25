@@ -42,7 +42,7 @@ public class CyclesQaTestsSqlServer
             {
                 calls.Add(owner.PostCycleAsync(raftId, new CycleBody(Today.AddDays(-i))));
                 calls.Add(owner.GetAsync($"/api/rafts/{raftId}/progress"));
-                calls.Add(owner.GetAsync($"/api/rafts/{raftId}/lanes/today"));
+                calls.Add(owner.GetAsync($"/api/rafts/{raftId}/progress"));
                 calls.Add(owner.GetAsync($"/api/rafts/{raftId}/cultivation-cycles"));
                 calls.Add(owner.GetAsync($"/api/zones/{zoneId}/cultivation-cycles"));
             }
@@ -179,7 +179,7 @@ public class CyclesQaTestsSqlServer
         var cycle = await owner.StartCycleAsync(raft.Id(), new CycleBody(DateOnly.MinValue));
 
         Assert.False((await owner.ProgressAsync(raft.Id(), "?date=0001-01-01")).IsNull("cycle"));
-        Assert.False((await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).GetProperty("lanes").GetArrayLength() == 0);
+        Assert.False((await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).GetProperty("lanes").GetArrayLength() == 0);
         Assert.Equal(Today, (await owner.EditCycleAsync(cycle.Id(), new CycleBody(Today, RowVersion: cycle.Text("rowVersion")))).Date("startDate"));
     }
 }

@@ -294,23 +294,4 @@ public class LaborSettingsQaBusinessDateTests
         Assert.Equal(OMTS.Domain.Enums.AttendanceRoundingUnit.Minutes15, (await CurrentAsync()).RoundingUnit);
     }
 
-    [Theory]
-    [InlineData("2026-10-31T16:59:59Z", 1, "2026-10-01", "2026-10-31", "10/2026")]
-    [InlineData("2026-10-31T17:00:00Z", 1, "2026-11-01", "2026-11-30", "11/2026")]
-    [InlineData("2026-11-25T16:59:59Z", 26, "2026-10-26", "2026-11-25", "11/2026")]
-    [InlineData("2026-11-25T17:00:00Z", 26, "2026-11-26", "2026-12-25", "12/2026")]
-    [InlineData("2026-12-31T16:59:59Z", 1, "2026-12-01", "2026-12-31", "12/2026")]
-    [InlineData("2026-12-31T17:00:00Z", 1, "2027-01-01", "2027-01-31", "01/2027")]
-    [InlineData("2028-02-28T17:00:00Z", 1, "2028-02-01", "2028-02-29", "02/2028")]
-    public async Task With_no_payroll_the_first_next_period_holds_today_in_utc_plus_7(string now, int startDay, string start, string end, string name)
-    {
-        await using var host = new Host();
-        await host.SeedAsync(_ => { });
-        host.Clock.Now = DateTimeOffset.Parse(now);
-
-        var preview = (await host.UseAsync<PayrollSettingsService, OMTS.Application.Common.Results.Result<PayrollSettingsPreview>>(s => s.PreviewAsync(startDay, null, default))).Value!;
-
-        Assert.Equal(new PayPeriod(DateOnly.Parse(start), DateOnly.Parse(end)), preview.NextPeriods[0]);
-        Assert.Equal(name, preview.NextPeriods[0].Name);
-    }
 }

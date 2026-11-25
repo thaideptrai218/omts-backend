@@ -150,7 +150,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         { RecordId = p.Id, ZoneId = raft.ZoneId, After = new { p.WorkDate, p.RaftId, p.JobTypeId, p.ResponsibleAccountId, p.PurchaseRequestId } });
         if (p.Approved is null)
             await notifications.NotifyAsync([responsible.Id], "WORK_PLAN_REQUESTED", "Kế hoạch ngày làm cần xác nhận",
-                $"{input.WorkDate:dd/MM/yyyy}: {job.Name}, bè {raft.Code}. Vui lòng nhận hoặc từ chối kế hoạch.", nameof(WorkDayPlan), p.Id.ToString(), false, ct);
+                $"{input.WorkDate:dd/MM/yyyy}: {job.Name}, bè {raft.Code}. Vui lòng nhận hoặc từ chối kế hoạch.", nameof(WorkDayPlan), p.Id.ToString(), false, ct, p.Id);
         await uow.SaveChangesAsync(ct);
         return await ViewAsync(p, ct);
     }
@@ -169,7 +169,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         audit.Record(new AuditEntry("WorkDayPlan.Responded", nameof(WorkDayPlan))
         { RecordId = p.Id, ZoneId = p.Raft.ZoneId, After = new { p.Approved, p.ResponseReason } });
         await notifications.NotifyAsync([p.CreatorAccountId], "WORK_PLAN_RESPONDED", "Quản lý phản hồi kế hoạch",
-            $"{p.ResponsibleAccount.DisplayName} {(input.Approved ? "đồng ý" : "từ chối")} kế hoạch {p.WorkDate:dd/MM/yyyy}. {p.ResponseReason}", nameof(WorkDayPlan), p.Id.ToString(), false, ct);
+            $"{p.ResponsibleAccount.DisplayName} {(input.Approved ? "đồng ý" : "từ chối")} kế hoạch {p.WorkDate:dd/MM/yyyy}. {p.ResponseReason}", nameof(WorkDayPlan), p.Id.ToString(), false, ct, p.Id);
         await uow.SaveChangesAsync(ct);
         return await ViewAsync(p, ct);
     }

@@ -26,6 +26,8 @@ internal sealed class QualityClaimConfiguration : IEntityTypeConfiguration<Quali
             .HasFilter($"[StatusId] IN ({StatusIds.QualityClaim.AwaitingResponse}, {StatusIds.QualityClaim.OfferMade})");
         builder.HasIndex(x => new { x.CustomerId, x.SentAt });
         builder.HasIndex(x => new { x.StatusId, x.SentAt });
+        // The after-sale report reads the claims sent in a period, whatever their status or customer.
+        builder.HasIndex(x => x.SentAt);
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_QualityClaim_Rejected_Has_Note", $"[StatusId] <> {StatusIds.QualityClaim.Rejected} OR [ResponseNote] IS NOT NULL");

@@ -20,7 +20,7 @@ namespace OMTS.Application.Features.Labor.Work;
 /// LABOR-04.4: the Cooperative Owner, or a Zone Manager in the zone of the day (ATTENDANCE Edit; owner decision of 20/11/2026), enters a missing or corrected check-in or check-out of an employee and day, today or earlier, and
 /// changes, adds or removes the job periods of the day, with a reason; the times and the periods then have the method Correction and
 /// the hours are worked out again when shown (BR-LABOR-05). The audit log keeps the values before and after with the reason. Nothing
-/// can be corrected in a pay period whose payroll is Awaiting finalization or Finalized (BR-LABOR-13, MSG-LABOR-04). The client asks
+/// can be corrected in a pay period whose payroll is Finalized (BR-LABOR-13, MSG-LABOR-04). The client asks
 /// MSG-GEN-04 before it sends.
 /// </summary>
 public sealed class AttendanceCorrectionService(

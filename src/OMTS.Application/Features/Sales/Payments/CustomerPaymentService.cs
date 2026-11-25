@@ -121,17 +121,6 @@ public sealed class CustomerPaymentService(
     }
 
     /// <summary>
-    /// An advance on an order for money that has arrived, saved at once: cash waits for the Accountant to confirm it (Awaiting confirmation), a transfer (with its bank reference) is Completed. The money is reserved
-    /// for the order while it is open (<see cref="CustomerDebtAllocator"/>). The customer of the order is the payer; an advance carries no discount and names no invoice.
-    /// </summary>
-    public Task<Result<CustomerPaymentSaved>> RecordOrderAdvanceAsync(SalesOrder order, RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
-        SaveAsync(request with { CustomerId = order.CustomerId, Allocations = null, DiscountAmount = 0m }, CustomerPaymentKind.Payment, CustomerPaymentMode.OrderAdvance, cancellationToken, order);
-
-    /// <summary>The same advance as a VietQR code that waits for the transfer of the customer (it counts nowhere until the transfer arrives).</summary>
-    public Task<Result<CustomerPaymentSaved>> CreateOrderAdvanceTransferAsync(SalesOrder order, RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
-        SaveAsync(request with { CustomerId = order.CustomerId, Allocations = null, DiscountAmount = 0m }, CustomerPaymentKind.Payment, CustomerPaymentMode.WaitsForTransfer, cancellationToken, order);
-
-    /// <summary>
     /// The advance of an order that is being saved: checked and added to the unit of work of the caller with its audit row, but not saved, so the order and its advance are one save. The caller reads the payment again
     /// after the save (<see cref="ICustomerPaymentRepository.GetAsync"/>) for its view and, for a payment that waits for its transfer, its VietQR code (<see cref="QrOf"/>).
     /// </summary>
@@ -144,7 +133,7 @@ public sealed class CustomerPaymentService(
     }
 
     private async Task<Result<CustomerPaymentSaved>> SaveAsync(
-        RecordCustomerPaymentRequest request, CustomerPaymentKind kind, CustomerPaymentMode mode, CancellationToken cancellationToken, SalesOrder? order = null)
+        RecordCustomerPaymentRequest request, CustomerPaymentKind kind, CustomerPaymentMode mode, CancellationToken cancellationToken)
     {
         var key = CustomerPaymentRules.Trimmed(request.DeduplicationKey);
         if (key is not null && await FirstOfKeyAsync(key, cancellationToken) is { } first)
@@ -152,7 +141,7 @@ public sealed class CustomerPaymentService(
             return first;
         }
 
-        var staged = await StageAsync(request, kind, mode, order, cancellationToken);
+        var staged = await StageAsync(request, kind, mode, order: null, cancellationToken);
         if (!staged.IsSuccess)
         {
             return staged.Error!;

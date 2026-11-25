@@ -79,42 +79,6 @@ public class SalesCatalogueQaLinkedProfileTests(AuthApiFactory factory) : IClass
         Assert.Equal(phone, with.Text("phoneNumber"));
     }
 
-    // ACCOUNT-01: a number sent as +84 still links and still counts for the staff check.
-    [Fact]
-    public async Task Registration_with_a_plus_84_number_is_stored_as_0_and_counts_for_the_staff_check()
-    {
-        var owner = await factory.PurchasingOwnerAsync();
-        var phone = NewPhone();
-        var offline = await owner.CreateCustomerAsync(phone: phone);
-
-        var accountId = await RegisterAsync($"+84{phone[1..]}", phone);
-
-        var linked = await factory.QueryAsync(db => db.Customers.SingleAsync(c => c.AccountId == accountId));
-        Assert.Equal((offline.Id(), phone), (linked.Id, linked.PhoneNumber));
-    }
-
-    // BR-ACCOUNT-04: only a profile not merged can be linked; the kept profile keeps the account it has.
-    [Fact]
-    public async Task Registration_with_the_number_of_a_merged_profile_makes_a_new_profile_or_links_the_new_owner_of_the_number()
-    {
-        var owner = await factory.PurchasingOwnerAsync();
-        var (phone1, phone2) = (NewPhone(), NewPhone());
-        var kept = await owner.CreateCustomerAsync();
-        var merged1 = await owner.CreateCustomerAsync(phone: phone1);
-        var merged2 = await owner.CreateCustomerAsync(phone: phone2);
-        await (await owner.MergeAsync(kept.Id(), merged1.Id())).ReadAsync(HttpStatusCode.OK);
-        await (await owner.MergeAsync(kept.Id(), merged2.Id())).ReadAsync(HttpStatusCode.OK);
-        var reused = await owner.CreateCustomerAsync(phone: phone2);
-
-        var alone = await RegisterAsync(phone1, phone1);
-        var profile = await factory.QueryAsync(db => db.Customers.SingleAsync(c => c.AccountId == alone));
-        Assert.NotEqual(merged1.Id(), profile.Id);
-        Assert.Equal(phone1, profile.PhoneNumber);
-
-        var second = await RegisterAsync(phone2, phone2);
-        Assert.Equal(reused.Id(), (await factory.QueryAsync(db => db.Customers.SingleAsync(c => c.AccountId == second))).Id);
-    }
-
     // NFR-09: a stale form gets MSG06. The number moved on: the screen read the old one, so it is a stale form, not a change.
     [Fact]
     public async Task L5_a_linked_form_read_before_the_trader_changed_the_number_gets_msg06()
@@ -131,16 +95,5 @@ public class SalesCatalogueQaLinkedProfileTests(AuthApiFactory factory) : IClass
 
         await response.ProblemAsync(HttpStatusCode.Conflict, "MSG06");
         Assert.NotEmpty(view.Text("name")!);
-    }
-
-    private async Task<Guid> RegisterAsync(string identifier, string normalized)
-    {
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = identifier }));
-        var token = await VerifyAsync(client, id, factory.LastSmsCode(normalized));
-        var password = NewPassword();
-        var response = await client.PostAsJsonAsync("/api/auth/register", new { channel = "Sms", identifier, password, passwordConfirmation = password, verificationToken = token });
-        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid();
     }
 }

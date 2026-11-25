@@ -81,7 +81,7 @@ public class RaftStatusAndAccessTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("MSG-GEN-09", inStoppedZone.Text("code"));
         Assert.Equal($"Farming zone {zone.Text("code")} is Discontinued and cannot be used for this action.", inStoppedZone.Text("detail"));
 
-        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         // The older route of Resume still works for one release.
         var back = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/reactivate", new { reason = "Repaired", rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
@@ -95,7 +95,7 @@ public class RaftStatusAndAccessTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync($"/api/rafts/{Guid.NewGuid()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.PostAsJsonAsync($"/api/rafts/{Guid.NewGuid()}/discontinue", new { rowVersion = "" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync($"/api/rafts/{Guid.NewGuid()}/lanes/today")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync($"/api/rafts/{Guid.NewGuid()}/progress")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync($"/api/rafts/{raft.Id()}/condition")).StatusCode);
     }
 
@@ -116,11 +116,11 @@ public class RaftStatusAndAccessTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(0, detail.GetProperty("materialCost").GetDecimal());
         Assert.Equal(5, detail.GetProperty("lanes").GetArrayLength());
         Assert.Equal(HttpStatusCode.OK, (await staff.Client.GetAsync(detail.GetProperty("photos")[0].Text("url"))).StatusCode);
-        Assert.Equal(5, (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftA.Id()}/lanes/today")).GetProperty("lanes").GetArrayLength());
+        Assert.Equal(5, (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftA.Id()}/progress")).GetProperty("lanes").GetArrayLength());
 
         Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}")).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}/lanes/today")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}/progress")).ErrorCodeAsync());
 
         // Owner-only writes: even a role holding every function in the zone gets MSG-GEN-08.
         var trader = await factory.TraderAsync();
@@ -141,7 +141,7 @@ public class RaftStatusAndAccessTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}/rafts")).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}")).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}/lanes/today")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}/progress")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync($"/api/rafts/{raftA.Id()}")).StatusCode);
 
         var unchanged = await factory.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raftA.Id()));

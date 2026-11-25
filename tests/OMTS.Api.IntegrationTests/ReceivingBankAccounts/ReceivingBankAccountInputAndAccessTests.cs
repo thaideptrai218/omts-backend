@@ -93,7 +93,7 @@ public sealed class ReceivingBankAccountInputAndAccessTests
     [Theory]
     [InlineData(StaffRole.ZoneManager)]
     [InlineData(StaffRole.Accountant)]
-    public async Task Only_the_owner_has_access_also_not_staff_of_all_zones(StaffRole role)
+    public async Task Only_the_owner_has_access_to_the_account_also_not_staff_of_all_zones_while_any_staff_reads_the_list_of_banks(StaffRole role)
     {
         using var api = new AuthApiFactory();
         await api.EnsureCooperativeAsync();
@@ -102,7 +102,7 @@ public sealed class ReceivingBankAccountInputAndAccessTests
         await api.GrantAsync(staff, role, null);
         var client = await api.LoginAsync(staff.Username, password);
 
-        Assert.Equal("MSG-GEN-08", await (await client.GetAsync("/api/banks")).ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/banks")).StatusCode);
         Assert.Equal("MSG-GEN-08", await (await client.GetAsync(Route)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync(Route, Body(""))).ErrorCodeAsync());
         Assert.Null(await api.QueryAsync(db => db.Cooperatives.AsNoTracking().Select(c => c.BankAccount).SingleAsync()));
@@ -117,6 +117,7 @@ public sealed class ReceivingBankAccountInputAndAccessTests
         var trader = await api.LoginAsync((await api.AddAccountAsync(NewCode(), password, SubjectType.Trader)).Username, password);
         var anonymous = api.CreateClient();
 
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync("/api/banks")).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await trader.GetAsync(Route)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await trader.PutAsJsonAsync(Route, Body(""))).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/banks")).StatusCode);

@@ -24,6 +24,12 @@ public sealed class BffClientOptions
 
     /// <summary>Development may leave the secret empty; the feature then stays inactive, no header can match an empty secret.</summary>
     public bool IsValid(bool development) => !Enabled || development || SharedSecret.Length >= MinimumSecretLength;
+
+    /// <summary>
+    /// True when the API runs for real users (not Development) without the BFF naming the end user's address: every request then
+    /// carries the BFF's address, so all web users share the per-address limits (5 login attempts a minute for the whole cooperative).
+    /// </summary>
+    public bool SharesRateLimitBucket(bool development) => !Enabled && !development;
 }
 
 /// <summary>
@@ -54,6 +60,19 @@ public static class BffClientHeadersSetup
                 $"{BffClientOptions.SectionName}:SharedSecret must be at least {BffClientOptions.MinimumSecretLength} characters when {BffClientOptions.SectionName}:Enabled is true.")
             .ValidateOnStart();
         return services;
+    }
+
+    /// <summary>Logs a warning at startup when the BFF headers are off outside Development (see <see cref="BffClientOptions.SharesRateLimitBucket"/>); it changes no setting.</summary>
+    public static void WarnWhenBffClientIsOff(this WebApplication app)
+    {
+        var options = app.Services.GetRequiredService<IOptions<BffClientOptions>>().Value;
+        if (options.SharesRateLimitBucket(app.Environment.IsDevelopment()))
+        {
+            app.Logger.LogWarning(
+                "{Section}:Enabled is false: every request carries the address of the web server, so all web users share one rate-limit bucket and the login limit applies to the whole cooperative together. "
+                + "Set {Section}:Enabled to true with a {Section}:SharedSecret of at least {MinimumLength} characters (the same secret as the web server) to limit each user separately.",
+                BffClientOptions.SectionName, BffClientOptions.SectionName, BffClientOptions.SectionName, BffClientOptions.MinimumSecretLength);
+        }
     }
 
     /// <summary>Before <c>UseForwardedHeaders</c>: checks the secret, keeps what the BFF supplied, and removes the secret from the request.</summary>

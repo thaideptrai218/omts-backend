@@ -18,15 +18,15 @@ using static OMTS.Api.IntegrationTests.Labor.LaborSettingsTestKit;
 namespace OMTS.Api.IntegrationTests.Labor;
 
 /// <summary>
-/// BR-LABOR-13 on a real SQL Server: a dated change and the sending of a payroll cannot both pass unseen, whichever saves first.
-/// The send here is what LABOR-12 will do: it updates the payroll row, under the row version it read.
+/// BR-LABOR-13 on a real SQL Server: a dated change and the finalization of a payroll cannot both pass unseen, whichever saves first.
+/// The finalization here updates the payroll row, under the row version it read.
 /// </summary>
 public class PayPeriodLockRaceSqlServerTests
 {
     private static Payroll DraftOfOctober() => new() { PeriodStart = new(2020, 10, 1), PeriodEnd = new(2020, 10, 31) };
 
     [SqlServerFact]
-    public async Task A_send_landing_between_the_lock_check_and_the_save_fails_that_save()
+    public async Task A_finalization_landing_between_the_lock_check_and_the_save_fails_that_save()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -37,13 +37,13 @@ public class PayPeriodLockRaceSqlServerTests
         using var scope = api.Services.CreateScope();
         Assert.Null(await scope.ServiceProvider.GetRequiredService<PayPeriodLock>().CheckAsync(new DateOnly(2020, 10, 15), default));
 
-        await SendAsync(api, payroll.Id);
+        await FinalizeAsync(api, payroll.Id);
 
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() => scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync());
     }
 
     [SqlServerFact]
-    public async Task A_change_saved_before_a_send_that_read_the_payroll_earlier_fails_that_send()
+    public async Task A_change_saved_before_a_finalization_that_read_the_payroll_earlier_fails_that_finalization()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -54,8 +54,8 @@ public class PayPeriodLockRaceSqlServerTests
 
         using var scope = api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-        var sending = await db.Payrolls.SingleAsync(p => p.Id == payroll.Id);
-        sending.StatusId = StatusIds.Payroll.AwaitingFinalization;
+        var finalizing = await db.Payrolls.SingleAsync(p => p.Id == payroll.Id);
+        finalizing.StatusId = StatusIds.Payroll.Finalized;
 
         Assert.Equal(HttpStatusCode.OK, (await owner.PostRateAsync(jobType, 50_000, "2020-10-15")).StatusCode);
 
@@ -63,7 +63,7 @@ public class PayPeriodLockRaceSqlServerTests
     }
 
     [SqlServerFact]
-    public async Task Rates_and_settings_racing_the_send_of_their_period_never_answer_500_and_the_period_ends_locked()
+    public async Task Rates_and_settings_racing_the_finalization_of_their_period_never_answer_500_and_the_period_ends_locked()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -81,9 +81,9 @@ public class PayPeriodLockRaceSqlServerTests
         var saves = jobTypes.Select((j, i) => owner.PostRateAsync(j, 50_000 + i, "2020-10-15"))
             .Append(owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-10-15", rowVersion = version }))
             .ToList();
-        var send = Task.Run(() => SendWithRetriesAsync(api, payroll.Id));
+        var finalization = Task.Run(() => FinalizeWithRetriesAsync(api, payroll.Id));
         var responses = await Task.WhenAll(saves);
-        await send;
+        await finalization;
 
         await AssertNo500Async(responses);
         foreach (var refused in responses.Where(r => r.StatusCode == HttpStatusCode.Conflict))
@@ -91,7 +91,7 @@ public class PayPeriodLockRaceSqlServerTests
             Assert.Contains(await refused.ErrorCodeAsync(), new[] { "MSG06", "MSG-LABOR-04" });
         }
 
-        Assert.Equal(StatusIds.Payroll.AwaitingFinalization, await QueryAsync(api, db => db.Payrolls.Select(p => p.StatusId).SingleAsync()));
+        Assert.Equal(StatusIds.Payroll.Finalized, await QueryAsync(api, db => db.Payrolls.Select(p => p.StatusId).SingleAsync()));
         var current = await owner.ReadJobTypeAsync(jobTypes[0].IdOf());
         Assert.Equal("MSG-LABOR-04", await (await owner.PostRateAsync(current, 70_000, "2020-10-16")).ErrorCodeAsync());
     }
@@ -124,23 +124,23 @@ public class PayPeriodLockRaceSqlServerTests
         await AssertNo500Async(responses);
     }
 
-    private static async Task SendAsync(SqlServerApiFactory api, Guid payrollId)
+    private static async Task FinalizeAsync(SqlServerApiFactory api, Guid payrollId)
     {
         using var scope = api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         var payroll = await db.Payrolls.SingleAsync(p => p.Id == payrollId);
-        payroll.StatusId = StatusIds.Payroll.AwaitingFinalization;
+        payroll.StatusId = StatusIds.Payroll.Finalized;
         await db.SaveChangesAsync();
     }
 
-    /// <summary>A send that meets a save of the period reads the row again, as a user does after MSG06.</summary>
-    private static async Task SendWithRetriesAsync(SqlServerApiFactory api, Guid payrollId)
+    /// <summary>A finalization that meets a save of the period reads the row again, as a user does after MSG06.</summary>
+    private static async Task FinalizeWithRetriesAsync(SqlServerApiFactory api, Guid payrollId)
     {
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                await SendAsync(api, payrollId);
+                await FinalizeAsync(api, payrollId);
                 return;
             }
             catch (DbUpdateConcurrencyException) when (attempt < 50)

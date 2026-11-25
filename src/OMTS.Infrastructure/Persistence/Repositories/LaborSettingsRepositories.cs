@@ -13,8 +13,7 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
     // The plain comparison answers for what the column's collation calls equal, which is what the unique index refuses.
     public Task<JobType?> FindByNameAsync(string name, Guid? exceptId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.JobTypes.AsNoTracking().FirstOrDefaultAsync(j => (j.Name == name || j.Name.ToUpper() == upper) && j.Id != exceptId, cancellationToken);
+        return db.JobTypes.AsNoTracking().FirstOrDefaultAsync(j => j.Name == name && j.Id != exceptId, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(
@@ -74,7 +73,4 @@ internal sealed class PayrollRepository(OmtsDbContext db) : IPayrollRepository
 {
     public async Task<IReadOnlyList<Payroll>> ListEndingOnOrAfterAsync(DateOnly date, CancellationToken cancellationToken) =>
         await db.Payrolls.Where(p => p.PeriodEnd >= date && p.StatusId != StatusIds.Payroll.Cancelled).OrderBy(p => p.PeriodEnd).ToListAsync(cancellationToken);
-
-    public async Task<DateOnly?> LastPeriodEndAsync(CancellationToken cancellationToken) =>
-        await db.Payrolls.Where(p => p.StatusId != StatusIds.Payroll.Cancelled).MaxAsync(p => (DateOnly?)p.PeriodEnd, cancellationToken);
 }

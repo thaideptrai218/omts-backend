@@ -15,8 +15,6 @@ internal sealed class StatusConfiguration : IEntityTypeConfiguration<Status>
         builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
         builder.HasIndex(x => new { x.Group, x.Code }).IsUnique();
         builder.Property(x => x.DisplayName).HasMaxLength(Lengths.ShortText);
-        builder.Property(x => x.Meaning).HasMaxLength(Lengths.Reason);
-        builder.Property(x => x.DisplayColor).HasMaxLength(Lengths.Phone);
 
         builder.HasData(StatusCatalogSeed.Statuses);
     }

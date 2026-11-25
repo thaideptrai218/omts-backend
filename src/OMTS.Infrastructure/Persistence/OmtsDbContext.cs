@@ -67,7 +67,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CyclePlanPhoto> CyclePlanPhotos => Set<CyclePlanPhoto>();
     public DbSet<LaneProgressChange> LaneProgressChanges => Set<LaneProgressChange>();
     public DbSet<NurseryBatch> NurseryBatches => Set<NurseryBatch>();
-    public DbSet<NurseryBatchAllocation> NurseryBatchAllocations => Set<NurseryBatchAllocation>();
     public DbSet<NurseryBatchPhoto> NurseryBatchPhotos => Set<NurseryBatchPhoto>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
     public DbSet<HarvestLot> HarvestLots => Set<HarvestLot>();
@@ -134,7 +133,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
-    public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

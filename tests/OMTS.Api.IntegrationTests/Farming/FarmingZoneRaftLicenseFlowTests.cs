@@ -95,7 +95,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var discontinue = await owner.PostAsJsonAsync($"/api/rafts/{raftId}/discontinue", new { rowVersion = second.GetProperty("rowVersion").GetString() });
         Assert.Equal("MSG-GEN-06", await discontinue.ErrorCodeAsync());
 
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/lanes/today");
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/progress");
         Assert.Equal(6, today.GetProperty("lanes").GetArrayLength());
         Assert.All(today.GetProperty("lanes").EnumerateArray(), lane => Assert.Equal("In Use", lane.GetProperty("status").GetString()));
     }

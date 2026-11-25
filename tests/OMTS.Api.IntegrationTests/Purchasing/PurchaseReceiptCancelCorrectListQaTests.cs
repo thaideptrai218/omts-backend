@@ -14,18 +14,14 @@ namespace OMTS.Api.IntegrationTests.Purchasing;
 /// <summary>
 /// QA of PR P2 (OMTS-218): PURCHASE-06 on statuses other than Completed (MSG-GEN-09), the MSG-PURCHASE-08 recipients (every
 /// Owner and every Accountant with an Effective pair, the Owner also when the Owner cancelled), a supplier already paid in
-/// advance (MSG-PURCHASE-07, the preview equal to the cancel), the Owner's correction (PURCHASE-06.2) after a seeding with no
-/// quantity and its effect on the list and the raft material cost, and the PURCHASE-03.2 export holding the totals shown.
+/// advance (MSG-PURCHASE-07, the preview equal to the cancel), and the PURCHASE-03.2 export holding the totals shown.
 /// </summary>
 public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private const string Receipts = "/api/purchase-receipts";
 
-    private static Task<HttpResponseMessage> CorrectAsync(HttpClient client, Guid receiptId, object body) =>
-        client.PostAsJsonAsync($"{Receipts}/{receiptId}/correct", body);
-
     [Fact]
-    public async Task A_draft_or_a_cancelled_receipt_is_never_previewed_cancelled_corrected_returned_and_a_cancelled_one_never_removed()
+    public async Task A_draft_or_a_cancelled_receipt_is_never_previewed_cancelled_returned_and_a_cancelled_one_never_removed()
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
@@ -36,8 +32,6 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         {
             await (await world.Owner.GetAsync($"{Receipts}/{receipt.Id()}/cancel-preview")).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
             await (await world.Owner.CancelAsync(receipt.Id(), "Again")).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-            await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Price", lines = new[] { new { lineId = receipt.LineOf(world.Other), unitPrice = 900 } } }))
-                .ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
             await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(receipt.LineOf(world.Other), 1)] }))
                 .ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         }
@@ -98,56 +92,6 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var advance = await factory.QueryAsync(db => db.Notifications
             .Where(n => n.RelatedRecordId == unpaid.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance).Select(n => n.MessageParams).FirstAsync());
         Assert.Equal(preview.Money("advanceAfter"), JsonDocument.Parse(advance!).RootElement.GetProperty("advance_amount").GetDecimal());
-    }
-
-    // GBR-04 / PURCHASE-06.2.E1: with the whole line seeded, the Owner can raise the quantity but never lower it; the
-    // receipt stays impossible to cancel.
-    [Fact]
-    public async Task After_the_whole_line_was_seeded_the_owner_can_only_raise_the_quantity_of_the_line()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 50, 9_000));
-        var line = receipt.LineOf(world.Seed);
-        await factory.SeedAsync(world.Raft.Id, line, 50);
-
-        var below = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 49.99m } } }))
-            .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        Assert.Equal(("Line 1", 50m, 50m, 0m), (below.GetProperty("field").GetString(), below.Money("minQuantity"), below.Money("seededQuantity"), below.Money("returnedQuantity")));
-
-        var raised = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Supplier invoice", lines = new[] { new { lineId = line, quantity = 60 } } })).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal((60m, 540_000m, 50m, 10m), (raised.LineViewOf(world.Seed).Money("quantity"), raised.LineViewOf(world.Seed).Money("lineAmount"),
-            raised.LineViewOf(world.Seed).Money("seeded"), raised.LineViewOf(world.Seed).Money("returnable")));
-        Assert.Equal("Seeded", (await (await world.Owner.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09")).GetProperty("cause").GetString());
-    }
-
-    // PURCHASE-06.2 step 5: the list and the price of material used on a raft follow the corrected line; repeated or missing
-    // lines and a version read before another change are refused.
-    [Fact]
-    public async Task A_correction_moves_the_list_and_the_raft_material_cost_and_refuses_repeated_lines_or_a_stale_version()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(world.MaterialForRaft(4, 25_000), new LineBody(world.Other, 1, 10_000));
-        var material = receipt.LineOf(world.Material);
-        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1)] })).ReadAsync(HttpStatusCode.Created);
-        var current = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/{receipt.Id()}");
-
-        Assert.Equal("Lines", await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "x", lines = new[] { new { lineId = material, unitPrice = 1 }, new { lineId = material, unitPrice = 2 } } }))
-            .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("Lines", await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "x", lines = Array.Empty<object>() })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "x", rowVersion = Convert.ToBase64String([1, 2, 3, 4, 5, 6, 7, 8]), lines = new[] { new { lineId = material, unitPrice = 1 } } }))
-            .ProblemAsync(HttpStatusCode.Conflict, "MSG06");
-
-        await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Invoice price", rowVersion = current.GetProperty("rowVersion").GetString(), lines = new[] { new { lineId = material, unitPrice = 20_000 } } }))
-            .ReadAsync(HttpStatusCode.OK);
-
-        var list = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}?supplierId={world.SupplierId}&raftId={world.Raft.Id}");
-        var row = Assert.Single(list.GetProperty("page").GetProperty("items").EnumerateArray());
-        Assert.Equal((90_000m, 80_000m, 80_000m), (row.Money("total"), row.Money("linesTotal"), list.GetProperty("totals").Money("receiptsTotal")));
-        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
-        var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/raft-material-costs?raftId={world.Raft.Id}");
-        // The cost price stays the 25,000 the first receipt set (the Fixed method), not the corrected 20,000.
-        Assert.Equal(50_000m, Assert.Single(costs.GetProperty("rafts").EnumerateArray()).Money("materialCost"));
     }
 
     // PURCHASE-03.2: the file holds the receipts and the three totals shown; the raft material cost is not a receipt total.

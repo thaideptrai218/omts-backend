@@ -58,6 +58,16 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Update(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken) =>
         (await zones.UpdateAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>
+    /// Saves the licensed sea area of an In Use zone as GeoJSON, or clears it with a null <c>boundary</c>. In Use rafts
+    /// pinned outside it are named in the warning <c>RAFTS_OUTSIDE_ZONE_BOUNDARY</c>; the save goes through.
+    /// </summary>
+    [HttpPut("{zoneId:guid}/boundary")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<FarmingZoneSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetBoundary(Guid zoneId, SaveZoneBoundaryRequest request, CancellationToken cancellationToken) =>
+        (await zones.SetBoundaryAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>Blocked with MSG-GEN-06 while In Use rafts remain in the zone.</summary>
     [HttpPost("{zoneId:guid}/discontinue")]
     [RequireCooperativeOwner]
@@ -65,8 +75,7 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Discontinue(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken) =>
         (await zones.DiscontinueAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Resume (FARM-02.3). <c>/reactivate</c> is the older route of the same action, kept for one release.</summary>
-    [HttpPost("{zoneId:guid}/resume")]
+    /// <summary>Resume (FARM-02.3).</summary>
     [HttpPost("{zoneId:guid}/reactivate")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]

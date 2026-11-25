@@ -248,9 +248,6 @@ public sealed record SalesOrderRequestDraft(
 
 public sealed record SalesOrderDraftLine(Guid ProductId, string ProductCode, string ProductName, Guid UnitId, string UnitCode, string UnitName, decimal Quantity, decimal UnitPrice);
 
-/// <summary>An advance saved on an order, with the VietQR code when it waits for its transfer, and the order as it is now.</summary>
-public sealed record SalesOrderAdvanceSaved(SalesOrderView Order, SalesOrderAdvanceView Advance, CustomerPaymentQr? Qr);
-
 /// <summary>The order saved, and the VietQR code of its advance when the advance waits for the transfer.</summary>
 public sealed record SalesOrderSaved(SalesOrderView Order, string Message, string MessageCode, CustomerPaymentQr? AdvanceQr = null);
 

@@ -56,7 +56,8 @@ public sealed class PriceTrendsService(ReportFilterResolver filters, IPriceTrend
 
         // The unit, the product and the key are known to be valid here: each was an invalid field above.
         var (f, productId, periodUnit) = (filter.Value!, request.ProductId!.Value, unit!.Value);
-        var lines = PriceTrendsCalculator.LinesOf(await query.LinesAsync(f, cancellationToken), periodUnit, productId, periodDate);
+        var (periodFrom, periodTo) = PriceTrendsCalculator.BucketOf(periodDate, periodUnit);
+        var lines = PriceTrendsCalculator.LineRowsOf(await query.LinesAsync(f, productId, periodFrom, periodTo, cancellationToken));
         var empty = lines.Count == 0 ? UserMessages.NoDataForFilters("product and period") : null;
         return new PriceTrendLineList(f.From, f.To, Name(periodUnit), productId, periodKey!, lines, empty?.Text, empty?.Code);
     }
@@ -74,7 +75,7 @@ public sealed class PriceTrendsService(ReportFilterResolver filters, IPriceTrend
         }
 
         var (f, periodUnit) = (filter.Value!, unit!.Value);
-        var series = PriceTrendsCalculator.Build(await query.LinesAsync(f, cancellationToken), periodUnit);
+        var series = PriceTrendsCalculator.Build(await query.DaysAsync(f, cancellationToken), periodUnit);
         var empty = series.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new PriceTrendsReport(computedAt, f.From, f.To, Name(periodUnit), new PriceTrendsChoices(f.Zones, f.Products), series, empty?.Text, empty?.Code);
     }

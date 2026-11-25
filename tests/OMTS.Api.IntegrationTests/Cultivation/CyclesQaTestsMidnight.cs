@@ -61,7 +61,7 @@ public class CyclesQaTestsMidnight
         Assert.Equal(["Start date"], await (await owner.PostCycleAsync(second, new CycleBody(newDay))).InvalidFieldsAsync());
         Assert.Equal(oldDay, (await owner.ProgressAsync(second)).Date("date"));
         Assert.Equal(["Date"], await (await owner.GetAsync($"/api/rafts/{second}/progress?date={newDay:yyyy-MM-dd}")).InvalidFieldsAsync());
-        Assert.Equal(oldDay, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{second}/lanes/today")).Date("date"));
+        Assert.Equal(oldDay, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{second}/progress")).Date("date"));
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public class CyclesQaTestsMidnight
         Assert.Equal(oldDay, DateOnly.FromDateTime(api.Clock.GetUtcNow().UtcDateTime));
         Assert.Equal([1, 2], (await owner.ProgressAsync(raft.Id(), $"?date={oldDay:yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
         Assert.Equal([1, 2, 3], (await owner.ProgressAsync(raft.Id())).LaneNumbers(StatusIds.Lane.InUse));
-        Assert.Equal([1, 2, 3], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/progress")).LaneNumbers(StatusIds.Lane.InUse));
     }
 
     // BR-CYCLE-01: a raft closed today can start its next cycle from tomorrow, and "tomorrow" begins at midnight in Vietnam.

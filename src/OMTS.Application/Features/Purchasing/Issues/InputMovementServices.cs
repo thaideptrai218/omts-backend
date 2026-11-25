@@ -30,26 +30,26 @@ public sealed class InputMovementService(
 
     public async Task<Result<InputMovementPage>> MovementsAsync(Guid itemId, InputMovementQuery query, CancellationToken cancellationToken)
     {
-        var read = await ReadAsync(itemId, query, cancellationToken);
+        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
+        var read = await ReadAsync(itemId, query, (page - 1) * pageSize, pageSize, cancellationToken);
         if (!read.IsSuccess)
         {
             return read.Error!;
         }
 
-        var (item, rows) = read.Value;
-        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        return new InputMovementPage(rows.Skip((page - 1) * pageSize).Take(pageSize).Select(View).ToList(), page, pageSize, rows.Count, item.Unit);
+        var (item, rows, total) = read.Value;
+        return new InputMovementPage(rows.Select(View).ToList(), page, pageSize, total, item.Unit);
     }
 
     public async Task<Result<ExportedFile>> ExportAsync(Guid itemId, InputMovementQuery query, CancellationToken cancellationToken)
     {
-        var read = await ReadAsync(itemId, query, cancellationToken);
+        var read = await ReadAsync(itemId, query, 0, null, cancellationToken);
         if (!read.IsSuccess)
         {
             return read.Error!;
         }
 
-        var (item, rows) = read.Value;
+        var (item, rows, _) = read.Value;
         string[] headers = ["Document", "Type", "Time", "Party", "Seed lot", "Cost", "Previous cost", "Price", "Quantity", "Balance", "Unit"];
         var data = rows.Select(r => (IReadOnlyList<object?>)new List<object?>
         {
@@ -101,8 +101,9 @@ public sealed class InputMovementService(
             m.PreviousUnitCost, r.Source?.Kind, r.Source?.RecordId, r.Source?.CycleId, r.Source?.RaftId, r.Source?.ZoneId);
     }
 
-    /// <summary>The movements that match the query, newest first, each with the balance after it in time order.</summary>
-    private async Task<Result<(FarmingInputItem Item, IReadOnlyList<InputMovementRow> Rows)>> ReadAsync(Guid itemId, InputMovementQuery query, CancellationToken cancellationToken)
+    /// <summary>The movements that match the query, newest first, each with the balance after it in time order: one page (<paramref name="take"/> null reads them all) and the total that match.</summary>
+    private async Task<Result<(FarmingInputItem Item, IReadOnlyList<InputMovementRow> Rows, int Total)>> ReadAsync(
+        Guid itemId, InputMovementQuery query, int skip, int? take, CancellationToken cancellationToken)
     {
         if (!await access.MayReadAsync(cancellationToken))
         {
@@ -127,15 +128,8 @@ public sealed class InputMovementService(
 
         var from = query.From is { } f ? BusinessClock.FromLocal(f.ToDateTime(TimeOnly.MinValue)) : (DateTimeOffset?)null;
         var before = query.To is { } t ? BusinessClock.FromLocal(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : (DateTimeOffset?)null;
-        var all = await movements.ForItemAsync(itemId, query.IncludeReversals, cancellationToken);
-        // An adjustment counts as the kind of the row it undoes, so the kind filter keeps the adjustments of that kind when they are shown.
-        var kindOf = all.ToDictionary(r => r.Movement.Id, r => r.Movement.Kind);
-        bool OfKind(InputStockMovement m) =>
-            query.Kind is null || m.Kind == query.Kind || (m.Kind == InputStockMovementKind.Reversal && m.ReversesMovementId is { } undone && kindOf.TryGetValue(undone, out var original) && original == query.Kind);
-        var rows = all
-            .Where(r => (from is null || r.Movement.OccurredAt >= from) && (before is null || r.Movement.OccurredAt < before) && OfKind(r.Movement))
-            .OrderByDescending(r => r.Movement.OccurredAt).ThenByDescending(r => r.Movement.Sequence).ToList();
-        return (item, rows);
+        var (rows, total) = await movements.ForItemAsync(itemId, new InputMovementFilter(from, before, query.Kind, query.IncludeReversals), skip, take, cancellationToken);
+        return (item, rows, total);
     }
 }
 

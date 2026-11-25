@@ -99,8 +99,5 @@ public sealed record RaftView(
 /// <summary>Answer of a raft create, edit or photo change (FARM-04.0 step 6), in the shape of the zone saves.</summary>
 /// <param name="Message">MSG-GEN-05, e.g. "Raft saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
-/// <param name="Warnings">Non-blocking remarks: the pin more than 5 km from its zone, lanes narrower than 1 m across, lanes of unequal length; empty when there is none.</param>
+/// <param name="Warnings">Non-blocking remarks: the pin more than 5 km from its zone or outside the zone boundary, lanes narrower than 1 m across, lanes of unequal length; empty when there is none.</param>
 public sealed record RaftSaved(RaftView Raft, string Message, string MessageCode, IReadOnlyList<FarmingWarning>? Warnings = null);
-
-/// <summary>FARM-04.1 every lane of a raft today with its status In Use or Removed and its state of the day (BR-FARM-03).</summary>
-public sealed record RaftLanesToday(Guid RaftId, string RaftCode, DateOnly Date, IReadOnlyList<LaneDayView> Lanes);

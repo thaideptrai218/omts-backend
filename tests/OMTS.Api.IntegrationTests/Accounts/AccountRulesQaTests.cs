@@ -150,118 +150,6 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.InRange((await paused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 895, 900);
     }
 
-    // PM decision 03/11: MSG-ACCOUNT-18 carries the real wait, also when the guard per target refuses. All ten sends leave the
-    // hour in one minute, so a client can try again then, and the refusal says how many codes the purpose and number have left.
-    [Fact]
-    public async Task The_guard_per_target_answers_the_time_until_a_send_leaves_the_hour()
-    {
-        var phone = NewPhone();
-        var sent = DateTimeOffset.UtcNow.AddMinutes(-59);
-        await factory.UseDbAsync(db =>
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                db.VerificationCodes.Add(new VerificationCode
-                {
-                    Purpose = VerificationPurpose.ChangePhone,
-                    Channel = VerificationChannel.Sms,
-                    Target = phone,
-                    CodeHash = NewCode(),
-                    CreatedAt = sent,
-                    LastSentAt = sent,
-                    SendTimes = [sent],
-                    ExpiresAt = sent + VerificationCode.Lifetime,
-                });
-            }
-        });
-
-        var refused = await factory.CreateClient().StartRegistrationAsync("Sms", phone);
-
-        Assert.Equal("MSG-ACCOUNT-18", await refused.ErrorCodeAsync());
-        var body = await refused.BodyAsync();
-        Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 120);
-        Assert.Equal(VerificationCode.MaxCodesPerHour, body.GetProperty("sendsLeft").GetInt32());
-    }
-
-    // The guard counts the sends that are in the hour: a request whose last send is recent does not count its older sends.
-    [Fact]
-    public async Task The_guard_per_target_does_not_count_sends_older_than_the_hour()
-    {
-        var phone = NewPhone();
-        var now = DateTimeOffset.UtcNow;
-        await factory.UseDbAsync(db => db.VerificationCodes.Add(new VerificationCode
-        {
-            Purpose = VerificationPurpose.ChangePhone,
-            Channel = VerificationChannel.Sms,
-            Target = phone,
-            CodeHash = NewCode(),
-            CreatedAt = now.AddHours(-2),
-            LastSentAt = now.AddMinutes(-5),
-            SendCount = VerificationThrottle.MaxSendsPerTargetPerWindow,
-            SendTimes = [now.AddMinutes(-5)],
-            ExpiresAt = now,
-        }));
-
-        Assert.Equal(HttpStatusCode.Created, (await factory.CreateClient().StartRegistrationAsync("Sms", phone)).StatusCode);
-    }
-
-    // BR-ACCOUNT-09: a code can be entered wrongly 5 times, and a resend gives a new code: one typing error on it after 4 wrong
-    // entries on the old one leaves its right code working.
-    [Fact]
-    public async Task The_new_code_of_a_resend_has_its_own_five_wrong_entries()
-    {
-        var phone = NewPhone();
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));
-        for (var i = 0; i < 4; i++)
-        {
-            Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(id, WrongCodeFor(factory.LastSmsCode(phone)))).ErrorCodeAsync());
-        }
-
-        await factory.AgeAsync(id, TwoMinutes);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/verifications/{id}/resend", null)).StatusCode);
-        var newCode = factory.LastSmsCode(phone);
-
-        Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(id, WrongCodeFor(newCode))).ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.OK, (await client.EnterAsync(id, newCode)).StatusCode);
-    }
-
-    // ACCOUNT-06.0.E2: a resend of a code cancelled by its 5th wrong entry answers MSG-ACCOUNT-17, not -16 whose text offers Resend
-    // code again. Recovery keeps -16 (BR-ACCOUNT-07): see VerificationAbuseTests.
-    [Fact]
-    public async Task Resend_of_a_cancelled_code_answers_msg_account_17()
-    {
-        var phone = NewPhone();
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));
-        for (var i = 0; i < VerificationCode.MaxFailedAttempts; i++)
-        {
-            await client.EnterAsync(id, WrongCodeFor(factory.LastSmsCode(phone)));
-        }
-
-        await factory.AgeAsync(id, TwoMinutes);
-
-        Assert.Equal("MSG-ACCOUNT-17", await (await client.PostAsync($"/api/verifications/{id}/resend", null)).ErrorCodeAsync());
-    }
-
-    // BR-ACCOUNT-09, ACCOUNT-06 step 4: only the latest code works, also when the earlier one is on a request opened more than an
-    // hour ago that a resend made current.
-    [Fact]
-    public async Task A_new_code_cancels_an_earlier_code_of_a_request_older_than_an_hour()
-    {
-        var phone = NewPhone();
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));
-        await factory.AgeAsync(id, TimeSpan.FromMinutes(61));
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/verifications/{id}/resend", null)).StatusCode);
-        var earlierCode = factory.LastSmsCode(phone);
-        await factory.AgeAsync(id, TwoMinutes);
-
-        await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));
-
-        Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(id, earlierCode)).ErrorCodeAsync());
-    }
-
     // Same rule: a new code for the same purpose and number cancels the earlier one, also when another account asked for it.
     [Fact]
     public async Task A_new_code_for_another_account_cancels_the_earlier_code_of_that_number()
@@ -427,22 +315,6 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
     public void A_quoted_email_or_a_final_dot_is_refused(string input) =>
         Assert.Null(EmailAddresses.Normalize(input));
 
-    // BR-ACCOUNT-02, BR-ACCOUNT-09: the mailbox of an account, quoted: refused as invalid, and no code goes out. An email
-    // cannot register at all now, so the refusal names the channel.
-    [Fact]
-    public async Task A_taken_email_in_quotes_is_refused_as_invalid_and_gets_no_code()
-    {
-        var local = NewCode();
-        await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Trader, a => { a.Email = $"{local}@example.com"; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
-        var quoted = $"\"{local}\"@example.com";
-
-        var started = await factory.CreateClient().StartRegistrationAsync("Email", quoted);
-
-        Assert.Equal("MSG-GEN-01", await started.ErrorCodeAsync());
-        Assert.Equal("Channel", (await started.BodyAsync()).GetProperty("field").GetString());
-        Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(quoted));
-    }
-
     // "Wherever a contact is accepted": staff account, employee, supplier and cooperative profile share the one validator.
     [Fact]
     public async Task A_staff_account_in_a_quoted_email_answers_msg_gen_01_and_other_digits_are_stored_as_ascii()
@@ -457,50 +329,6 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal("MSG-GEN-01", await quoted.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
         Assert.Equal(phone, (await saved.BodyAsync()).GetProperty("account").GetProperty("phoneNumber").GetString());
-    }
-
-    // Fine: the format of the number does not get around the limit, and verifying a code does not clear it.
-    [Fact]
-    public async Task The_limit_holds_across_formats_of_the_number_and_successful_verifications()
-    {
-        var phone = NewPhone();
-        var client = factory.CreateClient();
-        var spellings = new[] { phone, "+84" + phone[1..], $"{phone[..4]} {phone[4..7]}.{phone[7..]}", "84" + phone[1..] };
-
-        for (var i = 0; i < VerificationCode.MaxCodesPerHour; i++)
-        {
-            var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", spellings[i]));
-            Assert.NotEmpty(await VerifyAsync(client, id, factory.LastSmsCode(phone)));
-            await factory.AgeAsync(id, TwoMinutes);
-        }
-
-        var refused = await client.StartRegistrationAsync("Sms", spellings[3]);
-        Assert.Equal("MSG-ACCOUNT-18", await refused.ErrorCodeAsync());
-        Assert.InRange((await refused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 3000, 3600);
-        Assert.Equal(3, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count);
-    }
-
-    // Fine: a cancelled code is refused even when right, and an expired one too.
-    [Fact]
-    public async Task A_cancelled_or_expired_code_is_refused_when_right()
-    {
-        var phone = NewPhone();
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", phone));
-        var code = factory.LastSmsCode(phone);
-        var answers = new List<string?>();
-        for (var i = 0; i < VerificationCode.MaxFailedAttempts; i++)
-        {
-            answers.Add(await (await client.EnterAsync(id, WrongCodeFor(code))).ErrorCodeAsync());
-        }
-
-        Assert.Equal(["MSG-ACCOUNT-16", "MSG-ACCOUNT-16", "MSG-ACCOUNT-16", "MSG-ACCOUNT-16", "MSG-ACCOUNT-17"], answers);
-        Assert.Equal("MSG-ACCOUNT-17", await (await client.EnterAsync(id, code)).ErrorCodeAsync());
-
-        var otherPhone = NewPhone();
-        var expiring = await VerificationIdAsync(await client.StartRegistrationAsync("Sms", otherPhone));
-        await factory.UpdateAsync<VerificationCode>(expiring, c => c.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1));
-        Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(expiring, factory.LastSmsCode(otherPhone))).ErrorCodeAsync());
     }
 
     // Fine: at the limit, the recovery of a real number answers exactly like an unknown number.

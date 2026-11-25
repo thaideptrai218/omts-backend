@@ -506,7 +506,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var owner = raft.Owner.Client;
         await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().FinishedLanes(2));
 
-        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today");
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/progress");
 
         var states = today.GetProperty("lanes").EnumerateArray().ToDictionary(l => l.GetProperty("laneNumber").GetInt32(), l => l.Text("state"));
         Assert.Equal(("BeingHarvested", "Harvested", "BeingHarvested", "NotSeeded"), (states[1], states[2], states[3], states[4]));

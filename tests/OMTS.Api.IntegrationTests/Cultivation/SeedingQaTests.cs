@@ -153,29 +153,6 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Equal(10.1m, await ReturnableAsync());
     }
 
-    // BR-PURCHASE-09, MSG-PURCHASE-10: the quantity not below seeded + returned, in decimals; only the Owner.
-    [Fact]
-    public async Task A_correction_of_the_receipt_stops_at_seeded_plus_returned_and_only_the_owner_corrects()
-    {
-        var setup = await factory.CycleAsync();
-        var owner = setup.Owner.Client;
-        var lot = await owner.SeedLotAsync(quantity: 100m);
-        await owner.RecordSeedingAsync(setup.CycleId, lot.Session(quantity: 30.5m));
-        await owner.ReturnLotAsync(lot, 10.25m);
-
-        var below = await (await owner.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 40.74m })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
-        Assert.Equal(40.75m, below.Money("minQuantity"));
-        Assert.Contains("cannot be less than 40.75 kg (30.5 seeded, 10.25 returned)", below.Text("detail"));
-
-        var manager = await factory.ManagerAsync(setup.ZoneId);
-        Assert.Equal("MSG-GEN-08", await (await manager.Client.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 50m })).ErrorCodeAsync());
-        var accountant = await factory.StaffAsync(null, StaffRole.Accountant);
-        Assert.Equal("MSG-GEN-08", await (await accountant.Client.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 50m })).ErrorCodeAsync());
-
-        await (await owner.CorrectAsync(lot.ReceiptId, "Counted again", new { lineId = lot.LineId, quantity = 40.75m })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(0m, (await ReceiptAsync(owner, lot.ReceiptId)).LineViewOf(lot.ItemId).Money("returnable"));
-    }
-
     // BR-PURCHASE-09: a receipt with two seed lines names the line that was seeded; seeded is told before returned.
     [Fact]
     public async Task The_cancel_block_names_the_seeded_line_and_goes_with_the_last_session()

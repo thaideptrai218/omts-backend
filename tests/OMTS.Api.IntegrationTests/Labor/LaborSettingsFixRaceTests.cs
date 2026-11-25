@@ -37,8 +37,6 @@ public class LaborSettingsFixRaceTests
 
             return await inner.ListEndingOnOrAfterAsync(date, cancellationToken);
         }
-
-        public Task<DateOnly?> LastPeriodEndAsync(CancellationToken cancellationToken) => inner.LastPeriodEndAsync(cancellationToken);
     }
 
     [SqlServerFact]
@@ -79,26 +77,6 @@ public class LaborSettingsFixRaceTests
             var winner = await responses.Single(r => r.StatusCode == HttpStatusCode.OK).BodyAsync(HttpStatusCode.OK);
             Assert.Equal((await owner.ReadJobTypeAsync(jobType.IdOf())).VersionOf(), winner.GetProperty("jobType").VersionOf());
             Assert.Equal(2, await QueryAsync(api, db => db.PayRates.CountAsync(r => r.JobTypeId == jobType.IdOf())));
-        }
-    }
-
-    // One row holds both the values and the version, so payroll settings have no such gap; this keeps it so.
-    [SqlServerFact]
-    public async Task Parallel_identical_payroll_settings_have_one_winner_whose_version_is_the_record_s()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        await using var api = await StartAsync(database);
-        var (owner, _, _) = await OwnerWithCooperativeAsync(api);
-
-        for (var round = 0; round < Rounds; round++)
-        {
-            var version = (await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).VersionOf();
-
-            var responses = await InParallelAsync(Parallel, _ => owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = round + 2, automaticPayroll = false, rowVersion = version }));
-
-            await AssertOneWinnerAsync(responses, HttpStatusCode.OK, "MSG06");
-            var winner = await responses.Single(r => r.StatusCode == HttpStatusCode.OK).BodyAsync(HttpStatusCode.OK);
-            Assert.Equal((await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).VersionOf(), winner.GetProperty("settings").VersionOf());
         }
     }
 

@@ -133,13 +133,13 @@ public class SeedingQaTestsClientList(AuthApiFactory factory) : IClassFixture<Au
         var lot = await owner.SeedLotAsync();
         var record = await owner.SeedingRecordAsync(setup.CycleId, lot.Session([1, 2]));
 
-        var lanes = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{setup.RaftId}/lanes/today");
+        var lanes = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{setup.RaftId}/progress");
         Assert.Equal(["Growing", "Growing", "NotSeeded", "NotSeeded", "NotSeeded"], lanes.GetProperty("lanes").EnumerateArray().OrderBy(l => l.GetProperty("laneNumber").GetInt32()).Select(l => l.Text("state")));
         Assert.False((await owner.ZoneRowAsync(setup.ZoneId, setup.RaftId)).Flag("canCancel"));
 
         await (await owner.RemoveSeedingAsync(record.Id())).ReadAsync(HttpStatusCode.NoContent);
 
-        var after = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{setup.RaftId}/lanes/today");
+        var after = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{setup.RaftId}/progress");
         Assert.All(after.GetProperty("lanes").EnumerateArray(), l => Assert.Equal("NotSeeded", l.Text("state")));
         Assert.True((await owner.ZoneRowAsync(setup.ZoneId, setup.RaftId)).Flag("canCancel"));
     }

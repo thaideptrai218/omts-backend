@@ -64,7 +64,7 @@ public class FarmingZoneSrs2710Tests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(body.Name, (await factory.ZoneEntityAsync(zone.Id())).Name);
         Assert.Equal(0, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == zone.Id() && e.Action == "FarmingZone.Updated")));
 
-        var resumed = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") }))
+        var resumed = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         var edited = await owner.Client.EditZoneAsync(zone.Id(), body with { Name = "Renamed", RowVersion = resumed.Text("rowVersion") });
         Assert.Equal("Renamed", edited.Text("name"));
@@ -82,12 +82,12 @@ public class FarmingZoneSrs2710Tests(AuthApiFactory factory) : IClassFixture<Aut
             .ReadAsync(HttpStatusCode.OK);
 
         var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zone.Id()));
-        Assert.Equal("MSG-GEN-08", await (await staff.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") })).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") })).ErrorCodeAsync());
 
-        var resumed = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { reason = "New season", rowVersion = discontinued.Text("rowVersion") }))
+        var resumed = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { reason = "New season", rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal((StatusIds.Usage.InUse, zone.Text("code")), (resumed.GetProperty("statusId").GetInt32(), resumed.Text("code")));
-        Assert.Equal("MSG-GEN-09", await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = resumed.Text("rowVersion") })).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = resumed.Text("rowVersion") })).ErrorCodeAsync());
         // Its rafts keep their own status (they are resumed one by one in FARM-04).
         Assert.Equal(StatusIds.Usage.Discontinued, (await factory.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raft.Id()))).StatusId);
 

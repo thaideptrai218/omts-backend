@@ -112,7 +112,7 @@ public class MandatorySmsQaCommitAndConfigTests
     }
 
     [Fact]
-    public async Task Provider_None_outside_development_keeps_the_action_warns_at_startup_and_once_per_save_and_codes_answer_msg_account_13()
+    public async Task Provider_None_outside_development_keeps_the_action_and_warns_at_startup_and_once_per_save()
     {
         await using var api = new ProductionHost(("Sms:Provider", "None"));
         var z = await api.ZoneAsync();
@@ -124,8 +124,6 @@ public class MandatorySmsQaCommitAndConfigTests
         Assert.Contains(api.Logs.Lines, l => l.Contains("SMS provider is None") && l.Contains("mandatory notifications"));
         Assert.Single(api.Logs.Lines, l => l.Contains(NotConfiguredLine));
         Assert.DoesNotContain(api.Logs.Lines, l => l.Contains(manager.PhoneNumber!));
-        var code = await api.CreateClient().PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = NewPhone() });
-        Assert.Equal("MSG-ACCOUNT-13", await code.ErrorCodeAsync());
     }
 
     // Allowed by design as before this branch, with the warning: nothing leaves the server, and only the startup line says so.
@@ -168,51 +166,4 @@ public class MandatorySmsQaCommitAndConfigTests
     }
 
     // ---- Verification codes ----
-
-    // BR-ACCOUNT-09 limits codes only. The other side, no ceiling on the mandatory SMS themselves, is a budget question for the PM.
-    [Fact]
-    public async Task The_daily_limit_counts_codes_only_mandatory_sms_neither_use_it_nor_stop_at_it()
-    {
-        await using var api = Host(settings: ("Verification:DailySmsLimit", "2"));
-        var z = await api.ZoneAsync();
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
-        var anonymous = api.CreateClient();
-
-        for (var i = 0; i < 3; i++)
-        {
-            await z.RecordedAsync(9.1m, 20m, client: managerClient);
-        }
-
-        Assert.Equal(3, api.SmsTo(manager).Count);
-        var (first, second) = (NewPhone(), NewPhone());
-        Assert.True((await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = first })).IsSuccessStatusCode);
-        Assert.True((await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = second })).IsSuccessStatusCode);
-        Assert.Matches(@"\d{6}", api.LastSmsCode(first));
-        var refused = await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = NewPhone() });
-        Assert.Equal("MSG-ACCOUNT-13", await refused.ErrorCodeAsync());
-
-        await z.RecordedAsync(9.1m, 20m, client: managerClient);
-
-        Assert.Equal(4, api.SmsTo(manager).Count);
-    }
-
-    // A code waits for its own provider call: the new setting, the queue and the text rule are not on its path.
-    [Fact]
-    public async Task A_code_goes_out_with_its_own_text_after_an_alert_and_a_refused_number_still_answers_msg_account_13()
-    {
-        var refused = NewPhone();
-        await using var api = Host(settings: [("Sms:MandatoryTimeoutSeconds", "1"), ("Sms:Fake:FailFor:0", refused)]);
-        var z = await api.ZoneAsync();
-        var (managerClient, _) = await api.StaffAsync(z.Zone);
-        await z.RecordedAsync(9.1m, 20m, client: managerClient);
-        var anonymous = api.CreateClient();
-        var free = NewPhone();
-
-        var code = await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = free });
-        var notDelivered = await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = refused });
-
-        Assert.True(code.IsSuccessStatusCode, await code.Content.ReadAsStringAsync());
-        Assert.Matches(@"\d{6}", api.LastSmsCode(free));
-        Assert.Equal("MSG-ACCOUNT-13", await notDelivered.ErrorCodeAsync());
-    }
 }

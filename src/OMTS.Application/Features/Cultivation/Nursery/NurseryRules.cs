@@ -25,9 +25,6 @@ public static class NurseryReasonCodes
     /// <summary>Close refused: nothing is left in the pool.</summary>
     public const string NothingToClose = "NURSERY_NOTHING_TO_CLOSE";
 
-    /// <summary>The transfer of shares between rafts is gone (v2): 410.</summary>
-    public const string AllocationsRemoved = "NURSERY_ALLOCATIONS_REMOVED";
-
     /// <summary>The nursery batch of a cycle changes only before its first seeding record (409).</summary>
     public const string CycleSeedLocked = "CYCLE_SEED_LOCKED";
 

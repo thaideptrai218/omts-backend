@@ -31,7 +31,6 @@ public class CooperativeReviewFixTests
         Assert.StartsWith("/api/public/cooperative/logos/", firstUrl);
         Assert.Equal(PngA, await anonymous.GetByteArrayAsync(firstUrl));
         Assert.Equal(PngB, await anonymous.GetByteArrayAsync(secondUrl));
-        Assert.Equal(PngB, await anonymous.GetByteArrayAsync("/api/public/cooperative/logo"));
     }
 
     // Only logo files can be reached, never another path or category.

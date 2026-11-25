@@ -17,6 +17,8 @@ internal sealed class LoginSessionConfiguration : IEntityTypeConfiguration<Login
         builder.HasIndex(x => x.PreviousRefreshTokenHash).HasFilter("[PreviousRefreshTokenHash] IS NOT NULL");
         // The revocation sweeper reads the sessions revoked in the last minutes.
         builder.HasIndex(x => x.RevokedAt);
+        // The clean-up of ended sessions also looks for the ones whose refresh token ran out.
+        builder.HasIndex(x => x.RefreshTokenExpiresAt);
         builder.Property(x => x.RevokeReason).HasMaxLength(Lengths.Name);
         // Base64url of a 256-bit keyed hash: 43 characters. The device list and the signed-out-device check look sessions up by it.
         builder.Property(x => x.DeviceKey).HasMaxLength(64);

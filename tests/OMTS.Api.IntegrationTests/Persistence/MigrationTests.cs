@@ -49,7 +49,6 @@ public class MigrationTests
 
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
             Assert.Equal(db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(Status))!.GetSeedData().Count(), await db.Statuses.CountAsync());
-            Assert.Equal(db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(StatusTransition))!.GetSeedData().Count(), await db.StatusTransitions.CountAsync());
             var cascadingKeys = await db.Database
                 .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE delete_referential_action <> 0")
                 .SingleAsync();
@@ -84,7 +83,7 @@ public class MigrationTests
         Assert.DoesNotContain("SeedingEvents", tables);
         // MESSAGE_DELIVERY (1601–1603, transitions 53–54) comes back with NotificationsV2: the SMS rows use it.
         Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1600));
-        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 52));
+        Assert.DoesNotContain("StatusTransitions", tables);
 
         // The cleanup took the legacy columns off LaneSegments, which RaftsV2 then dropped: seen just before RaftsV2.
         await migrator.MigrateAsync(MigrationBeforeRaftsV2);
@@ -93,7 +92,7 @@ public class MigrationTests
         await migrator.MigrateAsync(MigrationBeforeCleanup);
         Assert.Empty(LegacyTables.Except(await TableNamesAsync(db)));
         Assert.Equal(38, await db.Statuses.CountAsync(s => s.Id >= 801 && s.Id <= 1603));
-        Assert.Equal(43, await db.StatusTransitions.CountAsync(t => t.Id >= 12 && t.Id <= 54));
+        Assert.Equal(43, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM StatusTransitions WHERE Id BETWEEN 12 AND 54").SingleAsync());
 
         await db.Database.MigrateAsync();
         Assert.Empty(LegacyTables.Intersect(await TableNamesAsync(db)));

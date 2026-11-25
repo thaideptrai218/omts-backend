@@ -17,17 +17,16 @@ namespace OMTS.Api.IntegrationTests.Audit;
 public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task Registration_contact_changes_password_change_and_device_moves_write_and_show_no_secret()
+    public async Task Contact_changes_password_change_and_device_moves_write_and_show_no_secret()
     {
         await factory.EnsureCooperativeAsync();
         var (ownerAccount, owner) = await factory.OwnerAsync();
         var secrets = new List<string>();
 
         var (phone, phonePassword) = (NewPhone(), NewPassword());
-        var traderId = await RegisterAsync("Sms", phone, phonePassword, secrets);
-        // A phone number is the only way to register now; a second trader stands where the email registration was.
+        var traderId = await AddTraderAsync(phone, phonePassword, secrets);
         var secondPhone = NewPhone();
-        var secondTraderId = await RegisterAsync("Sms", secondPhone, NewPassword(), secrets);
+        var secondTraderId = await AddTraderAsync(secondPhone, NewPassword(), secrets);
 
         var trader = factory.CreateClient();
         var tokens = await LoginTokensAsync(trader, phone, phonePassword);
@@ -70,9 +69,8 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var stored = await factory.QueryAsync(db => db.AuditEvents
             .Where(e => records.Contains(e.RecordId) || actors.Contains(e.ActorAccountId)).ToListAsync());
         Assert.Superset(
-            new HashSet<string> { "Account.Registered", "Account.ContactChanged", "Account.PasswordChanged", "PushDevice.Moved" },
+            new HashSet<string> { "Account.ContactChanged", "Account.PasswordChanged", "PushDevice.Moved" },
             stored.Select(e => e.Action).ToHashSet());
-        Assert.Equal(2, stored.Count(e => e.Action == "Account.Registered"));
         Assert.Equal(2, stored.Count(e => e.Action == "Account.ContactChanged"));
         foreach (var e in stored)
         {
@@ -110,16 +108,12 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         }
     }
 
-    private async Task<Guid> RegisterAsync(string channel, string identifier, string password, List<string> secrets)
+    /// <summary>A trader account with a verified phone number, as the Owner makes it from a trader account request.</summary>
+    private async Task<Guid> AddTraderAsync(string phone, string password, List<string> secrets)
     {
-        var client = factory.CreateClient();
-        var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel, target = identifier }));
-        var code = Keep(secrets, channel == "Sms" ? factory.LastSmsCode(identifier) : factory.LastEmailCode(identifier));
-        var token = Keep(secrets, await VerifyAsync(client, id, code));
+        var account = await factory.AddAccountAsync(NewCode(), password, OMTS.Domain.Enums.SubjectType.Trader, a => a.PhoneNumber = phone);
         Keep(secrets, password);
-        var registered = await ReadAsync(await client.PostAsJsonAsync("/api/auth/register",
-            new { channel, identifier, password, passwordConfirmation = password, verificationToken = token }), HttpStatusCode.Created);
-        return registered.GetProperty("accountId").GetGuid();
+        return account.Id;
     }
 
     private static string Keep(List<string> secrets, string secret)

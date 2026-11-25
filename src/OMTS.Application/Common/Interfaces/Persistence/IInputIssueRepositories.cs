@@ -39,6 +39,9 @@ public interface IInputIssueRepository
     /// <summary>The issue with its zone, raft, type, receiver and lines (items with their units, seed lots, rafts), tracked.</summary>
     Task<InputIssue?> GetForEditAsync(Guid issueId, CancellationToken cancellationToken);
 
+    /// <summary>The codes of these issues by id, in one read, without loading the issues; an id that is not an issue is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> CodesOfAsync(IReadOnlyCollection<Guid> issueIds, CancellationToken cancellationToken);
+
     /// <summary>The issue that has the code ignoring case (any kind and status), other than the given one.</summary>
     Task<InputIssue?> FindByCodeAsync(string code, Guid? exceptIssueId, CancellationToken cancellationToken);
 
@@ -89,13 +92,17 @@ public sealed record InputMovementSource(InputIssueSource Kind, Guid? RecordId, 
 
 public sealed record InputMovementRow(InputStockMovement Movement, decimal BalanceAfter, string? SeedLotCode, InputMovementSource? Source = null);
 
+/// <summary>Which movements of an item to read: <c>OccurredAt</c> from <paramref name="From"/> (included) to <paramref name="Before"/> (excluded), of a kind (an adjustment that undoes a row counts as that row's kind).</summary>
+public sealed record InputMovementFilter(DateTimeOffset? From, DateTimeOffset? Before, InputStockMovementKind? Kind, bool IncludeReversals);
+
 public interface IInputMovementQuery
 {
     /// <summary>
-    /// The movements of an item oldest first with the balance after each, in the order of <c>OccurredAt</c> then write order. Without reversals, the rows an edit or cancellation
-    /// undid and the reversal rows are left out together (with the cost adjustments they caused), so the balance still adds up.
+    /// The movements of an item that match the filter, newest first (<c>OccurredAt</c> then write order), <paramref name="skip"/> and <paramref name="take"/> applied in SQL (a null take reads
+    /// them all), with the total that match. The balance after each row counts every visible row of the item up to it, whatever the filter keeps. Without reversals, the rows an edit or
+    /// cancellation undid and the reversal rows are left out together (with the cost adjustments they caused), so the balance still adds up.
     /// </summary>
-    Task<IReadOnlyList<InputMovementRow>> ForItemAsync(Guid itemId, bool includeReversals, CancellationToken cancellationToken);
+    Task<(IReadOnlyList<InputMovementRow> Rows, int Total)> ForItemAsync(Guid itemId, InputMovementFilter filter, int skip, int? take, CancellationToken cancellationToken);
 
     /// <summary>The seed lots of an item (lines of Completed receipts with the item), oldest first, with the quantity of each on the ledger.</summary>
     Task<IReadOnlyList<InputSeedLotRow>> SeedLotsAsync(Guid itemId, CancellationToken cancellationToken);

@@ -21,6 +21,13 @@ public class FarmingZone : AuditableEntity, IHasStatus
     /// <summary>Area in hectares.</summary>
     public decimal? Area { get; set; }
 
+    /// <summary>
+    /// The licensed sea area as RFC 7946 GeoJSON text (WGS84, positions [longitude, latitude]): a FeatureCollection of one
+    /// ring polygons, one per area ("Khu") of the licensed map, as the server normalized it; null when none was saved. A raft
+    /// pinned outside it only warns (PM decision 25/11/2026: warn, never block).
+    /// </summary>
+    public string? BoundaryGeoJson { get; set; }
+
     /// <summary>Current water thresholds entered by the Cooperative Owner (BR-WATER-04); changes go to AuditEvent.</summary>
     public decimal? PhMin { get; set; }
     public decimal? PhMax { get; set; }

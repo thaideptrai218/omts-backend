@@ -26,6 +26,30 @@ public sealed class LaneStateReader(ICultivationCycleQuery cycles, ISeedingRecor
         var seedings = cycle is null ? [] : await seedingRecords.LaneSeedingsAsync(cycle.Id, cancellationToken);
         var harvests = cycle is null ? [] : await harvestLots.LaneHarvestsAsync(cycle.Id, cancellationToken);
         var steps = cycle is null ? [] : await progress.StepsAsync(cycle.Id, cancellationToken);
+        return DayOf(raft, date, cycle, seedings, harvests, steps);
+    }
+
+    /// <summary>
+    /// The same for several rafts, the lane day of each raft by its id, in four reads however many rafts there are (the cycles of the date, then the seedings, harvests and steps of all those cycles).
+    /// Each lane day equals what <see cref="ReadAsync"/> gives for the raft.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, LaneDay>> ReadManyAsync(IReadOnlyCollection<Raft> rafts, DateOnly date, CancellationToken cancellationToken)
+    {
+        var cycleOf = await cycles.CyclesOnDateAsync(rafts.Select(r => r.Id).ToList(), date, cancellationToken);
+        var cycleIds = cycleOf.Values.Select(c => c.Id).ToList();
+        var seedings = (await seedingRecords.LaneSeedingsOfCyclesAsync(cycleIds, cancellationToken)).ToLookup(s => s.CycleId);
+        var harvests = (await harvestLots.LaneHarvestsOfCyclesAsync(cycleIds, cancellationToken)).ToLookup(h => h.CycleId);
+        var steps = (await progress.StepsOfCyclesAsync(cycleIds, cancellationToken)).ToLookup(s => s.CycleId);
+        return rafts.ToDictionary(
+            r => r.Id,
+            r => cycleOf.TryGetValue(r.Id, out var cycle)
+                ? DayOf(r, date, cycle, seedings[cycle.Id].ToList(), harvests[cycle.Id].ToList(), steps[cycle.Id].ToList())
+                : DayOf(r, date, null, [], [], []));
+    }
+
+    private static LaneDay DayOf(
+        Raft raft, DateOnly date, CycleSpan? cycle, IReadOnlyList<LaneSeeding> seedings, IReadOnlyList<LaneHarvest> harvests, IReadOnlyList<LaneProgressStep> steps)
+    {
         var laneIds = raft.Lanes.Select(l => l.Id).ToList();
         var states = LaneStateRules.StatesOn(date, cycle, laneIds, seedings, harvests, steps);
         return new LaneDay(

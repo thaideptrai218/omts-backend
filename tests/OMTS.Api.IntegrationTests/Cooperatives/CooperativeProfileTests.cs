@@ -124,7 +124,6 @@ public class CooperativeProfileTests
         Assert.True(File.Exists(Path.Combine(api.StorageRoot, firstKey!)));
         // The URL names that very file: after removal it still serves (published versions keep it); only the current logo is gone.
         Assert.Equal(HttpStatusCode.OK, (await api.CreateClient().GetAsync(logoUrl)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await api.CreateClient().GetAsync("/api/public/cooperative/logo")).StatusCode);
     }
 
     private static async Task<HttpClient> OwnerAsync(AuthApiFactory api) =>

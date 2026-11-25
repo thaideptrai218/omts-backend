@@ -56,7 +56,6 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
         // The body still carries an expected harvest date: it is ignored, never stored or answered.
         Assert.Equal((250.5m, 8000.25m), (cycle.GetProperty("expectedSeedQuantity").GetDecimal(), cycle.GetProperty("targetYieldKg").GetDecimal()));
         Assert.False(cycle.TryGetProperty("expectedHarvestDate", out _));
-        Assert.Null(await factory.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycle.Id()).Select(c => c.ExpectedHarvestDate).SingleAsync()));
         Assert.Equal(10, cycle.GetProperty("daysOfFarming").GetInt32());
     }
 

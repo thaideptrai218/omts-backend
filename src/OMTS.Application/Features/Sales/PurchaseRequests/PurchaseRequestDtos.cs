@@ -34,13 +34,12 @@ public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNum
 /// <param name="SalesOrderId">The order made from the request (a request placed in the Mini App has one at once, a Draft); <paramref name="SalesOrderCode"/> is its code (DH000123).</param>
 /// <param name="Code">The code the request is named by on the screens, in the harvest and at the port.</param>
 /// <param name="Staffing">The staffing plan the Owner sends before accepting (decision of 31/10/2026); null before it.</param>
-/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026).</param>
-/// <param name="Harvest">The lots of the request and the commands on them, on the detail of an Accepted request only.</param>
+/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done, on a request that carries the mark (the routes that set it are gone).</param>
 public sealed record PurchaseRequestView(
     Guid Id, PurchaseRequestCustomerView Customer, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt,
     IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion, Guid? SalesOrderId = null, string? SalesOrderCode = null,
-    string Code = "", PurchaseStaffingView? Staffing = null, DateTimeOffset? HarvestCompletedAt = null, PurchaseHarvestView? Harvest = null);
+    string Code = "", PurchaseStaffingView? Staffing = null, DateTimeOffset? HarvestCompletedAt = null);
 
 /// <summary>A request as its trader sees it (SCR-SALE-01): no other customer's data, no price, no internal field.</summary>
 /// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026).</param>

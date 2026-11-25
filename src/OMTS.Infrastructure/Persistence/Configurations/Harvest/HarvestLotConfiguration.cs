@@ -14,8 +14,6 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId), nameof(HarvestLot.WeighedByAccountId), nameof(HarvestLot.WeighingAgreedByAccountId));
-        // The purchase request the trip harvested for (decision of 11/11/2026); the lots of a request are listed by it.
-        builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
         // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
         builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.ClosedBySalesInvoiceId);
         builder.Property(x => x.CageCount).HasPrecision(9, 2);
@@ -32,6 +30,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasIndex(x => new { x.RaftId, x.HarvestDate });
         builder.HasIndex(x => x.CycleId);
         builder.HasIndex(x => new { x.StatusId, x.HarvestDate });
+        // The end-of-day report reads the lots weighed in a period.
+        builder.HasIndex(x => x.WeighedOn);
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_HarvestLot_CageCount", "[CageCount] > 0");

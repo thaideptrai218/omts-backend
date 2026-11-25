@@ -23,14 +23,16 @@ internal sealed class CustomerRepository(OmtsDbContext db) : ICustomerRepository
 
     public Task<Customer?> FindByCodeAsync(string code, Guid? exceptCustomerId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Code.ToUpper() == upper && c.Id != exceptCustomerId, cancellationToken);
+        return db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Code == code && c.Id != exceptCustomerId, cancellationToken);
     }
 
     public async Task<IReadOnlySet<string>> ExistingPhonesAsync(IReadOnlyCollection<string> phoneNumbers, CancellationToken cancellationToken) =>
         (await db.Customers.AsNoTracking()
             .Where(c => c.MergedIntoCustomerId == null && c.PhoneNumber != null && phoneNumbers.Contains(c.PhoneNumber))
             .Select(c => c.PhoneNumber!).ToListAsync(cancellationToken)).ToHashSet();
+
+    public async Task<IReadOnlySet<string>> ExistingCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+        (await db.Customers.AsNoTracking().Where(c => codes.Contains(c.Code)).Select(c => c.Code).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public void Add(Customer customer) => db.Customers.Add(customer);
 
