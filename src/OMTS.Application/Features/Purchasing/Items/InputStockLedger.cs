@@ -252,14 +252,21 @@ public sealed class InputStockLedger(
     private async Task LoadOnHandAsync(IEnumerable<Guid> itemIds, CancellationToken cancellationToken)
     {
         var missing = itemIds.Where(id => !onHand.ContainsKey(id)).Distinct().ToList();
-        foreach (var (id, quantity) in await stock.OnHandAsync(missing, cancellationToken))
+        if (missing.Count == 0)
         {
-            onHand[id] = quantity;
+            return;
+        }
+
+        // One read of the ledger: the quantity of an item is the sum of its buckets (an item with no row holds nothing).
+        foreach (var id in missing)
+        {
+            onHand[id] = 0m;
         }
 
         foreach (var (key, quantity) in await stock.BucketBalancesAsync(missing, cancellationToken))
         {
             buckets[key] = quantity;
+            onHand[key.ItemId] += quantity;
         }
     }
 

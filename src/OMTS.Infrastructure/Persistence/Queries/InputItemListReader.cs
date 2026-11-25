@@ -30,17 +30,20 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
         var query = Filtered(filter);
         var total = await query.CountAsync(cancellationToken);
         var ids = await Sorted(query, filter).Skip((page - 1) * pageSize).Take(pageSize).Select(f => f.Id).ToListAsync(cancellationToken);
-        // SQL Server cannot sum an expression that holds a subquery: the figures of each match are read and added up here.
+        // SQL Server cannot sum an expression that holds a subquery: the figures of each match are read and added up here. They also hold the quantity on hand of the items of the
+        // page, so the ledger is summed once for the whole list.
         var figures = total == 0
             ? []
-            : await query.Select(f => new { f.OnHand, Cost = f.CostPrice }).ToListAsync(cancellationToken);
-        return (await RowsAsync(ids, cancellationToken), total, figures.Sum(f => f.OnHand * (f.Cost ?? 0m)));
+            : await query.Select(f => new { f.Id, f.OnHand, Cost = f.CostPrice }).ToListAsync(cancellationToken);
+        var onHand = figures.ToDictionary(f => f.Id, f => f.OnHand);
+        return (await RowsAsync(ids, onHand, cancellationToken), total, figures.Sum(f => f.OnHand * (f.Cost ?? 0m)));
     }
 
     public async Task<IReadOnlyList<InputItemRow>> ListAsync(InputItemFilter filter, CancellationToken cancellationToken) =>
-        await RowsAsync(await Sorted(Filtered(filter), filter).Select(f => f.Id).ToListAsync(cancellationToken), cancellationToken);
+        await RowsAsync(await Sorted(Filtered(filter), filter).Select(f => f.Id).ToListAsync(cancellationToken), null, cancellationToken);
 
-    private async Task<IReadOnlyList<InputItemRow>> RowsAsync(List<Guid> ids, CancellationToken cancellationToken)
+    /// <summary>The rows of the items, with the quantity on hand from <paramref name="onHand"/> when the caller has it, else summed from the ledger in one grouped read.</summary>
+    private async Task<IReadOnlyList<InputItemRow>> RowsAsync(List<Guid> ids, IReadOnlyDictionary<Guid, decimal>? onHand, CancellationToken cancellationToken)
     {
         if (ids.Count == 0)
         {
@@ -53,9 +56,9 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
             .Include(i => i.Product)
             .Include(i => i.Photos)
             .Where(i => ids.Contains(i.Id)).AsSplitQuery().ToListAsync(cancellationToken)).ToDictionary(i => i.Id);
-        var sums = await db.InputStockMovements.AsNoTracking().Where(m => ids.Contains(m.ItemId))
-            .GroupBy(m => m.ItemId).Select(g => new { g.Key, Sum = g.Sum(m => m.Quantity) }).ToListAsync(cancellationToken);
-        return ids.Select(id => new InputItemRow(items[id], sums.FirstOrDefault(s => s.Key == id)?.Sum ?? 0m)).ToList();
+        onHand ??= (await db.InputStockMovements.AsNoTracking().Where(m => ids.Contains(m.ItemId))
+            .GroupBy(m => m.ItemId).Select(g => new { g.Key, Sum = g.Sum(m => m.Quantity) }).ToListAsync(cancellationToken)).ToDictionary(s => s.Key, s => s.Sum);
+        return ids.Select(id => new InputItemRow(items[id], onHand.GetValueOrDefault(id))).ToList();
     }
 
     private IQueryable<Figures> Filtered(InputItemFilter filter)

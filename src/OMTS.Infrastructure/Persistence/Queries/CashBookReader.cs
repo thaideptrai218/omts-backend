@@ -2,13 +2,16 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.CashBook;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.CashBook;
+using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
-/// The cash book read side: the self-made vouchers and the supplier payments with money are projected to one shape
-/// (<see cref="CashBookEntry"/>) and joined in one query, so the filters, the order, the paging and the sums all run in SQL over both.
+/// The cash book read side: the self-made vouchers, the supplier payments with money and the customer payments that moved money are projected to one shape
+/// (<see cref="CashBookEntry"/>) and joined in one query, so the filters, the order, the paging and the sums all run in SQL over all of them.
 /// Enums are projected as their names (strings), the same in both halves of the union. A supplier payment is a Cash line unless it
 /// is a bank transfer; a payment is money out, money paid back by the supplier money in.
 /// </summary>
@@ -17,33 +20,32 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
     public async Task<(IReadOnlyList<CashBookEntry> Items, int Total)> PageAsync(
         CashBookQuery query, int page, int pageSize, CancellationToken cancellationToken)
     {
-        var matches = Filter(Entries(), query);
+        var matches = Entries(query);
         var total = await matches.CountAsync(cancellationToken);
         var items = await Order(matches, query).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         return (items, total);
     }
 
     public async Task<IReadOnlyList<CashBookEntry>> ListAsync(CashBookQuery query, CancellationToken cancellationToken) =>
-        await Order(Filter(Entries(), query), query).ToListAsync(cancellationToken);
+        await Order(Entries(query), query).ToListAsync(cancellationToken);
 
     public async Task<CashBookSums> SumsAsync(
         CashFundFilter fund, Guid? cashAccountId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {
-        var recorded = InFund(Entries(), fund, cashAccountId).Where(e => !e.Cancelled);
-        var before = from is { } start ? await TotalsAsync(recorded.Where(e => e.Date < start), cancellationToken) : (Receipts: 0m, Payments: 0m);
-        var within = recorded;
-        if (from is { } periodStart)
-        {
-            within = within.Where(e => e.Date >= periodStart);
-        }
-
-        if (to is { } periodEnd)
-        {
-            within = within.Where(e => e.Date <= periodEnd);
-        }
-
-        var inPeriod = await TotalsAsync(within, cancellationToken);
-        return new CashBookSums(before.Receipts, before.Payments, inPeriod.Receipts, inPeriod.Payments);
+        // One read over the three tables, each cut to the fund, the account and the end of the period on its own columns: the rows before the period and the rows in it are told apart and
+        // added up by the database, so the history before the period is never read row by row. No lower bound: the opening balance is everything before the period.
+        var upper = to is { } end && from is { } start && start > end ? start.AddDays(-1) : to;
+        var lines = VoucherSource(fund, cashAccountId, null, upper).Where(v => v.CancelledAt == null)
+            .Select(v => new MoneyLine { Date = v.VoucherDate, Receipt = v.Direction == CashDirection.Receipt, Amount = v.Amount })
+            .Concat(SupplierPaymentSource(fund, cashAccountId, null, upper).Where(p => p.StatusId != StatusIds.SupplierPayment.Cancelled)
+                .Select(p => new MoneyLine { Date = p.PaymentDate, Receipt = p.Kind != SupplierPaymentKind.Payment, Amount = p.Amount }))
+            .Concat(CustomerPaymentSource(fund, cashAccountId, null, upper).Where(p => p.StatusId != StatusIds.CustomerPayment.Cancelled)
+                .Select(p => new MoneyLine { Date = p.PaymentDate, Receipt = p.Kind == CustomerPaymentKind.Payment, Amount = p.Amount }));
+        var periodStart = from ?? DateOnly.MinValue;
+        var sums = await lines.GroupBy(l => new { Before = l.Date < periodStart, l.Receipt })
+            .Select(g => new { g.Key.Before, g.Key.Receipt, Sum = g.Sum(l => l.Amount) }).ToListAsync(cancellationToken);
+        decimal SumOf(bool before, bool receipt) => sums.Where(s => s.Before == before && s.Receipt == receipt).Sum(s => s.Sum);
+        return new CashBookSums(SumOf(true, true), SumOf(true, false), SumOf(false, true), SumOf(false, false));
     }
 
     public async Task<IReadOnlyList<CashPartyView>> SearchPartiesAsync(CashPartyKind kind, string? search, int take, CancellationToken cancellationToken)
@@ -119,13 +121,22 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
         return found;
     }
 
-    /// <summary>
-    /// Every voucher, every supplier payment with money (amount above zero) and every customer payment that moved money as a line. The supplier payment of a cancelled status is
-    /// a Cancelled line; its type is the system type of its kind and it never counts in the business result by itself.
-    /// </summary>
-    private IQueryable<CashBookEntry> Entries()
+    /// <summary>One line of money for the sums: when, which way, how much.</summary>
+    private sealed class MoneyLine
     {
-        var vouchers = db.CashVouchers.AsNoTracking().Select(v => new CashBookEntry
+        public DateOnly Date { get; init; }
+        public bool Receipt { get; init; }
+        public decimal Amount { get; init; }
+    }
+
+    /// <summary>
+    /// Every voucher, every supplier payment with money (amount above zero) and every customer payment that moved money as a line, the lines of the query only. The fund, the account and
+    /// the period are cut on the columns of each table before the lines are joined into one list (an index can serve them); the other filters follow on each part, then the parts are
+    /// concatenated. The supplier payment of a cancelled status is a Cancelled line; its type is the system type of its kind and it never counts in the business result by itself.
+    /// </summary>
+    private IQueryable<CashBookEntry> Entries(CashBookQuery query)
+    {
+        var vouchers = VoucherSource(query.Fund, query.CashAccountId, query.From, query.To).Select(v => new CashBookEntry
         {
             Source = "CashVoucher",
             Id = v.Id,
@@ -153,7 +164,7 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
             SourceDocumentId = null,
             SourceDocumentCode = null,
         });
-        var payments = db.SupplierPayments.AsNoTracking().Where(p => p.Amount > 0).Select(p => new CashBookEntry
+        var payments = SupplierPaymentSource(query.Fund, query.CashAccountId, query.From, query.To).Select(p => new CashBookEntry
         {
             Source = p.Kind == SupplierPaymentKind.Payment ? "SupplierPayment" : "SupplierPaidBack",
             Id = p.Id,
@@ -178,63 +189,116 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
             SourceDocumentId = p.PurchaseReturnId ?? p.Id,
             SourceDocumentCode = p.PurchaseReturn != null ? p.PurchaseReturn.Code : p.Code,
         });
-        // Customer payments with money that has arrived or left (Completed), and the ones cancelled after that (they were confirmed once): a payment waiting for its transfer, one Awaiting
-        // confirmation and one that is all discount are no line. A payment is money in, money paid back money out; cash is the Cash fund, any transfer the Bank fund.
-        var customerPayments = db.CustomerPayments.AsNoTracking()
-            .Where(p => p.Amount > 0 && (p.StatusId == StatusIds.CustomerPayment.Completed || (p.StatusId == StatusIds.CustomerPayment.Cancelled && p.ConfirmedAt != null)))
-            .Select(p => new CashBookEntry
-            {
-                Source = p.Kind == CustomerPaymentKind.Payment ? "CustomerPayment" : "CustomerPaidBack",
-                Id = p.Id,
-                Code = p.Code,
-                OccurredAt = p.PaidAt,
-                Date = p.PaymentDate,
-                CreatedAt = p.CreatedAt,
-                Direction = p.Kind == CustomerPaymentKind.Payment ? "Receipt" : "Payment",
-                Fund = p.Method == CustomerPaymentMethod.Cash ? "Cash" : p.Method == CustomerPaymentMethod.EWallet ? "EWallet" : "Bank",
-                CashAccountId = p.CashAccountId,
-                TypeId = p.Kind == CustomerPaymentKind.Payment ? CashVoucherTypeIds.ReceiptFromCustomer : CashVoucherTypeIds.PaymentToCustomer,
-                PartyKind = p.CustomerId != null ? "Customer" : null,
-                PartyId = p.CustomerId,
-                PartyName = p.Customer != null ? p.Customer.Name : null,
-                Amount = p.Amount,
-                CollectorId = p.CollectedByAccountId,
-                CreatedById = p.RecordedByAccountId,
-                Note = p.Note,
-                CountsInResult = false,
-                Cancelled = p.StatusId == StatusIds.CustomerPayment.Cancelled,
-                SourceDocumentKind = "CustomerPayment",
-                SourceDocumentId = p.Id,
-                SourceDocumentCode = p.Code,
-            });
-        return vouchers.Concat(payments).Concat(customerPayments);
+        var customerPayments = CustomerPaymentSource(query.Fund, query.CashAccountId, query.From, query.To).Select(p => new CashBookEntry
+        {
+            Source = p.Kind == CustomerPaymentKind.Payment ? "CustomerPayment" : "CustomerPaidBack",
+            Id = p.Id,
+            Code = p.Code,
+            OccurredAt = p.PaidAt,
+            Date = p.PaymentDate,
+            CreatedAt = p.CreatedAt,
+            Direction = p.Kind == CustomerPaymentKind.Payment ? "Receipt" : "Payment",
+            Fund = p.Method == CustomerPaymentMethod.Cash ? "Cash" : p.Method == CustomerPaymentMethod.EWallet ? "EWallet" : "Bank",
+            CashAccountId = p.CashAccountId,
+            TypeId = p.Kind == CustomerPaymentKind.Payment ? CashVoucherTypeIds.ReceiptFromCustomer : CashVoucherTypeIds.PaymentToCustomer,
+            PartyKind = p.CustomerId != null ? "Customer" : null,
+            PartyId = p.CustomerId,
+            PartyName = p.Customer != null ? p.Customer.Name : null,
+            Amount = p.Amount,
+            CollectorId = p.CollectedByAccountId,
+            CreatedById = p.RecordedByAccountId,
+            Note = p.Note,
+            CountsInResult = false,
+            Cancelled = p.StatusId == StatusIds.CustomerPayment.Cancelled,
+            SourceDocumentKind = "CustomerPayment",
+            SourceDocumentId = p.Id,
+            SourceDocumentCode = p.Code,
+        });
+        return Filter(vouchers, query).Concat(Filter(payments, query)).Concat(Filter(customerPayments, query));
     }
 
-    /// <summary>The lines of one fund, and of one account when named.</summary>
-    private static IQueryable<CashBookEntry> InFund(IQueryable<CashBookEntry> entries, CashFundFilter fund, Guid? cashAccountId)
+    /// <summary>The vouchers of one fund (all of them for All), of one account when named, dated within the period; no bound when a date is null.</summary>
+    private IQueryable<CashVoucher> VoucherSource(CashFundFilter fund, Guid? cashAccountId, DateOnly? from, DateOnly? to)
     {
-        if (fund != CashFundFilter.All)
+        var vouchers = db.CashVouchers.AsNoTracking();
+        vouchers = fund switch
         {
-            var name = fund.ToString();
-            entries = entries.Where(e => e.Fund == name);
+            CashFundFilter.Cash => vouchers.Where(v => v.Fund == CashFund.Cash),
+            CashFundFilter.Bank => vouchers.Where(v => v.Fund == CashFund.Bank),
+            CashFundFilter.EWallet => vouchers.Where(v => v.Fund == CashFund.EWallet),
+            _ => vouchers,
+        };
+        if (cashAccountId is { } accountId)
+        {
+            vouchers = vouchers.Where(v => v.CashAccountId == accountId);
         }
 
-        return cashAccountId is { } accountId ? entries.Where(e => e.CashAccountId == accountId) : entries;
+        if (from is { } start)
+        {
+            vouchers = vouchers.Where(v => v.VoucherDate >= start);
+        }
+
+        return to is { } end ? vouchers.Where(v => v.VoucherDate <= end) : vouchers;
     }
 
+    /// <summary>
+    /// The supplier payments with money, of one fund, one account and the period. A payment is a Cash line unless it is a bank transfer, and never an e-wallet one. Cancelled ones stay: the
+    /// callers that do not list them leave them out.
+    /// </summary>
+    private IQueryable<SupplierPayment> SupplierPaymentSource(CashFundFilter fund, Guid? cashAccountId, DateOnly? from, DateOnly? to)
+    {
+        var payments = db.SupplierPayments.AsNoTracking().Where(p => p.Amount > 0);
+        payments = fund switch
+        {
+            CashFundFilter.Cash => payments.Where(p => p.Method != PaymentMethod.BankTransfer),
+            CashFundFilter.Bank => payments.Where(p => p.Method == PaymentMethod.BankTransfer),
+            CashFundFilter.EWallet => payments.Where(p => false),
+            _ => payments,
+        };
+        if (cashAccountId is { } accountId)
+        {
+            payments = payments.Where(p => p.CashAccountId == accountId);
+        }
+
+        if (from is { } start)
+        {
+            payments = payments.Where(p => p.PaymentDate >= start);
+        }
+
+        return to is { } end ? payments.Where(p => p.PaymentDate <= end) : payments;
+    }
+
+    /// <summary>
+    /// The customer payments that moved money (Completed) and the ones cancelled after that (they were confirmed once), of one fund, one account and the period: a payment waiting for its
+    /// transfer, one Awaiting confirmation and one that is all discount are no line. Cash is the Cash fund, an e-wallet the EWallet fund, any transfer the Bank fund.
+    /// </summary>
+    private IQueryable<CustomerPayment> CustomerPaymentSource(CashFundFilter fund, Guid? cashAccountId, DateOnly? from, DateOnly? to)
+    {
+        var payments = db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Amount > 0 && (p.StatusId == StatusIds.CustomerPayment.Completed || (p.StatusId == StatusIds.CustomerPayment.Cancelled && p.ConfirmedAt != null)));
+        payments = fund switch
+        {
+            CashFundFilter.Cash => payments.Where(p => p.Method == CustomerPaymentMethod.Cash),
+            CashFundFilter.Bank => payments.Where(p => p.Method != CustomerPaymentMethod.Cash && p.Method != CustomerPaymentMethod.EWallet),
+            CashFundFilter.EWallet => payments.Where(p => p.Method == CustomerPaymentMethod.EWallet),
+            _ => payments,
+        };
+        if (cashAccountId is { } accountId)
+        {
+            payments = payments.Where(p => p.CashAccountId == accountId);
+        }
+
+        if (from is { } start)
+        {
+            payments = payments.Where(p => p.PaymentDate >= start);
+        }
+
+        return to is { } end ? payments.Where(p => p.PaymentDate <= end) : payments;
+    }
+
+    /// <summary>The filters of the query other than the fund, the account and the period (those are cut on the tables, see <see cref="Entries"/>), applied to one part of the list.</summary>
     private static IQueryable<CashBookEntry> Filter(IQueryable<CashBookEntry> entries, CashBookQuery query)
     {
-        entries = InFund(entries, query.Fund, query.CashAccountId);
-        if (query.From is { } from)
-        {
-            entries = entries.Where(e => e.Date >= from);
-        }
-
-        if (query.To is { } to)
-        {
-            entries = entries.Where(e => e.Date <= to);
-        }
-
         if (query.Direction is { } direction)
         {
             var name = direction.ToString();
@@ -291,10 +355,4 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
         (_, true) => entries.OrderByDescending(e => e.Code).ThenByDescending(e => e.OccurredAt).ThenBy(e => e.Id),
         _ => entries.OrderBy(e => e.Code).ThenBy(e => e.OccurredAt).ThenBy(e => e.Id),
     };
-
-    private static async Task<(decimal Receipts, decimal Payments)> TotalsAsync(IQueryable<CashBookEntry> entries, CancellationToken cancellationToken)
-    {
-        var sums = await entries.GroupBy(e => e.Direction).Select(g => new { Direction = g.Key, Sum = g.Sum(e => e.Amount) }).ToListAsync(cancellationToken);
-        return (sums.FirstOrDefault(s => s.Direction == "Receipt")?.Sum ?? 0m, sums.FirstOrDefault(s => s.Direction == "Payment")?.Sum ?? 0m);
-    }
 }

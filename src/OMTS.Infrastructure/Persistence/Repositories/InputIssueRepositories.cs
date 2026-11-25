@@ -191,16 +191,50 @@ internal sealed class InputIssueTypeRepository(OmtsDbContext db) : IInputIssueTy
 
 internal sealed class InputMovementReader(OmtsDbContext db) : IInputMovementQuery
 {
-    public async Task<IReadOnlyList<InputMovementRow>> ForItemAsync(Guid itemId, bool includeReversals, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<InputMovementRow> Rows, int Total)> ForItemAsync(
+        Guid itemId, InputMovementFilter filter, int skip, int? take, CancellationToken cancellationToken)
     {
-        var rows = await db.InputStockMovements.AsNoTracking().Where(m => m.ItemId == itemId)
-            .OrderBy(m => m.OccurredAt).ThenBy(m => m.Sequence).ToListAsync(cancellationToken);
-        if (!includeReversals)
+        var visible = Visible(db.InputStockMovements.AsNoTracking().Where(m => m.ItemId == itemId), filter.IncludeReversals);
+        var matching = visible;
+        if (filter.From is { } from)
         {
-            // An edit or cancellation undoes rows with reversal rows: both sides are left out, so the running balance still adds up. The cost adjustments they caused go with them.
-            var undone = rows.Where(m => m.ReversesMovementId != null).Select(m => m.ReversesMovementId!.Value).ToHashSet();
-            var hidden = rows.Where(m => m.Kind == InputStockMovementKind.Reversal || undone.Contains(m.Id)).Select(m => m.Id).ToHashSet();
-            rows = rows.Where(m => !hidden.Contains(m.Id) && !(m.CausedByMovementId is { } cause && hidden.Contains(cause))).ToList();
+            matching = matching.Where(m => m.OccurredAt >= from);
+        }
+
+        if (filter.Before is { } before)
+        {
+            matching = matching.Where(m => m.OccurredAt < before);
+        }
+
+        if (filter.Kind is { } kind)
+        {
+            // An adjustment counts as the kind of the row it undoes, so the kind filter keeps the adjustments of that kind when they are shown.
+            matching = matching.Where(m => m.Kind == kind
+                || (m.Kind == InputStockMovementKind.Reversal && db.InputStockMovements.Any(o => o.Id == m.ReversesMovementId && o.Kind == kind)));
+        }
+
+        var total = await matching.CountAsync(cancellationToken);
+        var paged = matching.OrderByDescending(m => m.OccurredAt).ThenByDescending(m => m.Sequence).Skip(skip);
+        var rows = await (take is { } count ? paged.Take(count) : paged).ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+        {
+            return ([], total);
+        }
+
+        // The balance after a row counts every visible row up to it (not only the ones the filter keeps): one sum before the oldest row read, then the visible rows from it to the newest.
+        var (newest, oldest) = (rows[0], rows[^1]);
+        var opening = await visible.Where(m => m.OccurredAt < oldest.OccurredAt || (m.OccurredAt == oldest.OccurredAt && m.Sequence < oldest.Sequence))
+            .SumAsync(m => (decimal?)m.Quantity, cancellationToken) ?? 0m;
+        var span = await visible
+            .Where(m => (m.OccurredAt > oldest.OccurredAt || (m.OccurredAt == oldest.OccurredAt && m.Sequence >= oldest.Sequence))
+                && (m.OccurredAt < newest.OccurredAt || (m.OccurredAt == newest.OccurredAt && m.Sequence <= newest.Sequence)))
+            .OrderBy(m => m.OccurredAt).ThenBy(m => m.Sequence).Select(m => new { m.Id, m.Quantity }).ToListAsync(cancellationToken);
+        var balances = new Dictionary<Guid, decimal>(span.Count);
+        var balance = opening;
+        foreach (var m in span)
+        {
+            balance += m.Quantity;
+            balances[m.Id] = balance;
         }
 
         var lotIds = rows.Where(m => m.SeedLotLineId != null).Select(m => m.SeedLotLineId!.Value).Distinct().ToList();
@@ -214,13 +248,20 @@ internal sealed class InputMovementReader(OmtsDbContext db) : IInputMovementQuer
             : (await db.InputIssues.AsNoTracking().Where(i => documentIds.Contains(i.Id) && i.SourceKind != InputIssueSource.None)
                 .Select(i => new { i.Id, i.SourceKind, i.SourceRecordId, i.CycleId, i.RaftId, i.ZoneId }).ToListAsync(cancellationToken))
                 .ToDictionary(i => i.Id, i => new InputMovementSource(i.SourceKind, i.SourceRecordId, i.CycleId, i.RaftId, i.ZoneId));
-        var balance = 0m;
-        return rows.Select(m =>
-        {
-            balance += m.Quantity;
-            return new InputMovementRow(m, balance, m.SeedLotLineId is { } lot ? codes.GetValueOrDefault(lot) : null, m.DocumentId is { } doc ? sources.GetValueOrDefault(doc) : null);
-        }).ToList();
+        return (rows.Select(m => new InputMovementRow(
+            m, balances[m.Id], m.SeedLotLineId is { } lot ? codes.GetValueOrDefault(lot) : null, m.DocumentId is { } doc ? sources.GetValueOrDefault(doc) : null)).ToList(), total);
     }
+
+    /// <summary>
+    /// Without reversals: leaves out the reversal rows, the rows they undo, and the cost adjustments those rows caused. A reversal and the row it undoes cancel each other, so leaving both
+    /// out keeps the running balance whole. The rows looked for are of the same item, so each look-up seeks the index of the item instead of reading the whole ledger.
+    /// </summary>
+    private IQueryable<InputStockMovement> Visible(IQueryable<InputStockMovement> rows, bool includeReversals) => includeReversals
+        ? rows
+        : rows.Where(m => m.Kind != InputStockMovementKind.Reversal
+            && !db.InputStockMovements.Any(r => r.ItemId == m.ItemId && r.ReversesMovementId == m.Id)
+            && !(m.CausedByMovementId != null && db.InputStockMovements.Any(c => c.Id == m.CausedByMovementId && c.ItemId == m.ItemId
+                && (c.Kind == InputStockMovementKind.Reversal || db.InputStockMovements.Any(r => r.ItemId == c.ItemId && r.ReversesMovementId == c.Id)))));
 
     public async Task<IReadOnlyList<InputSeedLotRow>> SeedLotsAsync(Guid itemId, CancellationToken cancellationToken)
     {
