@@ -88,5 +88,7 @@ internal sealed class CashVoucherConfiguration : IEntityTypeConfiguration<CashVo
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
         // The book reads one fund over a period.
         builder.HasIndex(x => new { x.Fund, x.VoucherDate });
+        // The financial report reads the vouchers of a period across both funds.
+        builder.HasIndex(x => x.VoucherDate);
     }
 }

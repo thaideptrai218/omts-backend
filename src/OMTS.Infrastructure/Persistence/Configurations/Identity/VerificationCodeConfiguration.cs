@@ -15,6 +15,8 @@ internal sealed class VerificationCodeConfiguration : IEntityTypeConfiguration<V
         builder.HasIndex(x => x.TokenHash).IsUnique();
         builder.HasIndex(x => new { x.Target, x.Purpose, x.CreatedAt });
         builder.HasIndex(x => new { x.AccountId, x.Purpose });
+        // The daily SMS ceiling adds up the sends of one channel since a time; the send count rides along so the sum needs no lookup.
+        builder.HasIndex(x => new { x.Channel, x.LastSentAt }).IncludeProperties(x => x.SendCount);
         builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }
