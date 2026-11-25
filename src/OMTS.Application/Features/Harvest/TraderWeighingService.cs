@@ -10,6 +10,7 @@ using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest;
 
@@ -84,17 +85,18 @@ public sealed class TraderWeighingService(
                 return check.ToError();
             }
 
-            var cage = new HarvestLotTraderCage
+            var cage = new HarvestLotCage
             {
                 LotId = lot.Id,
+                Side = HarvestLotCageSide.Trader,
                 Number = lot.TraderCages.Select(c => c.Number).DefaultIfEmpty(0).Max() + 1,
                 Kg = request.Kg!.Value,
                 WeighedAt = timeProvider.GetUtcNow(),
                 WeighedByAccountId = Trader(),
                 ClientOperationId = request.ClientOperationId,
             };
-            lot.TraderCages.Add(cage);
-            lots.AddTraderCage(cage);
+            lot.AllCages.Add(cage);
+            lots.AddCage(cage);
             try
             {
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -154,8 +156,8 @@ public sealed class TraderWeighingService(
             return AppError.NotFound;
         }
 
-        lot.TraderCages.Remove(cage);
-        lots.RemoveTraderCage(cage);
+        lot.AllCages.Remove(cage);
+        lots.RemoveCage(cage);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await SheetOfAsync(lot, cancellationToken);
     }

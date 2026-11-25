@@ -153,10 +153,6 @@ public interface IHarvestLotRepository
 
     void RemoveCage(HarvestLotCage cage);
 
-    void AddTraderCage(HarvestLotTraderCage cage);
-
-    void RemoveTraderCage(HarvestLotTraderCage cage);
-
     /// <summary>The orders (not cancelled) each lot's harvest plan serves and their trader accounts; every id asked has an entry, empty for a lot outside a plan.</summary>
     Task<IReadOnlyDictionary<Guid, HarvestLotOrders>> OrdersOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 

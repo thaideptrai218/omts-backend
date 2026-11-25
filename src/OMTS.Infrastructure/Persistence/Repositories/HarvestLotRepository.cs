@@ -229,8 +229,7 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
         db.HarvestLotProductLines.RemoveRange(lot.ProductLines);
         db.HarvestRecordEmployees.RemoveRange(lot.Crew);
-        db.HarvestLotCages.RemoveRange(lot.Cages);
-        db.HarvestLotTraderCages.RemoveRange(lot.TraderCages);
+        db.HarvestLotCages.RemoveRange(lot.AllCages);
         db.HarvestLots.Remove(lot);
     }
 
@@ -249,10 +248,6 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
     public void AddCage(HarvestLotCage cage) => db.HarvestLotCages.Add(cage);
 
     public void RemoveCage(HarvestLotCage cage) => db.HarvestLotCages.Remove(cage);
-
-    public void AddTraderCage(HarvestLotTraderCage cage) => db.HarvestLotTraderCages.Add(cage);
-
-    public void RemoveTraderCage(HarvestLotTraderCage cage) => db.HarvestLotTraderCages.Remove(cage);
 
     public async Task<IReadOnlyDictionary<Guid, HarvestLotOrders>> OrdersOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
@@ -288,8 +283,7 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
                 && !l.HarvestPlanLine!.Plan.Orders.Any(o => o.Order.StatusId != StatusIds.SalesOrder.Cancelled && o.Order.Customer != null
                     && o.Order.Customer.AccountId != null && o.Order.Customer.AccountId != traderAccountId))
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
-            .Include(l => l.Cages)
-            .Include(l => l.TraderCages)
+            .Include(l => l.AllCages)
             .OrderByDescending(l => l.HarvestedAt)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
@@ -303,8 +297,7 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
             .Include(l => l.ProductLines).ThenInclude(p => p.Product)
-            .Include(l => l.Cages)
-            .Include(l => l.TraderCages)
+            .Include(l => l.AllCages)
             .Include(l => l.Raft).ThenInclude(r => r.Zone)
             .AsSplitQuery();
 }
