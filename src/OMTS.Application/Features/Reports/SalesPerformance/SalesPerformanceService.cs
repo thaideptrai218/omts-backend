@@ -38,7 +38,10 @@ public sealed class SalesPerformanceService(ReportFilterResolver filters, ISales
 
         // Both are known to be given: a missing grouping or key is an invalid field above.
         var (f, groupBy, key) = (filter.Value!, grouping!.Value, request.GroupKey!.Trim());
-        var invoices = SalesPerformanceCalculator.InvoicesOf(await query.FactsAsync(f, cancellationToken), groupBy, key);
+        var group = SalesPerformanceCalculator.GroupOf(groupBy, key);
+        var invoices = group is null
+            ? []
+            : SalesPerformanceCalculator.InvoiceRowsOf(await query.InvoicesOfGroupAsync(f, group, cancellationToken));
         var empty = invoices.Count == 0 ? UserMessages.NoDataForFilters("group") : null;
         return new SalesPerformanceInvoiceList(f.From, f.To, Name(groupBy), key, invoices, empty?.Text, empty?.Code);
     }
@@ -56,7 +59,7 @@ public sealed class SalesPerformanceService(ReportFilterResolver filters, ISales
         }
 
         var (f, groupBy) = (filter.Value!, grouping!.Value);
-        var calculation = SalesPerformanceCalculator.Build(await query.FactsAsync(f, cancellationToken), groupBy);
+        var calculation = SalesPerformanceCalculator.Build(await query.AggregatesAsync(f, groupBy, cancellationToken), groupBy);
         var (groups, totals) = groupBy == SalesPerformanceGrouping.Customer
             ? await WithCustomerMoneyAsync(calculation, f, cancellationToken)
             : (calculation.Groups, calculation.Totals);

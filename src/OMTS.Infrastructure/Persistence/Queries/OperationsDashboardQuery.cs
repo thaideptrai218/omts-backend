@@ -19,9 +19,12 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
             invoices = invoices.Where(i => i.ZoneId == zone);
         }
 
-        // No invoice sums to null, which is 0.
-        var total = await invoices.SumAsync(i => (decimal?)i.Total, cancellationToken) ?? 0m;
-        return new DashboardRevenueFigures(total, await invoices.CountAsync(cancellationToken));
+        // One command for the sum and the count; no invoice has no group, which is 0 and 0.
+        var figures = await invoices
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Sum(i => i.Total), Count = g.Count() })
+            .FirstOrDefaultAsync(cancellationToken);
+        return new DashboardRevenueFigures(figures?.Total ?? 0m, figures?.Count ?? 0);
     }
 
     public async Task<DashboardDayFigures> DayAsync(DateOnly date, Guid? zoneId, CancellationToken cancellationToken)
@@ -33,8 +36,11 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
             returns = returns.Where(r => r.Invoice.ZoneId == zone);
         }
 
-        var value = await returns.SumAsync(r => (decimal?)r.Value, cancellationToken) ?? 0m;
-        return new DashboardDayFigures(invoices.InvoiceCount, invoices.Total, await returns.CountAsync(cancellationToken), value);
+        var standing = await returns
+            .GroupBy(_ => 1)
+            .Select(g => new { Value = g.Sum(r => r.Value), Count = g.Count() })
+            .FirstOrDefaultAsync(cancellationToken);
+        return new DashboardDayFigures(invoices.InvoiceCount, invoices.Total, standing?.Count ?? 0, standing?.Value ?? 0m);
     }
 
     public async Task<IReadOnlyList<PendingTaskFigures>> PendingTasksAsync(int oldestCount, CancellationToken cancellationToken)

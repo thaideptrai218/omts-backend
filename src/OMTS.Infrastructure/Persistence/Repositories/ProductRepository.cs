@@ -30,19 +30,17 @@ internal sealed class ProductRepository(OmtsDbContext db) : IProductRepository
 
     public Task<Product?> FindByNameAsync(string name, Guid? exceptProductId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Name.ToUpper() == upper && p.Id != exceptProductId, cancellationToken);
+        return db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Name == name && p.Id != exceptProductId, cancellationToken);
     }
 
     public async Task<CodeOwner?> FindCodeOwnerAsync(string code, Guid? exceptProductId, Guid? exceptProductUnitId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        if (await db.Products.AsNoTracking().Where(p => p.Code.ToUpper() == upper && p.Id != exceptProductId).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(cancellationToken) is { } productId)
+        if (await db.Products.AsNoTracking().Where(p => p.Code == code && p.Id != exceptProductId).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(cancellationToken) is { } productId)
         {
             return new CodeOwner(productId, false);
         }
 
-        var unitOwner = await db.ProductUnits.AsNoTracking().Where(u => u.Code.ToUpper() == upper && u.Id != exceptProductUnitId).Select(u => (Guid?)u.ProductId).FirstOrDefaultAsync(cancellationToken);
+        var unitOwner = await db.ProductUnits.AsNoTracking().Where(u => u.Code == code && u.Id != exceptProductUnitId).Select(u => (Guid?)u.ProductId).FirstOrDefaultAsync(cancellationToken);
         return unitOwner is { } owner ? new CodeOwner(owner, true) : null;
     }
 

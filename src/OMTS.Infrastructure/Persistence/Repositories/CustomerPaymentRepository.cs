@@ -16,8 +16,7 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
 
     public async Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return await db.CustomerPayments.AsNoTracking().Where(p => p.Code.ToUpper() == upper && p.Id != exceptPaymentId).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(cancellationToken);
+        return await db.CustomerPayments.AsNoTracking().Where(p => p.Code == code && p.Id != exceptPaymentId).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) =>

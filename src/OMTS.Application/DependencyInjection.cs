@@ -118,7 +118,6 @@ public static class DependencyInjection
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
-        services.AddScoped<RegistrationService>();
         services.AddScoped<PasswordRecoveryService>();
         services.AddScoped<CurrentPasswordProof>();
         services.AddScoped<ContactChangeNotifier>();

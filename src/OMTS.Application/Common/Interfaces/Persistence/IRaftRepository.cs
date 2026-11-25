@@ -9,6 +9,9 @@ public interface IRaftRepository
     /// <summary>Raft with its zone, lanes and photos, tracked for editing.</summary>
     Task<Raft?> GetForEditAsync(Guid raftId, CancellationToken cancellationToken);
 
+    /// <summary>Raft with its zone and lanes, without its photos, untracked: for a read that shows the lanes and never changes the raft.</summary>
+    Task<Raft?> GetForReadAsync(Guid raftId, CancellationToken cancellationToken);
+
     /// <summary>The rafts with these ids and their zones, untracked (rafts named on purchase receipt lines).</summary>
     Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken);
 

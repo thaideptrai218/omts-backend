@@ -25,6 +25,15 @@ public class BffClientHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
     // Random per run, so no secret-like literal is committed.
     private readonly string _secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
+    // Outside Development the API warns at startup when the BFF headers are off, because all web users then share one rate-limit bucket.
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    public void The_shared_rate_limit_bucket_is_warned_of_only_when_the_headers_are_off_outside_development(bool enabled, bool development, bool warns) =>
+        Assert.Equal(warns, new BffClientOptions { Enabled = enabled }.SharesRateLimitBucket(development));
+
     // The limit is per minute; sent together, the requests take their permit in one window.
     [Fact]
     public async Task With_the_secret_each_supplied_address_gets_its_own_login_bucket()

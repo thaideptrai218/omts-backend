@@ -356,13 +356,11 @@ public sealed class CustomerService(
 
         var existing = await customers.ExistingPhonesAsync(valid.Select(v => v.Values.PhoneNumber!).ToList(), cancellationToken);
         errors.AddRange(valid.Where(v => existing.Contains(v.Values.PhoneNumber!)).Select(v => new CustomerImportError(v.Row, ["Phone number"], "Already belongs to a customer.")));
-        foreach (var (row, request, _) in valid)
-        {
-            if (DocumentCodes.Typed(request.Code) is { } typed && await customers.FindByCodeAsync(typed, null, cancellationToken) is not null)
-            {
-                errors.Add(new CustomerImportError(row, ["Code"], "Already belongs to a customer."));
-            }
-        }
+        var typedCodes = valid.Select(v => DocumentCodes.Typed(v.Request.Code)).OfType<string>().ToList();
+        var takenCodes = typedCodes.Count == 0 ? new HashSet<string>() : await customers.ExistingCodesAsync(typedCodes, cancellationToken);
+        errors.AddRange(valid
+            .Where(v => DocumentCodes.Typed(v.Request.Code) is { } typed && takenCodes.Contains(typed))
+            .Select(v => new CustomerImportError(v.Row, ["Code"], "Already belongs to a customer.")));
 
         if (errors.Count > 0)
         {

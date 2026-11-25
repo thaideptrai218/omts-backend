@@ -22,15 +22,18 @@ public sealed class CycleSummaryReader(
     INurseryBatchRepository nurseries,
     TimeProvider timeProvider)
 {
-    /// <summary>The summary of a cycle, which comes with its raft: of a Closed cycle as of its close date, of an Open one as if it closed today.</summary>
-    public async Task<CycleSummary> ReadAsync(CultivationCycle cycle, CancellationToken cancellationToken)
+    /// <summary>
+    /// The summary of a cycle, which comes with its raft: of a Closed cycle as of its close date, of an Open one as if it closed today. A caller that has read the raft with its lanes, and the lane day
+    /// of that raft on the day the summary is read for, passes them and spares the reads again.
+    /// </summary>
+    public async Task<CycleSummary> ReadAsync(CultivationCycle cycle, CancellationToken cancellationToken, Raft? knownRaft = null, LaneDay? knownDay = null)
     {
         var today = timeProvider.Today();
         var asOf = cycle.CloseDate ?? today;
-        var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
+        var raft = knownRaft ?? await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
         var sessions = await seedingRecords.ListByCycleAsync(cycle.Id, cancellationToken);
         var lots = await harvestLots.ListByCycleAsync(cycle.Id, cancellationToken);
-        var states = (await laneStates.ReadAsync(raft, asOf, cancellationToken)).States;
+        var states = (knownDay ?? await laneStates.ReadAsync(raft, asOf, cancellationToken)).States;
         var nursery = cycle.NurseryBatchId is null || !(await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).TryGetValue(cycle.Id, out var facts) ? null : NurseryRules.SummaryOf(facts);
 
         var lastLot = lots.Count == 0 ? (DateOnly?)null : lots.Max(l => l.HarvestDate);

@@ -64,12 +64,23 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
             .ThenBy(m => m.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, WaterMeasurement>> LatestActiveByZoneAsync(CancellationToken cancellationToken) =>
-        await db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Active)
-            .GroupBy(m => m.ZoneId)
-            .Select(g => g.OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id).First())
+    public async Task<IReadOnlyDictionary<Guid, WaterMeasurement>> LatestActiveByZoneAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken)
+    {
+        var ids = zoneIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, WaterMeasurement>();
+        }
+
+        // The top row of each zone by the (ZoneId, MeasuredAt) index, not a pass over every measurement of every year.
+        return await db.FarmingZones.AsNoTracking()
+            .Where(z => ids.Contains(z.Id))
+            .SelectMany(z => db.WaterMeasurements.AsNoTracking()
+                .Where(m => m.ZoneId == z.Id && m.StatusId == StatusIds.WaterMeasurement.Active)
+                .OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
+                .Take(1))
             .ToDictionaryAsync(m => m.ZoneId, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<WaterMeasurement>> ListLatestActiveAsync(Guid zoneId, int count, CancellationToken cancellationToken) =>
         await db.WaterMeasurements.AsNoTracking()

@@ -67,4 +67,25 @@ public class CustomerStatementLedgerTests
         var empty = CustomerStatementLedger.Build([invoice], payments, Today.AddDays(-5), Today);
         Assert.Equal((0m, 0, 0m), (empty.OpeningDebt, empty.Entries.Count, empty.ClosingDebt));
     }
+
+    [Fact]
+    public void A_period_built_from_its_own_rows_and_the_opening_debt_summed_apart_equals_the_period_of_the_whole_history()
+    {
+        var old = Invoice("HD000001", 40, 3_000_000m);
+        var cutInPeriod = Invoice("HD000002", 20, 1_000_000m) with { PriceCuts = [new CustomerLedgerPriceCut(Guid.NewGuid(), Today.AddDays(-8), 100_000m, "claim")] };
+        var recent = Invoice("HD000003", 6, 500_000m);
+        var payments = new[] { Payment(1_000_000m, daysAgo: 30), Payment(400_000m, recent, daysAgo: 6), Payment(200_000m, daysAgo: 3, kind: OMTS.Domain.Enums.CustomerPaymentKind.PaidBack) };
+        var (from, to) = (Today.AddDays(-10), Today);
+
+        var whole = CustomerStatementLedger.Build([old, cutInPeriod, recent], payments, from, to);
+
+        // What the database sums before the period: the old invoice, the invoice of the cut with all its cuts, the first payment, and nothing of the cut (it is dated inside the period).
+        var opening = 3_000_000m + (1_000_000m + 100_000m) - 1_000_000m;
+        var partial = CustomerStatementLedger.Build([cutInPeriod, recent], payments.Skip(1), from, to, openingDebt: opening);
+
+        Assert.Equal(whole.OpeningDebt, partial.OpeningDebt);
+        Assert.Equal(whole.ClosingDebt, partial.ClosingDebt);
+        Assert.Equal(whole.Entries.Select(e => (e.Date, e.Kind, e.Code, e.DebtChange, e.DebtAfter)), partial.Entries.Select(e => (e.Date, e.Kind, e.Code, e.DebtChange, e.DebtAfter)));
+        Assert.Contains(partial.Entries, e => e.Kind == CustomerStatementEntryKind.PriceCut);
+    }
 }

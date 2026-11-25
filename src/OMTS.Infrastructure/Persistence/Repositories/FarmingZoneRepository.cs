@@ -18,8 +18,7 @@ internal sealed class FarmingZoneRepository(OmtsDbContext db) : IFarmingZoneRepo
 
     public Task<FarmingZone?> FindByCodeAsync(string code, Guid? exceptZoneId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.FarmingZones.AsNoTracking().FirstOrDefaultAsync(z => z.Code.ToUpper() == upper && z.Id != exceptZoneId, cancellationToken);
+        return db.FarmingZones.AsNoTracking().FirstOrDefaultAsync(z => z.Code == code && z.Id != exceptZoneId, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<ZoneWithRaftCount> Items, int Total)> SearchAsync(
@@ -62,8 +61,7 @@ internal sealed class FarmingZoneRepository(OmtsDbContext db) : IFarmingZoneRepo
 
     public async Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken)
     {
-        var upper = prefix.ToUpperInvariant();
-        return await db.FarmingZones.AsNoTracking().Where(z => z.Code.ToUpper().StartsWith(upper)).Select(z => z.Code).ToListAsync(cancellationToken);
+        return await db.FarmingZones.AsNoTracking().Where(z => z.Code.StartsWith(prefix)).Select(z => z.Code).ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> InUseRaftCodesAsync(Guid zoneId, CancellationToken cancellationToken) =>

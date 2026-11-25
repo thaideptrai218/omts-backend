@@ -9,5 +9,8 @@ public interface ILaneProgressRepository
     /// <summary>Every change of every lane of the cycle, read only, the oldest first.</summary>
     Task<IReadOnlyList<LaneProgressStep>> StepsAsync(Guid cycleId, CancellationToken cancellationToken);
 
+    /// <summary>The same for several cycles in one read, the oldest first; each step carries its cycle.</summary>
+    Task<IReadOnlyList<LaneProgressStep>> StepsOfCyclesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     void Add(LaneProgressChange change);
 }

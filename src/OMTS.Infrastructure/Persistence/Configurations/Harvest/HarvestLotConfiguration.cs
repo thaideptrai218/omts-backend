@@ -30,6 +30,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasIndex(x => new { x.RaftId, x.HarvestDate });
         builder.HasIndex(x => x.CycleId);
         builder.HasIndex(x => new { x.StatusId, x.HarvestDate });
+        // The end-of-day report reads the lots weighed in a period.
+        builder.HasIndex(x => x.WeighedOn);
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_HarvestLot_CageCount", "[CageCount] > 0");

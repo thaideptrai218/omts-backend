@@ -177,6 +177,9 @@ public interface IPurchaseReceiptRepository
     /// <summary>Receipt with supplier, zone, lines (items, rafts and their zones) and returns (lines), tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
 
+    /// <summary>The same graph as <see cref="GetForEditAsync"/>, not tracked: for the views, which only read it.</summary>
+    Task<PurchaseReceipt?> GetForViewAsync(Guid receiptId, CancellationToken cancellationToken);
+
     /// <summary>One page (1-based) of matching receipts with figures computed in SQL, newest first, and the totals of all matches.</summary>
     Task<(IReadOnlyList<ReceiptFigureRow> Items, ReceiptListTotals Totals)> PageFiguresAsync(
         PurchaseReceiptFilter filter, int page, int pageSize, CancellationToken cancellationToken);

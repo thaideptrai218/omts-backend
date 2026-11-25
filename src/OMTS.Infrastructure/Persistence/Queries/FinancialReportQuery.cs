@@ -12,6 +12,9 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 /// </summary>
 internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQuery
 {
+    /// <summary>The Windows name of the zone of Vietnam (UTC+7, no daylight saving) that SQL Server and Azure SQL know for AT TIME ZONE; it is the business time of <see cref="BusinessClock"/>.</summary>
+    private const string VietnamTimeZone = "SE Asia Standard Time";
+
     public async Task<IReadOnlyList<FinancialEntry>> EntriesAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var entries = new List<FinancialEntry>();
@@ -39,28 +42,42 @@ internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQ
                 .ToListAsync(cancellationToken))
             .Select(d => new FinancialEntry(FinancialEntryCodes.PaymentDiscounts, d.Date, d.Value)));
 
-        // Issue times are stored at UTC+7; the business date is read here, from the time, so no time zone rule has to be translated.
+        // The business date of an issue is the date of its instant at UTC+7, whatever offset it was stored with: the database moves the instant to the Vietnam time zone (UTC+7, no daylight
+        // saving) and cuts the date, so the lines are added up per kind and day there instead of being read one by one.
         var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
         var endExclusive = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
-        var issueLines = await db.InputIssues.AsNoTracking()
-            .Where(i => i.StatusId == StatusIds.InputIssue.Completed && i.IssuedAt >= start && i.IssuedAt < endExclusive)
-            .SelectMany(i => i.Lines.Select(l => new { i.Kind, i.IssuedAt, l.Value }))
-            .ToListAsync(cancellationToken);
-        entries.AddRange(issueLines
-            .GroupBy(l => (l.Kind, Date: BusinessClock.ToBusinessDate(l.IssuedAt)))
-            .Select(g => new FinancialEntry(g.Key.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, g.Key.Date, g.Sum(l => l.Value))));
+        var issues = db.InputIssues.AsNoTracking()
+            .Where(i => i.StatusId == StatusIds.InputIssue.Completed && i.IssuedAt >= start && i.IssuedAt < endExclusive);
+        if (db.Database.IsRelational())
+        {
+            var issueSums = await issues
+                .SelectMany(i => i.Lines, (i, l) => new { i.Kind, Day = EF.Functions.AtTimeZone(i.IssuedAt, VietnamTimeZone).Date, l.Value })
+                .GroupBy(x => new { x.Kind, x.Day })
+                .Select(g => new { g.Key.Kind, g.Key.Day, Value = g.Sum(x => x.Value) })
+                .ToListAsync(cancellationToken);
+            entries.AddRange(issueSums.Select(d => new FinancialEntry(
+                d.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, DateOnly.FromDateTime(d.Day), d.Value)));
+        }
+        else
+        {
+            // A provider without AT TIME ZONE (the in-memory test database) reads the lines and cuts the business date here.
+            var issueLines = await issues.SelectMany(i => i.Lines.Select(l => new { i.Kind, i.IssuedAt, l.Value })).ToListAsync(cancellationToken);
+            entries.AddRange(issueLines
+                .GroupBy(l => (l.Kind, Date: BusinessClock.ToBusinessDate(l.IssuedAt)))
+                .Select(g => new FinancialEntry(g.Key.Kind == InputIssueKind.Use ? FinancialEntryCodes.InputUseCost : FinancialEntryCodes.InputDisposalCost, g.Key.Date, g.Sum(l => l.Value))));
+        }
 
         // Wages count in the expense month chosen when the sheet was finalized: whole months, from the month of the first day to that of the last. The cost is the gross income of the payslips
         // (main pay + bonus): an advance already paid is a receivable settled against the payslip, not a cost that disappears (decision of 19/11/2026, REP-01).
         var (firstMonth, lastMonth) = ($"{from:yyyy-MM}", $"{to:yyyy-MM}");
+        // The expense month is always yyyy-MM (PayrollRules), so the text order is the calendar order in any collation.
         var payrolls = await db.Payrolls.AsNoTracking()
-            .Where(p => p.StatusId == StatusIds.Payroll.Finalized && p.ExpenseMonth != null)
-            .Select(p => new { p.ExpenseMonth, Net = p.Lines.Sum(l => l.MainPay + l.Bonus) })
+            .Where(p => p.StatusId == StatusIds.Payroll.Finalized && p.ExpenseMonth != null && p.ExpenseMonth.CompareTo(firstMonth) >= 0 && p.ExpenseMonth.CompareTo(lastMonth) <= 0)
+            .SelectMany(p => p.Lines, (p, l) => new { p.ExpenseMonth, l.MainPay, l.Bonus })
+            .GroupBy(x => x.ExpenseMonth!)
+            .Select(g => new { Month = g.Key, Net = g.Sum(x => x.MainPay + x.Bonus) })
             .ToListAsync(cancellationToken);
-        entries.AddRange(payrolls
-            .Where(p => string.CompareOrdinal(p.ExpenseMonth, firstMonth) >= 0 && string.CompareOrdinal(p.ExpenseMonth, lastMonth) <= 0)
-            .GroupBy(p => p.ExpenseMonth!)
-            .Select(g => new FinancialEntry(FinancialEntryCodes.LaborCost, DateOnly.ParseExact($"{g.Key}-01", "yyyy-MM-dd"), g.Sum(p => p.Net))));
+        entries.AddRange(payrolls.Select(p => new FinancialEntry(FinancialEntryCodes.LaborCost, DateOnly.ParseExact($"{p.Month}-01", "yyyy-MM-dd"), p.Net)));
 
         // Other expenses and other income: the vouchers that count in the result, of those two categories only (goods and wages have their own lines; a transfer is no result).
         entries.AddRange((await db.CashVouchers.AsNoTracking()

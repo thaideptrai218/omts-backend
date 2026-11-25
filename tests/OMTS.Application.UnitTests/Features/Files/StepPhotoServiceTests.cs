@@ -170,6 +170,8 @@ public class StepPhotoServiceTests
         public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult<Stream?>(Stored.TryGetValue(key, out var bytes) ? new MemoryStream(bytes) : null);
 
+        public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(Stored.ContainsKey(key));
+
         public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>
             Task.FromResult($"https://files.test/{key}");
 

@@ -48,6 +48,8 @@ internal sealed class InputIssueConfiguration : IEntityTypeConfiguration<InputIs
         builder.Property(x => x.Notes).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
         builder.HasIndex(x => new { x.Kind, x.IssuedAt });
+        // The financial report reads the issues of a period of every kind.
+        builder.HasIndex(x => x.IssuedAt);
         builder.HasIndex(x => x.ZoneId);
         builder.HasIndex(x => new { x.SourceKind, x.SourceRecordId });
     }

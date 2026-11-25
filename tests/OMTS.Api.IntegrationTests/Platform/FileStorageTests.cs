@@ -76,6 +76,18 @@ public class FileStorageTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.False(await Storage.DeleteAsync(key));
     }
 
+    [Fact]
+    public async Task A_stored_file_exists_without_being_read_and_a_missing_or_malformed_key_does_not()
+    {
+        var key = (await Storage.UploadAsync(Validated("a.png", Png), "evidence")).Key!;
+
+        Assert.True(await Storage.ExistsAsync(key));
+        Assert.False(await Storage.ExistsAsync(key.Replace("evidence/", "evidence/./")));
+        Assert.False(await Storage.ExistsAsync("evidence/2026/11/" + new string('a', 32) + ".png"));
+        Assert.True(await Storage.DeleteAsync(key));
+        Assert.False(await Storage.ExistsAsync(key));
+    }
+
     // Configuration errors stop the host at startup instead of failing a user request later.
     [Theory]
     [InlineData("Storage:Local:SigningKey", "")]

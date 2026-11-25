@@ -15,13 +15,18 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Include(r => r.Photos)
             .FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
 
+    public Task<Raft?> GetForReadAsync(Guid raftId, CancellationToken cancellationToken) =>
+        db.Rafts.AsNoTracking()
+            .Include(r => r.Zone)
+            .Include(r => r.Lanes)
+            .FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
+
     public async Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken) =>
         raftIds.Count == 0 ? [] : await db.Rafts.AsNoTracking().Include(r => r.Zone).Where(r => raftIds.Contains(r.Id)).ToListAsync(cancellationToken);
 
     public Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.Rafts.AsNoTracking().FirstOrDefaultAsync(r => r.ZoneId == zoneId && r.Code.ToUpper() == upper && r.Id != exceptRaftId, cancellationToken);
+        return db.Rafts.AsNoTracking().FirstOrDefaultAsync(r => r.ZoneId == zoneId && r.Code == code && r.Id != exceptRaftId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> CodesOfZoneAsync(Guid zoneId, CancellationToken cancellationToken) =>

@@ -33,8 +33,7 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
 
     public async Task<Guid?> FindOtherByCodeAsync(string code, Guid? exceptInvoiceId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return await db.SalesInvoices.AsNoTracking().Where(i => i.Code.ToUpper() == upper && i.Id != exceptInvoiceId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
+        return await db.SalesInvoices.AsNoTracking().Where(i => i.Code == code && i.Id != exceptInvoiceId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>

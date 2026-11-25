@@ -77,7 +77,9 @@ internal static class PurchaseRequestRules
     /// </summary>
     public static bool AllowsOrder(int statusId) => statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.Accepted;
 
-    /// <summary>SALE-02 step 1, before the Fulfilled check. A request whose staff are being asked is not answered yet.</summary>
+    /// <summary>
+    /// SALE-02 step 1, before the Fulfilled check. A request whose staff are being asked is not answered yet. An Ordered request is not cancelled: the Owner confirmed its order, which cancelling the request would cancel with it.
+    /// </summary>
     public static bool AllowsCancel(int statusId) =>
         statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.AwaitingStaff or StatusIds.PurchaseRequest.Accepted;
 

@@ -17,8 +17,8 @@ internal sealed record SalesInvoiceMatches(DateOnly From, DateOnly To, int Count
 
 /// <summary>
 /// SALE-09 steps 1-3: the invoices of the zones the caller may view (BR-SALE-08, BR-FARM-08), today by default, with the total of the Completed ones. Read only; the API checks the
-/// role, this the zones. A fixed number of commands, whatever the number of invoices: the allocation of the customers (BR-DEBT-05) is read for the page only, or for every match when
-/// the paid filter needs it.
+/// role, this the zones. A fixed number of commands, whatever the number of invoices: the database counts, sums and pages the matches; what the allocation (BR-DEBT-05) leaves unpaid is
+/// read for the customers of the page only, or of every match when the paid filter needs it.
 /// </summary>
 public sealed class SalesInvoiceSearchService(
     ISalesInvoiceSearchReader queries, CustomerDebtReader debts, ZoneAccessGuard zoneAccess, ICurrentUser currentUser, IStatusCatalog statusCatalog, TimeProvider timeProvider)
@@ -70,34 +70,35 @@ public sealed class SalesInvoiceSearchService(
         var (from, to) = period.Value;
         IReadOnlyCollection<Guid>? zoneIds = query.ZoneId is { } zoneId ? [zoneId] : zones.AllZones ? null : zones.ZoneIds.ToList();
         var collector = query.CashCollectedByMe ? currentUser.AccountId : null;
-        var keys = await queries.MatchingAsync(
-            new SalesInvoiceSearchFilter(
-                from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.SalesOrderId, query.OrderCode, maxMatches is { } max ? max + 1 : null),
-            cancellationToken);
-        if (maxMatches is { } limit && keys.Count > limit)
+        var filter = new SalesInvoiceSearchFilter(
+            from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.SalesOrderId, query.OrderCode);
+        if (maxMatches is { } limit && await queries.CountAsync(filter, cancellationToken) > limit)
         {
             return new AppError(ErrorKind.Validation, UserMessages.ExportTooLarge("sales invoices", limit), new Dictionary<string, object?> { ["field"] = "Filters" });
         }
 
-        IReadOnlyDictionary<Guid, CustomerDebtAllocation> allocations = new Dictionary<Guid, CustomerDebtAllocation>();
+        // What the allocation leaves unpaid, of the invoices of the profiles in the matches: the paid filter needs it for every match, otherwise only the page does.
+        IReadOnlyDictionary<Guid, decimal> unpaid = new Dictionary<Guid, decimal>();
+        SalesInvoicePaidFilter? paidFilter = null;
         if (query.Paid is { } paid)
         {
-            allocations = await AllocationsAsync(keys, cancellationToken);
-            keys = keys.Where(k => StateOf(k, allocations).IsPaid == paid).ToList();
+            unpaid = await debts.UnpaidAmountsAsync(await queries.CustomerIdsAsync(filter, cancellationToken), cancellationToken);
+            paidFilter = new SalesInvoicePaidFilter(paid, unpaid.Keys.ToList());
         }
 
-        var window = keys.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        if (query.Paid is null)
+        var matched = await queries.MatchAsync(filter, paidFilter, (page - 1) * pageSize, pageSize, cancellationToken);
+        var window = matched.Keys.ToList();
+        if (paidFilter is null)
         {
-            allocations = await AllocationsAsync(window, cancellationToken);
+            unpaid = await debts.UnpaidAmountsAsync(window.Where(k => k.CustomerId is not null).Select(k => k.CustomerId!.Value).ToList(), cancellationToken);
         }
 
-        var rows = await RowsAsync(window, allocations, collector, cancellationToken);
-        return new SalesInvoiceMatches(from, to, keys.Count, keys.Where(k => k.StatusId == StatusIds.SalesInvoice.Completed).Sum(k => k.Total), rows);
+        var rows = await RowsAsync(window, unpaid, collector, cancellationToken);
+        return new SalesInvoiceMatches(from, to, matched.Count, matched.CompletedTotal, rows);
     }
 
     private async Task<IReadOnlyList<SalesInvoiceRow>> RowsAsync(
-        List<SalesInvoiceSearchKey> window, IReadOnlyDictionary<Guid, CustomerDebtAllocation> allocations, Guid? collector, CancellationToken cancellationToken)
+        List<SalesInvoiceSearchKey> window, IReadOnlyDictionary<Guid, decimal> unpaid, Guid? collector, CancellationToken cancellationToken)
     {
         var ids = window.Select(k => k.Id).ToList();
         var rows = (await queries.RowsAsync(ids, cancellationToken)).ToDictionary(r => r.Id);
@@ -107,7 +108,7 @@ public sealed class SalesInvoiceSearchService(
         return window.Select(key =>
         {
             var row = rows[key.Id];
-            var state = StateOf(key, allocations);
+            var state = StateOf(key, unpaid);
             var delivery = sendings.TryGetValue(key.Id, out var sending)
                 ? TraderMessageService.EffectiveStatus(sending.DeliveryStatusId, sending.DeliveryStatusAt, now)
                 : StatusIds.MessageDelivery.NotSent;
@@ -119,10 +120,6 @@ public sealed class SalesInvoiceSearchService(
         }).ToList();
     }
 
-    private Task<IReadOnlyDictionary<Guid, CustomerDebtAllocation>> AllocationsAsync(IEnumerable<SalesInvoiceSearchKey> keys, CancellationToken cancellationToken) =>
-        debts.AllocationsAsync(keys.Where(k => k.CustomerId is not null).Select(k => k.CustomerId!.Value).ToList(), cancellationToken);
-
-    private static SalesInvoicePaidState StateOf(SalesInvoiceSearchKey key, IReadOnlyDictionary<Guid, CustomerDebtAllocation> allocations) =>
-        SalesInvoicePaidState.Of(
-            key.Id, key.StatusId, key.Total, key.CustomerId, key.OwnPayments, key.CustomerId is { } customerId ? allocations.GetValueOrDefault(customerId) : null);
+    private static SalesInvoicePaidState StateOf(SalesInvoiceSearchKey key, IReadOnlyDictionary<Guid, decimal> unpaid) =>
+        SalesInvoicePaidState.OfUnpaid(key.StatusId, key.Total, key.CustomerId, key.OwnPayments, unpaid.GetValueOrDefault(key.Id));
 }

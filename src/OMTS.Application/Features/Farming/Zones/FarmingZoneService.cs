@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
@@ -22,6 +23,7 @@ namespace OMTS.Application.Features.Farming.Zones;
 /// </summary>
 public sealed class FarmingZoneService(
     IFarmingZoneRepository zones,
+    IRaftRepository rafts,
     IZoneLicenseRepository licenses,
     ICooperativeRepository cooperatives,
     FarmingLookupAccess lookupAccess,
@@ -74,7 +76,7 @@ public sealed class FarmingZoneService(
         var raftZones = await lookupAccess.VisibleRaftZonesAsync(cancellationToken);
         var found = await zones.ListForMapAsync(includeDiscontinued, visible, cancellationToken);
         return found.Select(z => new MapZone(
-            z.Id, z.Code, z.Name, z.Latitude, z.Longitude, z.StatusId, statusCatalog.DisplayNameOf(z.StatusId),
+            z.Id, z.Code, z.Name, z.Latitude, z.Longitude, ZoneBoundaryJson.Read(z.BoundaryGeoJson), z.StatusId, statusCatalog.DisplayNameOf(z.StatusId),
             raftZones.Allows(z.Id) ? z.Rafts.OrderBy(r => r.Code).Select(r => new MapRaft(r.Id, r.Code, r.Latitude, r.Longitude)).ToList() : [])).ToList();
     }
 
@@ -163,6 +165,52 @@ public sealed class FarmingZoneService(
         return await SavedAsync(zone, cancellationToken);
     }
 
+    /// <summary>
+    /// Saves the licensed sea area the app read from the photographed map, or clears it with a null boundary. Like an edit,
+    /// only for an In Use zone (MSG-GEN-09) and against the version the client read (MSG06). In Use rafts pinned outside the
+    /// new boundary are named in a warning: PM decision 25/11/2026 (warn, never block).
+    /// </summary>
+    public async Task<Result<FarmingZoneSaved>> SetBoundaryAsync(Guid zoneId, SaveZoneBoundaryRequest request, CancellationToken cancellationToken)
+    {
+        var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
+        if (zone is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return WrongStatus(zone);
+        }
+
+        var check = new FieldCheck();
+        var boundary = ZoneBoundaryInput.Read(request.Boundary, check);
+        if (!check.IsValid)
+        {
+            return check.ToError();
+        }
+
+        if (await rowVersions.CheckAsync(zone, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        var before = BoundarySnapshot(zone);
+        zone.BoundaryGeoJson = ZoneBoundaryJson.Write(boundary);
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, BoundarySnapshot(zone));
+        if (changedAfter is not null)
+        {
+            audit.Record(new AuditEntry("FarmingZone.BoundaryChanged", RecordType)
+            {
+                RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, Before = changedBefore, After = changedAfter,
+            });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var inUseRafts = boundary is null ? [] : await rafts.ListByZoneAsync(zone.Id, StatusIds.Usage.InUse, cancellationToken);
+        return await SavedAsync(zone, cancellationToken, ZoneBoundaryRules.ForRafts(boundary, inUseRafts));
+    }
+
     /// <summary>In Use → Discontinued, blocked while the zone still has In Use rafts (MSG-GEN-06).</summary>
     public async Task<Result<FarmingZoneView>> DiscontinueAsync(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
@@ -177,10 +225,10 @@ public sealed class FarmingZoneService(
             return WrongStatus(zone);
         }
 
-        var rafts = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
-        if (rafts.Count > 0)
+        var raftCodes = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
+        if (raftCodes.Count > 0)
         {
-            return AppError.Conflict(UserMessages.StillInUse(rafts.Count, string.Join(", ", rafts)), new Dictionary<string, object?> { ["raftCodes"] = rafts });
+            return AppError.Conflict(UserMessages.StillInUse(raftCodes.Count, string.Join(", ", raftCodes)), new Dictionary<string, object?> { ["raftCodes"] = raftCodes });
         }
 
         return await ChangeStatusAsync(zone, StatusIds.Usage.Discontinued, "FarmingZone.Discontinued", request, cancellationToken);
@@ -236,11 +284,12 @@ public sealed class FarmingZoneService(
         }
     }
 
-    /// <summary>The zone with MSG-GEN-05 (FARM-02.0 step 6).</summary>
-    private async Task<FarmingZoneSaved> SavedAsync(FarmingZone zone, CancellationToken cancellationToken)
+    /// <summary>The zone with MSG-GEN-05 (FARM-02.0 step 6), the warnings on its pin first, then <paramref name="more"/>.</summary>
+    private async Task<FarmingZoneSaved> SavedAsync(FarmingZone zone, CancellationToken cancellationToken, IReadOnlyList<FarmingWarning>? more = null)
     {
         var saved = UserMessages.Saved("Farming zone");
-        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code, CoordinateRules.ForZone(zone.Latitude, zone.Longitude));
+        var warnings = CoordinateRules.ForZone(zone.Latitude, zone.Longitude).Concat(more ?? []).ToList();
+        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code, warnings);
     }
 
     private static AppError Duplicate(Guid existingId) => new(
@@ -264,10 +313,10 @@ public sealed class FarmingZoneService(
     private async Task<FarmingZoneView> ViewAsync(FarmingZone zone, CancellationToken cancellationToken)
     {
         var badges = await BadgesAsync([zone.Id], await lookupAccess.VisibleZonesAsync(cancellationToken), cancellationToken);
-        var rafts = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
+        var raftCodes = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
         return new FarmingZoneView(
-            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area,
-            zone.StatusId, statusCatalog.DisplayNameOf(zone.StatusId), rafts.Count, badges.GetValueOrDefault(zone.Id),
+            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area, ZoneBoundaryJson.Read(zone.BoundaryGeoJson),
+            zone.StatusId, statusCatalog.DisplayNameOf(zone.StatusId), raftCodes.Count, badges.GetValueOrDefault(zone.Id),
             RowVersionGuard.Encode(zone.RowVersion));
     }
 
@@ -294,6 +343,9 @@ public sealed class FarmingZoneService(
     }
 
     private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area };
+
+    /// <summary>The boundary as the GeoJSON it is (not as an escaped text), so the audit log shows and compares it as such.</summary>
+    private static object BoundarySnapshot(FarmingZone z) => new { Boundary = z.BoundaryGeoJson is { } json ? JsonNode.Parse(json) : null };
 
     private sealed record ZoneValues(string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area);
 }

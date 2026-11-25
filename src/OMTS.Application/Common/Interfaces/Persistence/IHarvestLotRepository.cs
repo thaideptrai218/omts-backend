@@ -20,6 +20,31 @@ public sealed record HarvestLotListRow(
     Guid Id, string LotCode, DateTimeOffset HarvestedAt, DateOnly HarvestDate, Guid ZoneId, string ZoneCode, Guid RaftId, string RaftCode, Guid CycleId, decimal CageCount, decimal EstimatedKg,
     decimal? WeighedKg, DateTimeOffset? WeighedAt, int StatusId, HarvestLotCloseReason? CloseReason, DateOnly? CloseDate, decimal? LeftoverKg, Guid RecordedByAccountId);
 
+/// <summary>The cycle of a lot of the yield report: the columns the report reads.</summary>
+public sealed record HarvestYieldCycleRow(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, decimal? TargetYieldKg);
+
+/// <summary>A lot of the yield report with its raft, zone and cycle: only the columns the report reads, never the whole entities.</summary>
+public sealed record HarvestYieldLotRow(
+    Guid Id, string LotCode, DateTimeOffset HarvestedAt, DateOnly HarvestDate, Guid RaftId, string RaftCode, Guid ZoneId, string ZoneCode, string ZoneName, int StatusId, decimal EstimatedKg, decimal CageCount,
+    decimal? WeighedKg, decimal? LeftoverKg, HarvestYieldCycleRow Cycle)
+{
+    public Guid CycleId => Cycle.Id;
+}
+
+/// <summary>How the lot list is ordered; the lot code then breaks every tie.</summary>
+public enum HarvestLotSort
+{
+    Code,
+    HarvestedAt,
+    RemainingKg,
+}
+
+/// <summary>The count and the sums of every lot the filters match; the sold, remaining and lost kg are worked out by the same rules as <see cref="HarvestLotFigures"/>.</summary>
+public sealed record HarvestLotListSums(int Count, decimal CageCount, decimal EstimatedKg, decimal WeighedKg, decimal SoldKg, decimal RemainingKg, decimal LostKg)
+{
+    public static readonly HarvestLotListSums None = new(0, 0m, 0m, 0m, 0m, 0m, 0m);
+}
+
 public interface IHarvestLotRepository
 {
     /// <summary>The lot with its lanes, photos, product lines, weighed cages, cycle, raft and zone, tracked for editing.</summary>
@@ -28,14 +53,29 @@ public interface IHarvestLotRepository
     /// <summary>The same, read only.</summary>
     Task<HarvestLot?> GetAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>The lot itself with its raft and zone, read only, in one query: for a read that needs only the lot's own values, its raft or its zone.</summary>
+    Task<HarvestLot?> GetHeaderAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>The lot with its lanes, cycle, raft and zone, read only: what the trace of a lot is built from.</summary>
+    Task<HarvestLot?> GetForTraceAsync(Guid lotId, CancellationToken cancellationToken);
+
     /// <summary>The lots of a cycle with their lanes, read only, the latest harvest first.</summary>
     Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken);
 
     /// <summary>Each lane of each lot of the cycle with its date: what the lane states are worked out from (BR-FARM-03).</summary>
     Task<IReadOnlyList<LaneHarvest>> LaneHarvestsAsync(Guid cycleId, CancellationToken cancellationToken);
 
+    /// <summary>The same for several cycles in one read; each row carries its cycle.</summary>
+    Task<IReadOnlyList<LaneHarvest>> LaneHarvestsOfCyclesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     /// <summary>The lots of the cycle that include the lane (CYCLE-05.0 step 3), each with its lot, read only, the latest harvest first.</summary>
     Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken);
+
+    /// <summary>The same for several lanes of the cycle in one read, the latest harvest first; each row carries its lane.</summary>
+    Task<IReadOnlyList<HarvestLotLane>> ListOfLanesAsync(Guid cycleId, IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken);
+
+    /// <summary>The lots with their lane rows only, tracked, in one read: what finishing lanes changes. A lot found once serves every lane of it.</summary>
+    Task<IReadOnlyDictionary<Guid, HarvestLot>> ListWithLanesForEditAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
     /// <summary>The employees named on these lots, each with the harvest date of its lot, read only.</summary>
     Task<IReadOnlyList<Features.Workforce.CrewDay>> ListCrewDaysAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
@@ -62,10 +102,10 @@ public interface IHarvestLotRepository
     Task<IReadOnlyList<LotLaneSeedLot>> LaneSeedLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The lots of the yield report (BR-HARVEST-07) with their raft, zone and cycle, read only: those harvested from <paramref name="from"/> to <paramref name="to"/> on rafts of the zones,
+    /// The lots of the yield report (BR-HARVEST-07) with their raft, zone and cycle, read only, as the columns the report reads: those harvested from <paramref name="from"/> to <paramref name="to"/> on rafts of the zones,
     /// or with <paramref name="wholeCycles"/> every lot of each cycle that has such a lot. Null zones: every zone.
     /// </summary>
-    Task<IReadOnlyList<HarvestLot>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken);
+    Task<IReadOnlyList<HarvestYieldLotRow>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken);
 
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);
@@ -82,8 +122,11 @@ public interface IHarvestLotRepository
     /// <summary>The ids of the same lots, oldest first: what the daily close check looks at (GFR-05).</summary>
     Task<IReadOnlyList<Guid>> ListForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
 
-    /// <summary>Every lot the filters match with its raft and zone, read only, the latest harvest first; the caller sorts and pages them once it knows their figures.</summary>
-    Task<IReadOnlyList<HarvestLotListRow>> SearchAsync(HarvestLotFilter filter, CancellationToken cancellationToken);
+    /// <summary>One page of the lots the filters match with their raft and zone, read only, in the order asked; the lot code breaks every tie, so a page never repeats or skips a lot.</summary>
+    Task<IReadOnlyList<HarvestLotListRow>> SearchPageAsync(HarvestLotFilter filter, HarvestLotSort sort, bool descending, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>The count and the sums of every lot the filters match, in one query.</summary>
+    Task<HarvestLotListSums> SumsAsync(HarvestLotFilter filter, CancellationToken cancellationToken);
 
     /// <summary>The product lines of these lots with their products, read only, in line order.</summary>
     Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);

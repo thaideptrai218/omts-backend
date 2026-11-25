@@ -28,7 +28,7 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
             DocumentType = "BUILDING_PERMIT", DocumentNumber = " ", EffectiveDate = null, ExpiryDate = null, IssuingAuthority = new string('i', 201),
             Holder = new string('h', 201), LegalScope = new string('s', 1001), File = null,
         }.ToForm())).InvalidFieldsAsync();
-        Assert.Equal(["Document type", "Document number", "Effective date", "Expiry date", "Issuing authority", "Holder", "Legal scope", "Zone", "File"], fields);
+        Assert.Equal(["Document type", "Document number", "Effective date", "Expiry date", "Issuing authority", "Holder", "Legal scope", "Zone"], fields);
 
         var valid = new LicenseFields { DocumentNumber = number, ZoneId = zoneId, EffectiveDate = Today, ExpiryDate = Today.AddYears(1) };
         Assert.Equal(["Expiry date"], await Invalid(valid with { ExpiryDate = Today }));
@@ -163,6 +163,25 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.NotNull(kept.ExpiringReminderSentAt);
     }
 
+    // FARM-03: the scan is optional, on create and on replace as on edit; the view then has no file link.
+    [Fact]
+    public async Task A_license_can_be_created_and_replaced_without_a_file()
+    {
+        var owner = await factory.OwnerAsync();
+        var zoneId = (await owner.Client.CreateZoneAsync()).Id();
+        var stored = factory.StoredFiles("zone-licenses").Count;
+
+        var created = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddDays(-30), File = null });
+        var renewal = new LicenseFields { DocumentType = null, EffectiveDate = Today.AddDays(-1), ExpiryDate = Today.AddYears(5), File = null };
+        var replaced = await (await owner.Client.PostAsync($"/api/zone-licenses/{created.Id()}/replace", renewal.ToForm())).ReadAsync(HttpStatusCode.Created);
+
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("fileUrl").ValueKind);
+        Assert.Equal(JsonValueKind.Null, replaced.GetProperty("fileUrl").ValueKind);
+        Assert.Equal(created.Id(), replaced.GetProperty("replacesDocumentId").GetGuid());
+        Assert.Equal(stored, factory.StoredFiles("zone-licenses").Count);
+        Assert.All(await factory.QueryAsync(db => db.ZoneComplianceDocuments.Where(d => d.ZoneId == zoneId).ToListAsync()), d => Assert.Null(d.EvidenceFileUrl));
+    }
+
     [Fact]
     public async Task Replace_keeps_the_zone_leaves_the_old_license_unchanged_and_only_a_license_not_replaced_can_be_replaced_or_edited()
     {
@@ -174,7 +193,6 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         });
         var renewal = new LicenseFields { DocumentType = null, EffectiveDate = Today.AddDays(-1), ExpiryDate = Today.AddYears(5) };
 
-        Assert.Equal(["File"], await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", (renewal with { File = null }).ToForm())).InvalidFieldsAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.PostAsync($"/api/zone-licenses/{Guid.NewGuid()}/replace", renewal.ToForm())).StatusCode);
 
         var replacement = await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", renewal.ToForm())).ReadAsync(HttpStatusCode.Created);

@@ -15,14 +15,38 @@ namespace OMTS.Application.Features.Harvest.Plans;
 public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog statusCatalog, HarvestPlanAccess access, IHarvestPlanRepository planRepository)
 {
     /// <param name="harvestZones">When given (the harvest screen), only the lines of these zones, among those the caller sees.</param>
-    public async Task<HarvestPlanView> ViewAsync(HarvestPlan plan, CancellationToken cancellationToken, IReadOnlySet<Guid>? harvestZones = null)
+    public async Task<HarvestPlanView> ViewAsync(HarvestPlan plan, CancellationToken cancellationToken, IReadOnlySet<Guid>? harvestZones = null) =>
+        (await ViewManyAsync([plan], cancellationToken, harvestZones))[0];
+
+    /// <summary>
+    /// The views of several plans, each as <see cref="ViewAsync"/> gives it, with the caller's scope, the names of the people and the maturity of the rafts read once for all of them.
+    /// </summary>
+    public async Task<IReadOnlyList<HarvestPlanView>> ViewManyAsync(IReadOnlyList<HarvestPlan> plans, CancellationToken cancellationToken, IReadOnlySet<Guid>? harvestZones = null)
     {
         var scope = await access.ScopeAsync(PermissionAction.View, cancellationToken);
-        var visible = HarvestPlanAccess.VisibleLines(plan, scope).Where(l => harvestZones is null || harvestZones.Contains(l.Raft.ZoneId)).ToList();
-        var caller = await access.CallerAsync(HarvestPlanAccess.ZoneIdsOf(plan), cancellationToken);
-        var ids = new[] { plan.CreatedByAccountId, plan.AssignedByAccountId, plan.CancelledByAccountId }.OfType<Guid>()
-            .Concat(visible.SelectMany(l => l.Lanes).Select(l => l.SkippedByAccountId).OfType<Guid>()).Distinct().ToList();
+        var visibleOf = plans.ToDictionary(p => p.Id, p => HarvestPlanAccess.VisibleLines(p, scope).Where(l => harvestZones is null || harvestZones.Contains(l.Raft.ZoneId)).ToList());
+        var ids = plans.SelectMany(p => new[] { p.CreatedByAccountId, p.AssignedByAccountId, p.CancelledByAccountId }.OfType<Guid>()
+                .Concat(visibleOf[p.Id].SelectMany(l => l.Lanes).Select(l => l.SkippedByAccountId).OfType<Guid>()))
+            .Distinct().ToList();
         var names = ids.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(ids, cancellationToken);
+
+        // The day each raft is mature, for the screen to warn (never refuse) before an early harvest; only lines still open need it.
+        var openRaftIds = plans.SelectMany(p => visibleOf[p.Id].Where(l => l.Lot is null).Select(l => l.RaftId)).Distinct().ToList();
+        IReadOnlyDictionary<Guid, CycleMaturity> maturity = openRaftIds.Count == 0 ? new Dictionary<Guid, CycleMaturity>() : await planRepository.CycleMaturityAsync(openRaftIds, cancellationToken);
+
+        var views = new List<HarvestPlanView>(plans.Count);
+        foreach (var plan in plans)
+        {
+            views.Add(await ViewOfAsync(plan, visibleOf[plan.Id], names, maturity, cancellationToken));
+        }
+
+        return views;
+    }
+
+    private async Task<HarvestPlanView> ViewOfAsync(
+        HarvestPlan plan, IReadOnlyList<HarvestPlanLine> visible, IReadOnlyDictionary<Guid, string> names, IReadOnlyDictionary<Guid, CycleMaturity> maturity, CancellationToken cancellationToken)
+    {
+        var caller = await access.CallerAsync(HarvestPlanAccess.ZoneIdsOf(plan), cancellationToken);
         AccountRef? Ref(Guid? id) => id is { } value ? new AccountRef(value, names.GetValueOrDefault(value) ?? string.Empty) : null;
 
         var inProgress = HarvestPlanRules.AllowsHarvest(plan.StatusId);
@@ -31,10 +55,6 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
         {
             mayHarvest[zoneId] = await access.MayHarvestAsync(zoneId, cancellationToken);
         }
-
-        // The day each raft is mature, for the screen to warn (never refuse) before an early harvest; only lines still open need it.
-        var openRaftIds = visible.Where(l => l.Lot is null).Select(l => l.RaftId).Distinct().ToList();
-        IReadOnlyDictionary<Guid, CycleMaturity> maturity = openRaftIds.Count == 0 ? new Dictionary<Guid, CycleMaturity>() : await planRepository.CycleMaturityAsync(openRaftIds, cancellationToken);
 
         var lineViews = new List<HarvestPlanLineView>();
         var canHarvestNow = false;

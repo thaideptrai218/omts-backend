@@ -33,7 +33,7 @@ public class RateLimitTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var client = api.CreateClient();
         var phones = new[] { NewPhone(), NewPhone() };
 
-        var answers = await Task.WhenAll(phones.Select(phone => client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
+        var answers = await Task.WhenAll(phones.Select(phone => client.PostAsJsonAsync("/api/auth/recovery", new { identifier = phone })));
 
         Assert.Single(answers, r => r.IsSuccessStatusCode);
         var refused = Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests);

@@ -89,8 +89,11 @@ internal sealed class InputStockMovementConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.PartyName).HasMaxLength(Lengths.Name);
         builder.ReferencesAccount(nameof(InputStockMovement.RecordedByAccountId));
         // The quantity on hand of an item and the movements of a document are read by these.
-        builder.HasIndex(x => new { x.ItemId, x.OccurredAt });
+        // The quantity and the lot ride along so adding up the stock of an item needs no lookup into the row.
+        builder.HasIndex(x => new { x.ItemId, x.OccurredAt }).IncludeProperties(x => new { x.Quantity, x.SeedLotLineId });
         builder.HasIndex(x => x.DocumentId);
         builder.HasIndex(x => x.SeedLotLineId);
+        // Undoing the rows of a document looks for the rows that reverse them; most rows reverse nothing.
+        builder.HasIndex(x => x.ReversesMovementId).HasFilter("[ReversesMovementId] IS NOT NULL");
     }
 }

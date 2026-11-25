@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -166,7 +167,11 @@ public class HarvestYieldCalculatorTests
     }
 
     private static HarvestYieldResult Build(IReadOnlyList<HarvestLot> lots, Dictionary<Guid, LotSalesFigures> sales, HarvestYieldGrouping groupBy) =>
-        HarvestYieldCalculator.Build(lots, sales, groupBy, From, To, StatusName);
+        HarvestYieldCalculator.Build(lots.Select(RowOf).ToList(), sales, groupBy, From, To, StatusName);
+
+    private static HarvestYieldLotRow RowOf(HarvestLot lot) => new(
+        lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, lot.RaftId, lot.Raft.Code, lot.Raft.ZoneId, lot.Raft.Zone.Code, lot.Raft.Zone.Name, lot.StatusId, lot.EstimatedKg, lot.CageCount, lot.WeighedKg, lot.LeftoverKg,
+        new HarvestYieldCycleRow(lot.CycleId, lot.Cycle.StartDate, lot.Cycle.CloseDate, lot.Cycle.StatusId, lot.Cycle.TargetYieldKg));
 
     private static string StatusName(int statusId) => statusId switch
     {

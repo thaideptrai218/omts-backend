@@ -96,6 +96,8 @@ public sealed class FileFaultApiFactory : AuthApiFactory
 
         public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default) => inner.OpenReadAsync(key, cancellationToken);
 
+        public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => inner.ExistsAsync(key, cancellationToken);
+
         public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>
             inner.GetReadUrlAsync(key, lifetime, cancellationToken);
 

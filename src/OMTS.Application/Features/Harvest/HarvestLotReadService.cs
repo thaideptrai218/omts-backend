@@ -30,7 +30,7 @@ public sealed class HarvestLotReadService(
     /// <summary>HARVEST-01.0 step 1: the lanes with their state today and the lots of the Open cycle. With no Open cycle: the lanes, no lot, and nothing to record.</summary>
     public async Task<Result<HarvestLotsScreen>> ScreenAsync(Guid raftId, CancellationToken cancellationToken)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
         if (raft is null)
         {
             return AppError.NotFound;

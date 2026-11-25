@@ -41,11 +41,11 @@ public interface IWaterMeasurementRepository
         Guid zoneId, DateTimeOffset from, DateTimeOffset toExclusive, IReadOnlyCollection<int> statusIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The latest Active measurement of each zone that has one (not tracked, without its raft); Voided does not count.
+    /// The latest Active measurement of each of the zones that has one (not tracked, without its raft); Voided does not count. Only these zones are read, so a screen of one zone never scans the others.
     /// Measurements taken at the same time are ordered by the time they were saved, then id, so the latest one is always
     /// the same.
     /// </summary>
-    Task<IReadOnlyDictionary<Guid, WaterMeasurement>> LatestActiveByZoneAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, WaterMeasurement>> LatestActiveByZoneAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken);
 
     /// <summary>The zone's <paramref name="count"/> latest Active measurements (not tracked), latest first, in the order of <see cref="LatestActiveByZoneAsync"/>.</summary>
     Task<IReadOnlyList<WaterMeasurement>> ListLatestActiveAsync(Guid zoneId, int count, CancellationToken cancellationToken);

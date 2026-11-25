@@ -15,9 +15,12 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 public sealed class PurchaseReceiptViews(
     IPurchaseReceiptRepository receipts, ISeedLotUsageQuery seedUsage, ISeedLotRegisterQuery seedLots, IAccountRepository accounts, IStatusCatalog statusCatalog, SupplierPaymentAllocationService allocations)
 {
-    public async Task<PurchaseReceiptView> ViewAsync(Guid receiptId, CancellationToken cancellationToken)
+    public async Task<PurchaseReceiptView> ViewAsync(Guid receiptId, CancellationToken cancellationToken) =>
+        await ViewAsync(await receipts.GetForViewAsync(receiptId, cancellationToken) ?? throw new InvalidOperationException($"Receipt {receiptId} not found."), cancellationToken);
+
+    /// <summary>The detail of a receipt already loaded with its graph (see <see cref="IPurchaseReceiptRepository.GetForViewAsync"/>), so a read loads it once.</summary>
+    public async Task<PurchaseReceiptView> ViewAsync(PurchaseReceipt r, CancellationToken cancellationToken)
     {
-        var r = await receipts.GetForEditAsync(receiptId, cancellationToken) ?? throw new InvalidOperationException($"Receipt {receiptId} not found.");
         var seeded = await seedUsage.SeededAsync(r.Lines.Select(l => l.Id).ToList(), cancellationToken);
         var lots = r.Kind == PurchaseReceiptKind.Seed && r.StatusId == StatusIds.PurchaseReceipt.Completed
             ? await seedLots.FiguresAsync(r.Lines.Where(l => IsSeedLot(r, l)).Select(l => l.Id).ToList(), cancellationToken)
