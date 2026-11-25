@@ -228,7 +228,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
 | `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `HARVEST_PLAN_HANDED_OVER` | a Zone Manager handed a harvest plan over ("Bàn giao", 24/11/2026), not to an Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the plan | unless turned off | Owner |
-| `PURCHASE_SHIFT_ASSIGNED` | the Owner or the manager responsible chose the employee for a purchase request: the shift is already a work assignment (24/11/2026), nothing to answer; message code `MINI_APP_NOTIFICATION`; opens the request | unless turned off | Employee |
+| `PURCHASE_SHIFT_ASSIGNED` | no longer sent since 25/11/2026: only requests staffed on 24-25/11 have it (their shift was a work assignment at once); employees are invited again with `PURCHASE_SHIFT_INVITED`; message code `MINI_APP_NOTIFICATION`; opens the request | unless turned off | Employee |
 | `LANE_DAMAGED` | a lane of a raft is reported damaged (12/11/2026), not to the Owner who reported it; message code `MINI_APP_NOTIFICATION` (no SRS message exists); opens the raft | unless turned off | Owner |
 | `LANE_OUT_OF_SERVICE` | a lane is put out of service (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
 | `LANE_PROGRESS_CHANGED` | the seeded or harvested percentage of a lane is changed by hand, `PUT /api/rafts/{raftId}/lanes/{n}/progress` (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
@@ -405,9 +405,32 @@ The Owner plans a harvest of the rafts of any zones (`KHT000001`, a code the use
 
 An account whose access is limited to some zones (a Zone Manager, or an Accountant granted a zone) sees only the employees who have at least one working zone among the zones of its `LABOR_WORKERS` View grants; the Owner and a caller granted all zones see everyone. The filter is in the query (`EmployeeSearchFilter.VisibleZoneIds`), not after loading: `GET /api/employees` (list, search, `total`, export), `GET /api/employees/{id}` (404 for an employee out of scope; `PUT`, `end-employment`, `resume`, `working-zones` answer 404 too), `GET /api/workforce/leave-requests` (only the requests of employees working in the caller's `WORK_ASSIGNMENTS` zones), and the employees offered to staff a purchase request (`GET /api/purchase-requests/staffing-employees`, `GET /api/work-plans/{id}/employees`; choosing one outside the scope answers 400 field `Employee`). `GET /api/workforce/lookups` and the staff attendance list already followed the working zones. An employee of several zones is seen through the zone in scope, and the view shows only the working zones the caller sees (`workingZones`); the Owner sees all. A Zone Manager can no longer add its zone to an employee it does not see (`POST /api/employees/{id}/working-zones`: 404): the Owner, or a caller granted all zones, brings an employee into a zone. Not changed: the crew validation of a nursery, seeding or harvest record (`Crew` field) still accepts any employee of the cooperative who still works here; the screens offer only the in-scope ones.
 
-### Purchase request staffing without waiting (owner decision of 24/11/2026)
+### Purchase request staffing with the staff's agreement (owner decision of 25/11/2026)
 
-`POST /api/purchase-requests/{id}/staffing` (body `PlanPurchaseStaffing`, unchanged; called by the person responsible of the work-day plan, or `POST /api/work-plans/{id}/assignments`) now makes a work assignment at once for each chosen employee (job type, raft and day of the work-day plan; the zone of the raft is added to the employee's working zones, as in LABOR-02 step 9) and tells the employee with a plain notice (type `PURCHASE_SHIFT_ASSIGNED`); the employee has nothing to accept or refuse. The request stays Awaiting response (3202, `AwaitingResponse`): it does not enter Awaiting staff (3205), which only requests sent before this change may still have. Each chosen employee also gets a `PurchaseShiftInvitation` row that is already answered (`approved: true`, `reservedWorkDate` the day) so `GET /api/purchase-requests/{id}/staffing`, `staffing` of the request view (`approvedEmployees`, `hasEnoughStaff`...) and `GET /api/me/purchase-shifts` keep their shape; `canRespond` is always false for them and `POST /api/me/purchase-shifts/{id}/response` answers 400 for a request that is not Awaiting staff. `POST /api/purchase-requests/{id}/accept` needs only a staffing plan (cages, day, pickup and at least one assigned employee, plus the approved work plan of an active responsible): 400 `Staffing plan required` without one, no counting of agreements; accepting makes no second assignment. Declining or the trader cancelling releases the assignments that no one has checked in on (LABOR-02.2), as before. Choosing more employees later is still allowed; the cages, day, pickup and capacity of a sent plan cannot change (400 `Staffing plan already sent`). An employee already assigned that day, on leave or without an active staff account is refused (400 `Employee unavailable`).
+The decision of 25/11/2026 brings back the flow of 31/10/2026 in place of the staffing without waiting of 24/11/2026. The Owner makes the
+work-day plan of the request (`POST /api/work-plans` with `purchaseRequestId`) for itself, approved at once, or for a Zone Manager, who
+accepts or refuses it (`POST /api/work-plans/{id}/response`). The person responsible then invites employees with
+`POST /api/purchase-requests/{id}/staffing` (body `PlanPurchaseStaffing`, unchanged) or `POST /api/work-plans/{id}/assignments`:
+
+- The request becomes Awaiting staff (3205, `AWAITING_STAFF`). Each invited employee gets an unanswered `PurchaseShiftInvitation` and the
+  notice `PURCHASE_SHIFT_INVITED`; no work assignment is made yet. The work-day plan reads `AWAITING_STAFF`.
+- The employee answers `POST /api/me/purchase-shifts/{id}/response` (`{ approved, reason, rowVersion }`, a refusal needs a reason) while the
+  request is Awaiting staff, the day is not past and the staffing is not complete (`canRespond`). An agreement holds the day: the employee
+  cannot agree to another request of that day (400 `Employee unavailable`). Once enough employees agreed, a further agreement answers 400
+  `Staffing already sufficient`. Each answer tells the Owners (`PURCHASE_SHIFT_RESPONDED`) and, when another person is responsible, that
+  person (`WORK_PLAN_STAFF_RESPONDED`), with how many agreed out of how many are needed.
+- Enough is `approvedEmployees >= requiredEmployees`, the cages divided by the cages one employee does a day, rounded up (`hasEnoughStaff`
+  in `staffing` of the request view).
+- `POST /api/purchase-requests/{id}/accept` answers 400 MSG-GEN-01 `Insufficient approved staff` until there are enough, and 400
+  `Employee unavailable` when an employee who agreed has since got an approved leave, a locked account, left, or another assignment that
+  day. Accepting makes the work assignments of the employees who agreed (job type, raft and day of the plan; the zone of the raft is added
+  to their working zones, LABOR-02 step 9), tells them (`PURCHASE_SHIFT_CONFIRMED`) and tells the employees who had not answered that
+  their invitation is closed (`PURCHASE_SHIFT_CLOSED`).
+- Without enough employees the person responsible invites more (the cages, day, pickup and capacity of a sent plan cannot change: 400
+  `Staffing plan already sent`), or the Owner declines the request with a reason (`POST /api/purchase-requests/{id}/decline`). Declining or
+  the trader cancelling frees the days held and tells every invited employee (`PURCHASE_SHIFT_CLOSED`).
+- Requests staffed on 24-25/11/2026 stayed Awaiting response with shifts already agreed and assigned: they are accepted under the same rule
+  (enough agreed shifts), with no second assignment.
 
 ### Quality claims (CLAIM-01, CLAIM-02)
 
