@@ -172,12 +172,9 @@ public static class MessageCodes
     public const string Order05 = "MSG-ORDER-05";
     public const string Order06 = "MSG-ORDER-06";
 
-    public const string Plan01 = "MSG-PLAN-01";
-    public const string Plan02 = "MSG-PLAN-02";
     public const string Plan03 = "MSG-PLAN-03";
     public const string Plan04 = "MSG-PLAN-04";
     public const string Plan05 = "MSG-PLAN-05";
-    public const string Plan06 = "MSG-PLAN-06";
     public const string Plan07 = "MSG-PLAN-07";
     public const string Plan08 = "MSG-PLAN-08";
 
@@ -209,13 +206,13 @@ public static class MessageCodes
     /// MSG-INPUT-01/02, the input issue refusals: an item or seed lot would go below zero, and the system issue types are protected;
     /// MSG-CUSTOMER-01, an invoice that leaves a debt for a customer over the debt limit while the settings do not allow more debt;
     /// MSG-ORDER-01/02/03/04/05/06, the order of goods (DH): an order with an invoice cannot be cancelled, a purchase request already made into an order, a quantity below what was delivered, the notice to the trader that the request became an order, an order that cannot be invoiced any more, and an invoice whose customer or zone is not the order's;
-    /// MSG-PLAN-01/02/03/04/05/06/07, the harvest plan (KHT): a lane outside the plan, a lane already in another open plan, a line that already has its lot, a plan that cannot be cancelled, the notices that a plan was handed over and that lanes will not be harvested, and a plan with no sales order.
+    /// MSG-PLAN-03/04/05/07/08, the harvest plan (KHT): a line that already has its lot, a plan that cannot be cancelled, the notice that a plan was handed over, a plan with no sales order, and an order that already has a plan.
     /// MSG-CLAIM-04/05/06 and MSG-HARVEST-02, the Owner's agreement to a sales return, its notice, the warning before cancelling one, and the question on the lot of oysters thrown away (CLAIM-03).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest02, Harvest03, Harvest04, Harvest05, Harvest06, Harvest07, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Origin05, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Purchase11, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Sale24, Labor08, Labor09, Labor17, Labor18, Labor19, Order01, Order02, Order03, Order04, Order05, Order06, Plan01, Plan02, Plan03, Plan04, Plan05, Plan06, Plan07, Plan08, Labor37,
+        Origin01, Origin02, Origin03, Origin04, Origin05, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Purchase11, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Sale24, Labor08, Labor09, Labor17, Labor18, Labor19, Order01, Order02, Order03, Order04, Order05, Order06, Plan03, Plan04, Plan05, Plan07, Plan08, Labor37,
     };
 
     /// <summary>

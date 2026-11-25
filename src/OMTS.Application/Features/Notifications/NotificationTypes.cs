@@ -128,9 +128,6 @@ public static class NotificationTypes
     /// <summary>MSG-PLAN-05, a harvest plan handed to the Zone Managers of its zone, or to the Owners when the zone has none; not mandatory.</summary>
     public const string HarvestPlanAssigned = "HARVEST_PLAN_ASSIGNED";
 
-    /// <summary>MSG-PLAN-06, lanes of a harvest plan a Zone Manager will not harvest ("Không thu"), with the reason, to the Owners (not to an Owner who did it); not mandatory.</summary>
-    public const string HarvestPlanLanesSkipped = "HARVEST_PLAN_LANES_SKIPPED";
-
     /// <summary>A Zone Manager handed a harvest plan over ("Bàn giao"), to the Owners (not to an Owner who did it); not mandatory.</summary>
     public const string HarvestPlanHandedOver = "HARVEST_PLAN_HANDED_OVER";
 
@@ -223,8 +220,6 @@ public static class NotificationTypes
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // Opens the plan; a Zone Manager holds the right to view the plans handed to its zones.
         new(HarvestPlanAssigned, "Harvest plan assigned", Default, [CooperativeOwner, ZoneManager],
-            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
-        new(HarvestPlanLanesSkipped, "Harvest plan lanes left out", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         new(HarvestPlanHandedOver, "Harvest plan handed over", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),

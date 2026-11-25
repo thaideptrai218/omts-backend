@@ -8,11 +8,11 @@ using OMTS.Domain.Entities.Harvest;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
-/// <summary>The line of a plan a lot is recorded from, as the recording sees it: the plan and line, tracked, and the lanes to harvest (the plan's lanes without those left out).</summary>
-public sealed record PlannedHarvest(HarvestPlan Plan, HarvestPlanLine Line, IReadOnlyList<int> LaneNumbers);
+/// <summary>The line of a plan a lot is recorded from, as the recording sees it: the plan and line, tracked.</summary>
+public sealed record PlannedHarvest(HarvestPlan Plan, HarvestPlanLine Line);
 
 /// <summary>
-/// How lots and lanes left out move a plan along, in the unit of work of the change that causes them: a lot recorded from a line, a lot removed, lanes left out or put back, a line changed. The moves follow
+/// How lots move a plan along, in the unit of work of the change that causes them: a lot recorded from a line, a lot removed, a line changed. The moves follow
 /// <see cref="HarvestPlanRules.Settle"/>; each one is audited, stamps the plan and gives it a new version, so two Zone Managers recording at once do not both settle the plan from stale lines.
 /// </summary>
 public sealed class HarvestPlanProgress(
@@ -21,8 +21,8 @@ public sealed class HarvestPlanProgress(
     public const string FieldName = "Harvest plan line";
 
     /// <summary>
-    /// The line a lot is recorded from, for the recording of a harvest on <paramref name="raftId"/>: the line must be of that raft, without a lot (MSG-PLAN-03), and its plan Assigned or Harvesting (MSG-GEN-09). The lanes
-    /// are the lanes of the plan not left out; a line with every lane left out records nothing (MSG-GEN-09).
+    /// The line a lot is recorded from, for the recording of a harvest on <paramref name="raftId"/>: the line must be of that raft, without a lot (MSG-PLAN-03), and its plan Received or Harvesting (MSG-GEN-09). The lanes
+    /// of the lot are not read here: the lot takes those of the raft when it is recorded.
     /// </summary>
     public async Task<Result<PlannedHarvest>> ResolveLineAsync(Guid lineId, Guid raftId, CancellationToken cancellationToken)
     {
@@ -43,17 +43,10 @@ public sealed class HarvestPlanProgress(
             return AppError.Conflict(UserMessages.PlanLineAlreadyHarvested(plan.Code, line.Raft.Code));
         }
 
-        var lanes = line.Lanes.Where(l => !l.IsSkipped).Select(l => l.Lane.LaneNumber).Order().ToList();
-        // A line planned without lanes (a plan line is a raft) records whatever lanes the form sends; only a line whose every lane was left out records nothing.
-        if (lanes.Count == 0 && line.Lanes.Count > 0)
-        {
-            return AppError.Conflict(UserMessages.WrongStatus($"Raft {line.Raft.Code} of {HarvestPlanCodeService.ObjectName} {plan.Code}", "left out"));
-        }
-
-        return new PlannedHarvest(plan, line, lanes);
+        return new PlannedHarvest(plan, line);
     }
 
-    /// <summary>The lot is recorded from the line: it carries the link, and the plan moves on (Harvesting, then Completed when every line is done).</summary>
+    /// <summary>The lot is recorded from the line: it carries the link, and the plan moves on (Harvesting, then HandedOver by a Zone Manager once every line is done).</summary>
     public void OnLotRecorded(PlannedHarvest planned, HarvestLot lot)
     {
         lot.HarvestPlanLineId = planned.Line.Id;
@@ -63,7 +56,7 @@ public sealed class HarvestPlanProgress(
     }
 
     /// <summary>
-    /// The lot is about to be removed: its line is open again, and a plan that had finished by itself is Harvesting again. A plan the Owner finished with lanes still to do stays Completed. Call it before the lot is removed.
+    /// The lot is about to be removed: its line is open again, and a plan that had finished by itself is Harvesting again. A plan the Owner finished with lines still open stays Completed. Call it before the lot is removed.
     /// </summary>
     public async Task OnLotRemovedAsync(HarvestLot lot, CancellationToken cancellationToken)
     {
@@ -81,7 +74,7 @@ public sealed class HarvestPlanProgress(
     public static bool AllDone(HarvestPlan plan) => HarvestPlanRules.AllDone(plan.Lines.Select(HarvestPlanRules.FactsOf).ToList());
 
     /// <summary>
-    /// Applies the moves of the status after a lot or a lane left out or put back, or a change of the lines. The plan is marked changed whenever this runs, so its version moves with the lines. Returns whether the status moved.
+    /// Applies the moves of the status after a lot or a change of the lines. The plan is marked changed whenever this runs, so its version moves with the lines. Returns whether the status moved.
     /// </summary>
     public bool Settle(HarvestPlan plan, bool allDoneBefore)
     {

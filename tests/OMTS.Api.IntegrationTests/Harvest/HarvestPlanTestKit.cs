@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Entities.Harvest;
+using OMTS.Api.IntegrationTests.Cultivation;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
@@ -14,9 +14,9 @@ public static class HarvestPlanTestKit
 {
     public const string PlanRoute = "/api/harvest-plans";
 
-    /// <summary>One line of a plan: a raft (of any zone) and the lanes to harvest.</summary>
-    public static object PlanLine(Guid raftId, int[] lanes, Guid? id = null, int? cages = null) =>
-        new { id, raftId, laneNumbers = lanes, expectedCageCount = cages };
+    /// <summary>One line of a plan: one whole raft (of any zone); a plan holds no lanes.</summary>
+    public static object PlanLine(Guid raftId, Guid? id = null, int? cages = null) =>
+        new { id, raftId, expectedCageCount = cages };
 
     /// <summary>
     /// A plan has no zone of its own: it takes the zones of the rafts of its lines. A plan serves at least one sales order (MSG-PLAN-07), so
@@ -77,9 +77,8 @@ public static class HarvestPlanTestKit
 
     /// <summary>
     /// The plan the kit makes for a harvest a test records without naming a plan line (a harvest needs a plan since 18/11/2026, MSG-HARVEST-06):
-    /// one line of the raft, assigned and received, serving a new order. A plan line is a raft (decision of 19/11/2026) and the lot holds every harvestable
-    /// lane of it whatever lanes the test sent, so the line names none: it then clashes with no other open plan of the raft. The id of its line, or null when
-    /// the plan is refused (the harvest is then posted as the test wrote it, so the test sees the answer of the API).
+    /// one line of the raft, assigned and received, serving a new order. A plan line is a whole raft and the lot holds every harvestable lane of it whatever
+    /// lanes the test sent. The id of its line, or null when the plan is refused (the harvest is then posted as the test wrote it, so the test sees the answer of the API).
     /// </summary>
     public static async Task<Guid?> PlannedLineForAsync(Guid raftId)
     {
@@ -88,7 +87,7 @@ public static class HarvestPlanTestKit
             return null;
         }
 
-        var body = PlanBody(PlanLine(raftId, [])).WithPlanField("salesOrderIds", new[] { await owner.OpenOrderAsync() });
+        var body = PlanBody(PlanLine(raftId)).WithPlanField("salesOrderIds", new[] { await owner.OpenOrderAsync() });
         var created = await owner.PostPlanAsync(body);
         if (created.StatusCode != HttpStatusCode.Created)
         {
@@ -105,6 +104,20 @@ public static class HarvestPlanTestKit
         // A lot is recorded from a plan a Zone Manager received ("Nhận"): the kit presses it as the Owner, who may harvest in every zone.
         var received = await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/receive", new { });
         return received.IsSuccessStatusCode ? plan.LineId() : null;
+    }
+
+    /// <summary>
+    /// Another raft of the zone of <paramref name="raft"/>, made by the same Owner, with an Open cycle and seed on all five lanes: a plan with two lines needs two rafts, as a line is one whole raft
+    /// and a raft is on a plan once.
+    /// </summary>
+    public static async Task<SeededRaft> AnotherRaftOfAsync(this AuthApiFactory factory, SeededRaft raft)
+    {
+        var owner = raft.Owner.Client;
+        var raftId = (await owner.CreateRaftAsync(raft.ZoneId)).Id();
+        var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(FarmingTestKit.Today.AddDays(-10)))).Id();
+        var lot = await owner.SeedLotAsync();
+        var session = await owner.SeedingRecordAsync(cycleId, lot.Session([1, 2, 3, 4, 5]));
+        return new SeededRaft(raft.Owner, raft.ZoneId, raftId, cycleId, lot, session);
     }
 
     public static Dictionary<string, object?> WithPlanField(this Dictionary<string, object?> body, string field, object? value)
@@ -152,9 +165,6 @@ public static class HarvestPlanTestKit
         return await owner.PlanCommandAsync(planId, "finish");
     }
 
-    public static Task<HttpResponseMessage> PostSkipAsync(this HttpClient client, Guid planId, Guid lineId, int[] lanes, string? reason, string command = "skip-lanes") =>
-        client.PostAsJsonAsync($"{PlanRoute}/{planId}/lines/{lineId}/{command}", new { laneNumbers = lanes, reason });
-
     /// <summary>Asserts a problem response with the status and MSG code, and returns its body.</summary>
     public static Task<JsonElement> PlanProblemAsync(this HttpResponseMessage response, HttpStatusCode status, string code) => Purchasing.PurchasingTestKit.ProblemAsync(response, status, code);
 
@@ -167,12 +177,6 @@ public static class HarvestPlanTestKit
 
     public static int StatusId(this JsonElement plan) => plan.GetProperty("statusId").GetInt32();
 
-    public static string LaneState(this JsonElement plan, int lineIndex, int laneNumber) =>
-        plan.GetProperty("lines")[lineIndex].GetProperty("lanes").EnumerateArray().Single(l => l.GetProperty("laneNumber").GetInt32() == laneNumber).Text("state");
-
     public static Task<int> PlanCountAsync(this AuthApiFactory api, string code) =>
         api.QueryAsync(db => db.HarvestPlans.AsNoTracking().CountAsync(p => p.Code == code));
-
-    public static Task<List<HarvestPlanLane>> PlanLanesAsync(this AuthApiFactory api, Guid lineId) =>
-        api.QueryAsync(db => db.HarvestPlanLanes.AsNoTracking().Where(l => l.LineId == lineId).ToListAsync());
 }

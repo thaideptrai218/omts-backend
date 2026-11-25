@@ -10,14 +10,13 @@ namespace OMTS.Api.Controllers;
 
 /// <summary>
 /// The harvest plans (Kế hoạch thu hoạch, KHT000001). A plan spans the rafts of its lines, of any zone. The filters need the right in some zone; the services check the zones of the lines. The Owner makes, changes,
-/// assigns, completes and cancels a plan; a Zone Manager reads the plans assigned that have a line in its zones (never a Draft) and sees only those lines, receives the plan (Nhận), records lots from them with <c>POST /api/rafts/{raftId}/harvest-lots</c> (<c>harvestPlanLineId</c>) and leaves lanes out ("Không thu") and hands the plan over (Bàn giao) once every line is done. Flow: Draft, Assigned (Owner), Received (Zone Manager), Harvesting (first lot or lane left out), HandedOver (Zone Manager), Completed (Owner).
+/// assigns, completes and cancels a plan; a Zone Manager reads the plans assigned that have a line in its zones (never a Draft) and sees only those lines, receives the plan (Nhận), records lots from them with <c>POST /api/rafts/{raftId}/harvest-lots</c> (<c>harvestPlanLineId</c>) and hands the plan over (Bàn giao) once every line has its lot. A line is one whole raft and a plan holds no lanes. Flow: Draft, Assigned (Owner), Received (Zone Manager), Harvesting (first lot), HandedOver (Zone Manager), Completed (Owner).
 /// </summary>
 [ApiController]
 [Route("api/harvest-plans")]
 [Authorize]
 public sealed class HarvestPlansController(
-    HarvestPlanService plans, HarvestPlanReadService reads, HarvestPlanLaneSkipService skips, HarvestPlanStaffingService staffing,
-    HarvestPlanHandoverService handover) : ControllerBase
+    HarvestPlanService plans, HarvestPlanReadService reads, HarvestPlanStaffingService staffing, HarvestPlanHandoverService handover) : ControllerBase
 {
     /// <summary>The plans the caller may see, code descending, with filters and paging. A Zone Manager sees only the plans handed over with a line in its zones (and only those lines).</summary>
     [HttpGet]
@@ -33,15 +32,14 @@ public sealed class HarvestPlansController(
     public async Task<IActionResult> NextCode(CancellationToken cancellationToken) => (await reads.NextCodeAsync(cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// The rafts a plan can be made for (Owner): In Use, with an Open cultivation cycle and a lane that can be harvested, each with its zone, the product of its cycle and its lanes (Free, InAnotherPlan with the plan
-    /// code, or Harvested). <c>zoneId</c> narrows it to one zone; without it every zone.
+    /// The rafts a plan can be made for (Owner): In Use, with an Open cultivation cycle and a lane that can be harvested, each with its zone and the product of its cycle. <c>zoneId</c> narrows it to one zone; without it every zone.
     /// </summary>
     [HttpGet("eligible-rafts")]
     [RequirePermission(PermissionFunctions.HarvestPlans, PermissionAction.Create, PermissionScope.AnyZone)]
     [ProducesResponseType<EligibleRafts>(StatusCodes.Status200OK)]
     public async Task<IActionResult> EligibleRafts([FromQuery] Guid? zoneId, CancellationToken cancellationToken) => (await reads.EligibleRaftsAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>The plans Assigned, Received or Harvesting in the zones the caller harvests: what the harvest screen records from. Each carries its lines, lanes and the buttons the caller may press.</summary>
+    /// <summary>The plans Assigned, Received or Harvesting in the zones the caller harvests: what the harvest screen records from. Each carries its lines and the buttons the caller may press.</summary>
     [HttpGet("assigned")]
     [RequirePermission(PermissionFunctions.Harvests, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<HarvestPlansToHarvest>(StatusCodes.Status200OK)]
@@ -53,7 +51,7 @@ public sealed class HarvestPlansController(
     [ProducesResponseType<HarvestPlanOrderDraft>(StatusCodes.Status200OK)]
     public async Task<IActionResult> OrderDraft(Guid orderId, CancellationToken cancellationToken) => (await reads.OrderDraftAsync(orderId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>One plan with its lines (each lane Planned, Harvested or Skipped with the lot code), the orders it serves and the buttons the caller may press (<c>allowedActions</c>).</summary>
+    /// <summary>One plan with its lines (each Open or Harvested, with its lot), the orders it serves and the buttons the caller may press (<c>allowedActions</c>).</summary>
     [HttpGet("{id:guid}")]
     [RequirePermission(PermissionFunctions.HarvestPlans, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<HarvestPlanView>(StatusCodes.Status200OK)]
@@ -66,7 +64,7 @@ public sealed class HarvestPlansController(
     public async Task<IActionResult> GetByCode(string code, CancellationToken cancellationToken) => (await reads.GetByCodeAsync(code, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Saves a Draft plan. 409 MSG-GEN-02 for a code taken (field Code); 409 MSG-PLAN-02 for a lane that waits in another open plan; 400 MSG-GEN-01 names every invalid field (a line is named "Line 2 lanes",
+    /// Saves a Draft plan. 409 MSG-GEN-02 for a code taken (field Code); 400 MSG-GEN-01 names every invalid field (a line is named "Line 2 raft",
     /// the orders "Sales orders").
     /// </summary>
     [HttpPost]
@@ -76,7 +74,7 @@ public sealed class HarvestPlansController(
         (await plans.CreateAsync(request, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
 
     /// <summary>
-    /// Replaces the header, the orders and the lines of a plan that is not over (the row version is required; lines carry their <c>id</c>). After the hand-over a line that has its lot or a lane left out must come
+    /// Replaces the header, the orders and the lines of a plan that is not over (the row version is required; lines carry their <c>id</c>). After the hand-over a line that has its lot must come
     /// back unchanged (409 MSG-PLAN-03); other lines can change and lines can be added.
     /// </summary>
     [HttpPut("{id:guid}")]
@@ -99,7 +97,7 @@ public sealed class HarvestPlansController(
     public async Task<IActionResult> Receive(Guid id, HarvestPlanActionRequest request, CancellationToken cancellationToken) =>
         (await handover.ReceiveAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>"Bàn giao": a Zone Manager hands over a Harvesting plan once every line of the plan has its lot or all its lanes left out; the Owners are told. 409 MSG-GEN-09 for another status or lines still to harvest. Body <c>{}</c>.</summary>
+    /// <summary>"Bàn giao": a Zone Manager hands over a Harvesting plan once every line of the plan has its lot; the Owners are told. 409 MSG-GEN-09 for another status or lines still to harvest. Body <c>{}</c>.</summary>
     [HttpPost("{id:guid}/hand-over")]
     [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
     [ProducesResponseType<HarvestPlanSaved>(StatusCodes.Status200OK)]
@@ -139,18 +137,4 @@ public sealed class HarvestPlansController(
     [ProducesResponseType<HarvestPlanStaffingLine>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SaveStaffing(Guid id, Guid lineId, SaveHarvestPlanLineStaffingRequest request, CancellationToken cancellationToken) =>
         (await staffing.SaveLineAsync(id, lineId, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>"Không thu": leaves lanes of a line out with a reason (<c>laneNumbers</c>, <c>reason</c>); the Owners are told (MSG-PLAN-06). While the plan is Received or Harvesting and the line has no lot (409 MSG-PLAN-03).</summary>
-    [HttpPost("{id:guid}/lines/{lineId:guid}/skip-lanes")]
-    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
-    [ProducesResponseType<HarvestPlanView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> SkipLanes(Guid id, Guid lineId, SkipHarvestPlanLanesRequest request, CancellationToken cancellationToken) =>
-        (await skips.SkipAsync(id, lineId, request, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>Puts lanes left out back (<c>laneNumbers</c>), for a mistake, while the line has no lot.</summary>
-    [HttpPost("{id:guid}/lines/{lineId:guid}/unskip-lanes")]
-    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
-    [ProducesResponseType<HarvestPlanView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> UnskipLanes(Guid id, Guid lineId, SkipHarvestPlanLanesRequest request, CancellationToken cancellationToken) =>
-        (await skips.UnskipAsync(id, lineId, request, cancellationToken)).ToActionResult(Ok);
 }

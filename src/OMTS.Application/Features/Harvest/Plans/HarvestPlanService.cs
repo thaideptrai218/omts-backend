@@ -1,4 +1,4 @@
-using OMTS.Application.Common;
+﻿using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -17,8 +17,8 @@ namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
 /// The harvest plans (KHT): the Owner makes one for the rafts of any zones (the zone of a line is the zone of its raft), changes it, hands it to the Zone Managers of every zone of its lines, completes it once a Zone Manager handed it over, or
-/// cancels it. A Draft is free to change; once it is handed over only the lines without a lot and without a lane left out can change, and lines can be added (the Zone Managers of a zone a change brings in are told).
-/// A lane may wait in only one open plan at a time (MSG-PLAN-02). Lots and lanes left out move the plan along (<see cref="HarvestPlanProgress"/>). The service checks the zones of the lines; the API checks that the
+/// cancels it. A Draft is free to change; once it is handed over only the lines without a lot can change, and lines can be added (the Zone Managers of a zone a change brings in are told).
+/// A line is one whole raft and a plan holds no lanes. Lots move the plan along (<see cref="HarvestPlanProgress"/>). The service checks the zones of the lines; the API checks that the
 /// role holds the right in some zone.
 /// </summary>
 public sealed class HarvestPlanService(
@@ -107,7 +107,7 @@ public sealed class HarvestPlanService(
 
     // ---- Changing ----
 
-    /// <summary>Replaces the header, the orders and the lines of a plan that is not over. After the hand-over, a line with its lot or a lane left out must come back unchanged (MSG-PLAN-03).</summary>
+    /// <summary>Replaces the header, the orders and the lines of a plan that is not over. After the hand-over, a line with its lot must come back unchanged (MSG-PLAN-03).</summary>
     public async Task<Result<HarvestPlanSaved>> UpdateAsync(Guid planId, SaveHarvestPlanRequest request, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
@@ -216,7 +216,7 @@ public sealed class HarvestPlanService(
         return await SavedAsync(plan.Id, cancellationToken);
     }
 
-    /// <summary>"Giao QLV": the Draft is handed to the Zone Managers of its zone, who are told. Every raft needs an Open cycle, and no lane may wait in another open plan.</summary>
+    /// <summary>"Giao QLV": the Draft is handed to the Zone Managers of its zone, who are told. Every raft needs an Open cycle.</summary>
     public async Task<Result<HarvestPlanSaved>> AssignAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
@@ -253,12 +253,6 @@ public sealed class HarvestPlanService(
             }
         }
 
-        var wanted = plan.Lines.GroupBy(l => l.RaftId).ToDictionary(g => g.Key, g => (IReadOnlySet<Guid>)g.SelectMany(l => l.Lanes).Select(l => l.LaneId).ToHashSet());
-        if (await ClashAsync(wanted, plan.Id, cancellationToken) is { } clash)
-        {
-            return clash;
-        }
-
         var me = currentUser.AccountId!.Value;
         plan.AssignedAt = timeProvider.GetUtcNow();
         plan.AssignedByAccountId = me;
@@ -272,7 +266,7 @@ public sealed class HarvestPlanService(
         return await SavedAsync(plan.Id, cancellationToken);
     }
 
-    /// <summary>"Hoàn thành": only the Owner, only a plan a Zone Manager handed over ("Bàn giao": every line has its lot or all its lanes left out). The system never completes a plan by itself.</summary>
+    /// <summary>"Hoàn thành": only the Owner, only a plan a Zone Manager handed over ("Bàn giao": every line has its lot). The system never completes a plan by itself.</summary>
     public async Task<Result<HarvestPlanSaved>> FinishAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
@@ -302,7 +296,7 @@ public sealed class HarvestPlanService(
         {
             RecordId = plan.Id,
             RecordCode = plan.Code,
-            After = new { LinesLeft = left.Count, LanesLeft = left.Sum(l => l.Lanes.Count(lane => !lane.IsSkipped)), RaftsLeft = left.Select(l => l.Raft.Code).ToList() },
+            After = new { LinesLeft = left.Count, RaftsLeft = left.Select(l => l.Raft.Code).ToList() },
         });
         if (await SaveAsync(plan, cancellationToken) is { } error)
         {
@@ -375,7 +369,7 @@ public sealed class HarvestPlanService(
     // ---- Checking ----
 
     /// <summary>
-    /// What the entries name, checked against the database: the rafts (of any zone) and their lanes and the orders, then the lanes against the other open plans (MSG-PLAN-02). The rafts come tracked, with their zone and lanes;
+    /// What the entries name, checked against the database: the rafts (of any zone) and the orders. The rafts come tracked, with their zone;
     /// the product of each raft is that of its Open cycle.
     /// </summary>
     private async Task<Result<Prepared>> PrepareAsync(HarvestPlanEntries entries, HarvestPlan? stored, CancellationToken cancellationToken)
@@ -391,7 +385,6 @@ public sealed class HarvestPlanService(
         var plannedAt = entries.PlannedAt.ToOffset(BusinessClock.UtcOffset);
 
         var keptRafts = stored?.Lines.Select(l => l.RaftId).ToHashSet() ?? [];
-        var keptLanes = stored?.Lines.SelectMany(l => l.Lanes).Select(l => l.LaneId).ToHashSet() ?? [];
         var raftById = new Dictionary<Guid, Raft>();
         foreach (var raftId in entries.Lines.Select(l => l.RaftId).Distinct())
         {
@@ -401,7 +394,6 @@ public sealed class HarvestPlanService(
             }
         }
 
-        var usedLanes = new HashSet<(Guid, Guid)>();
         foreach (var entry in entries.Lines)
         {
             var field = $"Line {entry.LineNumber}";
@@ -410,14 +402,17 @@ public sealed class HarvestPlanService(
                 || ((raft.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse) && !keptRafts.Contains(raft.Id)))
             {
                 invalid.Add($"{field} raft");
-                continue;
             }
+        }
 
-            // Lanes are optional: a line without them is checked for its raft only (old plans keep the lanes they have).
-            var lanes = raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber) && (l.StatusId == StatusIds.Lane.InUse || keptLanes.Contains(l.Id))).ToList();
-            if (entry.LaneNumbers.Count > 0 && (lanes.Count != entry.LaneNumbers.Count || lanes.Any(l => !usedLanes.Add((raft.Id, l.Id)))))
+        // A line is one whole raft, and a raft is on a plan once. A plan stored before that rule keeps the lines it has on the same raft (they may hold lots), but no line may join them.
+        var storedRaftOf = stored?.Lines.ToDictionary(l => l.Id, l => l.RaftId) ?? new Dictionary<Guid, Guid>();
+        foreach (var group in entries.Lines.Where(l => l.RaftId != Guid.Empty).GroupBy(l => l.RaftId).Where(g => g.Count() > 1))
+        {
+            var kept = group.Where(l => l.Id is { } id && storedRaftOf.TryGetValue(id, out var storedRaft) && storedRaft == l.RaftId).ToList();
+            foreach (var repeated in group.Except(kept).Skip(kept.Count == 0 ? 1 : 0))
             {
-                invalid.Add($"{field} lanes");
+                invalid.Add($"Line {repeated.LineNumber} raft");
             }
         }
 
@@ -446,30 +441,7 @@ public sealed class HarvestPlanService(
             return AppError.InvalidFields(invalid.Distinct().ToList());
         }
 
-        var wanted = entries.Lines.GroupBy(l => l.RaftId).ToDictionary(
-            g => g.Key, g => (IReadOnlySet<Guid>)g.SelectMany(l => raftById[l.RaftId].Lanes.Where(lane => l.LaneNumbers.Contains(lane.LaneNumber)).Select(lane => lane.Id)).ToHashSet());
-        if (await ClashAsync(wanted, stored?.Id, cancellationToken) is { } clash)
-        {
-            return clash;
-        }
-
         return new Prepared(raftById, orders, plannedAt, await plans.CycleProductsAsync(raftById.Keys.ToList(), cancellationToken));
-    }
-
-    /// <summary>MSG-PLAN-02 when a lane wanted by this plan already waits in another open plan.</summary>
-    private async Task<AppError?> ClashAsync(IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> wanted, Guid? exceptPlanId, CancellationToken cancellationToken)
-    {
-        var claims = await plans.OpenLaneClaimsAsync(wanted.Keys.ToList(), exceptPlanId, cancellationToken);
-        var clash = HarvestPlanRules.Clashes(claims.Select(c => (c.RaftId, c.LaneId, c.PlanCode)), wanted).FirstOrDefault();
-        if (clash is null)
-        {
-            return null;
-        }
-
-        var inClash = claims.Where(c => c.RaftId == clash.RaftId && c.PlanCode == clash.OtherPlanCode && clash.LaneIds.Contains(c.LaneId)).ToList();
-        return AppError.Conflict(
-            UserMessages.PlanLanesInAnotherPlan(inClash[0].RaftCode, inClash.Select(c => c.LaneNumber).Order().ToList(), clash.OtherPlanCode),
-            new Dictionary<string, object?> { ["field"] = "Lines" });
     }
 
     /// <summary>The raft of a line can be harvested: In Use in a zone In Use, with an Open cycle.</summary>
@@ -491,16 +463,14 @@ public sealed class HarvestPlanService(
     }
 
     /// <summary>
-    /// A plan handed to the Zone Managers: a line with its lot or a lane left out must come back as it is (MSG-PLAN-03), every other line is free, and a line that is new or moved to another raft needs an Open cycle.
+    /// A plan handed to the Zone Managers: a line with its lot must come back as it is (MSG-PLAN-03), every other line is free, and a line that is new or moved to another raft needs an Open cycle.
     /// </summary>
     private async Task<AppError?> CheckHandedOverEditAsync(HarvestPlan plan, HarvestPlanEntries entries, Prepared ready, CancellationToken cancellationToken)
     {
         foreach (var line in plan.Lines.Where(l => HarvestPlanRules.LineLocked(HarvestPlanRules.FactsOf(l))))
         {
             var entry = entries.Lines.FirstOrDefault(e => e.Id == line.Id);
-            // A form without lanes (a line is a raft) leaves the lanes of the line as they are.
-            var sameLanes = entry is not null && (entry.LaneNumbers.Count == 0 || entry.LaneNumbers.SequenceEqual(line.Lanes.Select(l => l.Lane.LaneNumber).Order()));
-            if (entry is null || entry.RaftId != line.RaftId || !sameLanes || entry.ExpectedCageCount != line.ExpectedCageCount || entry.Note != line.Note)
+            if (entry is null || entry.RaftId != line.RaftId || entry.ExpectedCageCount != line.ExpectedCageCount || entry.Note != line.Note)
             {
                 return AppError.Conflict(UserMessages.PlanLineAlreadyHarvested(plan.Code, line.Raft.Code), new Dictionary<string, object?> { ["lineId"] = line.Id });
             }
@@ -523,25 +493,16 @@ public sealed class HarvestPlanService(
 
     // ---- Applying ----
 
-    private static HarvestPlanLine NewLine(HarvestPlan plan, HarvestPlanLineEntries entry, Raft raft, Guid? cycleProductId)
+    private static HarvestPlanLine NewLine(HarvestPlan plan, HarvestPlanLineEntries entry, Raft raft, Guid? cycleProductId) => new()
     {
-        var line = new HarvestPlanLine
-        {
-            PlanId = plan.Id,
-            LineNumber = entry.LineNumber,
-            RaftId = raft.Id,
-            Raft = raft,
-            ExpectedProductId = cycleProductId,
-            ExpectedCageCount = entry.ExpectedCageCount,
-            Note = entry.Note,
-        };
-        foreach (var lane in raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber)))
-        {
-            line.Lanes.Add(new HarvestPlanLane { LineId = line.Id, LaneId = lane.Id, Lane = lane });
-        }
-
-        return line;
-    }
+        PlanId = plan.Id,
+        LineNumber = entry.LineNumber,
+        RaftId = raft.Id,
+        Raft = raft,
+        ExpectedProductId = cycleProductId,
+        ExpectedCageCount = entry.ExpectedCageCount,
+        Note = entry.Note,
+    };
 
     private void ApplyOrders(HarvestPlan plan, IReadOnlyList<SalesOrder> wanted)
     {
@@ -561,7 +522,7 @@ public sealed class HarvestPlanService(
         }
     }
 
-    /// <summary>Lines are matched by id: a kept line takes the new fields and lanes, a line not sent is taken out (it has no lot and no lane left out, or the check before refused), a line with no id is new. Lines are numbered as sent.</summary>
+    /// <summary>Lines are matched by id: a kept line takes the new fields, a line not sent is taken out (it has no lot, or the check before refused), a line with no id is new. Lines are numbered as sent.</summary>
     private void ApplyLines(HarvestPlan plan, HarvestPlanEntries entries, Prepared ready)
     {
         var unused = plan.Lines.ToList();
@@ -574,11 +535,6 @@ public sealed class HarvestPlanService(
                 var added = NewLine(plan, entry, raft, (ready.CycleProducts.TryGetValue(raft.Id, out var addedProduct) ? addedProduct : (Guid?)null));
                 plan.Lines.Add(added);
                 plans.AddLine(added);
-                foreach (var lane in added.Lanes)
-                {
-                    plans.AddLane(lane);
-                }
-
                 continue;
             }
 
@@ -588,35 +544,12 @@ public sealed class HarvestPlanService(
             line.ExpectedProductId = ready.CycleProducts.TryGetValue(raft.Id, out var cycleProduct) ? cycleProduct : line.RaftId == raft.Id ? line.ExpectedProductId : null;
             line.ExpectedCageCount = entry.ExpectedCageCount;
             line.Note = entry.Note;
-            var sameRaft = line.RaftId == raft.Id;
-            // No lanes sent: a line of the same raft keeps the lanes it has; a line moved to another raft has none.
-            var wantedLanes = entry.LaneNumbers.Count == 0 && sameRaft
-                ? line.Lanes.Select(l => l.Lane).ToList()
-                : raft.Lanes.Where(l => entry.LaneNumbers.Contains(l.LaneNumber)).ToList();
-            foreach (var lane in line.Lanes.Where(l => !sameRaft || wantedLanes.All(w => w.Id != l.LaneId)).ToList())
-            {
-                line.Lanes.Remove(lane);
-                plans.RemoveLane(lane);
-            }
-
             line.RaftId = raft.Id;
             line.Raft = raft;
-            foreach (var lane in wantedLanes.Where(w => line.Lanes.All(l => l.LaneId != w.Id)))
-            {
-                var row = new HarvestPlanLane { LineId = line.Id, LaneId = lane.Id, Lane = lane };
-                line.Lanes.Add(row);
-                plans.AddLane(row);
-            }
         }
 
         foreach (var removed in unused)
         {
-            foreach (var lane in removed.Lanes.ToList())
-            {
-                removed.Lanes.Remove(lane);
-                plans.RemoveLane(lane);
-            }
-
             plan.Lines.Remove(removed);
             plans.RemoveLine(removed);
         }
@@ -665,7 +598,6 @@ public sealed class HarvestPlanService(
         {
             l.LineNumber,
             RaftCode = l.Raft?.Code,
-            Lanes = l.Lanes.Select(x => x.Lane?.LaneNumber ?? 0).Order().ToList(),
             l.ExpectedProductId,
             l.ExpectedCageCount,
             l.Note,

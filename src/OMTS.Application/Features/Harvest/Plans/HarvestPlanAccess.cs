@@ -38,7 +38,7 @@ public sealed class HarvestPlanAccess(ZoneAccessGuard zoneAccess)
         return zones.Count > 0;
     }
 
-    /// <summary>The caller may record harvests and leave lanes out in the zone (HARVESTS Create).</summary>
+    /// <summary>The caller may record harvests in the zone (HARVESTS Create).</summary>
     public Task<bool> MayHarvestAsync(Guid zoneId, CancellationToken cancellationToken) =>
         zoneAccess.AllowsAsync(PermissionFunctions.Harvests, PermissionAction.Create, zoneId, cancellationToken);
 

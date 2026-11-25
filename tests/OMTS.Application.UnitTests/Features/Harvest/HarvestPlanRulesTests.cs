@@ -4,7 +4,7 @@ using static OMTS.Application.Features.Harvest.Plans.HarvestPlanAction;
 
 namespace OMTS.Application.UnitTests.Features.Harvest;
 
-/// <summary>The rules of a harvest plan: the state of a lane and a line, the status moves after a lot or a lane left out, the buttons of each caller, and the lanes two open plans both want.</summary>
+/// <summary>The rules of a harvest plan: the state of a line (one whole raft), the status moves after a lot, and the buttons of each caller.</summary>
 public class HarvestPlanRulesTests
 {
     private const int Draft = StatusIds.HarvestPlan.Draft;
@@ -21,44 +21,25 @@ public class HarvestPlanRulesTests
     private static IReadOnlyList<HarvestPlanAction> Buttons(int status, HarvestPlanCaller caller, bool hasLot = false, bool canHarvestNow = false, bool mayHarvestInPlan = false, bool allLinesDone = false) =>
         HarvestPlanRules.AllowedActions(status, caller, hasLot, canHarvestNow, mayHarvestInPlan, allLinesDone);
 
-    private static PlanLineFacts Open(int lanes = 2) => new(false, lanes, 0);
-    private static PlanLineFacts WithLot(int lanes = 2) => new(true, lanes, 0);
-    private static PlanLineFacts AllSkipped(int lanes = 2) => new(false, lanes, lanes);
-    private static PlanLineFacts SomeSkipped(int lanes = 2) => new(false, lanes, 1);
+    private static PlanLineFacts Open() => new(false);
+    private static PlanLineFacts WithLot() => new(true);
 
-    // ---- Lanes and lines ----
-
-    [Theory]
-    [InlineData(false, false, HarvestPlanLaneState.Planned)]
-    [InlineData(true, false, HarvestPlanLaneState.Harvested)]
-    [InlineData(false, true, HarvestPlanLaneState.Skipped)]
-    public void A_lane_is_harvested_when_it_is_in_the_lot_and_skipped_when_it_is_left_out(bool inLot, bool skipped, HarvestPlanLaneState expected) =>
-        Assert.Equal(expected, HarvestPlanRules.LaneState(inLot, skipped));
+    // ---- Lines ----
 
     [Fact]
-    public void A_line_is_done_with_its_lot_or_when_every_lane_is_left_out()
+    public void A_line_is_done_with_its_lot()
     {
         Assert.False(HarvestPlanRules.LineDone(Open()));
-        Assert.False(HarvestPlanRules.LineDone(SomeSkipped()));
         Assert.True(HarvestPlanRules.LineDone(WithLot()));
-        Assert.True(HarvestPlanRules.LineDone(AllSkipped()));
-        Assert.Equal(HarvestPlanLineState.Open, HarvestPlanRules.LineState(SomeSkipped()));
+        Assert.Equal(HarvestPlanLineState.Open, HarvestPlanRules.LineState(Open()));
         Assert.Equal(HarvestPlanLineState.Harvested, HarvestPlanRules.LineState(WithLot()));
-        Assert.Equal(HarvestPlanLineState.Skipped, HarvestPlanRules.LineState(AllSkipped()));
     }
 
     [Fact]
-    public void A_line_with_no_lanes_is_never_done_by_leaving_lanes_out()
-    {
-        Assert.False(HarvestPlanRules.LineDone(new PlanLineFacts(false, 0, 0)));
-    }
-
-    [Fact]
-    public void A_line_is_locked_once_it_has_a_lot_or_a_lane_left_out()
+    public void A_line_is_locked_once_it_has_a_lot()
     {
         Assert.False(HarvestPlanRules.LineLocked(Open()));
         Assert.True(HarvestPlanRules.LineLocked(WithLot()));
-        Assert.True(HarvestPlanRules.LineLocked(SomeSkipped()));
     }
 
     // ---- Status moves ----
@@ -67,12 +48,6 @@ public class HarvestPlanRulesTests
     public void The_first_lot_of_a_received_plan_starts_the_harvest()
     {
         Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [WithLot(), Open()], allDoneBefore: false));
-    }
-
-    [Fact]
-    public void The_first_lane_left_out_starts_the_harvest()
-    {
-        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [SomeSkipped(), Open()], allDoneBefore: false));
     }
 
     [Fact]
@@ -85,23 +60,20 @@ public class HarvestPlanRulesTests
     public void An_assigned_plan_never_moves_with_the_lines_nobody_received_it()
     {
         Assert.Empty(HarvestPlanRules.Settle(Assigned, [WithLot(), Open()], allDoneBefore: false));
-        Assert.Empty(HarvestPlanRules.Settle(Assigned, [AllSkipped()], allDoneBefore: false));
     }
 
     [Fact]
     public void The_system_never_completes_a_plan_whatever_the_lines()
     {
         Assert.Empty(HarvestPlanRules.Settle(Harvesting, [WithLot(), WithLot()], allDoneBefore: false));
-        Assert.Empty(HarvestPlanRules.Settle(Harvesting, [WithLot(), AllSkipped()], allDoneBefore: true));
         Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [WithLot()], allDoneBefore: false));
-        Assert.Equal([Harvesting], HarvestPlanRules.Settle(Received, [AllSkipped(), AllSkipped(3)], allDoneBefore: false));
     }
 
     [Fact]
     public void A_handed_over_plan_opens_again_when_a_line_is_open_again_and_stays_handed_over_otherwise()
     {
         Assert.Equal([Harvesting], HarvestPlanRules.Settle(HandedOver, [Open(), WithLot()], allDoneBefore: true));
-        Assert.Empty(HarvestPlanRules.Settle(HandedOver, [WithLot(), AllSkipped()], allDoneBefore: true));
+        Assert.Empty(HarvestPlanRules.Settle(HandedOver, [WithLot(), WithLot()], allDoneBefore: true));
     }
 
     [Fact]
@@ -117,7 +89,7 @@ public class HarvestPlanRulesTests
     }
 
     [Fact]
-    public void A_plan_the_owner_finished_with_lanes_still_to_do_stays_completed()
+    public void A_plan_the_owner_finished_with_lines_still_open_stays_completed()
     {
         Assert.Empty(HarvestPlanRules.Settle(Completed, [Open(), WithLot()], allDoneBefore: false));
         Assert.Empty(HarvestPlanRules.Settle(Completed, [WithLot(), WithLot()], allDoneBefore: true));
@@ -165,10 +137,6 @@ public class HarvestPlanRulesTests
         Assert.False(HarvestPlanRules.AllowsHarvest(HandedOver));
         Assert.False(HarvestPlanRules.AllowsHarvest(Draft));
         Assert.False(HarvestPlanRules.AllowsHarvest(Completed));
-        Assert.True(HarvestPlanRules.AllowsUnskip(Completed));
-        Assert.True(HarvestPlanRules.AllowsUnskip(HandedOver));
-        Assert.False(HarvestPlanRules.AllowsUnskip(Assigned));
-        Assert.False(HarvestPlanRules.AllowsUnskip(Cancelled));
         Assert.True(HarvestPlanRules.AllowsEdit(Harvesting));
         Assert.True(HarvestPlanRules.AllowsEdit(Received));
         Assert.False(HarvestPlanRules.AllowsEdit(HandedOver));
@@ -195,8 +163,8 @@ public class HarvestPlanRulesTests
     [Fact]
     public void A_received_plan_offers_the_harvest_and_the_cancel_while_no_lot_exists()
     {
-        Assert.Equal([HarvestPlanAction.Harvest, SkipLane], Buttons(Received, Manager, canHarvestNow: true, mayHarvestInPlan: true));
-        Assert.Equal([Edit, Cancel, HarvestPlanAction.Harvest, SkipLane], Buttons(Received, Owner, canHarvestNow: true, mayHarvestInPlan: true));
+        Assert.Equal([HarvestPlanAction.Harvest], Buttons(Received, Manager, canHarvestNow: true, mayHarvestInPlan: true));
+        Assert.Equal([Edit, Cancel, HarvestPlanAction.Harvest], Buttons(Received, Owner, canHarvestNow: true, mayHarvestInPlan: true));
         Assert.Empty(Buttons(Received, Manager));
     }
 
@@ -206,7 +174,7 @@ public class HarvestPlanRulesTests
         var open = Buttons(Harvesting, Manager, hasLot: true, canHarvestNow: true, mayHarvestInPlan: true, allLinesDone: false);
         var done = Buttons(Harvesting, Manager, hasLot: true, canHarvestNow: false, mayHarvestInPlan: true, allLinesDone: true);
 
-        Assert.Equal([HarvestPlanAction.Harvest, SkipLane], open);
+        Assert.Equal([HarvestPlanAction.Harvest], open);
         Assert.Equal([HarvestPlanAction.HandOver], done);
         // The Owner edits and finishes only after the hand-over, and a reader never hands over.
         Assert.Equal([Edit, HarvestPlanAction.HandOver], Buttons(Harvesting, Owner, hasLot: true, mayHarvestInPlan: true, allLinesDone: true));
@@ -218,7 +186,7 @@ public class HarvestPlanRulesTests
     {
         var actions = Buttons(Harvesting, Owner, hasLot: true, canHarvestNow: true, mayHarvestInPlan: true);
 
-        Assert.Equal([Edit, HarvestPlanAction.Harvest, SkipLane], actions);
+        Assert.Equal([Edit, HarvestPlanAction.Harvest], actions);
         Assert.DoesNotContain(Cancel, actions);
         Assert.DoesNotContain(Finish, actions);
     }
@@ -237,31 +205,5 @@ public class HarvestPlanRulesTests
     {
         Assert.Empty(Buttons(Completed, Owner, hasLot: true));
         Assert.Empty(Buttons(Cancelled, Owner, canHarvestNow: true, mayHarvestInPlan: true));
-    }
-
-    // ---- Clashes ----
-
-    [Fact]
-    public void A_lane_wanted_by_two_open_plans_is_a_clash_for_its_raft_and_the_other_plan()
-    {
-        var (raft, other) = (Guid.NewGuid(), Guid.NewGuid());
-        var (lane1, lane2, lane3) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var wanted = new Dictionary<Guid, IReadOnlySet<Guid>> { [raft] = new HashSet<Guid> { lane1, lane2 } };
-
-        var clashes = HarvestPlanRules.Clashes([(raft, lane2, "KHT000002"), (raft, lane3, "KHT000002"), (other, lane1, "KHT000003")], wanted);
-
-        var clash = Assert.Single(clashes);
-        Assert.Equal(raft, clash.RaftId);
-        Assert.Equal([lane2], clash.LaneIds);
-        Assert.Equal("KHT000002", clash.OtherPlanCode);
-    }
-
-    [Fact]
-    public void Lanes_nobody_else_waits_on_are_no_clash()
-    {
-        var raft = Guid.NewGuid();
-        var wanted = new Dictionary<Guid, IReadOnlySet<Guid>> { [raft] = new HashSet<Guid> { Guid.NewGuid() } };
-
-        Assert.Empty(HarvestPlanRules.Clashes([(raft, Guid.NewGuid(), "KHT000002")], wanted));
     }
 }

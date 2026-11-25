@@ -261,7 +261,7 @@ public sealed class HarvestPlanStaffingService(
         {
             var canEdit = open && await RefusalAsync(plan, line, cancellationToken) == StaffingRefusal.None;
             result.Add(new HarvestPlanStaffingLine(
-                line.Id, line.RaftId, line.Raft.Code, line.Raft.ZoneId, line.Raft.Zone.Code, line.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(), plan.PlannedDate,
+                line.Id, line.RaftId, line.Raft.Code, line.Raft.ZoneId, line.Raft.Zone.Code, plan.PlannedDate,
                 linked[line.Id].Select(a => new HarvestPlanStaffingEmployee(a.EmployeeId, a.Employee.Code ?? string.Empty, a.Employee.FullName, a.Id, checkedIn.Contains((a.EmployeeId, a.Date))))
                     .OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(e => e.EmployeeId).ToList(),
                 canEdit));

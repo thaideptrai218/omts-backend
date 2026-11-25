@@ -7,12 +7,11 @@ namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
 /// The notifications of a harvest plan, saved with the change and pushed after it commits. The Owner is not told of their own action (operational notice, PM decision OMTS-216), so an Owner who hands a plan
-/// over in a zone with no Zone Manager, or who leaves lanes out, tells nobody but the other Owners.
+/// over in a zone with no Zone Manager tells nobody but the other Owners.
 /// </summary>
 public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications)
 {
     private const string AssignedTitle = "Harvest plan assigned";
-    private const string LanesSkippedTitle = "Harvest plan lanes left out";
     private const string HandedOverTitle = "Kế hoạch thu hoạch đã bàn giao";
 
     /// <summary>
@@ -52,7 +51,7 @@ public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerAct
         }
     }
 
-    /// <summary>A Zone Manager handed the plan over ("Bàn giao"): every line has its lot or all its lanes left out, and the Owners can complete it. Not told to an Owner who did it.</summary>
+    /// <summary>A Zone Manager handed the plan over ("Bàn giao"): every line has its lot, and the Owners can complete it. Not told to an Owner who did it.</summary>
     public async Task HandedOverAsync(HarvestPlan plan, Guid actor, CancellationToken cancellationToken)
     {
         var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetCooperativeOwnersAsync(cancellationToken), actor, cancellationToken);
@@ -66,19 +65,5 @@ public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerAct
             false,
             cancellationToken,
             plan.Id);
-    }
-
-    /// <summary>MSG-PLAN-06 to the Owners: lanes of a raft will not be harvested, with the reason.</summary>
-    public async Task LanesSkippedAsync(HarvestPlan plan, HarvestPlanLine line, IReadOnlyList<int> laneNumbers, string reason, Guid actor, CancellationToken cancellationToken)
-    {
-        var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetCooperativeOwnersAsync(cancellationToken), actor, cancellationToken);
-        await notifications.NotifyAsync(
-            told,
-            new NotificationContent(
-                NotificationTypes.HarvestPlanLanesSkipped,
-                LanesSkippedTitle,
-                UserMessages.PlanLanesSkippedNotice(plan.Code, line.Raft.Code, laneNumbers, reason),
-                new RelatedRecord(RelatedRecordTypes.HarvestPlan, plan.Id, plan.Code)),
-            cancellationToken);
     }
 }

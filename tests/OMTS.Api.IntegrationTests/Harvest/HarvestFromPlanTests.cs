@@ -11,7 +11,7 @@ using static OMTS.Api.IntegrationTests.Sales.SalesOrderTestKit;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
-/// <summary>A Zone Manager records lots from the lines of a harvest plan: the raft and lanes are the plan's, the lot carries the plan, the plan moves along, and a removed lot opens its line again.</summary>
+/// <summary>A Zone Manager records lots from the lines of a harvest plan (one whole raft each): the lot takes the lanes of the raft when it is recorded, carries the plan, the plan moves along, and a removed lot opens its line again.</summary>
 public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
@@ -19,19 +19,21 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1, 2]), PlanLine(raft.RaftId, [4])), manager.Client);
+        var second = await factory.AnotherRaftOfAsync(raft);
+        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId), PlanLine(second.RaftId)), manager.Client);
 
         var saved = await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(5).FromPlanLine(plan.LineId(0)));
 
         var lot = saved.GetProperty("lot");
-        // A plan line is a raft (owner decision of 18/11/2026): the lanes of the plan and of the form are not read.
+        // A plan line is a whole raft and a plan holds no lanes: the lanes of the form are not read.
         Assert.Equal([1, 2, 3, 4, 5], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
         Assert.Equal((plan.Id(), plan.Text("code")), (lot.GetProperty("harvestPlan").Id(), lot.GetProperty("harvestPlan").Text("code")));
         Assert.Matches("^.+-[0-9]{8}", lot.Text("lotCode"));
         var after = await raft.Owner.Client.GetPlanAsync(plan.Id());
         Assert.Equal(StatusIds.HarvestPlan.Harvesting, after.StatusId());
         Assert.Equal(lot.Text("lotCode"), after.GetProperty("lines")[0].GetProperty("lot").Text("lotCode"));
-        Assert.Equal("Harvested", after.LaneState(0, 1));
+        Assert.Equal("Harvested", after.GetProperty("lines")[0].Text("state"));
+        Assert.Equal("Open", after.GetProperty("lines")[1].Text("state"));
         var again = await manager.Client.GetHarvestLotAsync(lot.Id());
         Assert.Equal(plan.Text("code"), again.GetProperty("harvestPlan").Text("code"));
     }
@@ -41,10 +43,11 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1]), PlanLine(raft.RaftId, [2])), manager.Client);
+        var second = await factory.AnotherRaftOfAsync(raft);
+        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId), PlanLine(second.RaftId)), manager.Client);
 
         var first = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId(0)));
-        await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId(1)));
+        await manager.Client.HarvestLotAsync(second.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId(1)));
 
         // The system never completes a plan: every line is done and the plan waits for the hand-over.
         var waiting = await raft.Owner.Client.GetPlanAsync(plan.Id());
@@ -55,34 +58,31 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     [Fact]
-    public async Task A_lane_left_out_of_a_line_is_not_in_the_lot_and_the_lanes_beside_it_are()
+    public async Task A_lot_recorded_from_a_line_takes_the_lanes_the_raft_can_be_harvested_in_at_that_time()
     {
-        var raft = await factory.SeededRaftAsync();
+        var raft = await factory.SeededRaftAsync(1, 2, 3);
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1, 2, 3])), manager.Client);
-        (await manager.Client.PostSkipAsync(plan.Id(), plan.LineId(), [2], "Empty lane")).EnsureSuccessStatusCode();
+        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId)), manager.Client);
 
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId()));
+        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(5).FromPlanLine(plan.LineId()));
 
-        Assert.Equal([1, 3, 4, 5], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
-        var done = await raft.Owner.Client.GetPlanAsync(plan.Id());
-        Assert.Equal(("Harvested", "Skipped", "Harvested"), (done.LaneState(0, 1), done.LaneState(0, 2), done.LaneState(0, 3)));
-        Assert.Equal(StatusIds.HarvestPlan.Harvesting, done.StatusId());
+        // Lanes 4 and 5 have no seed: the plan names no lanes, so only the seeded lanes of the raft are in the lot.
+        Assert.Equal([1, 2, 3], lot.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
+        Assert.Equal(StatusIds.HarvestPlan.Harvesting, (await raft.Owner.Client.GetPlanAsync(plan.Id())).StatusId());
     }
 
     [Fact]
-    public async Task A_line_that_has_its_lot_cannot_be_recorded_again_nor_have_lanes_left_out()
+    public async Task A_line_that_has_its_lot_cannot_be_recorded_again()
     {
         var raft = await factory.SeededRaftAsync();
         var manager = await factory.ManagerAsync(raft.ZoneId);
-        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1]), PlanLine(raft.RaftId, [2])), manager.Client);
+        var second = await factory.AnotherRaftOfAsync(raft);
+        var plan = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId), PlanLine(second.RaftId)), manager.Client);
         await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId(0)));
 
         var again = await manager.Client.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId(0)));
-        var skip = await manager.Client.PostSkipAsync(plan.Id(), plan.LineId(0), [1], "Late");
 
         await again.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-03");
-        await skip.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-03");
         Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
     }
 
@@ -91,8 +91,8 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var raft = await factory.SeededRaftAsync();
         var other = await factory.SeededRaftAsync();
-        var draft = await raft.Owner.Client.CreatePlanAsync(PlanBody(PlanLine(raft.RaftId, [1])));
-        var assigned = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [2])));
+        var draft = await raft.Owner.Client.CreatePlanAsync(PlanBody(PlanLine(raft.RaftId)));
+        var assigned = await raft.Owner.Client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId)));
 
         var draftTry = await raft.Owner.Client.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(draft.LineId()));
         var wrongRaft = await other.Owner.Client.PostHarvestAsync(other.RaftId, HarvestFields.OfLanes(2).FromPlanLine(assigned.LineId()));
@@ -111,9 +111,10 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var raft = await factory.SeededRaftAsync();
         var client = raft.Owner.Client;
-        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1]), PlanLine(raft.RaftId, [2])));
+        var second = await factory.AnotherRaftOfAsync(raft);
+        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId), PlanLine(second.RaftId)));
         var lot = await client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId(0)));
-        await client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId(1)));
+        await client.HarvestLotAsync(second.RaftId, HarvestFields.OfLanes(2).FromPlanLine(plan.LineId(1)));
         Assert.Equal(StatusIds.HarvestPlan.Completed, (await client.CompletedPlanAsync(plan.Id())).StatusId());
 
         (await factory.SendRemovalAsync(client, lot.Id())).EnsureSuccessStatusCode();
@@ -131,7 +132,8 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var raft = await factory.SeededRaftAsync();
         var client = raft.Owner.Client;
-        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1]), PlanLine(raft.RaftId, [2])));
+        var second = await factory.AnotherRaftOfAsync(raft);
+        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId), PlanLine(second.RaftId)));
         await client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId(0)));
 
         var handOver = await client.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/hand-over", new { });
@@ -146,29 +148,28 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
     public async Task A_lot_cannot_be_recorded_from_a_plan_nobody_received()
     {
         var raft = await factory.SeededRaftAsync();
-        var plan = await raft.Owner.Client.AssignedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1])));
+        var plan = await raft.Owner.Client.AssignedPlanAsync(PlanBody(PlanLine(raft.RaftId)));
 
         var response = await raft.Owner.Client.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId()));
-        var skip = await raft.Owner.Client.PostSkipAsync(plan.Id(), plan.LineId(), [1], "Too early");
 
         await response.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        await skip.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
     }
 
     [Fact]
-    public async Task A_correction_of_a_lot_of_a_plan_keeps_to_the_lanes_of_the_line()
+    public async Task A_correction_of_a_lot_of_a_plan_follows_the_lot_rules_not_the_plan()
     {
         var raft = await factory.SeededRaftAsync();
         var client = raft.Owner.Client;
-        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId, [1, 2])));
+        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(raft.RaftId)));
         var lot = await client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FromPlanLine(plan.LineId()));
 
-        var outside = await factory.SendCorrectionAsync(client, lot.Id(), HarvestFields.OfLanes(1, 2, 3));
-        var inside = await factory.SendCorrectionAsync(client, lot.Id(), HarvestFields.OfLanes(1) with { Cages = "5" });
+        var fewer = await factory.SendCorrectionAsync(client, lot.Id(), HarvestFields.OfLanes(1, 2, 3));
+        var cages = await factory.SendCorrectionAsync(client, lot.Id(), HarvestFields.OfLanes(1, 2, 3) with { Cages = "5" });
 
-        await outside.PlanProblemAsync(HttpStatusCode.Conflict, "MSG-PLAN-01");
-        await inside.ReadAsync(HttpStatusCode.OK);
+        var corrected = (await fewer.ReadAsync(HttpStatusCode.OK)).GetProperty("lot");
+        Assert.Equal([1, 2, 3], corrected.GetProperty("laneNumbers").EnumerateArray().Select(l => l.GetInt32()));
+        await cages.ReadAsync(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -178,7 +179,7 @@ public class HarvestFromPlanTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var client = sale.Owner.Client;
         var unit = await client.BaseUnitIdAsync(sale.ProductId);
         var order = (await client.CreateOrderAsync(OrderBody(sale.CustomerId, sale.ProductId, unit))).GetProperty("order");
-        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(sale.RaftId, [3])).WithPlanField("salesOrderIds", new[] { order.Id() }));
+        var plan = await client.ReceivedPlanAsync(PlanBody(PlanLine(sale.RaftId)).WithPlanField("salesOrderIds", new[] { order.Id() }));
         var planned = await client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).FromPlanLine(plan.LineId()));
 
         var plain = await client.GetFromJsonAsync<JsonElement>($"/api/harvest-lots/for-sale?zoneId={sale.ZoneId}");

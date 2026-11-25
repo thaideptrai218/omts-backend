@@ -15,7 +15,7 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
 /// <param name="ProductLines">The share of each product on the lot (null: the form sent none, the lot is not split per product). With lines, the cages and estimated kg of the lot are their sums and any <c>CageCount</c> or <c>EstimatedKg</c> sent is ignored.</param>
 /// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
-/// <param name="HarvestPlanLineId">The line of a harvest plan (KHT) the lot is recorded from: the raft and lanes then come from the plan (the lanes sent are ignored) and the plan moves on with the lot.</param>
+/// <param name="HarvestPlanLineId">The line of a harvest plan (KHT) the lot is recorded from: the lot is of the whole raft of the line, so it takes every lane of the raft that can be harvested when it is recorded (the lanes sent are ignored), and the plan moves on with the lot.</param>
 /// <param name="HarvestPlanLineIsUnreadable">A value was sent for the plan line that is not an id.</param>
 /// <param name="ConfirmOverPlan">Kept so older clients still bind: the cycle target is a plan, not a cap (owner decision 12/11/2026), so nothing asks for it and it is ignored.</param>
 /// <param name="OverPlanReason">As <paramref name="ConfirmOverPlan"/>: accepted and ignored.</param>

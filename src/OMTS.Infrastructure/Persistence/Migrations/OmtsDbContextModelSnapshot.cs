@@ -2187,36 +2187,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("HarvestPlans");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLane", b =>
-                {
-                    b.Property<Guid>("LineId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("LaneId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("SkipReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTimeOffset?>("SkippedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("SkippedByAccountId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("LineId", "LaneId");
-
-                    b.HasIndex("LaneId");
-
-                    b.HasIndex("SkippedByAccountId");
-
-                    b.ToTable("HarvestPlanLanes", t =>
-                        {
-                            t.HasCheckConstraint("CK_HarvestPlanLane_Skipped", "([SkippedAt] IS NULL AND [SkipReason] IS NULL AND [SkippedByAccountId] IS NULL) OR ([SkippedAt] IS NOT NULL AND [SkipReason] IS NOT NULL)");
-                        });
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8970,30 +8940,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLane", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
-                        .WithMany()
-                        .HasForeignKey("LaneId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlanLine", "Line")
-                        .WithMany("Lanes")
-                        .HasForeignKey("LineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
-                        .WithMany()
-                        .HasForeignKey("SkippedByAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Lane");
-
-                    b.Navigation("Line");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Sales.Product", "ExpectedProduct")
@@ -10825,8 +10771,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
                 {
-                    b.Navigation("Lanes");
-
                     b.Navigation("Lot");
                 });
 

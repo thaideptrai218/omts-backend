@@ -136,7 +136,6 @@ public sealed class HarvestPlanStaffingServiceTests
             LineNumber = number,
             RaftId = raft.Id,
             Raft = raft,
-            Lanes = [new HarvestPlanLane { Lane = new Lane { LaneNumber = number } }, new HarvestPlanLane { Lane = new Lane { LaneNumber = number + 1 } }],
         };
 
         public WorkAssignment Assign(Employee employee, HarvestPlanLine? line, DateOnly? date = null, Raft? raft = null)
@@ -480,7 +479,6 @@ public sealed class HarvestPlanStaffingServiceTests
         Assert.Equal(["B01", "B11"], owner.Lines.Select(l => l.RaftCode));
         Assert.True(owner.CanEdit);
         Assert.All(owner.Lines, l => Assert.True(l.CanEdit));
-        Assert.Equal([1, 2], owner.Lines[0].LaneNumbers);
         Assert.Equal("KV01", owner.Lines[0].ZoneCode);
         Assert.True(owner.Lines[0].Employees.Single().CheckedIn);
         Assert.False(owner.Lines[1].Employees.Single().CheckedIn);
