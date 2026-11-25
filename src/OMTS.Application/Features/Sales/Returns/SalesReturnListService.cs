@@ -15,7 +15,14 @@ public sealed class SalesReturnListService(ISalesReturnRepository salesReturns, 
 {
     private const int MaxPageSize = 100;
 
-    public async Task<Result<SalesReturnListPage>> SearchAsync(SalesReturnListQuery query, CancellationToken cancellationToken)
+    public async Task<Result<SalesReturnListPage>> SearchAsync(SalesReturnListQuery query, CancellationToken cancellationToken) =>
+        await PageAsync(query, Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize), cancellationToken);
+
+    /// <summary>The first <paramref name="maxRows"/> returns of the list in its order and the sums of every match, in one read (the export file).</summary>
+    internal async Task<Result<SalesReturnListPage>> ExportRowsAsync(SalesReturnListQuery query, int maxRows, CancellationToken cancellationToken) =>
+        await PageAsync(query, 1, maxRows, cancellationToken);
+
+    private async Task<Result<SalesReturnListPage>> PageAsync(SalesReturnListQuery query, int page, int pageSize, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.SalesReturns, PermissionAction.View, cancellationToken);
         if (zones.IsEmpty || (query.ZoneId is { } chosen && !zones.Allows(chosen)))
@@ -46,7 +53,6 @@ public sealed class SalesReturnListService(ISalesReturnRepository salesReturns, 
         }
 
         var descending = !string.Equals(query.SortDir?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
-        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var filter = new SalesReturnFilter(query.From, query.To, query.CustomerId, query.ZoneId, zones.AllZones ? null : zones.ZoneIds.ToHashSet(), query.StatusId, query.Search);
         var (rows, total, sums) = await salesReturns.SearchAsync(filter, sort.Value, descending, page, pageSize, cancellationToken);
         var people = rows.Select(r => r.RecordedByAccountId).Distinct().ToList();

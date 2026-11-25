@@ -20,8 +20,7 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
 
     public Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.Rafts.AsNoTracking().FirstOrDefaultAsync(r => r.ZoneId == zoneId && r.Code.ToUpper() == upper && r.Id != exceptRaftId, cancellationToken);
+        return db.Rafts.AsNoTracking().FirstOrDefaultAsync(r => r.ZoneId == zoneId && r.Code == code && r.Id != exceptRaftId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> CodesOfZoneAsync(Guid zoneId, CancellationToken cancellationToken) =>

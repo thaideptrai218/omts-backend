@@ -75,8 +75,7 @@ internal sealed class InputUnitRepository(OmtsDbContext db) : IInputUnitReposito
 
     public Task<InputUnit?> FindByNameAsync(string name, Guid? exceptUnitId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.InputUnits.FirstOrDefaultAsync(u => u.Name.ToUpper() == upper && u.Id != exceptUnitId, cancellationToken);
+        return db.InputUnits.FirstOrDefaultAsync(u => u.Name == name && u.Id != exceptUnitId, cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, InputUnitUsage>> UsageAsync(CancellationToken cancellationToken)
@@ -112,8 +111,7 @@ internal sealed class InputItemCategoryRepository(OmtsDbContext db) : IInputItem
 
     public Task<InputItemCategory?> FindByNameAsync(string name, Guid? exceptGroupId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.InputItemGroups.AsNoTracking().FirstOrDefaultAsync(g => g.Name.ToUpper() == upper && g.Id != exceptGroupId, cancellationToken);
+        return db.InputItemGroups.AsNoTracking().FirstOrDefaultAsync(g => g.Name == name && g.Id != exceptGroupId, cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> ItemCountsAsync(CancellationToken cancellationToken) =>

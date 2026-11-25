@@ -71,6 +71,10 @@ public sealed record DebtCustomerRow(Guid Id, string Name, string? PhoneNumber, 
 public sealed record CustomerLedgerRows(
     IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments, IReadOnlyList<CustomerLedgerAdjustment> Adjustments);
 
+/// <summary>An invoice of a profile that the allocation of BR-DEBT-05 leaves unpaid, as the database works it out.</summary>
+/// <param name="Unpaid">What is still to pay of <paramref name="Total"/>, above 0.</param>
+public sealed record CustomerUnpaidInvoiceRow(Guid CustomerId, Guid InvoiceId, string Code, DateOnly InvoiceDate, decimal Total, decimal Unpaid);
+
 /// <summary>The sums of the customer debt formula (BR-DEBT-02) and the rows of the allocation and the statement (BR-DEBT-04/05), read from the database each time.</summary>
 public interface ICustomerDebtQuery
 {
@@ -87,13 +91,40 @@ public interface ICustomerDebtQuery
     Task<CustomerLedgerRows> LedgerAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The rows of <see cref="LedgerAsync"/> for the staff statement of one profile (DEBT-03): the payments also carry their internal data (BR-DEBT-04), the names of the
-    /// people read in the same query, so the statement sends the same commands whatever the number of payments.
+    /// The profiles among <paramref name="customerIds"/> that hold an advance reserved for an open order (<see cref="CustomerLedgerPayment.Reserved"/>). The database does not work the
+    /// allocation out for them (what an advance leaves reserved depends on the order the payments were recorded in): the caller allocates their ledger.
     /// </summary>
-    Task<CustomerLedgerRows> StatementLedgerAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<IReadOnlySet<Guid>> CustomersWithReservedAdvanceAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
 
-    /// <summary>The sales returns of the invoices of one profile, cancelled ones included (BR-DEBT-04); one query whatever the number of returns.</summary>
-    Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, CancellationToken cancellationToken);
+    /// <summary>
+    /// The invoices <see cref="CustomerDebtAllocator"/> leaves unpaid, worked out by the database for profiles that hold no reserved advance (see <see cref="CustomersWithReservedAdvanceAsync"/>),
+    /// oldest first (invoice time, then code). With <paramref name="oldestOnly"/>, only the oldest one of each profile.
+    /// </summary>
+    Task<IReadOnlyList<CustomerUnpaidInvoiceRow>> UnpaidInvoicesAsync(IReadOnlyCollection<Guid> customerIds, bool oldestOnly, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// For profiles with a debt but no unpaid invoice: the date of the oldest money paid back or debt adjustment above 0, which is what the debt is as old as. A profile with neither has no entry.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, DateOnly>> DebtOriginDatesAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The rows of <see cref="LedgerAsync"/> for the staff statement of one profile (DEBT-03): the payments also carry their internal data (BR-DEBT-04), the names of the
+    /// people read in the same query, so the statement sends the same commands whatever the number of payments. Only the rows with an entry dated from <paramref name="from"/> to
+    /// <paramref name="to"/>: an invoice with a price cut in the period comes with all its price cuts.
+    /// </summary>
+    Task<CustomerLedgerRows> StatementLedgerAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>The sales returns of the invoices of one profile dated from <paramref name="from"/> to <paramref name="to"/>, cancelled ones included (BR-DEBT-04).</summary>
+    Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What the statement entries of one profile dated before <paramref name="date"/> add up to (BR-DEBT-04): the debt at the start of a period, one sum per kind of entry.
+    /// Cancelled entries and payments waiting for their transfer count 0.
+    /// </summary>
+    Task<decimal> DebtBeforeAsync(Guid customerId, DateOnly date, CancellationToken cancellationToken);
+
+    /// <summary>The payments of one profile that are Awaiting confirmation, and those Pending transfer.</summary>
+    Task<(int AwaitingConfirmation, int PendingTransfer)> PaymentCountsAsync(Guid customerId, CancellationToken cancellationToken);
 
     /// <summary>The customer payments Awaiting confirmation, those without a customer included (SCR-DEBT-02 tab).</summary>
     Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken);

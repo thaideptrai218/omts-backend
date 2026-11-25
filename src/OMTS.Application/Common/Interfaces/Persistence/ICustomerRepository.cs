@@ -22,6 +22,9 @@ public interface ICustomerRepository
     /// <summary>The numbers among <paramref name="phoneNumbers"/> that a profile that is not merged already has.</summary>
     Task<IReadOnlySet<string>> ExistingPhonesAsync(IReadOnlyCollection<string> phoneNumbers, CancellationToken cancellationToken);
 
+    /// <summary>The codes among <paramref name="codes"/> that already belong to a profile (letter case ignored, as <see cref="FindByCodeAsync"/> reads them).</summary>
+    Task<IReadOnlySet<string>> ExistingCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken);
+
     void Add(Customer customer);
 
     void Remove(Customer customer);

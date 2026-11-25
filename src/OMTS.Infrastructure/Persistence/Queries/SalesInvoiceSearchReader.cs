@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Persistence.Configurations;
 
@@ -11,7 +12,70 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 /// <summary>SALE-09 on the indexes (InvoiceDate, ZoneId), lines by lot, payments by invoice and Notifications by related record: no index of its own and no query per invoice.</summary>
 internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoiceSearchReader
 {
-    public async Task<IReadOnlyList<SalesInvoiceSearchKey>> MatchingAsync(SalesInvoiceSearchFilter filter, CancellationToken cancellationToken)
+    public async Task<int> CountAsync(SalesInvoiceSearchFilter filter, CancellationToken cancellationToken) =>
+        Filtered(filter) is { } query ? await query.CountAsync(cancellationToken) : 0;
+
+    public async Task<IReadOnlyList<Guid>> CustomerIdsAsync(SalesInvoiceSearchFilter filter, CancellationToken cancellationToken) =>
+        Filtered(filter) is { } query
+            ? await query.Where(i => i.CustomerId != null).Select(i => i.CustomerId!.Value).Distinct().ToListAsync(cancellationToken)
+            : [];
+
+    public async Task<SalesInvoiceMatchPage> MatchAsync(SalesInvoiceSearchFilter filter, SalesInvoicePaidFilter? paid, int skip, int take, CancellationToken cancellationToken)
+    {
+        if (Filtered(filter) is not { } query)
+        {
+            return new SalesInvoiceMatchPage(0, 0m, []);
+        }
+
+        if (paid is { } state)
+        {
+            query = WithPaidState(query, state);
+        }
+
+        // One command for the count and the total of the Completed ones.
+        var figures = await query
+            .GroupBy(_ => 1)
+            .Select(g => new { Count = g.Count(), Completed = g.Sum(i => i.StatusId == StatusIds.SalesInvoice.Completed ? i.Total : 0m) })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (figures is null)
+        {
+            return new SalesInvoiceMatchPage(0, 0m, []);
+        }
+
+        var keys = await query
+            .OrderByDescending(i => i.InvoicedAt).ThenByDescending(i => i.Code)
+            .Skip(skip).Take(take)
+            .Select(i => new SalesInvoiceSearchKey(
+                i.Id,
+                i.CustomerId,
+                i.Total,
+                i.StatusId,
+                i.CustomerId != null
+                    ? 0m
+                    : i.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => (decimal?)p.Amount) ?? 0m))
+            .ToListAsync(cancellationToken);
+        return new SalesInvoiceMatchPage(figures.Count, figures.Completed, keys);
+    }
+
+    /// <summary>
+    /// The paid state of BR-SALE-08 in SQL: a walk-in invoice is paid when its own payments (not cancelled) cover its total, an invoice of a profile unless it is among the unpaid ones;
+    /// a Cancelled invoice has no state.
+    /// </summary>
+    private static IQueryable<SalesInvoice> WithPaidState(IQueryable<SalesInvoice> query, SalesInvoicePaidFilter filter)
+    {
+        var unpaidIds = filter.UnpaidInvoiceIds.ToList();
+        query = query.Where(i => i.StatusId != StatusIds.SalesInvoice.Cancelled);
+        return filter.Paid
+            ? query.Where(i => (i.CustomerId == null
+                    && i.Total - (i.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => (decimal?)p.Amount) ?? 0m) <= 0m)
+                || (i.CustomerId != null && !unpaidIds.Contains(i.Id)))
+            : query.Where(i => (i.CustomerId == null
+                    && i.Total - (i.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => (decimal?)p.Amount) ?? 0m) > 0m)
+                || (i.CustomerId != null && unpaidIds.Contains(i.Id)));
+    }
+
+    /// <summary>The invoices of the filter; null when the filter cannot match anything.</summary>
+    private IQueryable<SalesInvoice>? Filtered(SalesInvoiceSearchFilter filter)
     {
         var query = db.SalesInvoices.AsNoTracking().Where(i => i.InvoiceDate >= filter.From && i.InvoiceDate <= filter.To);
         if (filter.ZoneIds is { } zoneIds)
@@ -51,7 +115,7 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             var code = filter.Code.Trim();
             if (code.Length > Lengths.Code)
             {
-                return [];
+                return null;
             }
 
             query = query.Where(i => i.Code.Contains(code));
@@ -63,7 +127,7 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             var orderCode = filter.OrderCode.Trim();
             if (orderCode.Length > Lengths.Code)
             {
-                return [];
+                return null;
             }
 
             query = query.Where(i => i.SalesOrder != null && i.SalesOrder.Code.Contains(orderCode));
@@ -75,19 +139,7 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
                 && p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation));
         }
 
-        var ordered = query.OrderByDescending(i => i.InvoicedAt).ThenByDescending(i => i.Code);
-        // The export reads one match more than its limit, to know the selection is too large without reading all of it.
-        var limited = filter.Take is { } take ? ordered.Take(take) : ordered;
-        return await limited
-            .Select(i => new SalesInvoiceSearchKey(
-                i.Id,
-                i.CustomerId,
-                i.Total,
-                i.StatusId,
-                i.CustomerId != null
-                    ? 0m
-                    : i.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => (decimal?)p.Amount) ?? 0m))
-            .ToListAsync(cancellationToken);
+        return query;
     }
 
     public async Task<IReadOnlyList<SalesInvoiceSearchRow>> RowsAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken)

@@ -20,8 +20,7 @@ internal sealed class InputIssueRepository(OmtsDbContext db) : IInputIssueReposi
 
     public Task<InputIssue?> FindByCodeAsync(string code, Guid? exceptIssueId, CancellationToken cancellationToken)
     {
-        var upper = code.ToUpperInvariant();
-        return db.InputIssues.AsNoTracking().FirstOrDefaultAsync(i => i.Code.ToUpper() == upper && i.Id != exceptIssueId, cancellationToken);
+        return db.InputIssues.AsNoTracking().FirstOrDefaultAsync(i => i.Code == code && i.Id != exceptIssueId, cancellationToken);
     }
 
     public Task<bool> ReceiverWorksInAsync(Guid employeeId, Guid zoneId, CancellationToken cancellationToken) =>
@@ -179,8 +178,7 @@ internal sealed class InputIssueTypeRepository(OmtsDbContext db) : IInputIssueTy
 
     public Task<InputIssueType?> FindByNameAsync(string name, Guid? exceptTypeId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.InputIssueTypes.AsNoTracking().FirstOrDefaultAsync(t => t.IsActive && t.Name.ToUpper() == upper && t.Id != exceptTypeId, cancellationToken);
+        return db.InputIssueTypes.AsNoTracking().FirstOrDefaultAsync(t => t.IsActive && t.Name == name && t.Id != exceptTypeId, cancellationToken);
     }
 
     public Task<bool> IsUsedAsync(Guid typeId, CancellationToken cancellationToken) =>

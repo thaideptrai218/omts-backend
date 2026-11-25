@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Validation;
@@ -140,15 +142,22 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
                 p.PaidAt, p.DiscountAmount, null,
                 p.SalesOrderId, p.SalesOrder == null ? null : p.SalesOrder.Code, p.SalesOrder != null && (p.SalesOrder.StatusId == StatusIds.SalesOrder.Draft || p.SalesOrder.StatusId == StatusIds.SalesOrder.Delivering)))
             .ToListAsync(cancellationToken);
-        return new CustomerLedgerRows(invoices, await WithAllocationsAsync(payments, ids, cancellationToken), await AdjustmentsOf(ids, false, cancellationToken));
+        return new CustomerLedgerRows(invoices, await WithAllocationsAsync(payments, ids, cancellationToken), await AdjustmentsOf(ids, false, null, null, cancellationToken));
     }
 
-    public async Task<CustomerLedgerRows> StatementLedgerAsync(Guid customerId, CancellationToken cancellationToken)
+    public async Task<CustomerLedgerRows> StatementLedgerAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         List<Guid> ids = [customerId];
-        var invoices = await InvoicesOf(ids, cancellationToken);
+        // An invoice is listed for its own date, and for a price cut of the period (an entry of its own, which needs the invoice code and whether it was cancelled).
+        var periodInvoices = db.SalesInvoices.AsNoTracking()
+            .Where(i => i.CustomerId == customerId && ((i.InvoiceDate >= from && i.InvoiceDate <= to) || i.PriceCuts.Any(c => c.CutDate >= from && c.CutDate <= to)));
+        var invoices = await periodInvoices.Select(LedgerInvoice).ToListAsync(cancellationToken);
+        var cuts = await db.SalesInvoicePriceCuts.AsNoTracking()
+            .Where(c => periodInvoices.Any(i => i.Id == c.InvoiceId))
+            .Select(c => new { c.InvoiceId, Cut = new CustomerLedgerPriceCut(c.Id, c.CutDate, c.Amount, c.Reason) })
+            .ToListAsync(cancellationToken);
         // The display names are scalar subqueries of the same command (no query per payment, no extra command).
-        var rows = await PaymentsOf(ids)
+        var rows = await PaymentsOf(ids).Where(p => p.PaymentDate >= from && p.PaymentDate <= to)
             .Select(p => new
             {
                 Ledger = new CustomerLedgerPayment(
@@ -174,35 +183,151 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
                     r.Note, r.CancelReason),
             })
             .ToList();
-        return new CustomerLedgerRows(invoices, await WithAllocationsAsync(payments, ids, cancellationToken), await AdjustmentsOf(ids, true, cancellationToken));
+        return new CustomerLedgerRows(WithPriceCuts(invoices, cuts.ToLookup(c => c.InvoiceId, c => c.Cut)), payments, await AdjustmentsOf(ids, true, from, to, cancellationToken));
     }
 
-    public async Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
         await db.SalesReturns.AsNoTracking()
-            .Where(r => r.Invoice.CustomerId == customerId)
+            .Where(r => r.Invoice.CustomerId == customerId && r.ReturnDate >= from && r.ReturnDate <= to)
             .Select(r => new CustomerLedgerReturn(
                 customerId, r.Id, r.Code, r.InvoiceId, r.Invoice.Code, r.ReturnDate, r.Value, r.StatusId == StatusIds.SalesReturn.Cancelled, r.CancelledAt, r.CancelReason))
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// The statement entries before a date, one sum each (see <c>CustomerStatementLedger</c>): an invoice counts at its date with all its price cuts, each price cut takes its amount off at its own
+    /// date, and nothing of a cancelled invoice, return, payment or adjustment, or of a payment still waiting for its transfer, counts.
+    /// </summary>
+    public async Task<decimal> DebtBeforeAsync(Guid customerId, DateOnly date, CancellationToken cancellationToken)
+    {
+        var invoices = db.SalesInvoices.AsNoTracking().Where(i => i.CustomerId == customerId && i.StatusId != StatusIds.SalesInvoice.Cancelled);
+        var cuts = db.SalesInvoicePriceCuts.AsNoTracking().Where(c => c.Invoice.CustomerId == customerId && c.Invoice.StatusId != StatusIds.SalesInvoice.Cancelled);
+        var invoiced = await invoices.Where(i => i.InvoiceDate < date).SumAsync(i => (decimal?)i.Total, cancellationToken) ?? 0m;
+        var cutOfInvoiced = await cuts.Where(c => c.Invoice.InvoiceDate < date).SumAsync(c => (decimal?)c.Amount, cancellationToken) ?? 0m;
+        var cutBefore = await cuts.Where(c => c.CutDate < date).SumAsync(c => (decimal?)c.Amount, cancellationToken) ?? 0m;
+        var returned = await db.SalesReturns.AsNoTracking()
+            .Where(r => r.Invoice.CustomerId == customerId && r.StatusId != StatusIds.SalesReturn.Cancelled && r.ReturnDate < date)
+            .SumAsync(r => (decimal?)r.Value, cancellationToken) ?? 0m;
+        var money = await PaymentsOf([customerId])
+            .Where(p => p.PaymentDate < date && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer)
+            .GroupBy(p => p.Kind)
+            .Select(g => new { Kind = g.Key, Amount = g.Sum(p => p.Amount), Discount = g.Sum(p => p.DiscountAmount) })
+            .ToListAsync(cancellationToken);
+        var adjusted = await db.CustomerDebtAdjustments.AsNoTracking()
+            .Where(a => a.CustomerId == customerId && a.CancelledAt == null && a.AdjustmentDate < date)
+            .SumAsync(a => (decimal?)a.Amount, cancellationToken) ?? 0m;
+        var received = money.Where(m => m.Kind == CustomerPaymentKind.Payment).Sum(m => m.Amount);
+        var paidBack = money.Where(m => m.Kind == CustomerPaymentKind.PaidBack).Sum(m => m.Amount);
+        return invoiced + cutOfInvoiced - cutBefore - returned - received + paidBack - money.Sum(m => m.Discount) + adjusted;
+    }
+
+    public async Task<(int AwaitingConfirmation, int PendingTransfer)> PaymentCountsAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var counts = await PaymentsOf([customerId])
+            .Where(p => p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation || p.StatusId == StatusIds.CustomerPayment.PendingTransfer)
+            .GroupBy(p => p.StatusId)
+            .Select(g => new { StatusId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        return (
+            counts.Where(c => c.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation).Sum(c => c.Count),
+            counts.Where(c => c.StatusId == StatusIds.CustomerPayment.PendingTransfer).Sum(c => c.Count));
+    }
+
+    public async Task<IReadOnlySet<Guid>> CustomersWithReservedAdvanceAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken)
+    {
+        var ids = customerIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        // CustomerLedgerPayment.Reserved: a payment that counts, an advance on an order that is still Draft or Delivering.
+        var holders = await PaymentsOf(ids)
+            .Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer
+                && p.SalesOrderId != null && (p.SalesOrder!.StatusId == StatusIds.SalesOrder.Draft || p.SalesOrder.StatusId == StatusIds.SalesOrder.Delivering))
+            .Select(p => p.CustomerId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return holders.ToHashSet();
+    }
+
+    public async Task<IReadOnlyList<CustomerUnpaidInvoiceRow>> UnpaidInvoicesAsync(IReadOnlyCollection<Guid> customerIds, bool oldestOnly, CancellationToken cancellationToken)
+    {
+        var ids = customerIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        if (!db.Database.IsRelational())
+        {
+            // A provider without SQL (the in-memory one of the tests): the allocator over the ledger, which is what the SQL command computes.
+            var ledger = await LedgerAsync(ids, cancellationToken);
+            return ids.SelectMany(id =>
+            {
+                var unpaid = CustomerDebtAllocator.Allocate(
+                    ledger.Invoices.Where(i => i.CustomerId == id), ledger.Payments.Where(p => p.CustomerId == id), DateOnly.MinValue, ledger.Adjustments.Where(a => a.CustomerId == id)).UnpaidInvoices
+                    .Select(u => new CustomerUnpaidInvoiceRow(id, u.Id, u.Code, u.InvoiceDate, u.Total, u.Unpaid));
+                return oldestOnly ? unpaid.Take(1) : unpaid;
+            }).ToList();
+        }
+
+        var rows = await db.Database
+            .SqlQueryRaw<UnpaidRow>(
+                oldestOnly ? CustomerUnpaidInvoicesSql.Oldest : CustomerUnpaidInvoicesSql.All,
+                // nvarchar(max) whatever the length, so every call shares one plan (a size taken from the value gives one plan per length).
+                new SqlParameter("ids", System.Data.SqlDbType.NVarChar, -1) { Value = JsonSerializer.Serialize(ids) },
+                new SqlParameter("invoiceCancelled", StatusIds.SalesInvoice.Cancelled),
+                new SqlParameter("returnStands", StatusIds.SalesReturn.Recorded),
+                new SqlParameter("paymentCancelled", StatusIds.CustomerPayment.Cancelled),
+                new SqlParameter("paymentPending", StatusIds.CustomerPayment.PendingTransfer),
+                new SqlParameter("kindPayment", CustomerPaymentKind.Payment.ToString()),
+                new SqlParameter("kindPaidBack", CustomerPaymentKind.PaidBack.ToString()))
+            .ToListAsync(cancellationToken);
+        return rows.OrderBy(r => r.Ord).Select(r => new CustomerUnpaidInvoiceRow(r.CustomerId, r.InvoiceId, r.Code, r.InvoiceDate, r.Total, r.Unpaid)).ToList();
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, DateOnly>> DebtOriginDatesAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken)
+    {
+        var ids = customerIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, DateOnly>();
+        }
+
+        var paidBack = await PaymentsOf(ids)
+            .Where(p => p.Kind == CustomerPaymentKind.PaidBack && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer)
+            .GroupBy(p => p.CustomerId!.Value)
+            .Select(g => new { CustomerId = g.Key, Date = g.Min(p => p.PaymentDate) })
+            .ToListAsync(cancellationToken);
+        var adjusted = await db.CustomerDebtAdjustments.AsNoTracking()
+            .Where(a => ids.Contains(a.CustomerId) && a.CancelledAt == null && a.Amount > 0)
+            .GroupBy(a => a.CustomerId)
+            .Select(g => new { CustomerId = g.Key, Date = g.Min(a => a.AdjustmentDate) })
+            .ToListAsync(cancellationToken);
+        return paidBack.Concat(adjusted).GroupBy(x => x.CustomerId).ToDictionary(g => g.Key, g => g.Min(x => x.Date));
+    }
+
+    private sealed record UnpaidRow(Guid CustomerId, Guid InvoiceId, string Code, DateOnly InvoiceDate, decimal Total, decimal Unpaid, long Ord);
+
+    // The last two arguments are the price cuts (filled by WithPriceCuts) and the order of the invoice, which lets an advance reserved for an order cover this invoice and no other.
+    private static readonly System.Linq.Expressions.Expression<Func<SalesInvoice, CustomerLedgerInvoice>> LedgerInvoice = i => new CustomerLedgerInvoice(
+        i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, null, i.CancelledAt, i.CancelReason,
+        i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value), i.SalesOrderId);
+
+    private static IReadOnlyList<CustomerLedgerInvoice> WithPriceCuts(List<CustomerLedgerInvoice> invoices, ILookup<Guid, CustomerLedgerPriceCut> cutsOf) =>
+        invoices.Select(i => cutsOf.Contains(i.Id) ? i with { PriceCuts = cutsOf[i.Id].OrderBy(c => c.CutDate).ToList() } : i).ToList();
+
     private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken)
     {
-        // The last two arguments are the price cuts (filled below) and the order of the invoice, which lets an advance reserved for an order cover this invoice and no other.
         var invoices = await db.SalesInvoices.AsNoTracking()
             .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
-            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, null, i.CancelledAt, i.CancelReason,
-                i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value), i.SalesOrderId))
+            .Select(LedgerInvoice)
             .ToListAsync(cancellationToken);
         var cuts = await db.SalesInvoicePriceCuts.AsNoTracking()
             .Where(c => c.Invoice.CustomerId != null && ids.Contains(c.Invoice.CustomerId.Value))
             .Select(c => new { c.InvoiceId, Cut = new CustomerLedgerPriceCut(c.Id, c.CutDate, c.Amount, c.Reason) })
             .ToListAsync(cancellationToken);
-        if (cuts.Count == 0)
-        {
-            return invoices;
-        }
-
-        var cutsOf = cuts.ToLookup(c => c.InvoiceId, c => c.Cut);
-        return invoices.Select(i => cutsOf.Contains(i.Id) ? i with { PriceCuts = cutsOf[i.Id].OrderBy(c => c.CutDate).ToList() } : i).ToList();
+        return cuts.Count == 0 ? invoices : WithPriceCuts(invoices, cuts.ToLookup(c => c.InvoiceId, c => c.Cut));
     }
 
     private async Task<IReadOnlyList<CustomerLedgerPayment>> WithAllocationsAsync(List<CustomerLedgerPayment> payments, List<Guid> customerIds, CancellationToken cancellationToken)
@@ -225,11 +350,11 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         return payments.Select(p => partsOf.Contains(p.Id) ? p with { Allocations = partsOf[p.Id].ToList() } : p).ToList();
     }
 
-    /// <param name="named">True for the staff statement, which shows who recorded each one.</param>
-    private async Task<IReadOnlyList<CustomerLedgerAdjustment>> AdjustmentsOf(List<Guid> ids, bool withNames, CancellationToken cancellationToken)
+    /// <param name="withNames">True for the staff statement, which shows who recorded each one.</param>
+    private async Task<IReadOnlyList<CustomerLedgerAdjustment>> AdjustmentsOf(List<Guid> ids, bool withNames, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {
         var rows = await db.CustomerDebtAdjustments.AsNoTracking()
-            .Where(a => ids.Contains(a.CustomerId))
+            .Where(a => ids.Contains(a.CustomerId) && (from == null || a.AdjustmentDate >= from) && (to == null || a.AdjustmentDate <= to))
             .Select(a => new
             {
                 a.CustomerId, a.Id, a.Code, a.AdjustmentDate, a.OccurredAt, a.Amount, a.Reason, a.CancelledAt, a.RecordedByAccountId,

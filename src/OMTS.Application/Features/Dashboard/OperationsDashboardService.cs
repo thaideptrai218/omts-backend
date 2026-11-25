@@ -57,8 +57,15 @@ public sealed class OperationsDashboardService(
         }
 
         var (start, end) = period.Value;
-        var revenue = await queries.RevenueAsync(start, end, zoneId, cancellationToken);
-        var (receivables, owedBack) = await debts.TotalsAsync(cancellationToken);
+        var today = BusinessClock.ToBusinessDate(computedAt);
+        var todayFigures = await queries.DayAsync(today, zoneId, cancellationToken);
+        // The default period is today: its revenue is the invoices of today's tile, read once.
+        var revenue = start == today && end == today
+            ? new DashboardRevenueFigures(todayFigures.Revenue, todayFigures.InvoiceCount)
+            : await queries.RevenueAsync(start, end, zoneId, cancellationToken);
+        // The debt of every customer is read once: the receivables tile and the due debts tile both come from it.
+        var debtOf = await debts.DebtOfEveryProfileAsync(cancellationToken);
+        var (receivables, owedBack) = CustomerDebtService.TotalsOf(debtOf);
         var lots = await lotsForSale.CountAsync(zoneId, cancellationToken);
         var alerts = await WaterAlertsAsync(zoneId, cancellationToken);
         // The pending decisions (claims, payrolls, purchase requests, employee requests) are the Owner's: an Accountant sees none.
@@ -67,12 +74,11 @@ public sealed class OperationsDashboardService(
                 : Array.Empty<PendingTaskFigures>())
             .Select(t => new DashboardPendingTaskGroup(t.Kind, t.Count, t.Oldest.Select(r => new DashboardPendingTask(r.Id, r.Code, r.Label, r.Since)).ToList()))
             .ToList();
-        var today = BusinessClock.ToBusinessDate(computedAt);
-        var todayTile = DayTile(today, await queries.DayAsync(today, zoneId, cancellationToken));
+        var todayTile = DayTile(today, todayFigures);
         var yesterday = today.AddDays(-1);
         var yesterdayTile = DayTile(yesterday, await queries.DayAsync(yesterday, zoneId, cancellationToken));
         var policy = await standings.PolicyAsync(cancellationToken);
-        var (debtors, overdue, dueSoon) = await standings.DueSummaryAsync(policy, DueSoonDays, cancellationToken);
+        var (debtors, overdue, dueSoon) = await standings.DueSummaryAsync(debtOf, policy, DueSoonDays, cancellationToken);
         return new OperationsDashboard(
             computedAt,
             zoneId,

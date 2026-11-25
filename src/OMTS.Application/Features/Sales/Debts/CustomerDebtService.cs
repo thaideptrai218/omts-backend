@@ -39,12 +39,16 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
     /// <summary>
     /// Every profile of the list, in its order (the list pages it, the export writes it all), and the cooperative's totals (BR-FARM-10, BR-DEBT-02): the totals are of every profile,
-    /// whatever the search. A fixed number of queries, whatever the number of profiles.
+    /// whatever the search. A fixed number of queries, whatever the number of profiles: the debts and the age of each debt come from the database, and no ledger is read except of a
+    /// profile that holds an advance reserved for an open order.
     /// </summary>
-    public async Task<CustomerDebtRows> RowsAsync(string? search, CancellationToken cancellationToken)
+    public async Task<CustomerDebtRows> RowsAsync(string? search, CancellationToken cancellationToken) =>
+        await RowsAsync(await DebtOfEveryProfileAsync(cancellationToken), search, cancellationToken);
+
+    /// <summary>The rows of <see cref="RowsAsync(string?, CancellationToken)"/> for debts the caller has read already.</summary>
+    public async Task<CustomerDebtRows> RowsAsync(IReadOnlyDictionary<Guid, decimal> debtOf, string? search, CancellationToken cancellationToken)
     {
-        var debtOf = await DebtOfEveryProfileAsync(cancellationToken);
-        var (totalReceivables, totalOwedBack) = Totals(debtOf);
+        var (totalReceivables, totalOwedBack) = TotalsOf(debtOf);
         var nonZero = debtOf.Where(d => d.Value != 0).Select(d => d.Key).ToList();
         if (nonZero.Count == 0)
         {
@@ -52,14 +56,14 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         }
 
         var found = await queries.CustomersAsync(nonZero, search, cancellationToken);
-        var allocations = await debts.AllocationsAsync(found.Select(c => c.Id).ToList(), cancellationToken);
+        var ages = await debts.AgesAsync(found.ToDictionary(c => c.Id, c => debtOf[c.Id]), cancellationToken);
         var rows = found
             .Select(c =>
             {
-                var allocation = allocations.GetValueOrDefault(c.Id) ?? CustomerDebtAllocation.None;
+                var age = ages[c.Id];
                 // A debt of 0 or below has no age, even while advances reserved for orders leave invoices unpaid.
                 var owes = debtOf[c.Id] > 0;
-                return new CustomerDebtRow(View(c), debtOf[c.Id], owes ? allocation.DebtAgeDays : null, owes ? allocation.OldestUnpaidDate : null, allocation.ReservedTotal);
+                return new CustomerDebtRow(View(c), debtOf[c.Id], owes ? age.DebtAgeDays : null, owes ? age.OldestUnpaidDate : null, age.ReservedTotal);
             })
             // Money owed back has no age: last, largest first.
             .OrderByDescending(r => r.DebtAgeDays ?? -1)
@@ -72,12 +76,14 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
     /// <summary>The cooperative's totals alone (BR-FARM-10, BR-DEBT-02): the debts above zero, and the money owed back to customers shown apart. The operations dashboard (FARM-06) reads them here.</summary>
     public async Task<(decimal Receivables, decimal OwedBack)> TotalsAsync(CancellationToken cancellationToken) =>
-        Totals(await DebtOfEveryProfileAsync(cancellationToken));
+        TotalsOf(await DebtOfEveryProfileAsync(cancellationToken));
 
-    private async Task<Dictionary<Guid, decimal>> DebtOfEveryProfileAsync(CancellationToken cancellationToken) =>
+    /// <summary>The debt of every profile with an invoice or a payment: one read, for the callers that need the debts for several purposes.</summary>
+    public async Task<IReadOnlyDictionary<Guid, decimal>> DebtOfEveryProfileAsync(CancellationToken cancellationToken) =>
         (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
 
-    private static (decimal Receivables, decimal OwedBack) Totals(Dictionary<Guid, decimal> debtOf) =>
+    /// <summary>The totals of <see cref="TotalsAsync"/> for debts read already.</summary>
+    public static (decimal Receivables, decimal OwedBack) TotalsOf(IReadOnlyDictionary<Guid, decimal> debtOf) =>
         (debtOf.Values.Sum(CustomerDebtMath.Receivable), debtOf.Values.Sum(CustomerDebtMath.OwedBack));
 
     /// <summary>Step 3: the debt at the start of the period, what happened in it, the debt at its end, and the invoices unpaid today. The period defaults to the current month.</summary>
@@ -96,13 +102,16 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         }
 
         var (start, end) = period.Value;
-        // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04).
-        var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        // BR-DEBT-04: under each invoice, its corrections, also one made after the period (the price cuts are entries of their own).
+        // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04). Only the rows of the period are read; what came
+        // before it is one sum, the debt at its start.
+        var opening = await queries.DebtBeforeAsync(customerId, start, cancellationToken);
+        var ledger = await queries.StatementLedgerAsync(customerId, start, end, cancellationToken);
+        // BR-DEBT-04: under each invoice of the period, its corrections, also one made after the period (the price cuts are entries of their own).
+        var invoicesInPeriod = ledger.Invoices.Where(i => i.InvoiceDate >= start && i.InvoiceDate <= end).Select(i => i.Id).ToList();
         var lines = CustomerStatementLedger.Build(
-            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken),
-            await queries.ReturnsOfAsync(customerId, cancellationToken));
-        var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
+            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(invoicesInPeriod, cancellationToken),
+            await queries.ReturnsOfAsync(customerId, start, end, cancellationToken), opening);
+        var now = await debts.SnapshotAsync(customerId, cancellationToken);
         return new CustomerDebtStatement(
             View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices, now.ReservedAdvances);
     }
@@ -124,31 +133,25 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         }
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments, returns: await queries.ReturnsOfAsync(customerId, cancellationToken));
-        var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, timeProvider.Today(), ledger.Adjustments);
+        // The debt after each entry is that of the whole history: the debt before the period is one sum, then the rows of the period (no later row changes an earlier entry).
+        var (from, to) = (query.From ?? DateOnly.MinValue, query.To ?? DateOnly.MaxValue);
+        var opening = query.From is null ? 0m : await queries.DebtBeforeAsync(customerId, from, cancellationToken);
+        var ledger = await queries.StatementLedgerAsync(customerId, from, to, cancellationToken);
+        var lines = CustomerStatementLedger.Build(
+            ledger.Invoices, ledger.Payments, from, to, ledger.Adjustments, returns: await queries.ReturnsOfAsync(customerId, from, to, cancellationToken), openingDebt: opening);
+        var now = await debts.SnapshotAsync(customerId, cancellationToken);
         var entries = lines.Entries.AsEnumerable().Reverse();
-        if (query.From is { } from)
-        {
-            entries = entries.Where(e => e.Date >= from);
-        }
-
-        if (query.To is { } to)
-        {
-            entries = entries.Where(e => e.Date <= to);
-        }
-
         if (query.Kinds is { Count: > 0 } kinds)
         {
             entries = entries.Where(e => kinds.Contains(e.Kind));
         }
 
         var matching = entries.ToList();
-        var opening = query.From is { } start ? lines.Entries.Where(e => e.Date < start).Select(e => e.DebtAfter).LastOrDefault() : 0m;
+        var (awaiting, pending) = await queries.PaymentCountsAsync(customerId, cancellationToken);
         return new CustomerDebtTab(
             View(customer), now.Debt, now.DebtAgeDays, now.UnpaidInvoices,
             new Paged<CustomerStatementEntry>(matching.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, matching.Count), opening,
-            ledger.Payments.Count(p => p.AwaitingConfirmation), ledger.Payments.Count(p => p.Pending), now.ReservedAdvances);
+            awaiting, pending, now.ReservedAdvances);
     }
 
     private static CustomerDebtCustomer View(DebtCustomerRow c) => new(c.Id, c.Name, c.PhoneNumber, c.Code);

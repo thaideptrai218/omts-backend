@@ -13,8 +13,7 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
     // The plain comparison answers for what the column's collation calls equal, which is what the unique index refuses.
     public Task<JobType?> FindByNameAsync(string name, Guid? exceptId, CancellationToken cancellationToken)
     {
-        var upper = name.ToUpperInvariant();
-        return db.JobTypes.AsNoTracking().FirstOrDefaultAsync(j => (j.Name == name || j.Name.ToUpper() == upper) && j.Id != exceptId, cancellationToken);
+        return db.JobTypes.AsNoTracking().FirstOrDefaultAsync(j => j.Name == name && j.Id != exceptId, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(
