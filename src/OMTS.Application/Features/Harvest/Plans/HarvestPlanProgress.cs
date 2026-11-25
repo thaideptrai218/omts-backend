@@ -5,6 +5,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
@@ -16,7 +17,7 @@ public sealed record PlannedHarvest(HarvestPlan Plan, HarvestPlanLine Line, IRea
 /// <see cref="HarvestPlanRules.Settle"/>; each one is audited, stamps the plan and gives it a new version, so two Zone Managers recording at once do not both settle the plan from stale lines.
 /// </summary>
 public sealed class HarvestPlanProgress(
-    IHarvestPlanRepository plans, IStatusCatalog statusCatalog, AuditLogService audit, IUnitOfWork unitOfWork, ICurrentUser currentUser, TimeProvider timeProvider)
+    IHarvestPlanRepository plans, IStatusCatalog statusCatalog, AuditLogService audit, IUnitOfWork unitOfWork, ICurrentUser currentUser, TimeProvider timeProvider, HarvestPlanAccess access)
 {
     public const string FieldName = "Harvest plan line";
 
@@ -33,7 +34,13 @@ public sealed class HarvestPlanProgress(
             return AppError.Invalid(FieldName);
         }
 
-        if (!HarvestPlanRules.AllowsHarvest(plan.StatusId))
+        // A plan the Owner harvests himself is not there for anyone else: a Zone Manager cannot record a lot from it.
+        if (plan.Executor == HarvestPlanExecutor.Owner && !await access.IsOwnerAsync(cancellationToken))
+        {
+            return AppError.Invalid(FieldName);
+        }
+
+        if (!HarvestPlanRules.AllowsHarvest(plan.StatusId, plan.Executor))
         {
             return AppError.Conflict(UserMessages.WrongStatus($"{HarvestPlanCodeService.ObjectName} {plan.Code}", statusCatalog.DisplayNameOf(plan.StatusId)));
         }
@@ -86,7 +93,7 @@ public sealed class HarvestPlanProgress(
     public bool Settle(HarvestPlan plan, bool allDoneBefore)
     {
         unitOfWork.MarkChanged(plan);
-        var moves = HarvestPlanRules.Settle(plan.StatusId, plan.Lines.Select(HarvestPlanRules.FactsOf).ToList(), allDoneBefore);
+        var moves = HarvestPlanRules.Settle(plan.StatusId, plan.Lines.Select(HarvestPlanRules.FactsOf).ToList(), allDoneBefore, plan.Executor);
         foreach (var target in moves)
         {
             Move(plan, target);

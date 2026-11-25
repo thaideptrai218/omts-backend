@@ -3,6 +3,7 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Harvest;
 
@@ -29,6 +30,9 @@ public class HarvestPlan : AuditableEntity, IHasStatus
     /// <summary>When and by whom the plan was handed to the Zone Managers of its zones; null while it is a Draft (and for a Draft that was cancelled).</summary>
     public DateTimeOffset? AssignedAt { get; set; }
     public Guid? AssignedByAccountId { get; set; }
+
+    /// <summary>Who harvests the plan, set when it is assigned; <see cref="HarvestPlanExecutor.ZoneManager"/> until then and for every plan made before the choice existed.</summary>
+    public HarvestPlanExecutor Executor { get; set; } = HarvestPlanExecutor.ZoneManager;
 
     public DateTimeOffset? CompletedAt { get; set; }
     public Guid? CompletedByAccountId { get; set; }

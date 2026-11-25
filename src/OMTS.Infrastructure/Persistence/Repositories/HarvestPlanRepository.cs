@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -40,8 +41,9 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
         var query = db.HarvestPlans.AsNoTracking().Where(p => p.StatusId == StatusIds.HarvestPlan.Assigned || p.StatusId == StatusIds.HarvestPlan.Received || p.StatusId == StatusIds.HarvestPlan.Harvesting);
         if (zoneIds is not null)
         {
+            // A Zone Manager (limited to zones) never sees a plan the Owner harvests himself.
             var zones = zoneIds.ToList();
-            query = query.Where(p => p.Lines.Any(l => zones.Contains(l.Raft.ZoneId)));
+            query = query.Where(p => p.Executor == HarvestPlanExecutor.ZoneManager && p.Lines.Any(l => zones.Contains(l.Raft.ZoneId)));
         }
 
         var ids = await query.Select(p => p.Id).ToListAsync(cancellationToken);
@@ -190,7 +192,7 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
 
         if (filter.AssignedOnly)
         {
-            plans = plans.Where(p => p.AssignedAt != null);
+            plans = plans.Where(p => p.AssignedAt != null && p.Executor == HarvestPlanExecutor.ZoneManager);
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))

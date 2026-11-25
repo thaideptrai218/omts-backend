@@ -1,11 +1,12 @@
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
-/// Who may do what with the harvest plans. A plan has the zones of the rafts of its lines: the Owner does everything; a Zone Manager reads the plans handed over that have a line in one of its zones, sees only those
+/// Who may do what with the harvest plans. A plan has the zones of the rafts of its lines: the Owner does everything; a Zone Manager reads the plans handed over to Zone Managers (never the ones the Owner harvests himself) that have a line in one of its zones, sees only those
 /// lines and harvests from them with HARVESTS Create (never a Draft); the Accountant has none. Changing a plan needs the right in every zone it spans.
 /// </summary>
 public sealed class HarvestPlanAccess(ZoneAccessGuard zoneAccess)
@@ -62,7 +63,7 @@ public sealed class HarvestPlanAccess(ZoneAccessGuard zoneAccess)
         VisibleLines(plan, await ScopeAsync(PermissionAction.View, cancellationToken));
 
     public static IReadOnlyList<HarvestPlanLine> VisibleLines(HarvestPlan plan, Scope scope) =>
-        scope.IsEmpty || (scope.AssignedOnly && plan.AssignedAt is null)
+        scope.IsEmpty || (scope.AssignedOnly && (plan.AssignedAt is null || plan.Executor == HarvestPlanExecutor.Owner))
             ? []
             : plan.Lines.Where(l => scope.ZoneIds is null || scope.ZoneIds.Contains(l.Raft.ZoneId)).ToList();
 

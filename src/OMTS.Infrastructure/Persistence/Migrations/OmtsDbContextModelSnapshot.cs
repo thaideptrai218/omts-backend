@@ -2144,6 +2144,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CreatedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Executor")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");

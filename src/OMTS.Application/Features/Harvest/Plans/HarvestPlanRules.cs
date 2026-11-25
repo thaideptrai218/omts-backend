@@ -1,5 +1,6 @@
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
@@ -33,24 +34,38 @@ public static class HarvestPlanRules
 
     public static bool AllowsAssign(int statusId) => statusId == StatusIds.HarvestPlan.Draft;
 
-    /// <summary>"Nhận": a Zone Manager receives a plan the Owner assigned; there is no refusal.</summary>
-    public static bool AllowsReceive(int statusId) => statusId == StatusIds.HarvestPlan.Assigned;
+    /// <summary>"Nhận": a Zone Manager receives a plan the Owner assigned; there is no refusal. A plan the Owner harvests himself is never received.</summary>
+    public static bool AllowsReceive(int statusId, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager) =>
+        executor == HarvestPlanExecutor.ZoneManager && statusId == StatusIds.HarvestPlan.Assigned;
 
-    /// <summary>"Bàn giao": a Zone Manager hands over a plan being harvested once every line is done (see <see cref="AllDone"/>).</summary>
-    public static bool AllowsHandOver(int statusId) => statusId == StatusIds.HarvestPlan.Harvesting;
+    /// <summary>"Bàn giao": a Zone Manager hands over a plan being harvested once every line is done (see <see cref="AllDone"/>). A plan the Owner harvests himself is never handed over.</summary>
+    public static bool AllowsHandOver(int statusId, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager) =>
+        executor == HarvestPlanExecutor.ZoneManager && statusId == StatusIds.HarvestPlan.Harvesting;
 
-    /// <summary>"Hoàn thành" (the Finish action): only the Owner, only a plan the Zone Manager handed over. The system never completes a plan by itself.</summary>
-    public static bool AllowsFinish(int statusId) => statusId == StatusIds.HarvestPlan.HandedOver;
+    /// <summary>
+    /// "Hoàn thành" (the Finish action): only the Owner. A plan harvested by Zone Managers is finished once they handed it over; a plan the Owner harvests himself is finished from Harvesting once every line is
+    /// harvested or left out (<paramref name="allLinesDone"/>). The system never completes a plan by itself.
+    /// </summary>
+    public static bool AllowsFinish(int statusId, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager, bool allLinesDone = false) =>
+        executor == HarvestPlanExecutor.Owner ? statusId == StatusIds.HarvestPlan.Harvesting && allLinesDone : statusId == StatusIds.HarvestPlan.HandedOver;
 
     /// <summary>A plan with no lot yet can be cancelled while it is a Draft, Assigned or Received; once harvesting starts it is handed over instead.</summary>
     public static bool AllowsCancel(int statusId) => statusId is StatusIds.HarvestPlan.Draft or StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Received;
 
-    /// <summary>Lots are recorded from the lines, and lanes left out, only after a Zone Manager received the plan and before it is handed over.</summary>
-    public static bool AllowsHarvest(int statusId) => statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting;
+    /// <summary>
+    /// Lots are recorded from the lines, and lanes left out, only after a Zone Manager received the plan and before it is handed over; on a plan the Owner harvests himself, as soon as it is Assigned (there is no
+    /// reception) and until the Owner finishes it.
+    /// </summary>
+    public static bool AllowsHarvest(int statusId, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager) =>
+        executor == HarvestPlanExecutor.Owner
+            ? statusId is StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting
+            : statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting;
 
     /// <summary>A lane left out is put back while the plan is being harvested; a plan already handed over or completed opens again (Harvesting).</summary>
-    public static bool AllowsUnskip(int statusId) =>
-        statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.HandedOver or StatusIds.HarvestPlan.Completed;
+    public static bool AllowsUnskip(int statusId, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager) =>
+        executor == HarvestPlanExecutor.Owner
+            ? statusId is StatusIds.HarvestPlan.Assigned or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.Completed
+            : statusId is StatusIds.HarvestPlan.Received or StatusIds.HarvestPlan.Harvesting or StatusIds.HarvestPlan.HandedOver or StatusIds.HarvestPlan.Completed;
 
     public static HarvestPlanLaneState LaneState(bool inLot, bool skipped) =>
         inLot ? HarvestPlanLaneState.Harvested : skipped ? HarvestPlanLaneState.Skipped : HarvestPlanLaneState.Planned;
@@ -77,12 +92,20 @@ public static class HarvestPlanRules
     /// there until a Zone Manager hands it over: the system never completes a plan. A HandedOver plan, or a Completed one that was whole before the change, opens again (Harvesting) when a line is not done any more.
     /// </summary>
     /// <param name="allDoneBefore">Every line was done before this change; tells a Completed plan that was whole from one closed with lanes still to do.</param>
-    public static IReadOnlyList<int> Settle(int statusId, IReadOnlyCollection<PlanLineFacts> lines, bool allDoneBefore)
+    public static IReadOnlyList<int> Settle(int statusId, IReadOnlyCollection<PlanLineFacts> lines, bool allDoneBefore, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager)
     {
         var moves = new List<int>();
         var done = AllDone(lines);
         switch (statusId)
         {
+            case StatusIds.HarvestPlan.Assigned:
+                // A plan the Owner harvests himself has no reception: its first lot or lane left out starts the harvest.
+                if (executor == HarvestPlanExecutor.Owner && Started(lines))
+                {
+                    moves.Add(StatusIds.HarvestPlan.Harvesting);
+                }
+
+                break;
             case StatusIds.HarvestPlan.Received:
                 if (Started(lines))
                 {
@@ -116,7 +139,8 @@ public static class HarvestPlanRules
     /// <param name="canHarvestNow">Some line the caller sees is still open and in a zone where the caller may harvest.</param>
     /// <param name="mayHarvestInPlan">The caller sees a line of the plan in a zone where it may harvest.</param>
     /// <param name="allLinesDone">Every line of the whole plan, also in zones the caller does not see, has its lot or has every lane left out.</param>
-    public static IReadOnlyList<HarvestPlanAction> AllowedActions(int statusId, HarvestPlanCaller caller, bool hasLot, bool canHarvestNow, bool mayHarvestInPlan = false, bool allLinesDone = false)
+    public static IReadOnlyList<HarvestPlanAction> AllowedActions(
+        int statusId, HarvestPlanCaller caller, bool hasLot, bool canHarvestNow, bool mayHarvestInPlan = false, bool allLinesDone = false, HarvestPlanExecutor executor = HarvestPlanExecutor.ZoneManager)
     {
         var actions = new List<HarvestPlanAction>();
         var mayEdit = caller.IsOwner || caller.CanEdit;
@@ -130,17 +154,17 @@ public static class HarvestPlanRules
             actions.Add(HarvestPlanAction.Assign);
         }
 
-        if (AllowsReceive(statusId) && mayHarvestInPlan)
+        if (AllowsReceive(statusId, executor) && mayHarvestInPlan)
         {
             actions.Add(HarvestPlanAction.Receive);
         }
 
-        if (AllowsHandOver(statusId) && mayHarvestInPlan && allLinesDone)
+        if (AllowsHandOver(statusId, executor) && mayHarvestInPlan && allLinesDone)
         {
             actions.Add(HarvestPlanAction.HandOver);
         }
 
-        if (AllowsFinish(statusId) && caller.IsOwner)
+        if (AllowsFinish(statusId, executor, allLinesDone) && caller.IsOwner)
         {
             actions.Add(HarvestPlanAction.Finish);
         }
@@ -150,7 +174,7 @@ public static class HarvestPlanRules
             actions.Add(HarvestPlanAction.Cancel);
         }
 
-        if (AllowsHarvest(statusId) && canHarvestNow)
+        if (AllowsHarvest(statusId, executor) && canHarvestNow)
         {
             actions.Add(HarvestPlanAction.Harvest);
             actions.Add(HarvestPlanAction.SkipLane);
