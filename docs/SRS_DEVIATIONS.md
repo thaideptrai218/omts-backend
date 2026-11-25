@@ -69,8 +69,16 @@ HR-FIX, sửa logic nhân sự và lương (19/11/2026, OMTS-227, theo mặc đ�
 
 Ba quyết định của chủ HTX ngày 24/11/2026 (OMTS-227, chờ PM đưa vào SRS; chi tiết API ở [api-behaviour-reference](api-behaviour-reference.md): "Employee scope of a Zone Manager", "Harvest plans (KHT)", "Purchase request staffing without waiting"):
 - Phạm vi nhân viên (HR-SCOPE, thay BR-LABOR-01 "mọi Quản lý vùng thấy mọi nhân viên"): tài khoản chỉ có quyền ở một số vùng chỉ thấy nhân viên có ít nhất một vùng làm việc nằm trong các vùng đó; Chủ HTX và tài khoản quyền mọi vùng thấy tất cả. Lọc trong truy vấn danh sách, tìm kiếm, xuất file, chi tiết (404 khi ngoài phạm vi), danh sách đơn nghỉ và danh sách nhân viên để chọn nhân công đơn đặt mua; nhân viên nhiều vùng hiện qua vùng trong phạm vi và chỉ thấy các vùng làm việc trong phạm vi. Quản lý vùng không còn "thêm vùng của tôi" cho nhân viên không thấy. Chưa lọc: kiểm tra `Crew` khi lưu bản ghi (ươm, thả giống, thu hoạch).
-- Nhân công đơn đặt mua không chờ (SALE-03, thay quyết định 31/10/2026): chọn nhân viên thì ca thành phân công ngay, nhân viên chỉ nhận thông báo `PURCHASE_SHIFT_ASSIGNED`, đơn vẫn "Chờ phản hồi", nhận đơn chỉ cần có kế hoạch nhân công. Trạng thái "Chờ nhân viên" (3205) chỉ còn cho đơn cũ; không đổi dạng `PurchaseStaffingView`, `POST /api/me/purchase-shifts/{id}/response` đóng cho đơn mới.
+- Nhân công đơn đặt mua không chờ (SALE-03, thay quyết định 31/10/2026): đã bỏ ngày 25/11/2026, xem mục bên dưới.
 - Kế hoạch thu hoạch nhận và bàn giao (HARVEST-PLAN): thêm trạng thái Đã nhận 4206 (`RECEIVED`) và Đã bàn giao 4207 (`HANDED_OVER`, hiển thị tiếng Việt, khác các dòng cũ lưu tên tiếng Anh) trong nhóm `HARVEST_PLAN`; luồng Nháp, Đã giao, Đã nhận (Quản lý vùng, không từ chối), Đang thu hoạch (lô đầu tiên), Đã bàn giao (Quản lý vùng, khi mọi dòng đã có lô hoặc bỏ hết làn), Hoàn thành (chỉ Chủ HTX). Hệ thống không còn tự hoàn thành kế hoạch (bỏ chuyển 30113 Đã giao sang Hoàn thành; 30111, 30112 đổi trạng thái nguồn, thêm 30120 đến 30123). Thu hoạch và bỏ làn chỉ từ Đã nhận hoặc Đang thu hoạch; hủy từ Nháp, Đã giao, Đã nhận khi chưa có lô. Migration `HarvestPlanReceiveHandOverAndPurchaseStaffingWithoutWaiting`.
+
+Quyết định của chủ HTX ngày 25/11/2026 (chờ PM đưa vào SRS; chi tiết API ở [api-behaviour-reference](api-behaviour-reference.md):
+"Purchase request staffing with the staff's agreement"):
+- Nhân công đơn đặt mua có nhân viên xác nhận (SALE-03, trở lại quyết định 31/10/2026, thay "không chờ" ngày 24/11/2026): Chủ HTX giao kế
+  hoạch ngày làm cho chính mình hoặc Quản lý vùng (Quản lý vùng nhận hoặc từ chối); người phụ trách mời nhân viên, đơn sang "Chờ nhân viên"
+  (3205); mỗi nhân viên đồng ý hoặc từ chối (từ chối phải có lý do). Đủ người đồng ý (số lồng chia số lồng một người làm một ngày, làm
+  tròn lên) thì Chủ HTX mới bấm nhận đơn được, lúc đó ca của người đồng ý thành phân công. Không đủ thì người phụ trách mời thêm hoặc Chủ
+  HTX tự từ chối đơn kèm lý do; hệ thống không tự nhận hay tự từ chối. `PURCHASE_SHIFT_ASSIGNED` không còn gửi.
 
 ## Tích hợp chưa có nhà cung cấp
 

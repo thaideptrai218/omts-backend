@@ -21,9 +21,10 @@ using S = OMTS.Domain.Constants.StatusIds.PurchaseRequest;
 namespace OMTS.Application.Features.Sales.Requests;
 
 /// <summary>
-/// Kế hoạch nhân công của đơn theo lồng. Từ 24/11/2026 (quyết định của Chủ HTX): người phụ trách chọn nhân viên và ca thành phân công ngay,
-/// nhân viên chỉ nhận thông báo, không phải đồng ý hay từ chối, và đơn vẫn ở "Chờ phản hồi" (không còn "Chờ nhân viên"). Nhận đơn chỉ cần đã có kế hoạch.
-/// Trạng thái "Chờ nhân viên" và lời mời chưa trả lời của đơn gửi trước đó vẫn đọc và vẫn nhận đơn được.
+/// Kế hoạch nhân công của đơn theo lồng (quyết định 25/11/2026, trở lại quyết định 31/10/2026 thay cho "phân công ngay" ngày 24/11/2026):
+/// Chủ HTX giao kế hoạch ngày làm cho chính mình hoặc một Quản lý vùng (Quản lý vùng nhận hoặc từ chối); người phụ trách mời nhân viên,
+/// đơn sang "Chờ nhân viên"; mỗi nhân viên đồng ý hoặc từ chối ca. Đủ người đồng ý thì Chủ HTX mới nhận đơn được, lúc đó ca thành phân công;
+/// không đủ thì người phụ trách mời thêm hoặc Chủ HTX từ chối đơn. Đơn gửi trong 24-25/11 có ca đã ghi là đồng ý và đã phân công vẫn nhận được.
 /// </summary>
 public sealed class PurchaseStaffingService(
     IPurchaseRequestRepository requests, IWorkAssignmentRepository assignments, IAttendanceRepository attendances,
@@ -101,28 +102,23 @@ public sealed class PurchaseStaffingService(
             if (await UnavailableAsync(e, input.WorkDate, row.Id, ct) is not null) return AppError.Invalid("Employee unavailable");
         row.PlannedCages = input.Cages; row.WorkDate = input.WorkDate; row.PlannedPickupDate = input.PickupDate;
         row.CagesPerEmployeePerDay = input.CagesPerEmployeePerDay; row.StaffingNote = input.Note?.Trim();
-        // Đơn không vào "Chờ nhân viên": ca thành phân công ngay, ghi lại như một ca đã được nhận (giữ nguyên dạng PurchaseStaffingView và danh sách ca).
-        var now = clock.GetUtcNow();
+        // Mỗi người được mời phải đồng ý hoặc từ chối ca; đơn chờ nhân viên cho tới khi Chủ HTX nhận (đủ người) hoặc từ chối đơn.
+        row.StatusId = S.AwaitingStaff;
         foreach (var e in employees)
         {
-            var invite = new PurchaseShiftInvitation
-            {
-                PurchaseRequestId = row.Id, PurchaseRequest = row, EmployeeId = e.Id, Employee = e,
-                Approved = true, RespondedAt = now, ReservedWorkDate = input.WorkDate, Reason = null,
-            };
+            var invite = new PurchaseShiftInvitation { PurchaseRequestId = row.Id, PurchaseRequest = row, EmployeeId = e.Id, Employee = e };
             requests.AddInvitation(invite);
             // EF cập nhật navigation; thêm rõ ràng để adapter khác cũng trả đúng tiến độ.
             if (!row.ShiftInvitations.Contains(invite)) row.ShiftInvitations.Add(invite);
-            await CreateAssignmentAsync(row, plan, e.Id, user.AccountId ?? plan.CreatorAccountId, ct);
-            await notifications.NotifyAsync([e.AccountId!.Value], "PURCHASE_SHIFT_ASSIGNED", "Bạn được phân công ca làm",
-                $"{row.Code}: {row.PlannedCages} lồng, ngày {row.WorkDate:dd/MM/yyyy}, bè {plan.Raft.Code}. Ca đã được phân công, bạn không cần xác nhận.",
+            await notifications.NotifyAsync([e.AccountId!.Value], "PURCHASE_SHIFT_INVITED", "Mời xác nhận ca làm",
+                $"{row.Code}: {row.PlannedCages} lồng, ngày {row.WorkDate:dd/MM/yyyy}, bè {plan.Raft.Code}. Vui lòng đồng ý hoặc từ chối ca.",
                 nameof(PurchaseRequest), row.Code, false, ct, row.Id);
         }
         if (employees.Count > 0)
         {
             uow.MarkChanged(plan);
             uow.MarkChanged(row);
-            audit.Record(new AuditEntry("PurchaseRequest.StaffAssigned", nameof(PurchaseRequest))
+            audit.Record(new AuditEntry("PurchaseRequest.StaffInvited", nameof(PurchaseRequest))
             { RecordId = row.Id, RecordCode = row.Code, After = new { row.PlannedCages, row.WorkDate, row.CagesPerEmployeePerDay, EmployeeIds = newIds } });
             await uow.SaveChangesAsync(ct);
         }
@@ -165,7 +161,10 @@ public sealed class PurchaseStaffingService(
         audit.Record(new AuditEntry("PurchaseShift.Responded", nameof(PurchaseShiftInvitation))
         { RecordId = invite.Id, RecordCode = row.Code, After = new { invite.Approved, invite.Reason, row.WorkDate } });
         var summary = Summary(row)!;
-        var body = $"{row.Code}: {invite.Employee.FullName} {(input.Approved ? "đồng ý" : "từ chối")}. Đã đủ {summary.ApprovedEmployees}/{summary.RequiredEmployees} người. {invite.Reason}";
+        var progress = summary.HasEnoughStaff
+            ? $"Đã đủ {summary.ApprovedEmployees}/{summary.RequiredEmployees} người, Chủ HTX có thể nhận đơn."
+            : $"Mới có {summary.ApprovedEmployees}/{summary.RequiredEmployees} người đồng ý.";
+        var body = $"{row.Code}: {invite.Employee.FullName} {(input.Approved ? "đồng ý" : "từ chối")}. {progress} {invite.Reason}".TrimEnd();
         var ownerIds = await accounts.ListActiveOwnerIdsAsync(ct);
         await notifications.NotifyAsync(ownerIds, "PURCHASE_SHIFT_RESPONDED", "Nhân viên phản hồi ca làm", body,
             nameof(PurchaseRequest), row.Code, false, ct, row.Id);
@@ -179,9 +178,10 @@ public sealed class PurchaseStaffingService(
 
     public async Task<AppError?> ValidateAcceptanceAsync(PurchaseRequest row, int? cages, DateOnly? pickup, CancellationToken ct)
     {
-        // Chỉ cần đã có kế hoạch nhân công (người đã được phân công ngay khi chọn); không đếm sự đồng ý của nhân viên.
-        if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff) || Summary(row) is null || row.ShiftInvitations.Count(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate) == 0)
-            return AppError.Invalid("Staffing plan required");
+        // Chỉ nhận đơn khi đủ nhân viên đã đồng ý ca (quyết định 25/11/2026). Đơn "Chờ phản hồi" mà ca đã thành phân công ngay
+        // theo luồng 24-25/11 cũng được tính: các ca đó đã ghi là đồng ý.
+        if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff) || Summary(row) is not { HasEnoughStaff: true })
+            return AppError.Invalid("Insufficient approved staff");
         if (row.PlannedCages != cages || row.PlannedPickupDate != pickup || row.WorkDate < Today) return AppError.Invalid("Staffing plan mismatch");
         var plan = await plans.ForPurchaseAsync(row.Id, ct);
         if (plan?.Approved != true || plan.WorkDate != row.WorkDate || plan.ResponsibleAccount.StatusId != StatusIds.Account.Active)
@@ -193,12 +193,17 @@ public sealed class PurchaseStaffingService(
             return AppError.Invalid("Plan responsible");
         if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Work plan");
+        // Người đã đồng ý có thể được duyệt nghỉ, bị khóa tài khoản, nghỉ việc hoặc nhận việc khác trong ngày sau khi đồng ý. Ca đã là
+        // phân công của kế hoạch này (luồng 24-25/11) thì không kiểm tra lại.
+        var assigned = (await PlannedAssignmentsAsync(row, plan, ct)).Select(a => a.EmployeeId).ToHashSet();
+        foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate && !assigned.Contains(i.EmployeeId)))
+            if (await UnavailableAsync(invite.Employee, row.WorkDate!.Value, row.Id, ct) is not null) return AppError.Invalid("Employee unavailable");
         return null;
     }
 
     /// <summary>
-    /// Nhận đơn: các ca của kế hoạch đã là phân công từ lúc chọn nhân viên (<see cref="PlanAsync"/>); chỉ đơn gửi theo luồng cũ có người đã đồng ý ca mà chưa có phân công thì được tạo nốt ở đây.
-    /// Không tạo trùng phân công đã có.
+    /// Nhận đơn: mỗi nhân viên đã đồng ý ca có phân công đầu ngày của LABOR-02 (OMTS-132) trên bè, loại việc và ngày của kế hoạch, lưu cùng câu trả lời
+    /// của Chủ HTX. Không tạo trùng phân công đã có (đơn theo luồng 24-25/11 đã có phân công từ lúc chọn nhân viên).
     /// </summary>
     public async Task ActivateAssignmentsAsync(PurchaseRequest row, CancellationToken ct)
     {
