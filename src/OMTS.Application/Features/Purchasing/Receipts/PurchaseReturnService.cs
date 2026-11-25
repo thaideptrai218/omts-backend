@@ -6,6 +6,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -51,9 +52,14 @@ public sealed class PurchaseReturnService(
     public async Task<Result<PurchaseReceiptView>> CreateAsync(Guid receiptId, CreatePurchaseReturnRequest request, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null)
+        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
+        }
+
+        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Create, cancellationToken) is { } zoneRefused)
+        {
+            return zoneRefused;
         }
 
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
@@ -122,6 +128,12 @@ public sealed class PurchaseReturnService(
             return invalid;
         }
 
+        // The zone of a return is that of its receipt unless one is named; a Zone Manager returns goods of its own zones only.
+        if (await access.RefuseWriteAsync(request.ZoneId ?? sources!.Receipt?.ZoneId, PermissionAction.Create, cancellationToken) is { } zoneRefused)
+        {
+            return zoneRefused;
+        }
+
         var purchaseReturn = new PurchaseReturn { StatusId = StatusIds.PurchaseReturn.Draft, RecordedByAccountId = currentUser.AccountId!.Value };
         Apply(purchaseReturn, request, sources!);
         foreach (var line in BuildLines(request, sources!))
@@ -160,9 +172,19 @@ public sealed class PurchaseReturnService(
     public async Task<Result<PurchaseReturnView>> UpdateAsync(Guid returnId, SavePurchaseReturnRequest request, CancellationToken cancellationToken)
     {
         var purchaseReturn = await receipts.GetReturnForEditAsync(returnId, cancellationToken);
-        if (purchaseReturn is null)
+        if (purchaseReturn is null || !await access.SeesAsync(purchaseReturn.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
+        }
+
+        if (await access.RefuseWriteAsync(purchaseReturn.ZoneId, PermissionAction.Edit, cancellationToken) is { } oldZoneRefused)
+        {
+            return oldZoneRefused;
+        }
+
+        if (await access.RefuseWriteAsync(request.ZoneId ?? purchaseReturn.ZoneId, PermissionAction.Edit, cancellationToken) is { } newZoneRefused)
+        {
+            return newZoneRefused;
         }
 
         if (purchaseReturn.StatusId == StatusIds.PurchaseReturn.Recorded)
@@ -460,7 +482,7 @@ public sealed class PurchaseReturnService(
     public async Task<Result<Done>> RemoveAsync(Guid returnId, CancellationToken cancellationToken)
     {
         var purchaseReturn = await receipts.GetReturnForEditAsync(returnId, cancellationToken);
-        if (purchaseReturn is null)
+        if (purchaseReturn is null || !await access.SeesAsync(purchaseReturn.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
         }
@@ -468,6 +490,11 @@ public sealed class PurchaseReturnService(
         if (!await access.MayChangeAsync(purchaseReturn, cancellationToken))
         {
             return AppError.Forbidden;
+        }
+
+        if (await access.RefuseWriteAsync(purchaseReturn.ZoneId, PermissionAction.Delete, cancellationToken) is { } zoneRefused)
+        {
+            return zoneRefused;
         }
 
         if (purchaseReturn.StatusId != StatusIds.PurchaseReturn.Draft)
@@ -496,7 +523,7 @@ public sealed class PurchaseReturnService(
     public async Task<Result<CancelledPurchaseReturn>> CancelAsync(Guid returnId, CancelPurchaseReturnRequest request, CancellationToken cancellationToken)
     {
         var purchaseReturn = await receipts.GetReturnForEditAsync(returnId, cancellationToken);
-        if (purchaseReturn is null)
+        if (purchaseReturn is null || !await access.SeesAsync(purchaseReturn.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
         }
@@ -548,7 +575,7 @@ public sealed class PurchaseReturnService(
         if (request.ReceiptId is { } receiptId)
         {
             receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-            if (receipt is null)
+            if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
             {
                 return (null, AppError.Invalid("Receipt"));
             }

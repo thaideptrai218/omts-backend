@@ -138,8 +138,10 @@ public class FixedRolesScopeQaTests
         Assert.False(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(SalesReports, View, PermissionScope.ZoneScoped, ZoneA));
 
-        // Records with no zone: suppliers by the Zone Manager role (Create), supplier payments by the Accountant role.
-        Assert.True(access.Allows(Suppliers, Create, PermissionScope.ZoneScoped, ZoneB));
+        // Records with no zone: suppliers are read by the Zone Manager role (never created or edited, 25/11/2026), supplier payments are the Accountant role's.
+        Assert.True(access.Allows(Suppliers, View, PermissionScope.ZoneScoped, ZoneB));
+        Assert.False(access.Allows(Suppliers, Create, PermissionScope.ZoneScoped, ZoneB));
+        Assert.False(access.Allows(Suppliers, Edit, PermissionScope.ZoneScoped, ZoneB));
         Assert.True(access.Allows(SupplierPayments, Create, PermissionScope.NoZone, null));
         // Payroll: the Accountant role views and exports, it never prepares or pays (19/11/2026).
         Assert.True(access.Allows(Payroll, View, PermissionScope.ZoneScoped, ZoneA));

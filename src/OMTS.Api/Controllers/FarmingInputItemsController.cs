@@ -188,7 +188,7 @@ public sealed class InputInventorySettingsController(InputInventorySettingsServi
         (await settings.UpdateAsync(request, cancellationToken)).ToActionResult(Ok);
 }
 
-/// <summary>"Thiết lập giá" of a purchase receipt: the cost price and the last purchase price of its items; the update is Owner only.</summary>
+/// <summary>"Thiết lập giá" of a purchase receipt: the cost price and the last purchase price of its items; the update is the Owner's and the Zone Manager's of the zone of the receipt.</summary>
 [ApiController]
 [Authorize]
 public sealed class ReceiptPriceSetupController(ReceiptPriceSetupService priceSetup) : ControllerBase
@@ -199,7 +199,7 @@ public sealed class ReceiptPriceSetupController(ReceiptPriceSetupService priceSe
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) => (await priceSetup.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
     [HttpPut("api/purchase-receipts/{id:guid}/price-setup")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<ReceiptPriceSetupView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, UpdateReceiptPriceSetupRequest request, CancellationToken cancellationToken) =>
         (await priceSetup.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);

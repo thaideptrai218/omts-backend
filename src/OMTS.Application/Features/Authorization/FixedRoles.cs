@@ -41,7 +41,9 @@ public static class FixedRoles
         "Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce (work assignment and attendance of the zone). Selling is the Owner's.",
         [
             Full(CultivationCycles), Full(CultivationLogs), Full(WaterMeasurements), Full(Harvests), Full(HarvestLots),
-            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts), Full(Suppliers),
+            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts),
+            // Owner decision of 25/11/2026: a Zone Manager reads the suppliers to pick one on a receipt of its zones but neither creates nor edits them (supplier master data is the Owner's), nor pays them (the Accountant's).
+            new(Suppliers, [View]),
             // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
             new(LaborWorkers, [View, Create, Edit]),
             Full(WorkAssignments), Full(Attendance),

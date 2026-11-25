@@ -7,6 +7,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Domain.Constants;
@@ -44,7 +45,7 @@ public sealed class PurchaseReceiptService(
     private const int MaxCreateAttempts = 20;
 
     public async Task<Result<PurchaseReceiptView>> GetAsync(Guid receiptId, CancellationToken cancellationToken) =>
-        await receipts.GetForViewAsync(receiptId, cancellationToken) is { } receipt
+        await receipts.GetForViewAsync(receiptId, cancellationToken) is { } receipt && await access.SeesAsync(receipt.ZoneId, cancellationToken)
             ? await views.ViewAsync(receipt, cancellationToken)
             : AppError.NotFound;
 
@@ -56,6 +57,12 @@ public sealed class PurchaseReceiptService(
     {
         // The PN number a generated code took stays with the request over the rounds below: a lost round spends no further number, so the codes of parallel receipts stay consecutive.
         string? generatedCode = null;
+        // A Zone Manager records receipts of its own zones only and must name one (the Owner may leave the zone out).
+        if (await access.RefuseWriteAsync(request.ZoneId, PermissionAction.Create, cancellationToken) is { } zoneRefused)
+        {
+            return zoneRefused;
+        }
+
         for (var attempt = 1; ; attempt++)
         {
             var (refs, invalid) = await validator.CheckDraftAsync(request, storedKind: null, cancellationToken);
@@ -123,9 +130,21 @@ public sealed class PurchaseReceiptService(
     public async Task<Result<PurchaseReceiptView>> UpdateAsync(Guid receiptId, SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null)
+        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
+        }
+
+        // The zone it is in and the zone it is given must both be the caller's to write; a Completed receipt keeps its zone when none is sent.
+        var newZone = receipt.StatusId == StatusIds.PurchaseReceipt.Completed ? request.ZoneId ?? receipt.ZoneId : request.ZoneId;
+        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Edit, cancellationToken) is { } oldZoneRefused)
+        {
+            return oldZoneRefused;
+        }
+
+        if (await access.RefuseWriteAsync(newZone, PermissionAction.Edit, cancellationToken) is { } newZoneRefused)
+        {
+            return newZoneRefused;
         }
 
         if (receipt.StatusId == StatusIds.PurchaseReceipt.Completed)
@@ -190,9 +209,14 @@ public sealed class PurchaseReceiptService(
     public async Task<Result<PurchaseReceiptView>> CompleteAsync(Guid receiptId, CompleteReceiptRequest request, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null)
+        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
         {
             return AppError.NotFound;
+        }
+
+        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Edit, cancellationToken) is { } zoneRefused)
+        {
+            return zoneRefused;
         }
 
         if (await EditableDraftAsync(receipt, request.RowVersion, requireRowVersion: false, cancellationToken) is { } refused)

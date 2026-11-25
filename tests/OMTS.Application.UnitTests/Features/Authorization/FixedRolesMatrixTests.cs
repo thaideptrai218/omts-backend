@@ -112,6 +112,8 @@ public class FixedRolesMatrixTests
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
         [("PURCHASE-07", StaffRole.Accountant)] = RExport,
+        // Owner decision of 25/11/2026: a Zone Manager only views the suppliers (it picks one on a receipt of its zones); creating, editing and exporting them is the Owner's, and paying them the Accountant's.
+        [("PURCHASE-07", StaffRole.ZoneManager)] = R,
         [("PURCHASE-03", StaffRole.Accountant)] = RExport,
         [("SALE-04", StaffRole.Accountant)] = Full,
         [("SALE-04.2", StaffRole.Accountant)] = RExport,

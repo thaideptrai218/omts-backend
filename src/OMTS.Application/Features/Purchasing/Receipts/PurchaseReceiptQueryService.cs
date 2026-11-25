@@ -79,7 +79,7 @@ public sealed record ExportedFile(string FileName, string ContentType, byte[] Co
 
 /// <summary>
 /// PURCHASE-03 – search purchase receipts with totals, the material cost of rafts from their material usages, the receivers, and the Excel export.
-/// The zone of a receipt filters only: the Zone Manager, the Owner and the Accountant (view and export) see every receipt (BR-FARM-08).
+/// The Owner and the Accountant (view and export) see every receipt; a Zone Manager only the receipts of the zones of its pairs, and never one with no zone (owner decision of 25/11/2026, see <see cref="PurchaseReceiptAccess"/>).
 /// </summary>
 public sealed class PurchaseReceiptQueryService(
     IPurchaseReceiptRepository receipts,
@@ -90,6 +90,7 @@ public sealed class PurchaseReceiptQueryService(
     ISpreadsheetWriter spreadsheets,
     IStatusCatalog statusCatalog,
     ISeedLotRegisterQuery seedLots,
+    PurchaseReceiptAccess access,
     TimeProvider timeProvider)
 {
     public async Task<Result<PurchaseReceiptSearchResult>> SearchAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
@@ -117,7 +118,7 @@ public sealed class PurchaseReceiptQueryService(
     public async Task<Result<IReadOnlyList<ReceiptPaymentView>>> PaymentsAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        return receipt is null
+        return receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken)
             ? AppError.NotFound
             : Result<IReadOnlyList<ReceiptPaymentView>>.Success(await allocations.PaymentsOfAsync(receipt.Id, receipt.SupplierId, cancellationToken));
     }
@@ -243,9 +244,11 @@ public sealed class PurchaseReceiptQueryService(
         var (from, to) = period.Value;
         var statusIds = Merged(query.StatusId, query.StatusIds);
         var itemGroups = Merged(query.ItemGroup, query.ItemGroups);
+        // A Zone Manager lists the receipts of its zones only (the zones asked for are limited to them); the Owner and the Accountant list every receipt.
+        var zones = (await access.ScopeAsync(cancellationToken)).Limit(query.ZoneIds is { Length: > 0 } ? query.ZoneIds : null);
         return new PurchaseReceiptFilter(
             itemGroups is null ? query.ItemGroup : null, query.ItemId, query.RaftId, query.SupplierId, statusIds is null ? query.StatusId : null, from, to, query.Code,
-            query.Search, statusIds, itemGroups, query.ZoneIds is { Length: > 0 } ? query.ZoneIds : null,
+            query.Search, statusIds, itemGroups, zones,
             sort, query.SortDir == "desc" || (query.SortDir is null && query.SortBy is null), query.Kind);
     }
 
