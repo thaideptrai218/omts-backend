@@ -29,7 +29,7 @@ public class UnitOfWorkDeadlockTests
         await victim.Database.ExecuteSqlAsync($"UPDATE Statuses SET DisplayName = DisplayName WHERE Id = {second}");
 
         // Waits for the row the other transaction holds, then the other transaction waits for this one's row.
-        var save = new UnitOfWork(victim, new PushOutbox()).SaveChangesAsync();
+        var save = new UnitOfWork(victim, new MandatorySmsOutbox()).SaveChangesAsync();
         await Task.Delay(TimeSpan.FromSeconds(1));
         await other.Database.ExecuteSqlAsync($"UPDATE Statuses SET DisplayName = DisplayName WHERE Id = {second}");
 

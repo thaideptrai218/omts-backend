@@ -140,22 +140,4 @@ public class PurchaseRequestEdgeTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("Not sent", view.GetProperty("sendings").EnumerateArray().Single().Text("deliveryStatus"));
         Assert.Equal("FAKE_CONFIGURED_FAILURE", Assert.Single((await factory.NotificationRowsAsync(request.Id())).Sendings()).ProviderErrorCode);
     }
-
-    // A push the trader turned off is not pushed; the notification stays (BR-ACCOUNT-12). The type is not mandatory.
-    [Fact]
-    public async Task A_trader_may_turn_off_the_push_of_a_response()
-    {
-        var owner = await factory.PurchasingOwnerAsync();
-        var product = await owner.CreateProductAsync();
-        var trader = await factory.TraderAsync();
-        var saved = await trader.Client.PutAsJsonAsyncRaw("/api/me/notification-preferences", """{ "items": [{ "type": "PURCHASE_REQUEST_RESPONSE", "push": false }] }""");
-        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        var request = await trader.Client.PlaceAsync(product.Id());
-
-        (await owner.AcceptAsync(request)).EnsureSuccessStatusCode();
-
-        Assert.Single((await factory.NotificationRowsAsync(request.Id())).InList().Where(n => n.RecipientAccountId == trader.Account.Id));
-        var inbox = factory.Services.GetRequiredService<OMTS.Infrastructure.Messaging.Fakes.FakePushSender>().Inbox.List(trader.Account.Id.ToString());
-        Assert.Empty(inbox);
-    }
 }

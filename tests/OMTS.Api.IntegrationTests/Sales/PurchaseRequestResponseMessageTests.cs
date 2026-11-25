@@ -23,7 +23,7 @@ public class PurchaseRequestResponseMessageTests(AuthApiFactory factory) : IClas
 
     // BR-SALE-03: the trader account and the phone number of the profile; the SMS row never appears in a list (BR-SALE-09).
     [Fact]
-    public async Task The_response_reaches_the_trader_by_push_and_sms_and_each_sending_is_kept()
+    public async Task The_response_reaches_the_trader_in_the_list_and_by_sms_and_each_sending_is_kept()
     {
         var (owner, trader, productId, productName) = await WorldAsync();
         var request = await trader.Client.PlaceAsync(productId, 300);
@@ -41,7 +41,6 @@ public class PurchaseRequestResponseMessageTests(AuthApiFactory factory) : IClas
         Assert.NotNull(sending.DeliveryStatusAt);
 
         Assert.Equal(expected, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(trader.Profile.PhoneNumber)[0].Text);
-        Assert.Contains(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(trader.Account.Id.ToString()), m => m.NotificationId == listRow.Id);
 
         var shown = view.GetProperty("sendings").EnumerateArray().Single();
         Assert.Equal(("Sms", "Sent"), (shown.Text("channel"), shown.Text("deliveryStatus")));
@@ -83,7 +82,7 @@ public class PurchaseRequestResponseMessageTests(AuthApiFactory factory) : IClas
 
     // BR-SALE-09: nothing is sent when the profile has no phone number.
     [Fact]
-    public async Task A_profile_with_no_number_gets_the_push_and_no_sms_row()
+    public async Task A_profile_with_no_number_gets_the_list_row_and_no_sms_row()
     {
         var (owner, _, productId, _) = await WorldAsync();
         var trader = await factory.TraderAsync(configure: p => p.PhoneNumber = null);

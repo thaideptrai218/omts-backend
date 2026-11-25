@@ -21,7 +21,7 @@ public class MandatorySmsDeliveryTests
     private const string NotConfiguredLine = "not sent: Sms:Provider is None";
 
     [Fact]
-    public async Task A_provider_that_throws_keeps_the_action_the_rows_and_the_push_and_tells_the_logs_nothing_personal()
+    public async Task A_provider_that_throws_keeps_the_action_and_the_rows_and_tells_the_logs_nothing_personal()
     {
         await using var api = WithSender(new ThrowingSmsSender());
         var z = await api.ZoneAsync();
@@ -30,7 +30,6 @@ public class MandatorySmsDeliveryTests
         var measurement = await z.RecordedAsync(9.1m, 20m, client: managerClient);
 
         Assert.Equal(2, (await api.AlertsOfAsync(measurement.Id())).Count);
-        Assert.NotEmpty(api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString()));
         var failure = Assert.Single(api.Logs.Lines, l => l.Contains($"Mandatory SMS WATER_ALERT to account {manager.Id} failed: HttpRequestException"));
         Assert.DoesNotContain(manager.PhoneNumber!, failure);
         AssertNoSmsDetailInTheLogs(api, manager.PhoneNumber!, z.OwnerAccount.PhoneNumber!, z.Zone.Name);

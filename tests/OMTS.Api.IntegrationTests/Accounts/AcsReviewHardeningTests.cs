@@ -165,20 +165,6 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests);
     }
 
-    [Fact]
-    public async Task Push_token_taken_over_by_another_account_is_audited()
-    {
-        var first = await factory.AddAccountAsync(NewCode(), Password);
-        var second = await factory.AddAccountAsync(NewCode(), Password);
-        var token = $"ExponentPushToken[{NewCode()}]";
-
-        await (await factory.LoginAsync(first.Username)).PostAsJsonAsync("/api/me/devices", new { token, platform = "android", permissionGranted = true });
-        await (await factory.LoginAsync(second.Username)).PostAsJsonAsync("/api/me/devices", new { token, platform = "android", permissionGranted = true });
-
-        var moves = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "PushDevice.Moved").ToListAsync());
-        Assert.Contains(moves, e => e.Before!.Contains(first.Id.ToString()) && e.After!.Contains(second.Id.ToString()));
-    }
-
     private static async Task<HttpClient> LoginOnAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> api, string username)
     {
         var client = api.CreateClient();

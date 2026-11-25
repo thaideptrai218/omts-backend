@@ -36,7 +36,7 @@ public class QualityClaimQaRespondTests
     [Theory]
     [InlineData("ReturnAllGoods", "accepted: the cooperative offers a return of all the goods")]
     [InlineData("PriceCutWholeInvoice", "accepted: the cooperative offers a price cut of 30,000 VND on the whole invoice")]
-    public async Task Each_offer_reads_as_msg_claim_02_with_the_parameters_on_push_and_sms(string offer, string result)
+    public async Task Each_offer_reads_as_msg_claim_02_with_the_parameters_in_the_list_and_sms(string offer, string result)
     {
         using var api = new QualityClaimApiFactory();
         var c = await api.QaClaimedAsync();
@@ -50,8 +50,6 @@ public class QualityClaimQaRespondTests
         var row = await ListRowAsync(api, c, NotificationTypes.QualityClaimResponse);
         Assert.Equal(("MSG-CLAIM-02", expected), (row.MessageCode, row.Body));
         Assert.Equal(expected, await OfferSmsAsync(api, c));
-        var push = Assert.Single(api.Services.GetRequiredService<FakePushSender>().Inbox.List(c.World.Trader.Account.Id.ToString()), m => m.NotificationId == row.Id);
-        Assert.Contains(expected, push.Text);
         using var parameters = JsonDocument.Parse(row.MessageParams!);
         Assert.Equal(("Accepted", offer, "Sorry", CooperativePhone), (parameters.RootElement.Text("result"), parameters.RootElement.Text("offer"), parameters.RootElement.Text("note"), parameters.RootElement.Text("cooperative_phone")));
     }
@@ -102,7 +100,6 @@ public class QualityClaimQaRespondTests
             Assert.Equal((world.Trader.Profile.Name, new string('d', 100) + "..."), (parameters.RootElement.Text("customer_name"), parameters.RootElement.Text("description_start")));
         }
 
-        Assert.Contains(api.Services.GetRequiredService<FakePushSender>().Inbox.List(world.Sale.Owner.Account.Id.ToString()), m => m.NotificationId == owner.Id);
         Assert.Empty(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(world.Sale.Owner.Account.PhoneNumber!));
 
         await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion, note: note)).ReadAsync(HttpStatusCode.OK);
@@ -115,47 +112,13 @@ public class QualityClaimQaRespondTests
     }
 
     [Fact]
-    public async Task A_refused_push_and_a_refused_sms_undo_nothing_and_the_owner_is_still_told_a_new_claim_when_push_fails()
+    public void The_new_types_are_not_mandatory_and_go_to_their_own_role()
     {
-        using var api = new QualityClaimApiFactory();
-        var world = await api.ClaimWorldAsync();
-        api.RefusePushTo(world.Sale.Owner.Account.Id);
+        var response = NotificationTypes.Find(NotificationTypes.QualityClaimResponse)!;
+        var newClaim = NotificationTypes.Find(NotificationTypes.QualityClaimNew)!;
 
-        var claim = await world.Trader.Client.SubmitClaimAsync(world.InvoiceId);
-
-        Assert.Equal(1, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == NotificationTypes.QualityClaimNew && n.RelatedRecordId == claim.Id() && n.Channel == NotificationChannel.InApp)));
-    }
-
-    [Fact]
-    public async Task A_trader_who_turned_the_push_off_keeps_the_list_row_and_still_gets_the_sms()
-    {
-        using var api = new QualityClaimApiFactory();
-        var c = await api.QaClaimedAsync();
-        var trader = c.World.Trader;
-
-        Assert.Equal(HttpStatusCode.OK, (await trader.Client.SavePushAsync((NotificationTypes.QualityClaimResponse, false))).StatusCode);
-        var types = await trader.Client.OfferedTypesAsync();
-        Assert.Equal((false, false), types[NotificationTypes.QualityClaimResponse]);
-
-        await (await c.Owner.RejectClaimAsync(c.Id, c.RowVersion)).ReadAsync(HttpStatusCode.OK);
-
-        var row = await ListRowAsync(api, c, NotificationTypes.QualityClaimResponse);
-        Assert.DoesNotContain(api.Services.GetRequiredService<FakePushSender>().Inbox.List(trader.Account.Id.ToString()), m => m.NotificationId == row.Id);
-        Assert.Single(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(trader.Profile.PhoneNumber!));
-    }
-
-    [Fact]
-    public async Task The_new_types_are_not_mandatory_and_the_owner_type_can_be_turned_off()
-    {
-        using var api = new QualityClaimApiFactory();
-        var c = await api.QaClaimedAsync();
-        var traderTypes = await c.World.Trader.Client.OfferedTypesAsync();
-        Assert.Equal((false, true), traderTypes[NotificationTypes.QualityClaimResponse]);
-        Assert.DoesNotContain(NotificationTypes.QualityClaimNew, traderTypes.Keys);
-
-        var ownerTypes = await c.Owner.OfferedTypesAsync();
-        Assert.Equal((false, true), ownerTypes[NotificationTypes.QualityClaimNew]);
-        Assert.DoesNotContain(NotificationTypes.QualityClaimResponse, ownerTypes.Keys);
+        Assert.Equal(([NotificationRole.Trader], false), (response.Roles, response.IsMandatory));
+        Assert.Equal(([NotificationRole.CooperativeOwner], false), (newClaim.Roles, newClaim.IsMandatory));
     }
 
     [Fact]
@@ -302,7 +265,6 @@ public class QualityClaimQaRespondTests
         const string secretNote = "DEMO-SECRET-NOTE";
         var world = await api.ClaimWorldAsync();
         api.RefuseSmsTo(world.Trader.Profile.PhoneNumber!);
-        api.RefusePushTo(world.Trader.Account.Id);
 
         var claim = (await (await world.Trader.Client.PostClaimAsync(world.InvoiceId, secretDescription)).ReadAsync(HttpStatusCode.Created)).GetProperty("claim");
         var rowVersion = (await world.Sale.Owner.Client.ClaimAsStaffAsync(claim.Id())).Text("rowVersion");

@@ -18,17 +18,6 @@ internal sealed class UnconfiguredSmsSender(ILogger<UnconfiguredSmsSender> logge
     }
 }
 
-/// <summary><c>Push:Provider = None</c>: push is skipped (the in-app notification row is still saved).</summary>
-internal sealed class UnconfiguredPushSender(ILogger<UnconfiguredPushSender> logger) : IPushSender
-{
-    public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default)
-    {
-        logger.LogDebug(
-            "Push {Type} to {RecipientId} not sent: no push provider is configured", message.Type, message.RecipientAccountId ?? message.RecipientEmployeeId);
-        return Task.FromResult(DeliveryResult.Failed(UnconfiguredSenders.NotConfigured));
-    }
-}
-
 internal static class UnconfiguredSenders
 {
     public const string NotConfigured = "NOT_CONFIGURED";

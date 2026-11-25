@@ -39,7 +39,7 @@ public class Notification : Entity
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ReadAt { get; set; }
 
-    /// <summary>The type is always pushed and its push cannot be turned off (BR-ACCOUNT-11).</summary>
+    /// <summary>The type is mandatory: it also goes out by SMS (BR-ACCOUNT-11).</summary>
     public bool IsMandatory { get; set; }
 
     /// <summary>SMS / Zalo OA rows: the phone number the message was sent to.</summary>

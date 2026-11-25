@@ -4,7 +4,7 @@ namespace OMTS.Application.Features.Traceability.Tracing;
 /// One sales invoice line of a harvest lot, on an invoice that is not cancelled, at its latest values (BR-TRACE-03): the invoice, its zone and its trader. A walk-in sale has no
 /// customer profile, so no customer.
 /// </summary>
-/// <param name="CustomerAccountId">The trader account the customer profile is linked to, if any: Withdraw traceability record (TRACE-04) also pushes the notice to it.</param>
+/// <param name="CustomerAccountId">The trader account the customer profile is linked to, if any: Withdraw traceability record (TRACE-04) also sends the notice to its list.</param>
 /// <param name="TakenBackByReturn">The invoice has a sales return that stands (a return takes back the whole invoice): the trader no longer has these oysters (BR-TRACE-07).</param>
 public sealed record LotSaleLine(
     Guid InvoiceId,

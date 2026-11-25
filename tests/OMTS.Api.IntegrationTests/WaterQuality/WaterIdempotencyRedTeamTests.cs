@@ -12,7 +12,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// WATER-01 re-sends (QA red team): a re-sent client operation answers with the record as it is now and never adds an
-/// alert, notification or audit row; a push failure never undoes a measurement; a failed photo store leaves nothing.
+/// alert, notification or audit row; a failed photo store leaves nothing.
 /// </summary>
 public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
@@ -43,26 +43,6 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Push_failure_is_only_logged_the_measurement_and_its_in_app_alerts_are_saved()
-    {
-        await using var own = new WaterApiFactory(services: s => s.AddSingleton<IPushSender, DownPushSender>());
-        var z = await own.ZoneAsync();
-        var (managerClient, manager) = await own.StaffAsync(z.Zone);
-
-        var response = await z.RecordAsync(9.3m, 20m, client: managerClient);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal("Active", body.Text("alertState"));
-        var stored = await own.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == body.Id()));
-        Assert.Equal(StatusIds.WaterMeasurement.Active, stored.StatusId);
-        var alerts = await own.AlertsOfAsync(body.Id());
-        Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
-        Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
-        Assert.Contains(own.Logs.Lines, line => line.Contains("Push WATER_ALERT") && line.Contains("failed"));
-    }
-
-    [Fact]
     public async Task Failed_photo_storage_answers_502_and_leaves_no_measurement_audit_row_or_notification()
     {
         await using var broken = new WaterApiFactory(services: s => s.AddSingleton<OMTS.Application.Common.Interfaces.Storage.IFileStorage, FailingFileStorage>());
@@ -75,12 +55,5 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
         Assert.Equal(0, await broken.QueryAsync(db => db.WaterMeasurements.CountAsync()));
         Assert.Equal(0, await broken.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordType == "WaterMeasurement")));
         Assert.Equal(0, await broken.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "WATER_ALERT")));
-    }
-
-    /// <summary>A push provider that is down: every send throws.</summary>
-    private sealed class DownPushSender : IPushSender
-    {
-        public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default) =>
-            throw new HttpRequestException("push provider down");
     }
 }

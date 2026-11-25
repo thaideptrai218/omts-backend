@@ -231,56 +231,6 @@ public class MandatorySmsQaFailureTests
         Assert.Contains(Timeout, Assert.ThrowsAny<Exception>(() => api.CreateClient()).ToString());
     }
 
-    [Fact]
-    public async Task The_push_goes_out_while_the_sms_hangs()
-    {
-        await using var api = Host(new HangingSmsSender(), settings: (Timeout, "1"));
-        var z = await api.ZoneAsync();
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
-
-        await z.RecordedAsync(9.1m, 20m, client: managerClient);
-
-        var pushes = api.Services.GetRequiredService<FakePushSender>().Inbox;
-        Assert.NotEmpty(pushes.List(manager.Id.ToString()));
-        Assert.NotEmpty(pushes.List(z.OwnerAccount.Id.ToString()));
-    }
-
-    // The SMS is on its way although the push never answers. The answer itself waits for that push, up to 10 seconds (MandatorySmsAfterCommitWaitTests).
-    [Fact]
-    public async Task The_sms_goes_out_while_an_async_push_hangs()
-    {
-        var push = new HangingPushSender();
-        await using var api = Host(push: push);
-        var z = await api.ZoneAsync();
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
-
-        var answer = z.RecordAsync(9.1m, 20m, client: managerClient);
-        var delivered = await EventuallyAsync(() => api.SmsTo(manager).Count == 1, WellWithinTheHold);
-        var heldByThePush = !answer.IsCompleted;
-        push.Release();
-
-        Assert.True(delivered);
-        Assert.True(heldByThePush);
-        Assert.Equal(HttpStatusCode.Created, (await answer).StatusCode);
-    }
-
-    // PushOutboxInterceptor: "a provider that hangs or blocks its thread must not hold the other channel back".
-    [Fact]
-    public async Task L2_the_sms_goes_out_while_a_push_provider_blocks_its_thread()
-    {
-        using var push = new BlockingPushSender();
-        await using var api = Host(push: push);
-        var z = await api.ZoneAsync();
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
-
-        var answer = z.RecordAsync(9.1m, 20m, client: managerClient);
-        var delivered = await EventuallyAsync(() => api.SmsTo(manager).Count == 1, TimeSpan.FromSeconds(5));
-        push.Release();
-        await answer;
-
-        Assert.True(delivered, "No SMS left while the push provider was blocking.");
-    }
-
     // Client list: "Logs hold the type and the account id, never the number or the text".
     [Fact]
     public async Task L3_a_provider_error_code_that_repeats_the_number_does_not_reach_the_logs()

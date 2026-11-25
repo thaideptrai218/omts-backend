@@ -274,7 +274,7 @@ public class EmployeesV2QaRaceSqlServerTests
 
     private sealed class EditBeforeSaveUnitOfWork(OmtsDbContext db, EditOnce edit) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.PushOutbox());
+        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.MandatorySmsOutbox());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

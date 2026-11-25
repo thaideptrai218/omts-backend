@@ -11,7 +11,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>
 /// The real API whose notification dispatch fails for one license (its number contains <see cref="Marker"/>), as when
-/// the notification store or push gateway breaks on one record; every other notice goes through the real dispatcher.
+/// the notification store breaks on one record; every other notice goes through the real dispatcher.
 /// </summary>
 public sealed class FailingNoticeApiFactory : AuthApiFactory
 {

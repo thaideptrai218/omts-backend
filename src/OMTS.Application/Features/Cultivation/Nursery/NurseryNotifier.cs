@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Cultivation.Nursery;
 
 /// <summary>
 /// The notice of the nursery (decision of 12/11/2026): the Cooperative Owner is told when a batch is started, edited, cancelled, completed or corrected, unless the Owner did it. The notice is saved
-/// with the change and pushed after it commits. The SRS has no message for it, so the text is a generic notice (<c>MINI_APP_NOTIFICATION</c>, as the lane notices) and opens the batch.
+/// with the change. The SRS has no message for it, so the text is a generic notice (<c>MINI_APP_NOTIFICATION</c>, as the lane notices) and opens the batch.
 /// </summary>
 public sealed class NurseryNotifier(IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications)
 {

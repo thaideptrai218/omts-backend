@@ -22,7 +22,7 @@ namespace OMTS.Application.Features.Sales.Returns;
 /// <summary>
 /// CLAIM-03 – all the goods of one invoice come back, each line back for sale or thrown away as the Cooperative Owner decided (BR-CLAIM-03). The value of the return takes the invoice out of the
 /// customer debt; the invoice is locked (SALE-07, SALE-08); a walk-in invoice and its payments first get the profile of the trader. The return row, the lots, the money and the owner's notice are
-/// one save; the oysters taken back for sale go back on the product ledger (Return rows) after the lots are reopened, so a reopened lot first gets back what its close took off. The push is sent after
+/// one save; the oysters taken back for sale go back on the product ledger (Return rows) after the lots are reopened, so a reopened lot first gets back what its close took off. The SMS is sent after
 /// the commit and never undoes it (GFR-06). A correction or cancellation of the invoice and a payment of the customer change the same rows, so one of them fails with MSG06 or the unique index,
 /// and the debt shown is not stale.
 /// </summary>

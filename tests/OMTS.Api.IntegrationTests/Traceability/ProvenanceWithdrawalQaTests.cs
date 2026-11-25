@@ -82,21 +82,18 @@ public class ProvenanceWithdrawalQaTests
         Assert.Equal(("Sent", false, false), (Catalogue.Text(notice, "deliveryStatus"), notice.GetProperty("notifiedInApp").GetBoolean(), notice.GetProperty("toCall").GetBoolean()));
         Assert.Single(api.SmsTo(profile.PhoneNumber!));
         Assert.Empty(await api.NoticesInListAsync(locked.Id));
-        Assert.Empty(api.Services.GetRequiredService<FakePushSender>().Inbox.List(locked.Id.ToString()));
         Assert.Equal(0, await NoticesOfAsync(api, sale.Owner.Account.Id, sale.Manager.Account.Id, bystander.Account.Id));
         Assert.Empty(api.SmsTo(bystander.Profile.PhoneNumber!));
     }
 
-    // BR-ACCOUNT-11: PROVENANCE_WITHDRAWN is not a mandatory type, so the trader may turn its push off; the notice is still kept, unread, in the list (BR-ACCOUNT-12, GFR-06).
+    // BR-ACCOUNT-11: PROVENANCE_WITHDRAWN is not a mandatory type; the notice is kept, unread, in the list (BR-ACCOUNT-12, GFR-06).
     [Fact]
-    public async Task A_trader_who_turned_the_push_off_still_finds_the_notice_unread_in_the_list()
+    public async Task A_trader_finds_the_notice_unread_in_the_list()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await SetCooperativeAsync(api);
         var trader = await api.TraderAsync("DEMO QA quiet trader");
-        var off = await trader.Client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = NotificationTypes.ProvenanceWithdrawn, push = false } } });
-        Assert.Equal(HttpStatusCode.OK, off.StatusCode);
         await sale.Owner.Client.SoldAsync(sale, sale.LotId, customerId: trader.Profile.Id);
         await (await sale.Owner.Client.PostPublishAsync(sale.LotId)).ReadAsync(HttpStatusCode.OK);
 
@@ -107,7 +104,6 @@ public class ProvenanceWithdrawalQaTests
         Assert.Equal(1, list.GetProperty("unreadCount").GetInt32());
         var row = Assert.Single(list.GetProperty("items").EnumerateArray());
         Assert.Equal((NotificationTypes.ProvenanceWithdrawn, "MSG-TRACE-05"), (Catalogue.Text(row, "type"), Catalogue.Text(row, "messageCode")));
-        Assert.Empty(api.Services.GetRequiredService<FakePushSender>().Inbox.List(trader.Account.Id.ToString()));
     }
 
     // Steps 5-7 with a slow SMS Service (each send may take up to 10 s, TraderMessageService.SendTimeout): the withdrawal is saved before any send (GFR-06), but the notices are sent

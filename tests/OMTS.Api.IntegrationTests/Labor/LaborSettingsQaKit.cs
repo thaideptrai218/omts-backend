@@ -137,7 +137,7 @@ internal static class LaborSettingsQaKit
         api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IUnitOfWork>();
-            services.AddScoped<IUnitOfWork>(provider => new MomentUnitOfWork(new UnitOfWork(provider.GetRequiredService<OmtsDbContext>(), provider.GetRequiredService<OMTS.Infrastructure.Messaging.PushOutbox>()), moments));
+            services.AddScoped<IUnitOfWork>(provider => new MomentUnitOfWork(new UnitOfWork(provider.GetRequiredService<OmtsDbContext>(), provider.GetRequiredService<OMTS.Infrastructure.Messaging.MandatorySmsOutbox>()), moments));
             services.RemoveAll<IAttendanceSettingsRepository>();
             services.AddScoped<IAttendanceSettingsRepository>(provider => new MomentAttendanceSettings(new AttendanceSettingsRepository(provider.GetRequiredService<OmtsDbContext>()), moments));
         }));

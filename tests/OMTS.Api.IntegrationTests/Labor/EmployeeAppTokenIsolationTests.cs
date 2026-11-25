@@ -75,7 +75,7 @@ public partial class EmployeeAppTokenIsolationTests(AuthApiFactory factory) : IC
         var linked = await LinkDeviceAsync(factory, world, worker);
         var phone = factory.AsEmployee(linked);
         // The token is good where it belongs.
-        Assert.Equal(HttpStatusCode.NoContent, (await phone.PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await phone.GetAsync(Probe)).StatusCode);
 
         var (wrong, called) = await SweepAsync(phone, a => a.EndpointMetadata.OfType<IAuthorizeData>().Any()
             && !a.EndpointMetadata.OfType<IAllowAnonymous>().Any() && !NamesEmployeeScheme(a));
@@ -170,7 +170,7 @@ public partial class EmployeeAppTokenIsolationTests(AuthApiFactory factory) : IC
     }
 
     private async Task AssertAcceptedByEmployeeAppAsync(string token) =>
-        Assert.Equal(HttpStatusCode.NoContent, (await WithBearer(factory.CreateClient(), token).PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await WithBearer(factory.CreateClient(), token).GetAsync(Probe)).StatusCode);
 
     private async Task AssertAcceptedByStaffAsync(string token) =>
         Assert.Equal(HttpStatusCode.OK, (await WithBearer(factory.CreateClient(), token).GetAsync("/api/me")).StatusCode);

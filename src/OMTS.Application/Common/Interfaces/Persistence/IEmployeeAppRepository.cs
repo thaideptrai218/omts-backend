@@ -39,9 +39,6 @@ public interface IEmployeeAppRepository
     /// </summary>
     Task<bool> IsSessionActiveAsync(Guid employeeId, Guid sessionId, Guid deviceId, DateOnly today, DateTimeOffset now, CancellationToken cancellationToken);
 
-    /// <summary>The employee's linked device while one of its sessions is open: where an employee push is delivered; null otherwise.</summary>
-    Task<EmployeeDevice?> GetPushTargetAsync(Guid employeeId, DateTimeOffset now, CancellationToken cancellationToken);
-
     void Add(EmployeeLoginCode code);
 
     void Add(EmployeeDevice device);

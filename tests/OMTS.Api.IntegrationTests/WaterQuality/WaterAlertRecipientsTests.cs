@@ -49,8 +49,6 @@ public class WaterAlertRecipientsTests(AuthApiFactory api) : IClassFixture<AuthA
             Assert.StartsWith($"Water alert: zone {z.Zone.Name}, raft {z.Raft.Code}, measured on ", n.Body);
             Assert.EndsWith(". pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", n.Body);
         });
-        var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString());
-        Assert.Single(pushed, m => m.Text.Contains("pH 9.1 is too high (allowed 6.5–8.5)."));
     }
 
     [Fact]

@@ -14,9 +14,9 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>SALE-01 POST-2, BR-ACCOUNT-11, GFR-06: who hears of a new request.</summary>
 public class PurchaseRequestPlaceNotificationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    // POST-2, BR-ACCOUNT-11: a mandatory type, always pushed.
+    // POST-2, BR-ACCOUNT-11: a mandatory type.
     [Fact]
-    public async Task The_owner_gets_the_mandatory_notification_with_msg_sale_01_and_its_push()
+    public async Task The_owner_gets_the_mandatory_notification_with_msg_sale_01()
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password);
         var ownerClient = await factory.LoginAsync(owner.Username);
@@ -31,27 +31,5 @@ public class PurchaseRequestPlaceNotificationTests(AuthApiFactory factory) : ICl
         var row = Assert.Single(rows);
         Assert.Equal((NotificationTypes.PurchaseRequestNew, "MSG-SALE-01", expected, true), (row.Type, row.MessageCode, row.Body, row.IsMandatory));
         Assert.Contains("\"requested_cages\":300", row.MessageParams);
-        var push = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Id.ToString()).Single(m => m.NotificationId == row.Id);
-        Assert.Equal("MSG-SALE-01", push.MessageCode);
-
-        var types = await (await ownerClient.GetAsync("/api/me/notification-preferences")).ReadAsync(HttpStatusCode.OK);
-        var offered = types.GetProperty("types").EnumerateArray().Single(t => t.Text("type") == NotificationTypes.PurchaseRequestNew);
-        Assert.True(offered.GetProperty("mandatory").GetBoolean());
-    }
-
-    // GFR-06: a notification that cannot be pushed stays in the list, and nothing saved is undone.
-    [Fact]
-    public async Task A_push_that_fails_undoes_nothing_and_the_notification_stays_in_the_list()
-    {
-        var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var ownerClient = await factory.LoginAsync(owner.Username);
-        var product = await ownerClient.CreateProductAsync();
-        factory.RefusePushTo(owner.Id);
-        var trader = await factory.TraderAsync();
-
-        var request = await trader.Client.PlaceAsync(product.Id());
-
-        Assert.Single((await factory.NotificationRowsAsync(request.Id())).Where(n => n.RecipientAccountId == owner.Id));
-        Assert.DoesNotContain(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Id.ToString()), m => m.Text.StartsWith(NotificationTypes.PurchaseRequestNew, StringComparison.Ordinal));
     }
 }

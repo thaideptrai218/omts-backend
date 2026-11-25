@@ -115,13 +115,12 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
 
     // BR-WATER-05: the Owner and every Zone Manager with access; a locked account, a revoked pair, another zone and the Accountant are out.
     [Fact]
-    public async Task The_alert_reaches_exactly_the_owner_and_the_zone_managers_with_effective_access_and_push_cannot_be_turned_off()
+    public async Task The_alert_reaches_exactly_the_owner_and_the_zone_managers_with_effective_access_()
     {
         var z = await api.ZoneAsync();
         var other = await api.ZoneAsync();
         var (recorder, recorderAccount) = await api.StaffAsync(z.Zone);
-        var (_, pushOff) = await api.StaffAsync(z.Zone);
-        await api.UpdateAsync<Account>(pushOff.Id, a => a.NotificationPreferences.Add(new NotificationPreference { Type = "WATER_ALERT", Push = false }));
+        var (_, secondManager) = await api.StaffAsync(z.Zone);
         var (_, locked) = await api.StaffAsync(z.Zone);
         await api.UpdateAsync<Account>(locked.Id, a => a.StatusId = StatusIds.Account.Locked);
         var (_, revoked) = await api.StaffAsync(z.Zone);
@@ -136,7 +135,7 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var body = await z.RecordedAsync(7m, 20m, client: recorder, temperature: 40m);
 
         var alerts = await api.AlertsOfAsync(body.Id());
-        foreach (var expected in new[] { z.OwnerAccount.Id, recorderAccount.Id, pushOff.Id })
+        foreach (var expected in new[] { z.OwnerAccount.Id, recorderAccount.Id, secondManager.Id })
         {
             Assert.Single(alerts, n => n.RecipientAccountId == expected);
         }
@@ -147,8 +146,7 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         }
 
         Assert.All(alerts, n => Assert.True(n.IsMandatory));
-        var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(pushOff.Id.ToString());
-        Assert.Contains(pushed, m => m.Text.Contains("Temperature 40 °C is too high"));
+        Assert.Contains("Temperature 40 °C is too high", alerts.Single(n => n.RecipientAccountId == secondManager.Id).Body);
     }
 
     [Fact]

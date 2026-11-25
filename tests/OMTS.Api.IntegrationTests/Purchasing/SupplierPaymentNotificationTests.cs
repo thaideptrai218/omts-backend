@@ -12,7 +12,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-/// <summary>BR-PURCHASE-05 / MSG-PURCHASE-04: every transaction goes to every Owner, also the Owner who did it, and is always pushed.</summary>
+/// <summary>BR-PURCHASE-05 / MSG-PURCHASE-04: every transaction goes to every Owner, also the Owner who did it, and is mandatory.</summary>
 public class SupplierPaymentNotificationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
@@ -61,14 +61,13 @@ public class SupplierPaymentNotificationTests(AuthApiFactory factory) : IClassFi
         Assert.EndsWith($"The cooperative has now paid {name} 1,500 VND in advance.", body);
     }
 
-    // BR-PURCHASE-05, PM 03/11: also when the Owner acts. BR-ACCOUNT-11: push cannot be turned off for this type, and it opens for the Owner.
+    // BR-PURCHASE-05, PM 03/11: also when the Owner acts. BR-ACCOUNT-11: the type is mandatory, and it opens for the Owner.
     [Fact]
-    public async Task The_owner_who_acts_is_told_and_pushed_even_with_the_push_turned_off_and_the_notification_opens_the_payment()
+    public async Task The_owner_who_acts_is_told_and_the_notification_opens_the_payment()
     {
         var password = NewPassword();
         await factory.EnsureCooperativeAsync();
         var owner = await factory.AddAccountAsync(NewCode(), password, SubjectType.CooperativeOwner);
-        await factory.UpdateAsync<Account>(owner.Id, a => a.NotificationPreferences.Add(new NotificationPreference { Type = NotificationTypes.SupplierTransaction, Push = false }));
         var client = await factory.LoginAsync(owner.Username, password);
         var world = await factory.WorldAsync(client);
 
@@ -76,8 +75,7 @@ public class SupplierPaymentNotificationTests(AuthApiFactory factory) : IClassFi
 
         var row = await factory.QueryAsync(db => db.Notifications.SingleAsync(n => n.RecipientAccountId == owner.Id && n.RelatedRecordId == payment.Id()));
         Assert.True(row.IsMandatory);
-        var push = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Id.ToString());
-        Assert.Single(push, p => p.MessageCode == "MSG-PURCHASE-04" && p.MessageParams!.Value.GetProperty("payment_code").GetString() == payment.GetProperty("code").GetString());
+        Assert.Equal(("MSG-PURCHASE-04", payment.GetProperty("code").GetString()), (row.MessageCode, JsonDocument.Parse(row.MessageParams!).RootElement.GetProperty("payment_code").GetString()));
         var opened = await (await client.OpenNotificationAsync(row.Id)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((RelatedRecordTypes.SupplierPayment, payment.Id()), (opened.GetProperty("recordType").GetString(), opened.GetProperty("recordId").GetGuid()));
     }

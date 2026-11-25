@@ -22,7 +22,16 @@ internal static class EmployeeAppKit
     public const string Login = "/api/employee-app/login";
     public const string Refresh = "/api/employee-app/refresh";
     public const string Logout = "/api/employee-app/logout";
-    public const string PushToken = "/api/employee-app/device/push-token";
+
+    /// <summary>An endpoint only the employee app scheme opens: it answers 200 to a live employee session and 401 to any other token.</summary>
+    public static string Probe
+    {
+        get
+        {
+            var day = DateOnly.FromDateTime(DateTime.UtcNow);
+            return $"/api/me/workforce?from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}";
+        }
+    }
 
     public sealed record World(HttpClient Owner, Account OwnerAccount, FarmingZone Zone, HttpClient Manager, Account ManagerAccount);
 

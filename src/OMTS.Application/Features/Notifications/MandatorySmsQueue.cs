@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Notifications;
 
 /// <summary>
 /// Queues the SMS of a notification for the recipients whose role its type names (<see cref="NotificationSmsRule"/>);
-/// the SMS goes out after the caller's save commits, as push does. The actor rule of decision 3 is not decided here: an
+/// the SMS goes out after the caller's save commits. The actor rule of decision 3 is not decided here: an
 /// operational module leaves the acting Owner out of the recipients (<see cref="OwnerActorRecipientFilter"/>), and a
 /// money module keeps them, so they get the SMS too. A problem here never fails the business action (GFR-06).
 /// </summary>

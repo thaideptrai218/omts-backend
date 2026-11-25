@@ -44,11 +44,9 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 
 ### External services (development)
 
-Email, SMS, push, OCR and file storage are adapters picked by configuration, so switching provider needs no code change.
+Email, SMS, OCR and file storage are adapters picked by configuration, so switching provider needs no code change.
 In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
-`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). Every push is kept, and its `devices`
-lists the tokens a real provider would deliver to: those registered (`POST /api/me/devices`) by a session that is still
-logged in. These endpoints answer 404 outside
+`GET /api/dev/email?to=` (clear with `DELETE`). These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
 #### Photos of farming steps: local now, cloud later (OMTS-132, 12/11/2026)
@@ -108,7 +106,6 @@ created by a one-time command run on the server by the deployment operator (not 
 |---|---|
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5, from 1 to 60 or the host does not start: the longest the answer of an action waits for the SMS of its mandatory notifications) |
-| Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Paddle` reads them with the PaddleOCR sidecar, see [deployment-ocr.md](deployment-ocr.md); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Paddle:BaseUrl` (required with Paddle), `Ocr:Paddle:Layout` (default empty), `Ocr:Paddle:PhDecimals` / `SalinityDecimals` / `TemperatureDecimals` (2 / 1 / 1), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
 | Payment notifications, API-12 and API-13 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02, and every bank notification answers 401; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts`, `Payments:Fake:WebhookSecret` (a secret: user-secrets or `Payments__Fake__WebhookSecret`, empty by default, which accepts no notification) |
 | Trader payments of the Zalo Mini App: Checkout SDK + payOS (`api/me/invoices/{id}/checkout`, `api/me/checkouts/{id}`, webhook `POST api/integrations/payos`; decision of 21/11/2026, Mini App only, the web keeps VietQR). `Checkout:Provider` unset by default: every checkout answers MSG04 and no money is taken; `PayOS` calls payOS and Zalo and needs every key; `Fake` (Development only, the default there) makes up the payOS links, keeps the Zalo reports in memory and needs no key. The payments are recorded into the cash book Bank account of the account linked to the payOS channel (`Checkout:PayOsBankBin`, `Checkout:PayOsAccountNumber`; unset: the receiving bank account), so the Owner adds that account to the cash book; the payOS webhook URL is set to `https://<api host>/api/integrations/payos` (my.payos.vn). In Mini App Center → Checkout SDK, declare the custom payment method (its id is `ZaloCustomMethodId`). The report to Zalo goes through `Zalo:ProxyUrl` | `Checkout:Provider`, `Checkout:ZaloMiniAppId`, `Checkout:ZaloPrivateKey`, `Checkout:ZaloCustomMethodId`, `Checkout:PayOsClientId`, `Checkout:PayOsApiKey`, `Checkout:PayOsChecksumKey` (the keys and the private key are secrets: user-secrets / `Checkout__…`; on staging `CHECKOUT_PROVIDER`, `ZALO_MINI_APP_ID`, `ZALO_CHECKOUT_PRIVATE_KEY`, `ZALO_CUSTOM_METHOD_ID`, `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` in `.env`), `Checkout:TimeoutSeconds` (default 15; 1 to 120, anything else stops the host), `Checkout:ReportRetrySeconds` (default 60), `Checkout:PayOsBankBin`, `Checkout:PayOsAccountNumber` (staging `PAYOS_BANK_BIN`, `PAYOS_ACCOUNT_NUMBER`), `Checkout:ReturnUrl` (payOS requires one; empty: the Mini App deeplink) |
@@ -177,7 +174,7 @@ has already set. So:
 - A tester who sets any account's password to `Demo@1234` makes the next seed refuse the whole server. The password rule
   does not forbid that value, and the printed password then logs in to that account: start again from an empty database.
 
-**What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) answers 404 outside Development; no setting
+**What stays off.** The dev inbox (`/api/dev/sms`, `/email`) answers 404 outside Development; no setting
 opens it. Swagger answers 404 too, unless `Swagger:Enabled=true` (staging `.env`: `SWAGGER_ENABLED=true`,
 `SWAGGER_USERNAME`, `SWAGGER_PASSWORD` of 16+ characters, e.g. `openssl rand -hex 16`): every `/swagger` address then
 asks for that HTTP Basic login first (answers `Cache-Control: no-store`), and the host refuses to start when the setting
@@ -185,15 +182,15 @@ is on without one, so after editing `.env` check `docker compose logs api`: a mi
 and a rollback image that checks it too cannot replace it. The login opens the documentation only; the API still wants
 its bearer token (Swagger's Authorize button). Rotate the password by changing `.env` and redeploying.
 
-**SMS, email, push, OCR.** No real SMS or push provider exists yet, so a code cannot reach anyone on this server:
+**SMS, email, OCR.** No real SMS provider exists yet, so a code cannot reach anyone on this server:
 - The seeded accounts need no SMS: their phones are stored as verified. The exception is `nhanvien.chuaxacthuc`, which
   logs in with `phoneVerificationRequired = true`, gets MSG-ACCOUNT-04 on its business calls and cannot complete the step.
 - Also out of reach: trader registration, password recovery by SMS, and the first login of any staff account created on
   the server (it must verify its phone). The Owner can still reset a staff password, and the forced password change of
   `nhanvien.doimk` works.
-- Leave `Sms:Provider` and `Push:Provider` at `None`. `Ocr:Provider` stays unset unless the OCR sidecar runs ([deployment-ocr.md](deployment-ocr.md)). A code request then answers 503
+- Leave `Sms:Provider` at `None`. `Ocr:Provider` stays unset unless the OCR sidecar runs ([deployment-ocr.md](deployment-ocr.md)). A code request then answers 503
   MSG-ACCOUNT-13, so nobody waits for a message that will never come.
-- `Fake` is not refused for SMS, email or push: the host only logs a warning, the client is told the code was sent, and
+- `Fake` is not refused for SMS or email: the host only logs a warning, the client is told the code was sent, and
   nobody can read it because the inbox answers 404. `Ocr:Provider=Fake` stops the host.
 - `Email:Provider` defaults to `Smtp`. Without `Email:Smtp:Host` the host starts with no warning and each send fails
   (503). The demo accounts have no email address, so the demo does not need it.

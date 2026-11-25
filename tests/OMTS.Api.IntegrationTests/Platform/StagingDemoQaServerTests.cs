@@ -217,12 +217,11 @@ public partial class StagingDemoQaServerTests(StagingDemoQaServerFixture server)
 
     // Real process, no test-host settings: the only way to show appsettings.Development.json does not load here.
     [SqlServerFact]
-    public void The_real_staging_host_does_not_read_the_development_file_and_warns_about_sms_push_and_ocr()
+    public void The_real_staging_host_does_not_read_the_development_file_and_warns_about_sms_and_ocr()
     {
         var log = server.Staging!.Output;
 
         Assert.Contains("SMS provider is None", log);
-        Assert.Contains("Push provider is None", log);
         Assert.Contains("OCR provider '", log);
         Assert.DoesNotContain("Email provider is Fake", log);
         Assert.DoesNotContain("SMS provider is Fake", log);

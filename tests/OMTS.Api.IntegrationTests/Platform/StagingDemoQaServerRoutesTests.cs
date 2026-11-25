@@ -20,11 +20,10 @@ public partial class StagingDemoQaServerTests
 
     private static readonly string[] OffPaths =
     [
-        "/api/dev/sms", "/api/dev/email", "/api/dev/push",
-        "/api/dev/sms/", "/api/dev/email/", "/api/dev/push/",
-        "/API/DEV/SMS", "/Api/Dev/Email", "/api/DEV/push/",
-        "/api/dev/sms?phoneNumber=0900000015", "/api/dev/email?to=a@example.com", "/api/dev/push?accountId=00000000-0000-0000-0000-000000000001",
-        "/api/dev/push?accountId=not-a-guid",
+        "/api/dev/sms", "/api/dev/email",
+        "/api/dev/sms/", "/api/dev/email/",
+        "/API/DEV/SMS", "/Api/Dev/Email", "/api/DEV/email/",
+        "/api/dev/sms?phoneNumber=0900000015", "/api/dev/email?to=a@example.com",
         "//api/dev/sms", "/api//dev/sms", "/api/dev/%73ms", "/api/dev/sms%2F", "/api/dev/sms;x=1",
         "/swagger", "/swagger/", "/SWAGGER", "/Swagger/Index.html", "/swagger/index.html", "/SWAGGER/INDEX.HTML",
         "/swagger/v1/swagger.json", "/SWAGGER/V1/SWAGGER.JSON", "/swagger/v1/swagger.yaml", "/swagger/swagger-ui.css",
@@ -73,7 +72,7 @@ public partial class StagingDemoQaServerTests
     public async Task Other_verbs_on_the_dev_inbox_answer_405_with_an_empty_body(string environment)
     {
         var api = Api(environment);
-        foreach (var path in new[] { "/api/dev/sms", "/api/dev/email", "/api/dev/push" })
+        foreach (var path in new[] { "/api/dev/sms", "/api/dev/email" })
         {
             foreach (var method in new[] { HttpMethod.Post, HttpMethod.Put, HttpMethod.Patch, HttpMethod.Head })
             {
@@ -115,7 +114,7 @@ public partial class StagingDemoQaServerTests
         Assert.Equal(before, await db.Accounts.CountAsync());
     }
 
-    // Change list, "Fake providers": Sms None answers 503 MSG-ACCOUNT-13, and a list row stays saved though Push is None.
+    // Change list, "Fake providers": Sms None answers 503 MSG-ACCOUNT-13, and a list row stays saved.
     [SqlServerFact]
     public async Task With_none_providers_a_code_request_is_503_and_notification_rows_are_saved()
     {
@@ -143,7 +142,7 @@ public partial class StagingDemoQaServerTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
-    // Change list: fake SMS, email and push only warn, on the real process too; the client is told the code was sent
+    // Change list: fake SMS and email only warn, on the real process too; the client is told the code was sent
     // and the inbox stays closed. Both environments, as the change list's open question 2 says.
     [StagingDemoQaSqlServerTheory]
     [MemberData(nameof(Environments))]
@@ -152,13 +151,11 @@ public partial class StagingDemoQaServerTests
         var settings = server.Settings(environment);
         settings["Sms__Provider"] = "Fake";
         settings["Email__Provider"] = "Fake";
-        settings["Push__Provider"] = "Fake";
         settings["Jobs__OrphanFileCleanup__Enabled"] = "false";
         using var api = await server.Kit!.StartApiAsync(settings);
         Assert.False(api.HasExited, api.Output);
 
         Assert.Contains("SMS provider is Fake", api.Output);
-        Assert.Contains("Push provider is Fake", api.Output);
         Assert.Contains("Email provider is Fake", api.Output);
         var (_, body) = await LoginAsync(api.Client, "nhanvien.chuaxacthuc", server.Secret);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/me/phone-verification") { Content = JsonContent.Create(new { }) };

@@ -7,7 +7,7 @@ namespace OMTS.Application.Features.Notifications.Dtos;
 /// <param name="Body">English text of <paramref name="MessageCode"/>.</param>
 /// <param name="MessageCode">SRS code of the content (MSG-WATER-03…), to show it in the client's language.</param>
 /// <param name="MessageParams">The parameters of <paramref name="MessageCode"/>: a JSON object of atomic values (see the README).</param>
-/// <param name="Mandatory">The type is always pushed.</param>
+/// <param name="Mandatory">The type is mandatory: it also goes out by SMS.</param>
 /// <param name="ReadAt">Null while unread.</param>
 public sealed record NotificationView(
     Guid Id,

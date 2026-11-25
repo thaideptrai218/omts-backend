@@ -199,7 +199,7 @@ public sealed class EmploymentService(
         return new EmploymentChanged(await queries.ViewAsync(employee, caller, cancellationToken));
     }
 
-    /// <summary>MSG-LABOR-02 when an Active staff account has the phone number of the employee: kept in the Owners' list, never pushed (BR-LABOR-04).</summary>
+    /// <summary>MSG-LABOR-02 when an Active staff account has the phone number of the employee: kept in the Owners' list only (BR-LABOR-04).</summary>
     private async Task RemindToLockStaffAccountAsync(Employee employee, DateOnly lastDay, CancellationToken cancellationToken)
     {
         if (employee.PhoneNumber is not { } phone

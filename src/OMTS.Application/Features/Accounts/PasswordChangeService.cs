@@ -33,7 +33,7 @@ public sealed class PasswordChangeService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <param name="sessionId">The caller's session: its push devices move to the new session of this device.</param>
+    /// <param name="sessionId">The caller's session: the new session keeps its device.</param>
     public async Task<Result<PasswordChanged>> ChangeAsync(
         Guid accountId, Guid? sessionId, ChangePasswordRequest request, ClientInfo client, CancellationToken cancellationToken)
     {

@@ -218,7 +218,7 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         var oldPhone = factory.AsEmployee(oldDevice);
         var secondSession = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, oldDevice)).JsonAsync(HttpStatusCode.OK);
         // The code-less login ended the first session (one session per device): only the second one is open.
-        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(secondSession).PutAsJsonAsync(PushToken, new { pushToken = "old-phone-token", pushPermissionGranted = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await factory.AsEmployee(secondSession).GetAsync(Probe)).StatusCode);
 
         var newDevice = await LinkDeviceAsync(factory, world, worker);
 
@@ -231,7 +231,7 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("revoked", await ReasonAsync(refresh));
         Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, oldDevice)));
         var old = await factory.DeviceAsync(oldDevice);
-        Assert.Equal((false, EmployeeDeviceUnlinkReason.NewDevice, null), (old.IsLinked, old.UnlinkReason, old.PushToken));
+        Assert.Equal((false, EmployeeDeviceUnlinkReason.NewDevice), (old.IsLinked, old.UnlinkReason));
         Assert.Equal(2, (await factory.SessionsAsync(worker.Id)).Count(s => s.EmployeeDeviceId == old.Id && s.RevokedAt is not null));
         // Only the new one is linked, and it works.
         Assert.Equal(1, await factory.QueryAsync(db => db.EmployeeDevices.CountAsync(d => d.EmployeeId == worker.Id && d.UnlinkedAt == null)));
@@ -256,7 +256,7 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         // Two secrets back is not the previous one: asked for a code, nothing unlinked.
         Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, first)));
         Assert.True((await factory.DeviceAsync(third)).IsLinked);
-        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(third).PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await factory.AsEmployee(third).GetAsync(Probe)).StatusCode);
 
         // The previous one is a clone: the device is unlinked, every session ends, and the current secret is worth nothing now.
         Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, second)));

@@ -15,7 +15,7 @@ using static OMTS.Api.IntegrationTests.Sales.SalesCatalogueTestKit;
 namespace OMTS.Api.IntegrationTests.Sales;
 
 /// <summary>
-/// QA of OMTS-223: races on a real SQL Server. 2xx or 4xx, never 500; one winner; one notification, push and SMS per act. Run these alone
+/// QA of OMTS-223: races on a real SQL Server. 2xx or 4xx, never 500; one winner; one notification and SMS per act. Run these alone
 /// (`~PurchaseRequestQaRaceSqlServerTests`) as well as in a group: a parallel test passing inside a large run has hidden a real bug here before.
 /// </summary>
 public class PurchaseRequestQaRaceSqlServerTests
@@ -30,9 +30,6 @@ public class PurchaseRequestQaRaceSqlServerTests
         Assert.Equal(responded ? 1 : 0, rows.InList().OfType(NotificationTypes.PurchaseRequestResponse).Count());
         Assert.Equal(responded ? 1 : 0, rows.Sendings().Count);
         Assert.All(rows.Sendings(), s => Assert.Equal(StatusIds.MessageDelivery.Sent, s.DeliveryStatusId));
-        var pushes = host.Api.Services.GetRequiredService<FakePushSender>().Inbox.List(trader.Account.Id.ToString());
-        var listRows = rows.InList().OfType(NotificationTypes.PurchaseRequestResponse).Select(n => (Guid?)n.Id).ToList();
-        Assert.Equal(responded ? 1 : 0, pushes.Count(p => listRows.Contains(p.NotificationId)));
     }
 
     private static int SmsTo(FarmingHost host, TraderActor trader) =>

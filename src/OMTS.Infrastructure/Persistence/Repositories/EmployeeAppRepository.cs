@@ -53,13 +53,6 @@ internal sealed class EmployeeAppRepository(OmtsDbContext db) : IEmployeeAppRepo
                 && (s.Employee.LastWorkingDay == null || s.Employee.LastWorkingDay >= today),
             cancellationToken);
 
-    public Task<EmployeeDevice?> GetPushTargetAsync(Guid employeeId, DateTimeOffset now, CancellationToken cancellationToken) =>
-        db.EmployeeDevices.AsNoTracking().FirstOrDefaultAsync(
-            d => d.EmployeeId == employeeId
-                && d.UnlinkedAt == null
-                && db.EmployeeSessions.Any(s => s.EmployeeDeviceId == d.Id && s.RevokedAt == null && s.AbsoluteExpiresAt > now),
-            cancellationToken);
-
     public void Add(EmployeeLoginCode code) => db.EmployeeLoginCodes.Add(code);
 
     public void Add(EmployeeDevice device) => db.EmployeeDevices.Add(device);

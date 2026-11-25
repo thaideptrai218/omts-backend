@@ -439,10 +439,6 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
         Assert.DoesNotContain(rows, n => n.RecipientAccountId == locked.Id || n.RecipientAccountId == accountantAccount.Id || n.RecipientAccountId == managerAccount.Id);
         Assert.All(rows, n => Assert.Equal((NotificationTypes.SupplierTransaction, "MSG-PURCHASE-04", true), (n.Type, n.MessageCode, n.IsMandatory)));
 
-        var pushes = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(second.Id.ToString())
-            .Where(p => p.MessageParams is { } values && values.TryGetProperty("payment_code", out var code) && code.GetString() == payment.GetProperty("code").GetString()).ToList();
-        Assert.Equal(2, pushes.Count);
-
         var parameters = rows.Where(n => n.RecipientAccountId == second.Id).Select(n => JsonDocument.Parse(n.MessageParams!).RootElement).ToList();
         foreach (var p in parameters)
         {
@@ -456,11 +452,9 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
             [("Payment", 600m), ("PaymentCancelled", 1_000m)],
             parameters.Select(p => (p.GetProperty("transaction_kind").GetString(), p.GetProperty("debt_amount").GetDecimal())).OrderBy(x => x.Item1, StringComparer.Ordinal).ToList());
 
-        var preferences = await (await world.Owner.GetAsync("/api/me/notification-preferences")).ReadAsync(HttpStatusCode.OK);
-        var offered = preferences.GetProperty("types").EnumerateArray().Single(i => i.GetProperty("type").GetString() == NotificationTypes.SupplierTransaction);
-        Assert.True(offered.GetProperty("mandatory").GetBoolean() && offered.GetProperty("push").GetBoolean());
-        var ofAccountant = await (await accountant.GetAsync("/api/me/notification-preferences")).ReadAsync(HttpStatusCode.OK);
-        Assert.DoesNotContain(ofAccountant.GetProperty("types").EnumerateArray(), i => i.GetProperty("type").GetString() == NotificationTypes.SupplierTransaction);
+        var type = NotificationTypes.Find(NotificationTypes.SupplierTransaction)!;
+        Assert.True(type.IsMandatory);
+        Assert.DoesNotContain(NotificationRole.Accountant, type.Roles);
     }
 
     private sealed class SettableClock(DateTimeOffset now) : TimeProvider

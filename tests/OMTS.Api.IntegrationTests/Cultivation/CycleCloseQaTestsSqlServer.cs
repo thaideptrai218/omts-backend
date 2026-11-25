@@ -20,7 +20,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>
 /// QA of PR C5 on SQL Server: the close (by a Zone Manager, so the Owner is told) against every parallel write the developer's races leave out (material usage, cultivation log,
 /// harvest correction), parallel closes, and each race held at its worst moment. Exactly one side saves, nothing answers 500, nothing is half saved, and MSG-CYCLE-06 is kept
-/// and pushed once per saved close and never for a refused one. Run alone, at least twice.
+/// and notified once per saved close and never for a refused one. Run alone, at least twice.
 /// </summary>
 public class CycleCloseQaTestsSqlServer
 {
@@ -63,9 +63,6 @@ public class CycleCloseQaTestsSqlServer
     private static Task<int> StatusAsync(FarmingSqlServerHost host, Guid cycleId) =>
         host.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycleId).Select(c => c.StatusId).SingleAsync());
 
-    private static int Pushes(IServiceProvider services, Guid accountId) =>
-        services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString()).Count(m => m.MessageCode == "MSG-CYCLE-06");
-
     /// <summary>Checks one round of a race: one side saved, the cycle and the notice agree with the close.</summary>
     private static async Task AssertOneWonAsync(Setup s, Guid cycleId, int round, bool written, bool closed)
     {
@@ -97,7 +94,6 @@ public class CycleCloseQaTestsSqlServer
             wins += closed ? 1 : 0;
         }
 
-        Assert.Equal(wins, Pushes(s.Host.Api.Services, s.Host.Owner.Account.Id));
     }
 
     [SqlServerFact]
@@ -174,7 +170,7 @@ public class CycleCloseQaTestsSqlServer
     }
 
     [SqlServerFact]
-    public async Task Parallel_closes_by_a_zone_manager_tell_and_push_the_owner_once()
+    public async Task Parallel_closes_by_a_zone_manager_tell_the_owner_once()
     {
         var s = await StartAsync();
         await using var _ = s.Host;
@@ -191,7 +187,6 @@ public class CycleCloseQaTestsSqlServer
 
         Assert.Equal(1, saved);
         Assert.Equal(1, await NoticesAsync(s.Host, cycleId));
-        Assert.Equal(1, Pushes(s.Host.Api.Services, s.Host.Owner.Account.Id));
     }
 
     // Worst moment, close side: a harvest commits while the close waits to save. The close must answer MSG06, keep the cycle Open, write no audit and tell nobody;
@@ -215,7 +210,6 @@ public class CycleCloseQaTestsSqlServer
         Assert.Equal(StatusIds.CultivationCycle.Open, await StatusAsync(s.Host, cycleId));
         Assert.Equal(0, await NoticesAsync(s.Host, cycleId));
         Assert.Equal(0, await s.Host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == CycleCloseTestKit.ClosedAction && e.RecordId == cycleId)));
-        Assert.Equal(0, Pushes(api.Services, s.Host.Owner.Account.Id));
 
         var closed = await s.Owner.CloseCycleAsync(cycleId);
         Assert.Equal((false, 77m), (closed.GetProperty("cycle").Flag("closedEarly"), closed.GetProperty("summary").Number("kgHarvested")));

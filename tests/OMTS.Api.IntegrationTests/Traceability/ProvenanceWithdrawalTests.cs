@@ -87,7 +87,7 @@ public class ProvenanceWithdrawalTests
         Assert.Contains("DEMO trader two", audit.After);
         Assert.DoesNotContain("DEMO trader three", audit.After);
 
-        // Step 6 (BR-TRACE-07): one SMS per trader, never the reason; the trader account also has it in its list, pushed, opening nothing.
+        // Step 6 (BR-TRACE-07): one SMS per trader, never the reason; the trader account also has it in its list, opening nothing.
         var text = $"{coopName}: the origin information of oyster lot {code} (invoice {first.Text("code")}, {again.Text("code")}) has been withdrawn. You do not need to return the oysters. Please call {coopPhone}.";
         Assert.Equal([text], api.SmsTo(trader.PhoneNumber!).Select(m => m.Text));
         Assert.Single(api.SmsTo(second.Text("phoneNumber")));
@@ -98,7 +98,6 @@ public class ProvenanceWithdrawalTests
         Assert.Equal(new Guid?[] { account.Id, null }, sendings.OrderBy(s => s.RecipientAccountId is null).Select(s => s.RecipientAccountId));
         var inList = Assert.Single(await api.NoticesInListAsync(account.Id));
         Assert.Equal(((Guid?)null, text), (inList.RelatedRecordId, inList.Body));
-        Assert.Contains(api.Services.GetRequiredService<FakePushSender>().Inbox.List(account.Id.ToString()), p => p.NotificationId == inList.Id);
 
         // POST-3: the oysters are not taken back; the trace offers Withdraw no more.
         Assert.Equal(figures, (await sale.Owner.Client.GetHarvestLotAsync(sale.LotId)).GetProperty("figures").GetRawText());

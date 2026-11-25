@@ -59,9 +59,6 @@ public class Account : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.Account.Active;
     public Status Status { get; set; } = null!;
 
-    /// <summary>Push on/off per notification type (ACCOUNT-07, BR-ACCOUNT-11); mandatory types are always pushed.</summary>
-    public List<NotificationPreference> NotificationPreferences { get; set; } = [];
-
     public Employee? Employee { get; set; }
     public Customer? Customer { get; set; }
     public ICollection<AccessGrant> AccessGrants { get; set; } = [];

@@ -205,23 +205,21 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
             $"Zone license {license.Text("documentNumber")} ({zone.Code}) expires on {Date(Today.AddDays(20))}, in 20 days. Please renew it and record the new one.");
     }
 
-    // Mandatory: pushed although the Owner's stored choice for the type is off (BR-ACCOUNT-11), with the code and parameters.
+    // The row of the mandatory type (BR-ACCOUNT-11) carries the code and the atomic parameters.
     [Fact]
-    public async Task The_reminder_is_pushed_even_when_the_owner_turned_its_push_off()
+    public async Task The_reminder_row_carries_the_code_and_the_parameters()
     {
         var owner = await factory.OwnerAsync();
-        await factory.UpdateAsync<Account>(owner.Account.Id,
-            a => a.NotificationPreferences.Add(new NotificationPreference { Type = NotificationTypes.ZoneLicenseExpiry, Push = false }));
         var zone = await factory.ZoneEntityAsync((await owner.Client.CreateZoneAsync()).Id());
         var license = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone.Id, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(7) });
 
         await Job.RunOnceAsync(Today);
 
-        var pushed = Assert.Single(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Account.Id.ToString()),
-            p => p.MessageCode == "MSG-FARM-01" && p.MessageParams!.Value.GetProperty("document_number").GetString() == license.Text("documentNumber"));
-        Assert.StartsWith("ZONE_LICENSE_EXPIRY:", pushed.Text);
-        Assert.Equal([zone.Code], pushed.MessageParams!.Value.GetProperty("zone_codes").EnumerateArray().Select(z => z.GetString()));
-        Assert.Equal(7, pushed.MessageParams!.Value.GetProperty("days").GetInt32());
+        var row = Assert.Single(await NoticesAsync(license.Id()), n => n.RecipientAccountId == owner.Account.Id && n.MessageCode == "MSG-FARM-01");
+        var parameters = System.Text.Json.JsonDocument.Parse(row.MessageParams!).RootElement;
+        Assert.Equal(license.Text("documentNumber"), parameters.GetProperty("document_number").GetString());
+        Assert.Equal([zone.Code], parameters.GetProperty("zone_codes").EnumerateArray().Select(z => z.GetString()));
+        Assert.Equal(7, parameters.GetProperty("days").GetInt32());
     }
 
     private Task<List<Guid>> ActiveOwnersAsync() => factory.QueryAsync(db => db.Accounts

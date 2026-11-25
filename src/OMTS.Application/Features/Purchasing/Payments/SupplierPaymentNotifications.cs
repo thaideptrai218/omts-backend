@@ -10,8 +10,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Purchasing.Payments;
 
 /// <summary>
-/// BR-PURCHASE-05 for payments: MSG-PURCHASE-04 to every Owner for a payment, money paid back and a cancelled payment, always
-/// pushed, also when the Owner did it. The rows join the caller's unit of work; push goes out after its commit.
+/// BR-PURCHASE-05 for payments: MSG-PURCHASE-04 to every Owner for a payment, money paid back and a cancelled payment, mandatory,
+/// also when the Owner did it. The rows join the caller's unit of work; the SMS goes out after its commit.
 /// </summary>
 public sealed class SupplierPaymentNotifications(
     IZoneRecipientQuery recipients,

@@ -6,7 +6,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
-/// <summary>SALE-05 step 12: MSG-SALE-08 to the Cooperative Owners, saved with the invoice and pushed after it commits (GFR-06). The Owner is told of the Owner's own sales too (BR-SALE-03).</summary>
+/// <summary>SALE-05 step 12: MSG-SALE-08 to the Cooperative Owners, saved with the invoice (GFR-06). The Owner is told of the Owner's own sales too (BR-SALE-03).</summary>
 public sealed class SalesInvoiceNotifications(IZoneRecipientQuery recipients, IAccountRepository accounts, INotificationDispatcher notifications)
 {
     public const string Title = "New sale";

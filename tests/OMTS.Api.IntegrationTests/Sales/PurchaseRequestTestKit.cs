@@ -187,9 +187,6 @@ public static class PurchaseRequestTestKit
     public static void RefuseSmsTo(this WebApplicationFactory<Program> api, string phoneNumber) =>
         api.Services.GetRequiredService<IOptions<SmsOptions>>().Value.Fake.FailFor.Add(phoneNumber);
 
-    public static void RefusePushTo(this WebApplicationFactory<Program> api, Guid accountId) =>
-        api.Services.GetRequiredService<IOptions<PushOptions>>().Value.Fake.FailFor.Add(accountId.ToString());
-
     public static List<Notification> InList(this IEnumerable<Notification> rows) => rows.Where(n => n.Channel == NotificationChannel.InApp).ToList();
 
     public static List<Notification> Sendings(this IEnumerable<Notification> rows) => rows.Where(n => n.Channel != NotificationChannel.InApp).ToList();

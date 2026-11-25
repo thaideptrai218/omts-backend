@@ -16,7 +16,7 @@ public interface IUnitOfWork
     Task ReloadAsync(object entity, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Forgets every change not saved yet (rows added, records read) and the push and SMS messages queued with them, so a use
+    /// Forgets every change not saved yet (rows added, records read) and the SMS messages queued with them, so a use
     /// case that lost a save conflict can run again from fresh reads without saving or announcing its first attempt too.
     /// </summary>
     void DiscardChanges();

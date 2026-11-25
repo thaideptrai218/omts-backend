@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [Route("api/employee-app")]
 [Authorize(AuthenticationSchemes = EmployeeAppAuthentication.Scheme)]
 public sealed class EmployeeAppController(
-    EmployeeAppLoginService login, EmployeeAppSessionService sessions, EmployeeDeviceService devices, ICurrentEmployee currentEmployee) : ControllerBase
+    EmployeeAppLoginService login, EmployeeAppSessionService sessions, ICurrentEmployee currentEmployee) : ControllerBase
 {
     /// <summary>
     /// LABOR-06 – log in with the phone number of the profile. The linked device sends <c>deviceId</c> and <c>deviceSecret</c> and needs no
@@ -58,19 +58,5 @@ public sealed class EmployeeAppController(
 
         await sessions.LogoutAsync(employeeId, sessionId, cancellationToken);
         return NoContent();
-    }
-
-    /// <summary>The push token of this phone (BR-LABOR-04); an empty <c>pushToken</c> clears it.</summary>
-    [HttpPut("device/push-token")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> SetPushToken(EmployeePushTokenRequest request, CancellationToken cancellationToken)
-    {
-        if (currentEmployee is not { EmployeeId: { } employeeId, DeviceId: { } deviceId })
-        {
-            return Unauthorized();
-        }
-
-        return (await devices.SetPushTokenAsync(employeeId, deviceId, request, cancellationToken)).ToActionResult(_ => NoContent());
     }
 }

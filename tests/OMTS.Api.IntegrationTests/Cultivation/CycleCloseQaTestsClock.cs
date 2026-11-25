@@ -13,7 +13,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 
 /// <summary>
 /// QA of PR C5 on the days the SRS names, with a clock each test moves (one fresh API per test, so the cooperative has one Owner): the business day of the close
-/// (BR-CYCLE-07), the closed summary over time and next to the next cycle (BR-CYCLE-06, BR-CYCLE-01), the MSG-CYCLE-06 notice and its push (CYCLE-06 step 6,
+/// (BR-CYCLE-07), the closed summary over time and next to the next cycle (BR-CYCLE-06, BR-CYCLE-01), the MSG-CYCLE-06 notice (CYCLE-06 step 6,
 /// BR-ACCOUNT-11) and the audit row of the close (GBR-02).
 /// </summary>
 public class CycleCloseQaTestsClock
@@ -39,9 +39,6 @@ public class CycleCloseQaTestsClock
         api.Clock.At = InVietnam(10, 1);
         return new Setup(owner, manager, zoneId, raft.Id(), raft.Text("code"), cycleId);
     }
-
-    private static List<FakeMessage> ClosedPushes(CyclesQaClockApiFactory api, Guid accountId) =>
-        api.Services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString()).Where(m => m.MessageCode == "MSG-CYCLE-06").ToList();
 
     // BR-CYCLE-07: the close date is the day of the close in Vietnam; 00:30 there is still 17:30 UTC of the day before.
     [Fact]
@@ -107,10 +104,10 @@ public class CycleCloseQaTestsClock
         Assert.Equal(HttpStatusCode.Created, (await owner.PostUsageAsync(s.RaftId, new UsageBody(On(10, 13), MaterialUsageTestKit.BrokenBuoy, [new UsageLine(item)]))).StatusCode);
     }
 
-    // CYCLE-06 step 6 and MSG-CYCLE-06: one notice to the Owner with the early note naming the lanes, pushed once (push Default, BR-ACCOUNT-11); the Zone Manager gets none;
+    // CYCLE-06 step 6 and MSG-CYCLE-06: one notice to the Owner with the early note naming the lanes (not mandatory, BR-ACCOUNT-11); the Zone Manager gets none;
     // the notice opens the closed cycle in its zone (CYCLE-05.2).
     [Fact]
-    public async Task A_zone_managers_early_close_tells_and_pushes_the_owner_once_and_the_notice_opens_the_cycle()
+    public async Task A_zone_managers_early_close_tells_the_owner_once_and_the_notice_opens_the_cycle()
     {
         using var api = new CyclesQaClockApiFactory();
         var s = await ArrangeAsync(api);
@@ -125,26 +122,9 @@ public class CycleCloseQaTestsClock
         Assert.Equal(
             $"Raft {s.RaftCode}: the cultivation cycle was closed on 12/10/2026 early; lanes not harvested: 3, 4, 5. Seed hung: 50 kg. Harvested: about 300 kg. Days of farming: 10. Please review the summary.",
             notice.Body);
-        Assert.Equal(notice.Id, Assert.Single(ClosedPushes(api, s.Owner.Account.Id)).NotificationId);
-        Assert.Empty(ClosedPushes(api, s.Manager.Account.Id));
 
         var opened = await s.Owner.Client.GetFromJsonAsync<JsonElement>($"/api/me/notifications/{notice.Id}/open");
         Assert.Equal(("CultivationCycle", s.CycleId, s.ZoneId), (opened.Text("recordType"), opened.GetProperty("recordId").GetGuid(), opened.GetProperty("zoneId").GetGuid()));
-    }
-
-    // BR-ACCOUNT-11/12: CYCLE_CLOSED is not mandatory; an Owner who turned its push off still finds the notice in the list, without a push.
-    [Fact]
-    public async Task An_owner_who_turned_the_push_off_keeps_the_notice_without_a_push()
-    {
-        using var api = new CyclesQaClockApiFactory();
-        var s = await ArrangeAsync(api);
-        var off = await s.Owner.Client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = CycleCloseTestKit.ClosedType, push = false } } });
-        Assert.True(off.IsSuccessStatusCode, await off.Content.ReadAsStringAsync());
-
-        await s.Manager.Client.CloseCycleAsync(s.CycleId, ownerApproved: true);
-
-        Assert.Single(await api.ClosedNoticesAsync(s.CycleId));
-        Assert.Empty(ClosedPushes(api, s.Owner.Account.Id));
     }
 
     // GBR-02: a close is written to the audit log with the person, and the values BEFORE and after. The repo writes Before/After with the status for every other

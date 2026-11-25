@@ -41,8 +41,8 @@ public class EmployeeAppSessionTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(linked.GetProperty("deviceId").GetGuid(), refreshed.GetProperty("deviceId").GetGuid());
         Assert.Equal(JsonValueKind.Null, refreshed.GetProperty("deviceSecret").ValueKind);
         Assert.Equal(worker.Id, refreshed.GetProperty("employee").GetProperty("id").GetGuid());
-        var push = await factory.AsEmployee(refreshed).PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false });
-        Assert.Equal(HttpStatusCode.NoContent, push.StatusCode);
+        var probe = await factory.AsEmployee(refreshed).GetAsync(Probe);
+        Assert.Equal(HttpStatusCode.OK, probe.StatusCode);
     }
 
     [Fact]

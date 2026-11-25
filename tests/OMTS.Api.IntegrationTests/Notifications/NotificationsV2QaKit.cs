@@ -17,7 +17,6 @@ namespace OMTS.Api.IntegrationTests.Notifications;
 public static class NotificationsV2QaKit
 {
     public const string ListPath = "/api/me/notifications";
-    public const string PreferencesPath = "/api/me/notification-preferences";
 
     /// <summary>Dispatch and save in one scope, as a module does inside its use case.</summary>
     public static async Task NotifyAsync(this WebApplicationFactory<Program> api, IReadOnlyCollection<Guid> recipients, NotificationContent content)
@@ -51,14 +50,6 @@ public static class NotificationsV2QaKit
     public static Task<HttpResponseMessage> MarkNotificationReadAsync(this HttpClient client, Guid id) => client.PostAsync($"{ListPath}/{id}/read", null);
 
     public static Task<HttpResponseMessage> MarkAllNotificationsReadAsync(this HttpClient client) => client.PostAsync($"{ListPath}/read-all", null);
-
-    public static Task<HttpResponseMessage> SavePushAsync(this HttpClient client, params (string Type, bool Push)[] items) =>
-        client.PutAsJsonAsync(PreferencesPath, new { items = items.Select(i => new { type = i.Type, push = i.Push }) });
-
-    /// <summary>The offered types in order, each with (mandatory, push).</summary>
-    public static async Task<Dictionary<string, (bool Mandatory, bool Push)>> OfferedTypesAsync(this HttpClient client) =>
-        (await client.GetFromJsonAsync<JsonElement>(PreferencesPath)).GetProperty("types").EnumerateArray()
-            .ToDictionary(t => t.GetProperty("type").GetString()!, t => (t.GetProperty("mandatory").GetBoolean(), t.GetProperty("push").GetBoolean()));
 
     /// <summary>The problem body (buffered, so it can be read again).</summary>
     public static async Task<JsonElement> ProblemAsync(this HttpResponseMessage response)

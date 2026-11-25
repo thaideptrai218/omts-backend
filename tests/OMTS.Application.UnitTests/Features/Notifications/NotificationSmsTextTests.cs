@@ -25,7 +25,7 @@ public class NotificationSmsTextTests
     ];
 
     private static readonly NotificationTypeDefinition MoneyType = new(
-        "SUPPLIER_TRANSACTION", "Supplier payment", NotificationPushPolicy.AlwaysPush, [NotificationRole.CooperativeOwner],
+        "SUPPLIER_TRANSACTION", "Supplier payment", [NotificationRole.CooperativeOwner],
         NotificationOpenAccess.OwnerOnly, NotificationSmsRule.MoneyToOwner("amount"));
 
     [Fact]

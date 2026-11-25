@@ -19,16 +19,15 @@ internal sealed class NotificationRepository(OmtsDbContext db) : INotificationRe
     public Task<bool> AnyOfTypeSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken) =>
         db.Notifications.AsNoTracking().AnyAsync(n => n.Type == type && n.Channel == NotificationChannel.InApp && n.CreatedAt >= since, cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<NotificationPreference>>> GetPreferencesAsync(
-        IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlySet<Guid>> GetActiveAccountIdsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken)
     {
-        // Only active accounts are notified; only their preference column is read.
-        var accounts = await db.Accounts.AsNoTracking()
+        // Only active accounts are notified.
+        var active = await db.Accounts.AsNoTracking()
             .Where(a => accountIds.Contains(a.Id) && a.StatusId == StatusIds.Account.Active)
-            .Select(a => new { a.Id, a.NotificationPreferences })
+            .Select(a => a.Id)
             .ToListAsync(cancellationToken);
 
-        return accounts.ToDictionary(a => a.Id, a => (IReadOnlyList<NotificationPreference>)a.NotificationPreferences);
+        return active.ToHashSet();
     }
 
     public async Task<(IReadOnlyList<Notification> Items, int Total)> ListAsync(

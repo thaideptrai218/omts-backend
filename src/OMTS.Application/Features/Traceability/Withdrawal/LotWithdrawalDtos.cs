@@ -28,7 +28,7 @@ public sealed record LotWithdrawalPreview(
 /// <param name="Channel">The channel of the sending: SMS until the Zalo OA templates are approved.</param>
 /// <param name="PhoneNumber">The phone the SMS went to; null when the profile had none.</param>
 /// <param name="DeliveryStatusId">Sent (accepted by the service) or Not sent (refused, failed, or no phone number); read again while the withdrawal still sends, also Sending.</param>
-/// <param name="NotifiedInApp">The notice is also in the list of the trader account and pushed unless the trader turned it off (TRACE-04.1); false without an active trader account.</param>
+/// <param name="NotifiedInApp">The notice is also in the list of the trader account (TRACE-04.1); false without an active trader account.</param>
 /// <param name="ToCall">The SMS was not sent: the Cooperative Owner calls this trader (BR-TRACE-07).</param>
 public sealed record WithdrawalNotice(
     Guid CustomerId,

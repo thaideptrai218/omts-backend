@@ -11,7 +11,7 @@ namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
 /// SALE-07 step 10 and SALE-08 step 8: MSG-SALE-18 for each profile left with a debt below zero, to the Owners and the Accountants (the Accountant is also asked to pay it back). The rows join the
-/// caller's save and are pushed after it commits (GFR-06). A debt that stays at or above zero tells no one.
+/// caller's save (GFR-06). A debt that stays at or above zero tells no one.
 /// </summary>
 public sealed class SalesInvoiceOwedBackNotifier(IZoneRecipientQuery recipients, IAccountRepository accounts, INotificationDispatcher notifications, ICurrentUser currentUser)
 {

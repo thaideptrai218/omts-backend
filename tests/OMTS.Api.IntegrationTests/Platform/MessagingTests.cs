@@ -64,7 +64,6 @@ public class MessagingTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var client = production.CreateClient();
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/dev/sms")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/dev/push")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/dev/email")).StatusCode);
     }
 }

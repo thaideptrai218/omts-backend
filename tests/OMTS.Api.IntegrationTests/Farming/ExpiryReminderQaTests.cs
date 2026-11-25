@@ -205,21 +205,15 @@ public class ExpiryReminderQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.OK, (await owner.Client.OpenNotificationAsync(item.GetProperty("id").GetGuid())).StatusCode);
     }
 
-    // BR-ACCOUNT-11: the new type is mandatory for the Owner and is not offered to anyone else.
+    // BR-ACCOUNT-11: the new type is mandatory (it has an SMS rule) and goes to the Owner only.
     [Fact]
-    public async Task The_certification_type_cannot_be_turned_off_and_is_offered_to_the_owner_only()
+    public void The_certification_type_is_mandatory_and_goes_to_the_owner_only()
     {
-        var owner = await factory.OwnerAsync();
-        var offered = await owner.Client.OfferedTypesAsync();
-        Assert.Equal((true, true), offered[NotificationTypes.CooperativeCertificationExpiry]);
-        Assert.Equal("MSG-GEN-01", await (await owner.Client.SavePushAsync((NotificationTypes.CooperativeCertificationExpiry, false))).ErrorCodeAsync());
+        var type = NotificationTypes.Find(NotificationTypes.CooperativeCertificationExpiry)!;
 
-        foreach (var role in new[] { StaffRole.ZoneManager, StaffRole.Accountant })
-        {
-            var staff = await factory.StaffAsync(null, role);
-            Assert.DoesNotContain(NotificationTypes.CooperativeCertificationExpiry, (await staff.Client.OfferedTypesAsync()).Keys);
-            Assert.Equal("MSG-GEN-01", await (await staff.Client.SavePushAsync((NotificationTypes.CooperativeCertificationExpiry, true))).ErrorCodeAsync());
-        }
+        Assert.True(type.IsMandatory);
+        Assert.Equal([NotificationRole.CooperativeOwner], type.Roles);
+        Assert.Equal([NotificationRole.CooperativeOwner], type.Sms!.To);
     }
 
     private static async Task<Guid> LicenseAsync(Actor owner, DateOnly today, int daysLeft)

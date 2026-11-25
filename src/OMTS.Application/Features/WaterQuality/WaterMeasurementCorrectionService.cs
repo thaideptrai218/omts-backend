@@ -58,7 +58,7 @@ public sealed class WaterMeasurementCorrectionService(
             }
             catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
             {
-                // Drops this attempt's audit and notification rows and its push and SMS messages too.
+                // Drops this attempt's audit and notification rows and its SMS messages too.
                 unitOfWork.DiscardChanges();
             }
         }

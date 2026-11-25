@@ -182,9 +182,9 @@ public class ZonesLicensesSqlServerQaTests
         }
     }
 
-    // Two hosts running the daily check at once (or a catch-up meeting the 07:00 run): each notice once, pushed once.
+    // Two hosts running the daily check at once (or a catch-up meeting the 07:00 run): each notice once.
     [SqlServerFact]
-    public async Task Reminder_runs_in_parallel_send_each_notice_once_and_push_it_once()
+    public async Task Reminder_runs_in_parallel_send_each_notice_once()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var owner = host.Owner.Client;
@@ -202,7 +202,6 @@ public class ZonesLicensesSqlServerQaTests
         Assert.Equal(records.Count, sent.Sum());
         var told = await host.QueryAsync(db => db.Notifications.Select(n => n.RelatedRecordId!.Value).ToListAsync());
         Assert.Equal(records.Order(), told.Order());
-        Assert.Equal(records.Count, host.Api.Services.GetRequiredService<FakePushSender>().Inbox.List(host.Owner.Account.Id.ToString()).Count);
     }
 
     // The longest values fit the notification columns; the parameters stay whole (stored JSON limit 2000).

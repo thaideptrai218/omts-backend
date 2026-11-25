@@ -8,8 +8,8 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.Payments;
 
 /// <summary>
-/// BR-DEBT-06: MSG-DEBT-03 to every Owner for each transaction of DEBT-02, always pushed (BR-ACCOUNT-11), also when the Owner did it; one notice for one list of
-/// confirmations. The rows join the caller's unit of work; push and SMS go out after its commit (GFR-06).
+/// BR-DEBT-06: MSG-DEBT-03 to every Owner for each transaction of DEBT-02, mandatory (BR-ACCOUNT-11), also when the Owner did it; one notice for one list of
+/// confirmations. The rows join the caller's unit of work; the SMS goes out after its commit (GFR-06).
 /// </summary>
 public sealed class CustomerPaymentNotifications(
     IZoneRecipientQuery recipients,

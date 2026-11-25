@@ -95,16 +95,12 @@ public class OwnerPasswordResetQaTests
         Assert.False((await api.QueryAsync(db => db.Accounts.SingleAsync(a => a.Id == notOwner.Id))).MustChangePassword);
     }
 
-    // The Owner locked out by wrong guesses (MSG69) can log in with the new temporary password at once, and the
-    // phone registered by an ended session no longer receives push.
+    // The Owner locked out by wrong guesses (MSG69) can log in with the new temporary password at once.
     [Fact]
-    public async Task The_reset_lifts_a_temporary_login_lock_and_stops_the_push_of_the_Owners_devices()
+    public async Task The_reset_lifts_a_temporary_login_lock()
     {
         await using var api = new AuthApiFactory();
         var owner = await api.AddAccountAsync($"owner-{NewCode()}", Password);
-        using var phone = await api.LoginAsync(owner.Username);
-        Assert.Equal(HttpStatusCode.NoContent,
-            (await phone.PostAsJsonAsync("/api/me/devices", new { token = "owner-phone", platform = "ios", permissionGranted = true })).StatusCode);
         for (var attempt = 0; attempt < Account.MaxFailedLogins; attempt++)
         {
             await api.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = owner.Username, password = ResetPassword + "x" });
@@ -117,7 +113,6 @@ public class OwnerPasswordResetQaTests
         Assert.Equal("MSG-ACCOUNT-06", await lockedOut.ErrorCodeAsync());
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-        Assert.Empty(await PushDevicesAsync(api, owner.Id));
     }
 
     // The real entry point (Program → BootstrapCommand) with the real container: exit code 0, the console line
@@ -173,19 +168,4 @@ public class OwnerPasswordResetQaTests
 
     private static Task<string> HashAsync(AuthApiFactory api, Guid accountId) =>
         api.QueryAsync(db => db.Accounts.Where(a => a.Id == accountId).Select(a => a.PasswordHash).SingleAsync());
-
-    /// <summary>The device tokens of a push sent to the account now.</summary>
-    private static async Task<IReadOnlyList<string>> PushDevicesAsync(AuthApiFactory api, Guid accountId)
-    {
-        using (var scope = api.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-                [accountId],
-                new NotificationContent(NotificationTypes.WaterAlert, "QA", new OMTS.Application.Common.Messages.UserMessage("MSG-WATER-03", "QA")),
-                CancellationToken.None);
-            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-        }
-
-        return api.Services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString())[0].Devices ?? [];
-    }
 }

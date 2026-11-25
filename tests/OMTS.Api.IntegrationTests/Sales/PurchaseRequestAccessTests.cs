@@ -177,21 +177,16 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         Assert.NotEqual(other.Account.Id, trader.Account.Id);
     }
 
-    // BR-ACCOUNT-11: each account is offered the types it can receive.
+    // BR-ACCOUNT-11: each type goes to the roles that receive it; only the new request is mandatory.
     [Fact]
-    public async Task The_preferences_offer_each_type_to_who_receives_it()
+    public void The_types_go_to_who_receives_them()
     {
-        var (owner, trader, _) = await RequestAsync();
-
-        var ownerTypes = await (await owner.GetAsync("/api/me/notification-preferences")).ReadAsync(HttpStatusCode.OK);
-        var traderTypes = await (await trader.Client.GetAsync("/api/me/notification-preferences")).ReadAsync(HttpStatusCode.OK);
-
-        var offeredToOwner = ownerTypes.GetProperty("types").EnumerateArray().ToDictionary(t => t.Text("type")!, t => t.GetProperty("mandatory").GetBoolean());
-        Assert.True(offeredToOwner[NotificationTypes.PurchaseRequestNew]);
-        Assert.False(offeredToOwner[NotificationTypes.PurchaseRequestCancelled]);
-        Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, offeredToOwner.Keys);
-        // BR-ACCOUNT-11: the trader's types are the response to a request, the withdrawal of a provenance record (TRACE-04), the approval of a Zalo access request and the response to a quality claim (CLAIM-02), none mandatory.
-        var offeredToTrader = traderTypes.GetProperty("types").EnumerateArray().Select(t => (t.Text("type"), t.GetProperty("mandatory").GetBoolean())).ToList();
-        Assert.Equal([("PURCHASE_REQUEST_RESPONDED", false), (NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], offeredToTrader);
+        var ownerTypes = NotificationTypes.All.Where(t => t.Roles.Contains(NotificationRole.CooperativeOwner)).ToDictionary(t => t.Code, t => t.IsMandatory);
+        Assert.True(ownerTypes[NotificationTypes.PurchaseRequestNew]);
+        Assert.False(ownerTypes[NotificationTypes.PurchaseRequestCancelled]);
+        Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, ownerTypes.Keys);
+        // The trader's types are the response to a request, the withdrawal of a provenance record (TRACE-04), the approval of a Zalo access request and the response to a quality claim (CLAIM-02), none mandatory.
+        var traderTypes = NotificationTypes.All.Where(t => t.Roles.Contains(NotificationRole.Trader) && t.Code != "TRACE_QR_SENT").Select(t => (t.Code, t.IsMandatory)).ToList();
+        Assert.Equal([("PURCHASE_REQUEST_RESPONDED", false), (NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], traderTypes);
     }
 }

@@ -22,7 +22,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 public class StagingEndpointsAndFakeProvidersTests
 {
     private static readonly string[] DevAndSwaggerPaths =
-        ["/api/dev/sms", "/api/dev/email", "/api/dev/push", "/swagger", "/swagger/index.html", "/swagger/v1/swagger.json"];
+        ["/api/dev/sms", "/api/dev/email", "/swagger", "/swagger/index.html", "/swagger/v1/swagger.json"];
 
     // Production is here to show the flag widens nothing there either.
     [Theory]
@@ -30,7 +30,7 @@ public class StagingEndpointsAndFakeProvidersTests
     [InlineData("Production")]
     public async Task Dev_inboxes_and_swagger_answer_404_with_the_demo_flag_on_and_every_fake_provider_set(string environment)
     {
-        await using var host = Host(new AuthApiFactory(), environment, sms: "Fake", email: "Fake", push: "Fake");
+        await using var host = Host(new AuthApiFactory(), environment, sms: "Fake", email: "Fake");
         var client = host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         foreach (var path in DevAndSwaggerPaths)
@@ -63,12 +63,11 @@ public class StagingEndpointsAndFakeProvidersTests
     public async Task Fake_providers_in_staging_only_warn_and_a_code_sent_by_the_fake_sms_cannot_be_read()
     {
         var factory = new AuthApiFactory();
-        await using var host = Host(factory, "Staging", sms: "Fake", email: "Fake", push: "Fake");
+        await using var host = Host(factory, "Staging", sms: "Fake", email: "Fake");
         var client = host.CreateClient();
         Assert.IsType<FakeSmsSender>(host.Services.GetRequiredService<ISmsSender>());
 
         Assert.Contains(factory.Logs.Lines, line => line.Contains("SMS provider is Fake") && line.Contains("NOT sent"));
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("Push provider is Fake") && line.Contains("NOT sent"));
         Assert.Contains(factory.Logs.Lines, line => line.Contains("Email provider is Fake") && line.Contains("NOT sent"));
 
         var response = await SendPhoneCodeAsync(host, client);
@@ -81,7 +80,7 @@ public class StagingEndpointsAndFakeProvidersTests
     public async Task The_default_none_sms_in_staging_tells_the_client_the_code_could_not_be_sent()
     {
         var factory = new AuthApiFactory();
-        await using var host = Host(factory, "Staging", sms: "None", email: "Smtp", push: "None");
+        await using var host = Host(factory, "Staging", sms: "None", email: "Smtp");
         var client = host.CreateClient();
 
         var response = await SendPhoneCodeAsync(host, client);
@@ -94,18 +93,17 @@ public class StagingEndpointsAndFakeProvidersTests
     [Fact]
     public void Fake_ocr_stops_the_host_in_staging_with_the_demo_flag_on()
     {
-        using var host = Host(new AuthApiFactory(), "Staging", sms: "None", email: "Smtp", push: "None", ocr: "Fake");
+        using var host = Host(new AuthApiFactory(), "Staging", sms: "None", email: "Smtp", ocr: "Fake");
 
         var error = Assert.ThrowsAny<InvalidOperationException>(() => host.CreateClient());
         Assert.Contains("Ocr:Provider=Fake", error.Message);
     }
 
-    private static WebApplicationFactory<Program> Host(AuthApiFactory factory, string environment, string sms, string email, string push, string ocr = "") =>
+    private static WebApplicationFactory<Program> Host(AuthApiFactory factory, string environment, string sms, string email, string ocr = "") =>
         factory.WithWebHostBuilder(b => b
             .UseEnvironment(environment)
             .UseSetting("Sms:Provider", sms)
             .UseSetting("Email:Provider", email)
-            .UseSetting("Push:Provider", push)
             .UseSetting("Ocr:Provider", ocr)
             .UseSetting(DemoSeedGate.AllowOutsideDevelopmentKey, "true")
             .UseSetting(DemoSeedGate.PasswordKey, AcsTestKit.NewPassword()));

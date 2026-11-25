@@ -12,7 +12,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
-/// <summary>QA of OMTS-223: MSG-SALE-01, 02, 03 against Part V (V:248-250), mandatory push, recipients and opening (BR-SALE-03, BR-ACCOUNT-11, BR-ACCOUNT-12, GFR-06).</summary>
+/// <summary>QA of OMTS-223: MSG-SALE-01, 02, 03 against Part V (V:248-250), mandatory types, recipients and opening (BR-SALE-03, BR-ACCOUNT-11, BR-ACCOUNT-12, GFR-06).</summary>
 public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private sealed record World(Account OwnerAccount, HttpClient Owner, TraderActor Trader, Guid ProductId, string ProductName);
@@ -30,8 +30,6 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json!)!;
 
     private static string Dmy(DateOnly date) => date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
-
-    private FakeMessageInbox Pushes => factory.Services.GetRequiredService<FakePushSender>().Inbox;
 
     [Fact]
     public async Task Msg_sale_01_reads_as_part_v_with_and_without_a_note_with_exactly_its_parameters()
@@ -134,23 +132,18 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         }
     }
 
-    // BR-ACCOUNT-11: mandatory, so the Owner's choice does not stop it; the cancellation is not, so it does.
+    // BR-ACCOUNT-11: the new request is mandatory, the cancellation is not; both are kept in the Owner's list.
     [Fact]
-    public async Task The_new_request_is_pushed_whatever_the_owner_chose_and_the_cancellation_only_if_not_turned_off()
+    public async Task The_new_request_is_mandatory_and_the_cancellation_is_not_and_both_are_kept()
     {
         var w = await WorldAsync();
-        var choose = await w.Owner.PutAsJsonAsyncRaw("/api/me/notification-preferences", """{ "items": [{ "type": "PURCHASE_REQUEST_CANCELLED", "push": false }] }""");
-        Assert.Equal(HttpStatusCode.OK, choose.StatusCode);
-        var refused = await w.Owner.PutAsJsonAsyncRaw("/api/me/notification-preferences", """{ "items": [{ "type": "PURCHASE_REQUEST_NEW", "push": false }] }""");
-        Assert.NotEqual(HttpStatusCode.InternalServerError, refused.StatusCode);
 
         var request = await w.Trader.Client.PlaceAsync(w.ProductId);
         (await w.Trader.Client.CancelAsync(request)).EnsureSuccessStatusCode();
 
         var rows = (await factory.NotificationRowsAsync(request.Id())).Where(n => n.RecipientAccountId == w.OwnerAccount.Id).ToList();
-        var pushed = Pushes.List(w.OwnerAccount.Id.ToString());
-        Assert.Contains(pushed, m => m.NotificationId == rows.OfType(NotificationTypes.PurchaseRequestNew).Single().Id);
-        Assert.DoesNotContain(pushed, m => m.NotificationId == rows.OfType(NotificationTypes.PurchaseRequestCancelled).Single().Id);
+        Assert.True(rows.OfType(NotificationTypes.PurchaseRequestNew).Single().IsMandatory);
+        Assert.False(rows.OfType(NotificationTypes.PurchaseRequestCancelled).Single().IsMandatory);
     }
 
     [Fact]
@@ -178,24 +171,5 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
             Assert.DoesNotContain(accountant.Id, of);
             Assert.DoesNotContain(w.Trader.Account.Id, of);
         }
-
-        Assert.Empty(Pushes.List(locked.Id.ToString()));
-    }
-
-    [Fact]
-    public async Task A_push_that_fails_undoes_nothing_and_the_notification_stays_in_the_list()
-    {
-        var w = await WorldAsync();
-        factory.RefusePushTo(w.OwnerAccount.Id);
-        factory.RefusePushTo(w.Trader.Account.Id);
-
-        var request = await w.Trader.Client.PlaceAsync(w.ProductId);
-        (await w.Owner.AcceptAsync(request)).EnsureSuccessStatusCode();
-        (await w.Trader.Client.CancelAsync(await w.Trader.Client.MineAsync(request.Id()))).EnsureSuccessStatusCode();
-
-        var rows = (await factory.NotificationRowsAsync(request.Id())).InList();
-        Assert.Contains(rows, n => n.RecipientAccountId == w.OwnerAccount.Id && n.Type == NotificationTypes.PurchaseRequestNew);
-        Assert.Contains(rows, n => n.RecipientAccountId == w.OwnerAccount.Id && n.Type == NotificationTypes.PurchaseRequestCancelled);
-        Assert.Contains(rows, n => n.RecipientAccountId == w.Trader.Account.Id && n.Type == NotificationTypes.PurchaseRequestResponse);
     }
 }

@@ -107,7 +107,7 @@ public class SessionRevocationTests(AuthApiFactory factory) : IClassFixture<Auth
 
     private sealed class LockBeforeSessionSaveUnitOfWork(OmtsDbContext db, LockRace race) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db, new PushOutbox());
+        private readonly UnitOfWork _inner = new(db, new MandatorySmsOutbox());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

@@ -124,8 +124,6 @@ public static class DependencyInjection
         services.AddScoped<PasswordChangeService>();
         services.AddScoped<PhoneVerificationService>();
         services.AddScoped<ProfileService>();
-        services.AddScoped<NotificationPreferenceService>();
-        services.AddScoped<PushDeviceService>();
 
         // ACS – Owner's management of staff accounts, zone access and roles
         services.AddScoped<AccessGrantService>();
@@ -151,14 +149,12 @@ public static class DependencyInjection
         services.AddScoped<EmploymentConsequencesService>();
         services.AddScoped<EmploymentEndService>();
 
-        // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
+        // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts)
         services.AddScoped<EmployeeAppAccess>();
         services.AddScoped<EmployeeAppTokenIssuer>();
         services.AddScoped<EmployeeAppLoginService>();
         services.AddScoped<EmployeeAppSessionService>();
         services.AddScoped<EmployeeLoginCodeService>();
-        services.AddScoped<EmployeeDeviceService>();
-        services.AddScoped<IEmployeeNotifier, EmployeeNotifier>();
 
         // DEBT-01 receiving bank account
         services.AddScoped<ReceivingAccountAcceptance>();

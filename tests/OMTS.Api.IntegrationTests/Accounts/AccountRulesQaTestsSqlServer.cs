@@ -206,7 +206,7 @@ public class AccountRulesQaTestsSqlServer
         var id = Guid.NewGuid();
         var hash = Guid.NewGuid().ToString("N");
         return db.Database.ExecuteSqlAsync(
-            $"INSERT INTO Accounts (Id, Username, DisplayName, PasswordHash, SubjectType, StatusId, FailedLoginCount, MustChangePassword, CreatedAt, NotificationPreferences, Email, EmailVerifiedAt, PhoneNumber) VALUES ({id}, {username}, {username}, {hash}, N'Staff', 301, 0, 0, {createdAt}, N'[]', {email}, {verifiedAt}, {phone})");
+            $"INSERT INTO Accounts (Id, Username, DisplayName, PasswordHash, SubjectType, StatusId, FailedLoginCount, MustChangePassword, CreatedAt, Email, EmailVerifiedAt, PhoneNumber) VALUES ({id}, {username}, {username}, {hash}, N'Staff', 301, 0, 0, {createdAt}, {email}, {verifiedAt}, {phone})");
     }
 
     private static string SmsCode(SqlServerApiFactory api, string phone) =>

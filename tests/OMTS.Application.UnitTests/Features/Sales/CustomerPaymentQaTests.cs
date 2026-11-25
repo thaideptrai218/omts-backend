@@ -71,6 +71,6 @@ public class CustomerPaymentQaTests
 
         var parameters = MessageParameterJson.Serialize(notice.Parameters)!;
         Assert.True(notice.Text.Length <= NotificationColumnLength, $"text of {notice.Text.Length} characters: the in-app notice loses its end, \"{notice.Text[^60..]}\"");
-        Assert.True(parameters.Length <= NotificationColumnLength, $"parameters of {parameters.Length} characters: the row and the push carry none");
+        Assert.True(parameters.Length <= NotificationColumnLength, $"parameters of {parameters.Length} characters: the row carries none");
     }
 }

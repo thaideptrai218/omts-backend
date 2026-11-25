@@ -17,8 +17,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Accounts;
 
 /// <summary>
-/// ACCOUNT-08 View notifications and BR-ACCOUNT-11/12 end to end: every notification is kept whatever the push
-/// preference, push follows the type, the list is the caller's own (newest first, unread count, mark read, read all),
+/// ACCOUNT-08 View notifications and BR-ACCOUNT-11/12 end to end: every notification is kept,
+/// the list is the caller's own (newest first, unread count, mark read, read all),
 /// and opening the related record checks the access again.
 /// </summary>
 public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -27,13 +27,10 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
     private static readonly string TestPassword = NewPassword();
 
     [Fact]
-    public async Task A_notification_is_kept_in_the_list_with_its_message_code_although_its_push_is_turned_off()
+    public async Task A_notification_is_kept_in_the_list_with_its_message_code()
     {
         var (owner, client) = await OwnerAsync();
         var zone = await factory.AddZoneAsync(NewCode());
-        var off = await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } });
-        Assert.Equal(HttpStatusCode.OK, off.StatusCode);
-
         await NotifyAsync([owner.Id], OverdueReminder(zone));
 
         var item = Assert.Single((await ListAsync(client)).GetProperty("items").EnumerateArray());
@@ -45,15 +42,12 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(("FarmingZone", zone.Id, zone.Code), (item.GetProperty("relatedRecordType").GetString(), item.GetProperty("relatedRecordId").GetGuid(), item.GetProperty("relatedRecordCode").GetString()));
         Assert.False(item.GetProperty("mandatory").GetBoolean());
         Assert.Equal(JsonValueKind.Null, item.GetProperty("readAt").ValueKind);
-        Assert.Empty(Pushes(owner));
     }
 
     [Fact]
-    public async Task A_mandatory_type_is_pushed_even_when_its_stored_push_is_off_and_a_never_push_type_is_never_pushed()
+    public async Task A_mandatory_type_and_a_list_only_type_are_both_kept_and_only_the_mandatory_one_is_marked_so()
     {
         var (owner, client) = await OwnerAsync();
-        // The API refuses to turn a mandatory type off; a stored choice from before must not stop its push either.
-        await factory.UpdateAsync<Account>(owner.Id, a => a.NotificationPreferences.Add(new NotificationPreference { Type = NotificationTypes.WaterAlert, Push = false }));
         var zone = await factory.AddZoneAsync(NewCode());
 
         await NotifyAsync([owner.Id], new NotificationContent(
@@ -65,16 +59,19 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         var types = (await ListAsync(client)).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("type").GetString()).ToList();
         Assert.Equal(["STAFF_ACCOUNT_LOCK_REMINDER", "WATER_ALERT"], types.Order());
-        var pushed = Assert.Single(Pushes(owner));
-        Assert.StartsWith("WATER_ALERT:", pushed.Text);
-        // The push carries the code and atomic parameters (the dev inbox shows them as the device gets them).
-        Assert.Equal("MSG-WATER-03", pushed.MessageCode);
-        var outside = Assert.Single(pushed.MessageParams!.Value.GetProperty("values_outside").EnumerateArray());
+        var items = (await ListAsync(client)).GetProperty("items").EnumerateArray().ToDictionary(i => i.GetProperty("type").GetString()!);
+        Assert.True(items["WATER_ALERT"].GetProperty("mandatory").GetBoolean());
+        Assert.False(items["STAFF_ACCOUNT_LOCK_REMINDER"].GetProperty("mandatory").GetBoolean());
+        // The row carries the code and atomic parameters, so a client builds the text in its language.
+        var alert = items["WATER_ALERT"];
+        Assert.Equal("MSG-WATER-03", alert.GetProperty("messageCode").GetString());
+        var parameters = alert.GetProperty("messageParams");
+        var outside = Assert.Single(parameters.GetProperty("values_outside").EnumerateArray());
         Assert.Equal(("PH", 9.1m, "High", 7.5m, 8.5m), (
             outside.GetProperty("indicator").GetString(), outside.GetProperty("value").GetDecimal(), outside.GetProperty("direction").GetString(),
             outside.GetProperty("min").GetDecimal(), outside.GetProperty("max").GetDecimal()));
-        Assert.False(pushed.MessageParams!.Value.GetProperty("corrected").GetBoolean());
-        Assert.Equal("BE-01", pushed.MessageParams!.Value.GetProperty("raft_code").GetString());
+        Assert.False(parameters.GetProperty("corrected").GetBoolean());
+        Assert.Equal("BE-01", parameters.GetProperty("raft_code").GetString());
     }
 
     [Fact]
@@ -215,7 +212,4 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
-
-    private IReadOnlyList<FakeMessage> Pushes(Account account) =>
-        factory.Services.GetRequiredService<FakePushSender>().Inbox.List(account.Id.ToString());
 }

@@ -93,7 +93,7 @@ public class EmployeePhoneIndexSqlServerTests
 
     private sealed class RacingUnitOfWork(OmtsDbContext db, PhoneRace race) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.PushOutbox());
+        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.MandatorySmsOutbox());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

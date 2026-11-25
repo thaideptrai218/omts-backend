@@ -27,9 +27,9 @@ public class WaterHistoryQaTestsSqlServer
 {
     private static readonly DateOnly Today = TimeProvider.System.Today();
 
-    // Both runs have read the zone before either saves: the row version lets one through, and the other sends nothing, not even its push.
+    // Both runs have read the zone before either saves: the row version lets one through, and the other sends nothing, not even a notification.
     [SqlServerFact]
-    public async Task Two_runs_at_the_same_moment_send_one_reminder_and_one_push()
+    public async Task Two_runs_at_the_same_moment_send_one_reminder()
     {
         await using var database = SqlServerTestDatabase.Create();
         var seeded = await WaterSqlServerKit.SeedAsync(database);
@@ -46,12 +46,11 @@ public class WaterHistoryQaTestsSqlServer
         Assert.Equal([0, 1], runs.Order());
         await using var db = database.CreateContext();
         Assert.Equal(1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.WaterMeasurementOverdue));
-        Assert.Single(host.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString()));
     }
 
     // GFR-04 "every day" holds per zone. A zone form saved between the job's read of a zone and its save (the PM accepted that
     // conflict for the form) costs that zone alone, wherever it stands in the run: nothing of the lost try stays, neither row,
-    // marker nor push, so the next day sends its reminder once and the zones already reminded get nothing more.
+    // marker nor SMS, so the next day sends its reminder once and the zones already reminded get nothing more.
     [SqlServerFact]
     public async Task A_zone_saved_during_the_run_loses_only_its_own_reminder_and_gets_it_once_the_next_day()
     {
@@ -85,7 +84,6 @@ public class WaterHistoryQaTestsSqlServer
             }
         });
         var job = host.Services.GetRequiredService<WaterMeasurementOverdueJob>();
-        var pushes = host.Services.GetRequiredService<FakePushSender>().Inbox;
 
         Assert.Equal(2, await job.RunOnceAsync(Today));
 
@@ -93,7 +91,11 @@ public class WaterHistoryQaTestsSqlServer
         Assert.Equal(1, await RemindersOfAsync(database, before.Id));
         Assert.Equal(1, await RemindersOfAsync(database, after.Id));
         Assert.Equal(0, await RemindersOfAsync(database, seeded.Zone.Id));
-        Assert.Equal(2, pushes.List(owner.Id.ToString()).Count);
+        await using (var notified = database.CreateContext())
+        {
+            Assert.Equal(2, await notified.Notifications.CountAsync(n => n.RecipientAccountId == owner.Id));
+        }
+
         Assert.Contains(api.Logs.Lines, l => l.Contains($"failed for zone {seeded.Zone.Id}", StringComparison.Ordinal));
         await using (var read = database.CreateContext())
         {
@@ -107,7 +109,10 @@ public class WaterHistoryQaTestsSqlServer
         Assert.Equal(1, await RemindersOfAsync(database, seeded.Zone.Id));
         Assert.Equal(1, await RemindersOfAsync(database, before.Id));
         Assert.Equal(1, await RemindersOfAsync(database, after.Id));
-        Assert.Equal(3, pushes.List(owner.Id.ToString()).Count);
+        await using (var notified = database.CreateContext())
+        {
+            Assert.Equal(3, await notified.Notifications.CountAsync(n => n.RecipientAccountId == owner.Id));
+        }
     }
 
     [SqlServerFact]

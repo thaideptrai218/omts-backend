@@ -13,8 +13,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
-/// BR-PURCHASE-05 / BR-ACCOUNT-11: the Owner is notified when a receipt is completed (MSG-PURCHASE-01, a normal type whose
-/// push the Owner may turn off), also when the Owner completed it; a draft sends nothing. The message code is stored with
+/// BR-PURCHASE-05 / BR-ACCOUNT-11: the Owner is notified when a receipt is completed (MSG-PURCHASE-01, a normal type),
+/// also when the Owner completed it; a draft sends nothing. The message code is stored with
 /// atomic parameters.
 /// </summary>
 public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -52,29 +52,19 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
 
         // The Zone Manager who completed it receives nothing; nor does the Accountant.
         Assert.Empty(Completed(await manager.NotificationPageAsync()));
-        var push = Assert.Single(Pushes(await OwnerIdAsync(world)), p => p.MessageCode == "MSG-PURCHASE-01");
-        Assert.Equal(code, push.MessageParams!.Value.GetProperty("receipt_code").GetString());
     }
 
     [Fact]
-    public async Task The_owner_is_notified_also_when_the_owner_completed_the_receipt_and_may_turn_the_push_off()
+    public async Task The_owner_is_notified_also_when_the_owner_completed_the_receipt()
     {
         var world = await factory.WorldAsync();
-        var ownerId = await OwnerIdAsync(world);
-        Assert.True((await world.Owner.OfferedTypesAsync()).TryGetValue(NotificationTypes.PurchaseReceiptCompleted, out var offered));
-        Assert.Equal((false, true), offered);
-        await (await world.Owner.SavePushAsync((NotificationTypes.PurchaseReceiptCompleted, false))).ReadAsync(HttpStatusCode.OK);
 
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 1_000));
 
-        // Kept in the list although its push is off (BR-ACCOUNT-12).
         Assert.Contains(Completed(await world.Owner.NotificationPageAsync()), n => n.GetProperty("relatedRecordId").GetGuid() == receipt.Id());
-        Assert.DoesNotContain(Pushes(ownerId), p => p.MessageCode == "MSG-PURCHASE-01");
-        // A staff account is not offered the type: only the Owner receives it.
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        Assert.DoesNotContain(NotificationTypes.PurchaseReceiptCompleted, (await manager.OfferedTypesAsync()).Keys);
-        var accountant = await factory.AccountantAsync();
-        Assert.Contains(NotificationTypes.PurchaseReceiptCancelledPaidInAdvance, (await accountant.OfferedTypesAsync()).Keys);
+        // Only the Owner receives the type; the Accountant receives the cancellation notice.
+        Assert.Equal([NotificationRole.CooperativeOwner], NotificationTypes.Find(NotificationTypes.PurchaseReceiptCompleted)!.Roles);
+        Assert.Contains(NotificationRole.Accountant, NotificationTypes.Find(NotificationTypes.PurchaseReceiptCancelledPaidInAdvance)!.Roles);
     }
 
     [Fact]
@@ -95,7 +85,7 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
         Assert.Equal(StatusIds.PurchaseReceipt.Cancelled, await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == receipt.Id()).Select(r => r.StatusId).SingleAsync()));
     }
 
-    // BR-PURCHASE-05, PM 03/11: the Owner who acts is told like any other Owner, in the list and by push. MSG-PURCHASE-08
+    // BR-PURCHASE-05, PM 03/11: the Owner who acts is told like any other Owner, in the list. MSG-PURCHASE-08
     // goes out whenever the debt is below zero after the cancellation: when it goes below zero, when it was already, and
     // when a receipt worth nothing leaves it where it was.
     [Fact]
@@ -111,7 +101,6 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
         foreach (var receipt in new[] { paid, unpaid, free, unrelated })
         {
             Assert.Single(await RowsToAsync(ownerId, receipt, NotificationTypes.PurchaseReceiptCompleted));
-            Assert.Single(Pushes(ownerId), p => p.MessageCode == "MSG-PURCHASE-01" && CodeOf(p) == receipt.GetProperty("code").GetString());
         }
 
         // Debt 250,000 → 50,000: still above zero, so nothing is sent.
@@ -126,18 +115,12 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
             var row = Assert.Single(await RowsToAsync(ownerId, receipt, NotificationTypes.PurchaseReceiptCancelledPaidInAdvance));
             Assert.Equal("MSG-PURCHASE-08", row.MessageCode);
             Assert.Equal(advance, JsonDocument.Parse(row.MessageParams!).RootElement.GetProperty("advance_amount").GetDecimal());
-            Assert.Single(Pushes(ownerId), p => p.MessageCode == "MSG-PURCHASE-08" && CodeOf(p) == receipt.GetProperty("code").GetString());
         }
     }
-
-    private static string? CodeOf(FakeMessage push) => push.MessageParams!.Value.GetProperty("receipt_code").GetString();
 
     private Task<List<Domain.Entities.Platform.Notification>> RowsToAsync(Guid accountId, JsonElement receipt, string type) =>
         factory.QueryAsync(db => db.Notifications.Where(n => n.RecipientAccountId == accountId && n.RelatedRecordId == receipt.Id() && n.Type == type).ToListAsync());
 
     private Task<Guid> OwnerIdAsync(PurchasingWorld world) =>
         factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.CreatedBy!.Value).SingleAsync());
-
-    private IReadOnlyList<FakeMessage> Pushes(Guid accountId) =>
-        factory.Services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString());
 }

@@ -122,7 +122,7 @@ public sealed class EmployeeLoginCodeService(
             After = new { row.ExpiresAt },
         });
 
-        // Step 4: to the issuer's own account only, whatever their preferences keep out of push (BR-ACCOUNT-12, GFR-06).
+        // Step 4: to the issuer's own account only, (BR-ACCOUNT-12, GFR-06).
         var message = UserMessages.LoginCodeIssued(employee.FullName, code, row.ExpiresAt, employee.PhoneNumber!);
         await notifications.NotifyAsync([issuerId], new NotificationContent(NotificationTypes.EmployeeLoginCode, "Employee login code", message), cancellationToken);
 

@@ -61,7 +61,7 @@ public sealed class CustomerPaymentStatusService(
 
     /// <summary>
     /// The badge of the person who collected cash at the port and still holds it: how many of their payments wait for the Accountant, how many of those for more than <see cref="OverdueDays"/> days (BR-SALE-07 (3)).
-    /// In the app only: no SMS and no push.
+    /// In the app only: no SMS.
     /// </summary>
     public async Task<MyAwaitingCash> MyAwaitingCashAsync(CancellationToken cancellationToken)
     {

@@ -14,7 +14,6 @@ internal sealed class EmployeeDeviceConfiguration : IEntityTypeConfiguration<Emp
         builder.Property(x => x.PreviousDeviceSecretHash).HasMaxLength(Lengths.Hash);
         builder.Property(x => x.Platform).HasMaxLength(Lengths.Code);
         builder.Property(x => x.DeviceName).HasMaxLength(Lengths.Name);
-        builder.Property(x => x.PushToken).HasMaxLength(500);
         builder.Property(x => x.RowVersion).IsRowVersion();
         // An employee has one linked device (BR-LABOR-02): parallel links cannot both succeed.
         builder.HasIndex(x => x.EmployeeId)

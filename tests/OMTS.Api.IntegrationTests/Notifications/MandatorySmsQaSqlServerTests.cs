@@ -160,7 +160,7 @@ public class MandatorySmsQaSqlServerTests
         Assert.Empty(api.AllSms());
     }
 
-    // Unlike the conflict above: this failure drops the queue, while the tracker keeps the rows, so the retry commits a notification with no SMS and no push.
+    // Unlike the conflict above: this failure drops the queue, while the tracker keeps the rows, so the retry commits a notification with no SMS.
     [SqlServerFact(Skip = "Accepted: no flow retries in the same scope or saves after a cancelled save; one that does must send the outbox again.")]
     public async Task L4_a_deadlock_retried_in_the_same_request_still_sends_the_sms_of_the_notification_it_commits()
     {

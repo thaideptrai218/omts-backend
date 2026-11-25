@@ -143,7 +143,7 @@ public static class UserMessages
         $"The payment notification service did not accept account {accountNumber} at {bankName}. The receiving bank account has not been changed. Please check the account, or try again later.");
 
     /// <summary>
-    /// MSG-DEBT-03 (BR-DEBT-06): the Owner's notice of one transaction of the Accountant, "{user_name} {transaction_text}. {debt_text}"; always pushed. The SRS gives the
+    /// MSG-DEBT-03 (BR-DEBT-06): the Owner's notice of one transaction of the Accountant, "{user_name} {transaction_text}. {debt_text}"; mandatory. The SRS gives the
     /// placeholders only: the transaction names the code, the amount and the customer, the debt text the customer debt after it.
     /// </summary>
     /// <param name="transactionKind">Payment, PaidBack, PaymentCancelled or PaidBackCancelled: the atomic parameter clients word it from.</param>
@@ -688,12 +688,6 @@ public static class UserMessages
     public static readonly UserMessage RecoveryCodeMaybeSent = new(
         Account20, "If this phone number or email belongs to an account, a verification code has been sent to it.", Legacy.Msg15);
 
-    /// <summary>MSG-ACCOUNT-21 (ACCOUNT-07.1): push asked for, but no device of the account allows it.</summary>
-    public static readonly UserMessage PushNotAllowedOnDevice = new(
-        Account21,
-        "Your preferences are saved. This device does not allow notifications from OMTS. To get them on this device, please turn them on in the device settings. You can still see all notifications in the notification list.",
-        Legacy.Msg22);
-
     /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1, ACCOUNT-10.1.E1): the record of a notification or of an audit event no longer exists.</summary>
     /// <param name="objectName">e.g. "Zone license"; the first letter is capitalized.</param>
     /// <param name="recordCode">The code the notification or the event shows for the record; may be empty.</param>
@@ -743,7 +737,7 @@ public static class UserMessages
         };
     }
 
-    /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
+    /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; mandatory.</summary>
     /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
     /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
     /// <param name="preposition">"to" or "by" the supplier.</param>
