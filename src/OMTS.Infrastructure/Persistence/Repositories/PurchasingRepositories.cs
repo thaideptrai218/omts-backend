@@ -35,10 +35,16 @@ internal sealed class SupplierRepository(OmtsDbContext db) : ISupplierRepository
     public async Task<IReadOnlyList<SupplierFigureRow>> ListAsync(SupplierSearchFilter filter, CancellationToken cancellationToken) =>
         (await Sorted(Filtered(filter), filter).ToListAsync(cancellationToken)).Select(Row).ToList();
 
-    public async Task<(IReadOnlyList<SupplierHistoryRow> Items, int Total)> HistoryAsync(Guid supplierId, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<SupplierHistoryRow> Items, int Total)> HistoryAsync(Guid supplierId, IReadOnlyCollection<Guid>? zoneIds, int page, int pageSize, CancellationToken cancellationToken)
     {
         var receipts = db.PurchaseReceipts.AsNoTracking().Where(r => r.SupplierId == supplierId);
         var returns = db.PurchaseReturns.AsNoTracking().Where(r => r.SupplierId == supplierId && r.StatusId != StatusIds.PurchaseReturn.Draft);
+        if (zoneIds is not null)
+        {
+            receipts = receipts.Where(r => r.ZoneId != null && zoneIds.Contains(r.ZoneId.Value));
+            returns = returns.Where(r => r.ZoneId != null && zoneIds.Contains(r.ZoneId.Value));
+        }
+
         var total = await receipts.CountAsync(cancellationToken) + await returns.CountAsync(cancellationToken);
         // Anonymous shapes: EF translates a set operation over them, not over a constructor call.
         var rows = await receipts

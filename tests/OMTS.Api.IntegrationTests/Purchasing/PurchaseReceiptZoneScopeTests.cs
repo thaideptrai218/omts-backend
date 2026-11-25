@@ -60,7 +60,7 @@ public class PurchaseReceiptZoneScopeTests(AuthApiFactory factory) : IClassFixtu
         var line = new LineBody(world.Other, 1, 1000);
         var inA = await managerA.CreateReceiptAsync(world.Body(line) with { Complete = true });
         var inB = await managerB.CreateReceiptAsync(world.Body(line) with { Complete = true, ZoneId = zoneB.Id });
-        var none = await world.Owner.CreateReceiptAsync(world.Body(line) with { Complete = true, ZoneId = null });
+        var none = await NoZoneCompletedAsync(world, line);
         var route = "/api/purchase-receipts?pageSize=100";
 
         var (a, b, owner, acc) = (await ItemsAsync(managerA, route), await ItemsAsync(managerB, route), await ItemsAsync(world.Owner, route), await ItemsAsync(accountant, route));
@@ -126,5 +126,46 @@ public class PurchaseReceiptZoneScopeTests(AuthApiFactory factory) : IClassFixtu
         Assert.Equal(HttpStatusCode.Forbidden, debts.StatusCode);
         // The payment stays the Accountant's.
         Assert.Equal(HttpStatusCode.Created, (await accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1000, ConfirmAdvance = true })).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_supplier_history_and_detail_of_a_manager_hold_the_receipts_of_its_zones_only_and_no_total_purchased()
+    {
+        var world = await factory.WorldAsync();
+        var (zoneB, _) = await factory.ZoneWithRaftAsync();
+        var (managerA, managerB) = (await factory.ZoneManagerAsync(world.Zone), await factory.ZoneManagerAsync(zoneB));
+        var line = new LineBody(world.Other, 1, 1000);
+        var inA = await managerA.CreateReceiptAsync(world.Body(line) with { Complete = true });
+        var inB = await managerB.CreateReceiptAsync(world.Body(line) with { Complete = true, ZoneId = zoneB.Id });
+        var none = await NoZoneCompletedAsync(world, line);
+
+        var history = async (HttpClient client) => (await client.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/history?pageSize=100")).GetProperty("items");
+        var detail = async (HttpClient client) => (await client.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}")).GetProperty("receipts");
+
+        foreach (var rows in new[] { await history(managerA), await detail(managerA) })
+        {
+            Assert.True(Lists(rows, inA.Id()) && !Lists(rows, inB.Id()) && !Lists(rows, none.Id()), "A history or detail holds a receipt of another zone or with no zone");
+        }
+
+        foreach (var rows in new[] { await history(world.Owner), await detail(world.Owner) })
+        {
+            Assert.All(new[] { inA, inB, none }, receipt => Assert.True(Lists(rows, receipt.Id())));
+        }
+
+        // The figure sums the receipts of every zone, so a manager of one zone does not get it.
+        var row = (await ItemsOfSuppliersAsync(managerA)).EnumerateArray().First(s => s.Id() == world.SupplierId);
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("totalPurchased").ValueKind);
+    }
+
+    /// <summary>A Completed receipt with no zone: the kit books a completed receipt to a zone, so it is saved as a draft with no zone and completed by the Owner.</summary>
+    private static async Task<JsonElement> NoZoneCompletedAsync(PurchasingWorld world, LineBody line)
+    {
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(line) with { ZoneId = null });
+        return await (await world.Owner.CompleteAsync(draft.Id())).ReadAsync(HttpStatusCode.OK);
+    }
+
+    private static async Task<JsonElement> ItemsOfSuppliersAsync(HttpClient client)
+    {
+        return (await client.GetFromJsonAsync<JsonElement>("/api/suppliers?pageSize=100")).GetProperty("items");
     }
 }

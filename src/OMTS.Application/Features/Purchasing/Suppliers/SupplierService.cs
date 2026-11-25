@@ -16,6 +16,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Parties;
+using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -32,6 +33,7 @@ public sealed partial class SupplierService(
     IPurchaseReceiptRepository receipts,
     IAccountRepository accounts,
     ZoneAccessGuard zoneAccess,
+    PurchaseReceiptAccess receiptAccess,
     PartyAddressVerifier addressVerifier,
     IFileStorage storage,
     IStatusCatalog statusCatalog,
@@ -83,7 +85,8 @@ public sealed partial class SupplierService(
         }
 
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / 100), Math.Clamp(pageSize, 1, 100));
-        var (items, total) = await suppliers.HistoryAsync(supplierId, page, pageSize, cancellationToken);
+        var scope = await receiptAccess.ScopeAsync(cancellationToken);
+        var (items, total) = await suppliers.HistoryAsync(supplierId, scope.All ? null : scope.ZoneIds.ToList(), page, pageSize, cancellationToken);
         var names = await accounts.GetDisplayNamesAsync(items.Select(r => r.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         return new Paged<SupplierHistoryItem>(
             items.Select(r => new SupplierHistoryItem(
@@ -187,8 +190,10 @@ public sealed partial class SupplierService(
     }
 
     /// <summary>Total purchased follows the receipts it sums (PURCHASE_RECEIPTS View); debt follows SUPPLIER_PAYMENTS View (BR-FARM-07).</summary>
+    /// <summary>Total purchased sums the receipts of every zone, so a Zone Manager (who sees the receipts of its zones only) does not get it.</summary>
     public async Task<SupplierFigureAccess> FigureAccessAsync(CancellationToken cancellationToken) => new(
-        !(await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken)).IsEmpty,
+        (await receiptAccess.ScopeAsync(cancellationToken)).All
+        && !(await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken)).IsEmpty,
         !(await zoneAccess.PermittedZonesAsync(PermissionFunctions.SupplierPayments, PermissionAction.View, cancellationToken)).IsEmpty);
 
     public async Task<Result<SupplierView>> GetAsync(Guid supplierId, CancellationToken cancellationToken) =>
@@ -440,7 +445,10 @@ public sealed partial class SupplierService(
         // is PURCHASE-04: not shown here.
         var visible = await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken);
         // The latest receipts only (figures summed by SQL), so the detail does not slow down as history grows.
-        var history = visible.IsEmpty ? [] : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(SupplierId: supplier.Id), ReceiptHistoryLimit, cancellationToken);
+        var scope = await receiptAccess.ScopeAsync(cancellationToken);
+        var history = visible.IsEmpty
+            ? []
+            : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(SupplierId: supplier.Id, ZoneIds: scope.All ? null : scope.ZoneIds.ToList()), ReceiptHistoryLimit, cancellationToken);
         var certificates = new List<SupplierCertificate>();
         for (var i = 0; i < supplier.CertificateUrls.Count; i++)
         {

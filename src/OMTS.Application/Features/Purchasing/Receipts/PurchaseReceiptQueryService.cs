@@ -164,12 +164,16 @@ public sealed class PurchaseReceiptQueryService(
 
     /// <summary>
     /// The raft filter of the list and of the material cost: every raft, Discontinued ones included because old receipts name
-    /// them. Receipts follow the role only, whatever their zone (BR-FARM-08), so whoever may view them may filter by any raft. It
+    /// them. A Zone Manager gets the rafts of its zones only; the Owner and the Accountant every raft. It
     /// is how an Accountant, who may not read rafts (§I.4.4 FARM-04 No), fills a filter of PURCHASE-03 (R), so it holds id and
     /// codes only.
     /// </summary>
-    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken) =>
-        await rafts.ListForLookupAsync(PermittedZones.Everywhere, cancellationToken);
+    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken)
+    {
+        // A Zone Manager filters by the rafts of the zones it sees receipts of.
+        var scope = await access.ScopeAsync(cancellationToken);
+        return await rafts.ListForLookupAsync(scope.All ? PermittedZones.Everywhere : new PermittedZones(false, scope.ZoneIds), cancellationToken);
+    }
 
     /// <summary>PURCHASE-03.2: the receipts and the totals shown, as an .xlsx file (Export: Zone Manager and Owner).</summary>
     public async Task<Result<ExportedFile>> ExportAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
