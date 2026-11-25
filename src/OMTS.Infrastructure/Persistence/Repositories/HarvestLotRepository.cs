@@ -213,8 +213,6 @@ internal sealed partial class HarvestLotRepository(OmtsDbContext db) : IHarvestL
             .Select(l => l.Id)
             .ToListAsync(cancellationToken);
 
-    }
-
     public async Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
         var ids = lotIds.Distinct().ToList();

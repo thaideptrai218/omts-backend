@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261124190716_RemoveUnusedTablesAndColumns")]
+    [Migration("20261125091454_RemoveUnusedTablesAndColumns")]
     partial class RemoveUnusedTablesAndColumns
     {
         /// <inheritdoc />
@@ -235,6 +235,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CollectedByAccountId");
 
                     b.HasIndex("TypeId");
+
+                    b.HasIndex("VoucherDate");
 
                     b.HasIndex("Fund", "VoucherDate");
 
@@ -1206,6 +1208,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ZoneId", "MeasuredAt");
 
+                    b.HasIndex("ZoneId", "StatusId", "MeasuredAt", "CreatedAt", "Id")
+                        .IsDescending(false, false, true, true, true);
+
                     b.ToTable("WaterMeasurements");
                 });
 
@@ -1218,6 +1223,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("Area")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("BoundaryGeoJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -1866,6 +1874,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecordedByAccountId");
 
                     b.HasIndex("WeighedByAccountId");
+
+                    b.HasIndex("WeighedOn");
 
                     b.HasIndex("WeighingAgreedByAccountId");
 
@@ -2866,6 +2876,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("PreviousRefreshTokenHash")
                         .HasFilter("[PreviousRefreshTokenHash] IS NOT NULL");
 
+                    b.HasIndex("RefreshTokenExpiresAt");
+
                     b.HasIndex("RefreshTokenHash")
                         .IsUnique();
 
@@ -3045,6 +3057,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasFilter("[TokenHash] IS NOT NULL");
 
                     b.HasIndex("AccountId", "Purpose");
+
+                    b.HasIndex("Channel", "LastSentAt");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("Channel", "LastSentAt"), new[] { "SendCount" });
 
                     b.HasIndex("Target", "Purpose", "CreatedAt");
 
@@ -4155,6 +4171,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ZoneId", "OccurredAt");
 
+                    b.HasIndex("RecordId", "RecordType", "OccurredAt")
+                        .HasFilter("[RecordId] IS NOT NULL");
+
                     b.ToTable("AuditEvents");
                 });
 
@@ -4263,6 +4282,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RelatedRecordType", "RelatedRecordId");
 
                     b.HasIndex("RecipientAccountId", "Channel", "CreatedAt");
+
+                    b.HasIndex("Type", "Channel", "CreatedAt");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("Type", "Channel", "CreatedAt"), new[] { "RelatedRecordId" });
 
                     b.ToTable("Notifications");
                 });
@@ -5204,6 +5227,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("IssueTypeId");
 
+                    b.HasIndex("IssuedAt");
+
                     b.HasIndex("RaftId");
 
                     b.HasIndex("ReceiverEmployeeId");
@@ -5546,12 +5571,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordedByAccountId");
 
+                    b.HasIndex("ReversesMovementId")
+                        .HasFilter("[ReversesMovementId] IS NOT NULL");
+
                     b.HasIndex("SeedLotLineId");
 
                     b.HasIndex("Sequence")
                         .IsUnique();
 
                     b.HasIndex("ItemId", "OccurredAt");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ItemId", "OccurredAt"), new[] { "Quantity", "SeedLotLineId" });
 
                     b.ToTable("InputStockMovements");
                 });
@@ -6579,6 +6609,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("InvoiceId");
 
+                    b.HasIndex("PaidAt");
+
                     b.HasIndex("RecordedByAccountId");
 
                     b.HasIndex("SalesOrderId");
@@ -6586,6 +6618,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("TransferInvoiceCode");
 
                     b.HasIndex("CustomerId", "StatusId");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "StatusId"), new[] { "Kind", "Amount", "DiscountAmount", "PaymentDate" });
 
                     b.HasIndex("StatusId", "PaymentDate");
 
@@ -7464,6 +7498,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RespondedByAccountId");
 
+                    b.HasIndex("SentAt");
+
                     b.HasIndex("CustomerId", "SentAt");
 
                     b.HasIndex("StatusId", "SentAt");
@@ -7664,6 +7700,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "StatusId");
 
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "StatusId"), new[] { "Total", "PriceCutTotal", "InvoiceDate", "InvoicedAt" });
+
                     b.HasIndex("InvoiceDate", "ZoneId");
 
                     b.ToTable("SalesInvoices", t =>
@@ -7790,6 +7828,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CutDate");
 
                     b.HasIndex("EnteredByAccountId");
 
@@ -8088,9 +8128,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("ReturnDate");
 
                     b.HasIndex("StatusId");
 
