@@ -40,10 +40,8 @@ public class NotificationSqlServerTests
 
         await db.Database.MigrateAsync();
 
-        var migrated = await db.Accounts.AsNoTracking().SingleAsync(a => a.Id == account);
         var row = await db.Notifications.AsNoTracking().SingleAsync(n => n.Id == notification);
         var notSent = await db.Statuses.AsNoTracking().SingleAsync(s => s.Id == StatusIds.MessageDelivery.NotSent);
-        Assert.Empty(migrated.NotificationPreferences);
         Assert.Equal((NotificationChannel.InApp, (string?)null, (int?)null), (row.Channel, row.MessageCode, row.DeliveryStatusId));
         Assert.Equal(("NOT_SENT", "Not sent", StatusGroups.MessageDelivery), (notSent.Code, notSent.DisplayName, notSent.Group));
     }
@@ -65,7 +63,6 @@ public class NotificationSqlServerTests
             await db.SaveChangesAsync();
         }
 
-        var saved = await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } });
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
@@ -79,14 +76,11 @@ public class NotificationSqlServerTests
 
         var list = await client.GetFromJsonAsync<JsonElement>("/api/me/notifications?unreadOnly=true");
         var item = Assert.Single(list.GetProperty("items").EnumerateArray());
-        var preferences = await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences");
         var opened = await client.GetAsync($"/api/me/notifications/{item.GetProperty("id").GetGuid()}/open");
         var readAll = await (await client.PostAsync("/api/me/notifications/read-all", null)).Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Equal(1, list.GetProperty("unreadCount").GetInt32());
         Assert.Equal("Vùng Cái Rồng", item.GetProperty("messageParams").GetProperty("zone_name").GetString());
-        Assert.False(preferences.GetProperty("types").EnumerateArray().Single(t => t.GetProperty("type").GetString() == "WATER_MEASUREMENT_OVERDUE").GetProperty("push").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
         Assert.Equal((1, 0), (readAll.GetProperty("markedRead").GetInt32(), readAll.GetProperty("unreadCount").GetInt32()));
     }

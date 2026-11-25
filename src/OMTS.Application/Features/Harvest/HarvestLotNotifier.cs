@@ -8,7 +8,7 @@ using OMTS.Domain.Entities.Harvest;
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>
-/// The notifications of a recorded harvest, saved with it and pushed after it commits. A harvest is operational, so an Owner is not told of their own action (PM decision OMTS-216);
+/// The notifications of a recorded harvest, saved with it. A harvest is operational, so an Owner is not told of their own action (PM decision OMTS-216);
 /// a Zone Manager who finishes the last lane does get the reminder, as AC-13 says the Zone Managers of the zone receive it.
 /// </summary>
 public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications)
@@ -32,7 +32,7 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
     }
 
     /// <summary>
-    /// MSG-HARVEST-05 to the Zone Managers of the zone, or to the Cooperative Owners when it has none (GFR-05); pushed unless turned off. The check has no actor, so nobody is left out.
+    /// MSG-HARVEST-05 to the Zone Managers of the zone, or to the Cooperative Owners when it has none (GFR-05). The check has no actor, so nobody is left out.
     /// False when there is nobody to tell.
     /// </summary>
     public async Task<bool> AutoCloseWarningAsync(HarvestLot lot, Raft raft, DateOnly closeDate, CancellationToken cancellationToken)
@@ -54,7 +54,7 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
         return true;
     }
 
-    /// <summary>MSG-CYCLE-08 to the Zone Managers of the zone, or to the Cooperative Owners when it has none; always pushed (BR-CYCLE-07, BR-ACCOUNT-11).</summary>
+    /// <summary>MSG-CYCLE-08 to the Zone Managers of the zone, or to the Cooperative Owners when it has none; mandatory (BR-CYCLE-07, BR-ACCOUNT-11).</summary>
     public async Task CloseReminderAsync(CultivationCycle cycle, Raft raft, Guid recorder, CancellationToken cancellationToken)
     {
         var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetZoneManagersOrOwnersAsync(raft.ZoneId, cancellationToken), recorder, cancellationToken);

@@ -49,24 +49,19 @@ public class PlatformHardeningTests
         Assert.Empty((await database.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("failing").EnumerateArray());
     }
 
-    // Outside Development no fake pretends a verification code or a push was delivered.
+    // Outside Development no fake pretends a verification code was delivered.
     [Fact]
-    public async Task Sms_and_push_are_not_sent_and_not_faked_outside_development()
+    public async Task Sms_is_not_sent_and_not_faked_outside_development()
     {
         await using var development = new AuthApiFactory();
         await using var production = new AuthApiFactory().WithWebHostBuilder(b => b.UseEnvironment("Production"));
         production.CreateClient();
 
         var sms = await production.Services.GetRequiredService<ISmsSender>().SendAsync("0912000222", "code 123456");
-        var push = await production.Services.GetRequiredService<IPushSender>().SendAsync(
-            new PushMessage(Guid.NewGuid(), "Test", "Title", null, null, null, []));
 
         Assert.False(sms.Succeeded);
         Assert.Equal("NOT_CONFIGURED", sms.ErrorCode);
-        Assert.False(push.Succeeded);
-        Assert.Equal("NOT_CONFIGURED", push.ErrorCode);
         Assert.IsType<FakeSmsSender>(development.Services.GetRequiredService<ISmsSender>());
-        Assert.IsType<FakePushSender>(development.Services.GetRequiredService<IPushSender>());
     }
 
     [Fact]

@@ -32,7 +32,7 @@ public sealed class QualityClaimsController(QualityClaimReadService reads, Quali
 
     /// <summary>
     /// Proposes an <c>offer</c> (<c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c> with its <c>priceCutAmount</c>, above 0 and at most the invoice total), an optional <c>note</c> and <c>rowVersion</c>; the claim is then
-    /// Offer made and the trader accepts or declines it. Changes nothing on the invoice or the debt; push and SMS to the trader.
+    /// Offer made and the trader accepts or declines it. Changes nothing on the invoice or the debt; SMS to the trader.
     /// </summary>
     [HttpPost("{id:guid}/accept")]
     [RequireCooperativeOwner]

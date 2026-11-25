@@ -57,7 +57,7 @@ public static class DependencyInjection
         // Scoped (it reads the current user): works because AddDbContext builds the options per scope.
         // Switching to DbContext pooling or a context factory would need another way to pass the user.
         services.AddScoped<AuditableEntityStampInterceptor>();
-        services.AddScoped<PushOutboxInterceptor>();
+        services.AddScoped<MandatorySmsOutboxInterceptor>();
         services.AddDbContext<OmtsDbContext>((provider, options) =>
         {
             options.AddOmtsInterceptors(provider);
@@ -95,7 +95,6 @@ public static class DependencyInjection
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
         services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
-        services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<ISalesProductRepository, SalesProductRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
@@ -265,14 +264,14 @@ public static class DependencyInjection
 
     /// <summary>
     /// Interceptors every <see cref="OmtsDbContext"/> needs (audit stamps, permission cache invalidation,
-    /// push after commit); also used by tests that swap the database provider.
+    /// mandatory SMS after commit); also used by tests that swap the database provider.
     /// </summary>
     public static DbContextOptionsBuilder AddOmtsInterceptors(this DbContextOptionsBuilder options, IServiceProvider provider) =>
         options.AddInterceptors(
             provider.GetRequiredService<AuditableEntityStampInterceptor>(),
             provider.GetRequiredService<PermissionCacheInvalidationInterceptor>(),
             provider.GetRequiredService<SessionRevocationInterceptor>(),
-            provider.GetRequiredService<PushOutboxInterceptor>());
+            provider.GetRequiredService<MandatorySmsOutboxInterceptor>());
 
     // Redis or the database is picked when first resolved, from the final configuration. Without a Redis connection
     // string (and with Mode=Sql) nothing connects to Redis and every request is checked against the database.
@@ -317,11 +316,9 @@ public static class DependencyInjection
                 o => o.MandatoryTimeoutSeconds is >= SmsOptions.MinMandatoryTimeoutSeconds and <= SmsOptions.MaxMandatoryTimeoutSeconds,
                 $"{SmsOptions.SectionName}:MandatoryTimeoutSeconds must be from {SmsOptions.MinMandatoryTimeoutSeconds} to {SmsOptions.MaxMandatoryTimeoutSeconds}.")
             .ValidateOnStart();
-        services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
 
         services.AddSingleton<FakeEmailSender>();
         services.AddSingleton<FakeSmsSender>();
-        services.AddSingleton<FakePushSender>();
         services.AddSingleton<SmtpEmailSender>();
 
         services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
@@ -330,7 +327,7 @@ public static class DependencyInjection
             EmailOptions.SmtpProvider => provider.GetRequiredService<SmtpEmailSender>(),
             var other => throw UnknownProvider(EmailOptions.SectionName, other),
         });
-        // Only fakes exist for SMS and push until their provider tickets. The fake is configured for Development
+        // Only the fake exists for SMS until its provider ticket. The fake is configured for Development
         // only; elsewhere the default "None" fails every send, so nothing pretends a code or alert was delivered.
         services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider switch
         {
@@ -339,16 +336,9 @@ public static class DependencyInjection
             var other => throw UnknownProvider(SmsOptions.SectionName, other),
         });
         services.AddSingleton<ITraderMessageSender, SmsTraderMessageSender>();
-        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider switch
-        {
-            PushOptions.FakeProvider => provider.GetRequiredService<FakePushSender>(),
-            PushOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredPushSender>(provider),
-            var other => throw UnknownProvider(PushOptions.SectionName, other),
-        });
 
-        services.AddScoped<PushOutbox>();
-        services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
-        services.AddScoped<IMandatorySmsOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddScoped<MandatorySmsOutbox>();
+        services.AddScoped<IMandatorySmsOutbox>(provider => provider.GetRequiredService<MandatorySmsOutbox>());
         services.AddSingleton<MandatorySmsDelivery>();
 
         // Resolves the configured adapters at startup, so a configuration error stops the host right away.

@@ -15,7 +15,7 @@ public class MandatorySmsTextQaTests
     private static readonly DateTimeOffset MeasuredAt = new(2026, 10, 19, 23, 30, 0, TimeSpan.Zero);
 
     private static readonly NotificationTypeDefinition MoneyType = new(
-        "SUPPLIER_TRANSACTION", "Supplier payment transaction", NotificationPushPolicy.AlwaysPush, [NotificationRole.CooperativeOwner],
+        "SUPPLIER_TRANSACTION", "Supplier payment transaction", [NotificationRole.CooperativeOwner],
         NotificationOpenAccess.OwnerOnly, NotificationSmsRule.MoneyToOwner("amount"));
 
     private static string Grouped(string separator) => string.Join(separator, Account.Chunk(4).Select(c => new string(c)));

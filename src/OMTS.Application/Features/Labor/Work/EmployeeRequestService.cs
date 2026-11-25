@@ -22,7 +22,7 @@ namespace OMTS.Application.Features.Labor.Work;
 /// LABOR-10 and LABOR-05: an employee sends a request to the Cooperative Owner (leave, or a missed check-in or check-out) and can cancel it
 /// while it is Awaiting review; the Owner approves it, with an optional note, or rejects it, with a note (BR-LABOR-08). Approving a missed
 /// time records it in the attendance of the day with the method Request. The employee of a call is the one linked to the caller's account.
-/// The push to the employee of the result (MSG-LABOR-15) needs the employee app and its linked device (LABOR-06), which does not exist yet:
+/// Telling the employee of the result (MSG-LABOR-15) needs the employee app and its linked device (LABOR-06), which does not exist yet:
 /// the employee sees the result in their requests.
 /// </summary>
 public sealed class EmployeeRequestService(

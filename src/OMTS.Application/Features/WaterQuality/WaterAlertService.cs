@@ -12,7 +12,7 @@ namespace OMTS.Application.Features.WaterQuality;
 /// <summary>
 /// Checks a measurement against its own thresholds (BR-WATER-04) and sends the mandatory water notifications, the alert
 /// (MSG-WATER-03) and its withdrawal (MSG-WATER-04), to every active Cooperative Owner and the Zone Managers of the zone,
-/// except the Owner who did the action. Notification rows join the caller's unit of work; push is sent after its commit.
+/// except the Owner who did the action. Notification rows join the caller's unit of work; the SMS is sent after its commit.
 /// </summary>
 public sealed class WaterAlertService(
     IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications, TimeProvider timeProvider)

@@ -126,19 +126,6 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
         Assert.Single(api.SmsTo(manager));
     }
 
-    // ACCOUNT-07, BR-ACCOUNT-11: a mandatory type cannot be turned off, so a stray stored choice must not turn the SMS off either.
-    [Fact]
-    public async Task A_stored_choice_to_turn_the_push_off_does_not_turn_the_sms_off()
-    {
-        var z = await api.ZoneAsync();
-        var manager = await ManagerAsync(z.Zone);
-        await api.UpdateAsync<Account>(manager.Id, a => a.NotificationPreferences.Add(new NotificationPreference { Type = NotificationTypes.WaterAlert, Push = false }));
-
-        await z.RecordedAsync(9.1m, 20m);
-
-        Assert.Single(api.SmsTo(manager));
-    }
-
     [Fact]
     public async Task Locked_unverified_and_empty_numbers_get_none_and_the_row_follows_the_status_only()
     {

@@ -39,8 +39,6 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
         var rows = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Notifications
             .Where(n => n.RelatedRecordCode == zoneA.Code).Select(n => n.RecipientAccountId!.Value).ToListAsync();
         Assert.Equal(recipients.Order(), rows.Order());
-        var pushed = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(setup.ManagerOfA.ToString());
-        Assert.Contains(pushed, m => m.Subject == "Water alert");
     }
 
     // Same rule as AccountAccess: records with no zone follow the role only (BR-FARM-08), so an Accountant pair in any
@@ -87,40 +85,6 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     internal static string Code() => Guid.NewGuid().ToString("N")[..10];
-}
-
-/// <summary>A failing push provider must never roll back the saved notifications.</summary>
-public class PushFailureTests(PushFailureTests.ThrowingPushApiFactory factory) : IClassFixture<PushFailureTests.ThrowingPushApiFactory>
-{
-    [Fact]
-    public async Task Push_failure_keeps_the_saved_notification_rows()
-    {
-        var zone = await factory.AddZoneAsync(NotificationDispatchTests.Code());
-        await factory.AddAccountAsync(NotificationDispatchTests.Code(), AcsTestKit.NewPassword());
-
-        var recipients = await NotificationDispatchTests.NotifyAsync(factory, zone.Id);
-
-        using var scope = factory.Services.CreateScope();
-        var saved = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Notifications.CountAsync(n => n.RelatedRecordCode == zone.Code);
-        Assert.NotEmpty(recipients);
-        Assert.Equal(recipients.Count, saved);
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("Push WATER_ALERT"));
-    }
-
-    public sealed class ThrowingPushApiFactory : AuthApiFactory
-    {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            base.ConfigureWebHost(builder);
-            builder.ConfigureServices(services => services.AddSingleton<IPushSender, ThrowingPushSender>());
-        }
-    }
-
-    private sealed class ThrowingPushSender : IPushSender
-    {
-        public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default) =>
-            throw new HttpRequestException("push provider down");
-    }
 }
 
 /// <summary>Accounts around two zones: who must and must not hear about zone A.</summary>

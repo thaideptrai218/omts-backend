@@ -22,11 +22,5 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.HasIndex(x => x.ZaloAccountId).IsUnique().HasFilter("[ZaloAccountId] IS NOT NULL");
         builder.Property(x => x.AccessRequestNote).HasMaxLength(Lengths.Address);
         builder.Property(x => x.RejectionReason).HasMaxLength(Lengths.Reason);
-
-        builder.OwnsMany(x => x.NotificationPreferences, preferences =>
-        {
-            preferences.ToJson();
-            preferences.Property(p => p.Type).HasMaxLength(Lengths.ShortText);
-        });
     }
 }

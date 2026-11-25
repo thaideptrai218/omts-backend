@@ -27,9 +27,6 @@ public class MandatorySmsQaCommitAndConfigTests
     private static Task NotifyAsync(IServiceScope scope, Guid account, string text = "The water alert was withdrawn.") =>
         scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync([account], Withdrawn(text), CancellationToken.None);
 
-    private static IReadOnlyList<FakeMessage> PushesTo(AuthApiFactory api, Guid account) =>
-        api.Services.GetRequiredService<FakePushSender>().Inbox.List(account.ToString());
-
     // ---- The commit ----
 
     [Fact]
@@ -83,10 +80,9 @@ public class MandatorySmsQaCommitAndConfigTests
         Assert.Equal(0, await api.NotificationCountAsync(owner.Id, NotificationTypes.WaterAlertWithdrawn));
     }
 
-    // The tracker keeps the rows after a cancelled save, so a later save commits them; the queue is gone. Before this branch the
-    // push of a cancelled save stayed queued and went out with that later save. No flow of this branch saves after a cancellation.
+    // The tracker keeps the rows after a cancelled save, so a later save commits them; the queue is gone. No flow saves after a cancellation.
     [Fact(Skip = "Accepted: no flow retries in the same scope or saves after a cancelled save; one that does must send the outbox again.")]
-    public async Task L4_a_later_save_that_commits_the_notification_of_a_cancelled_save_still_sends_its_sms_and_push()
+    public async Task L4_a_later_save_that_commits_the_notification_of_a_cancelled_save_still_sends_its_sms()
     {
         await using var api = new AuthApiFactory();
         var owner = await api.AddAccountAsync(NewCode(), NewPassword());
@@ -98,7 +94,7 @@ public class MandatorySmsQaCommitAndConfigTests
         await unitOfWork.SaveChangesAsync();
 
         var rows = await api.NotificationCountAsync(owner.Id, NotificationTypes.WaterAlertWithdrawn);
-        Assert.Equal((1, 1, 1), (rows, api.SmsTo(owner).Count, PushesTo(api, owner.Id).Count));
+        Assert.Equal((1, 1), (rows, api.SmsTo(owner).Count));
     }
 
     // ---- Providers and settings ----

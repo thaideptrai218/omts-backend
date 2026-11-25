@@ -42,6 +42,3 @@ public sealed record EmployeeAppTokens(
 public sealed record EmployeeLoginCodeIssued(
     string Code, DateTimeOffset ExpiresAt, string PhoneNumber, string EmployeeName, string Message, string MessageCode);
 
-/// <param name="PushToken">The Expo push token of the phone; empty clears it.</param>
-/// <param name="PushPermissionGranted">False when the employee declined notifications on the device.</param>
-public sealed record EmployeePushTokenRequest(string? PushToken, bool PushPermissionGranted);

@@ -11,7 +11,6 @@ including the fixes of their 23/10 reviews). Keep it updated in the PRs that cha
 | UC03 Self-service account recovery | ACS-03 | `PasswordRecoveryService` |
 | UC04 Change password | ACS-04 | `PasswordChangeService` |
 | UC05 Update personal profile | ACS-05 | `ProfileService`, `PhoneVerificationService` |
-| UC06/UC07 Notification settings and devices | ACS-07 | `NotificationPreferenceService`, `PushDeviceService` |
 | UC08 Verify email or phone number | ACS-06 | `VerificationService` |
 | UC09 Manage cooperative profile | FARM-01 | `CooperativeProfileService` |
 | UC10 Manage employee profiles | LAB-01 | `EmployeeService` |
@@ -25,10 +24,10 @@ Clean Architecture, one ASP.NET Core 8 API:
 
 - **OMTS.Domain**: entities, enums, status ids. No dependencies.
 - **OMTS.Application**: use-case services returning `Result<T>`, interfaces of repositories and adapters, business rules, `UserMessages` (SRS MSG codes).
-- **OMTS.Infrastructure**: EF Core 8 (SQL Server) repositories, unit of work, interceptors, JWT/PBKDF2, adapters (SMTP email, SMS/push fakes, file storage), bootstrap command, health checks.
+- **OMTS.Infrastructure**: EF Core 8 (SQL Server) repositories, unit of work, interceptors, JWT/PBKDF2, adapters (SMTP email, SMS fake, file storage), bootstrap command, health checks.
 - **OMTS.Api**: controllers (thin: bind request → call service → `ToActionResult`), filters, rate limiting, problem details.
 
-Each use case runs in one HTTP request scope: the services of the request share one `OmtsDbContext`, and a single `IUnitOfWork.SaveChangesAsync` commits the change, its audit rows and in-app notifications together. Push messages and the SMS of mandatory notifications are sent only after the commit.
+Each use case runs in one HTTP request scope: the services of the request share one `OmtsDbContext`, and a single `IUnitOfWork.SaveChangesAsync` commits the change, its audit rows and in-app notifications together. The SMS of mandatory notifications is sent only after the commit.
 
 ## 2. Class diagrams
 
@@ -281,10 +280,9 @@ SQL Server, code-first EF Core migrations. Every business table derives from `Au
 
 | Table | Main columns | Keys / indexes |
 |---|---|---|
-| Accounts | DisplayName, Username, PhoneNumber, PhoneVerifiedAt, Email, EmailVerifiedAt, PasswordHash, MustChangePassword, TemporaryPasswordIssuedAt, FailedLoginCount, LockoutEndAt, LastLoginAt, SubjectType (CooperativeOwner, Staff, Trader), StatusId, NotificationPreferences (JSON) | unique Username; unique PhoneNumber; unique Email where verified |
+| Accounts | DisplayName, Username, PhoneNumber, PhoneVerifiedAt, Email, EmailVerifiedAt, PasswordHash, MustChangePassword, TemporaryPasswordIssuedAt, FailedLoginCount, LockoutEndAt, LastLoginAt, SubjectType (CooperativeOwner, Staff, Trader), StatusId | unique Username; unique PhoneNumber; unique Email where verified |
 | LoginSessions | AccountId, ClientType (Web, Mobile), AuthMethod (Password, ZaloMiniApp), DeviceKey (keyed hash of the client's device id, null when none), RefreshTokenHash, PreviousRefreshTokenHash, PreviousRefreshTokenGraceEndsAt, RefreshTokenExpiresAt, AbsoluteExpiresAt, LastRefreshedAt, RevokedAt, RevokeReason, RevokeCause (Revoked, TokenReuse), DeviceName, UserAgent, IpAddress | unique RefreshTokenHash (concurrency token); filtered index on PreviousRefreshTokenHash; (AccountId, DeviceKey); RevokedAt. A daily job deletes sessions 30 days after they expired or were revoked |
 | VerificationCodes | AccountId?, Purpose, Channel, Target, CodeHash, ExpiresAt, LastSentAt, SendCount, FailedAttempts, ConsumedAt, CancelledAt, TokenHash, TokenExpiresAt, TokenConsumedAt, RowVersion | unique TokenHash; (Target, Purpose, CreatedAt); (AccountId, Purpose) |
-| PushDevices | AccountId, Token, Platform, PermissionGranted, RegisteredAt, LastSeenAt | unique Token |
 | Roles | Name, Description, StatusId (In Use / Discontinued) | unique Name |
 | RolePermissions | RoleId, FunctionCode (catalog `PermissionFunctions`), CanView, CanCreate, CanEdit, CanDelete, OtherPermissions (Export, Publish), DataScope | RoleId |
 | AccessGrants | AccountId, RoleId, ZoneId (null = All zones), ScopeType, EffectiveFrom, EffectiveTo, GrantedByAccountId, RevokedAt, RevokedByAccountId, RevokeReason, StatusId | (AccountId, StatusId) |
@@ -315,7 +313,6 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | DELETE /api/me/zalo-link | signed in | ACS-01 (Zalo Mini App) |
 | GET /api/trader-requests; POST …/{id}/approve, …/{id}/reject | Cooperative Owner | ACS-01 (Zalo Mini App) |
 | GET/PUT /api/me/profile; POST /api/me/contact-changes (current password, per-IP limit), /confirm | signed in | ACS-05 |
-| GET/PUT /api/me/notification-preferences; POST/DELETE /api/me/devices | signed in | ACS-07 |
 | GET /api/me (identity, `mustChangePassword`, `phoneVerificationRequired`; open while either step is pending) | signed in | onboarding routing |
 | GET /api/me/permissions | signed in | menus, dashboard tiles |
 | GET/POST /api/accounts; GET/PUT /api/accounts/{id}; POST …/lock, …/unlock, …/reset-password | Cooperative Owner | ACS-09 |
@@ -344,7 +341,7 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | Audit | `AuditEvents` row in the same save as the change (before/after of changed fields, reason); no password, code or token. Bank numbers are masked. |
 | Logs | Only masked recipients and message ids for SMS/email; EF Core save-error and exception-middleware logs are off so duplicate values (phones, emails) never reach the log; every 500 is logged by `ProblemExceptionHandler` without client details. |
 | Files | Type detected from content (magic bytes), size limits, private storage, short-lived signed read URLs, `nosniff` and sandbox CSP on downloads. The deliberate exception is the cooperative logo, public by design: the anonymous current-logo endpoint and the per-file logo URLs, which reach logo files only. A store failure while reading answers 502 MSG05. |
-| External services | Outside Development SMS and push default to `None` (every send fails, so callers answer MSG04 instead of pretending a code was sent); the fakes are configured for Development only. SMTP runs with `StartTls` or `SslOnConnect`; `None` stops the host outside Development. |
+| External services | Outside Development SMS defaults to `None` (every send fails, so callers answer MSG04 instead of pretending a code was sent); the fakes are configured for Development only. SMTP runs with `StartTls` or `SslOnConnect`; `None` stops the host outside Development. |
 | Transport | `UseHttpsRedirection`; TLS (and HSTS) are terminated at the hosting reverse proxy. X-Forwarded-For is trusted only from the proxies in `ForwardedHeaders:KnownProxies`/`KnownNetworks` (and loopback), so the rate limiters see the real client and a client cannot choose its bucket. The API never returns exception details to clients. |
 
 ## 7. ADMIN – deployment bootstrap (old UC72)

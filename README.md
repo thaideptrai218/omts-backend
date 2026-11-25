@@ -82,11 +82,10 @@ Every account below uses the password `Demo@1234`. It exists only in this local 
 
 Login accepts a phone number or a username with the password (the web form too). A changed password stays changed; to get every demo login back, reset the environment with `docker compose down -v` (this deletes the database and stored files).
 
-**Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine. What would have been
+**Verification codes.** SMS and email use the fake providers: nothing leaves the machine. What would have been
 sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
 - `GET /api/dev/sms?phoneNumber=`
 - `GET /api/dev/email?to=`
-- `GET /api/dev/push?accountId=` (or `?employeeId=` for a push to an employee of the employee app)
 
 `docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
 
@@ -190,4 +189,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) — branches, Jira keys, commit/PR rules,
 | The API does not start or `seed` exits with code 1 | Read the message: it names the missing key, never the value. Missing secrets give exit code 1. |
 | `seed` refuses to run on a database with accounts | Demo seeding only runs on an empty or self-seeded database. Start from an empty database (`docker compose down -v` in local Docker). |
 | `/health/ready` returns 503 | The body lists the failing checks (database, migrations, status catalog, roles, cooperative, active Owner). |
-| Verification codes do not arrive | Local Docker uses the fake providers: read the codes at `GET /api/dev/sms?phoneNumber=` (or `/email`, `/push`). Nothing is sent. |
+| Verification codes do not arrive | Local Docker uses the fake providers: read the codes at `GET /api/dev/sms?phoneNumber=` (or `/email`). Nothing is sent. |

@@ -23,13 +23,13 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// QA of the rerun after a lost save on a real SQL Server: the rival saves for real just before the request's own save, so
-/// the row version conflict, the interceptor and the discard are all the production ones (no stand-in that drops the pushes).
+/// the row version conflict, the interceptor and the discard are all the production ones (no stand-in that drops the queued messages).
 /// </summary>
 [Collection(WaterRaceTestCollection.Name)]
 public class WaterCorrectionQaTestsRaces
 {
     [SqlServerFact]
-    public async Task A_correction_that_loses_to_a_real_one_leaves_one_audit_row_and_one_push_per_notice_of_each()
+    public async Task A_correction_that_loses_to_a_real_one_leaves_one_audit_row_and_one_notice_of_each()
     {
         await using var race = await Race.StartAsync();
         var (loser, loserAccount) = await race.OwnerAsync();
@@ -71,7 +71,6 @@ public class WaterCorrectionQaTestsRaces
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await race.AssertNoticesAsync(id, manager.Id, alerts: 1, withdrawals: 1);
-        Assert.Equal(1, (await race.PushesAsync(manager.Id)).Count(m => m.Text.Contains("was withdrawn")));
     }
 
     [SqlServerFact]
@@ -338,22 +337,12 @@ public class WaterCorrectionQaTestsRaces
         public Task<List<OMTS.Domain.Entities.Platform.AuditEvent>> AuditAsync(Guid id) =>
             QueryAsync(db => db.AuditEvents.AsNoTracking().Where(e => e.RecordId == id).ToListAsync());
 
-        public Task<IReadOnlyList<FakeMessage>> PushesAsync(Guid accountId) =>
-            Task.FromResult(api.Services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString()));
-
-        /// <summary>The rows of the account about the measurement and exactly one push for each.</summary>
+        /// <summary>The rows of the account about the measurement: how many alerts and how many withdrawals.</summary>
         public async Task AssertNoticesAsync(Guid id, Guid accountId, int alerts, int withdrawals)
         {
             var rows = await QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.RelatedRecordId == id && n.RecipientAccountId == accountId).ToListAsync());
             Assert.Equal(alerts, rows.Count(n => n.Type == NotificationTypes.WaterAlert));
             Assert.Equal(withdrawals, rows.Count(n => n.Type == NotificationTypes.WaterAlertWithdrawn));
-            var pushed = (await PushesAsync(accountId)).Select(m => m.NotificationId).ToList();
-            foreach (var row in rows)
-            {
-                Assert.Single(pushed, p => p == row.Id);
-            }
-
-            Assert.Equal(rows.Count, pushed.Count);
         }
 
         public async ValueTask DisposeAsync()

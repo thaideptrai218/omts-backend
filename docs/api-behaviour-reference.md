@@ -38,7 +38,7 @@ ended (`RevokeCause`: `Revoked` or `TokenReuse`). Under `/api/me`, for the calle
 | `DELETE sessions/{id}` | 204, also when the session had already ended; the current session may be ended (the next request is 401) |
 | `POST sessions/revoke-others` | 200 `{ "count": n }`: every open session except the current one |
 | `GET devices` | Open sessions grouped by `deviceKey` (`deviceKey, clientType, authMethod, deviceName, userAgent, maskedIpAddress, firstSignedInAt, lastActiveAt, isCurrent, sessionIds`); a session without a device is its own entry with a null `deviceKey` |
-| `DELETE devices/{deviceKey}` | 204 always (idempotent): ends the caller's sessions on that device. `deviceKey` is 43 base64url characters; the route shares its prefix with `DELETE devices/{token}` (push token), which keeps any other shape |
+| `DELETE devices/{deviceKey}` | 204 always (idempotent): ends the caller's sessions on that device. `deviceKey` is 43 base64url characters; any other shape does not match the route |
 
 Revoking goes through the same path as logout, so the next request of an ended session is 401 (through Redis when configured). A
 password change keeps the device and sign-in method of the session it replaces. `DELETE /api/me/zalo-link` ends every `ZaloMiniApp`
@@ -106,7 +106,7 @@ employee (a working zone among the zones of their pairs; `LABOR_WORKERS` Create)
 wrong entry; a new code cancels the earlier one (a filtered unique index keeps one open code per employee, also under parallel issuers).
 Only a keyed hash of it is stored (`IVerificationCodeHasher`, keyed by the row id with a key derived from `Jwt:SigningKey`), and it is never
 written to the audit log (`Employee.LoginCodeIssued` holds the expiry only) or to the logs. It is shown in this answer and sent to the
-issuer's own account as the notification `EMPLOYEE_LOGIN_CODE` (kept in their list, pushed unless they turn it off; its text holds the code,
+issuer's own account as the notification `EMPLOYEE_LOGIN_CODE` (kept in their list only; its text holds the code,
 as MSG-LABOR-08 asks and for those 5 minutes); it is never sent to the employee. The answer is `Cache-Control: no-store` (and `Pragma: no-cache`),
 like the login and refresh answers that carry tokens. Rate limited per signed-in account, not per IP and apart from the anonymous code endpoints:
 `RateLimits:EmployeeLoginCodesPerMinute` (default 60, so a Zone Manager can issue a code for a whole crew; 429 `TOO_MANY_REQUESTS`). The limiter
@@ -143,8 +143,7 @@ signing key and the device id, the same at every login of that device; the app s
 at most (`Jwt:EmployeeRefreshTokenLifetime`, `Jwt:EmployeeSessionMaxLifetime`) and follows the rules of a staff refresh token: rotated on every
 refresh, the one it replaced is answered for `Jwt:RefreshGracePeriod` with `refreshTokenRotated: false`, any other old token is replay and ends
 the session; a refusal is 401 MSG19 with `reason` `expired`, `reuse` or `revoked`. `POST /api/employee-app/logout` ends the current session and
-keeps the device linked, so the next login on it needs no code. `PUT /api/employee-app/device/push-token` `{ pushToken, pushPermissionGranted }`
-sets the push token of the caller's device (empty clears it; at most 500 characters). Every request of the employee app asks the database
+keeps the device linked, so the next login on it needs no code. Every request of the employee app asks the database
 whether the session is open, its device is still linked and the employee is Employed today (the day after the last working day, before the daily
 job has run, already counts as Left); employee sessions are not in the Redis revocation store.
 
@@ -166,9 +165,6 @@ the host does not start otherwise), is signed with a key derived from `Jwt:Signi
 `[Authorize]`, so every staff endpoint) refuses it, and only the endpoints that name the scheme
 (`[Authorize(AuthenticationSchemes = EmployeeAppAuthentication.Scheme)]`, today the `EmployeeAppController`) accept it and refuse a staff token. `ICurrentUser.AccountId`
 is null for an employee request, `ICurrentEmployee` (employee, session, device) is null for every other one. Tests sweep every endpoint in both directions.
-
-**Push to employees (BR-LABOR-04).** `IEmployeeNotifier` queues a push for the employee's linked device while one of its sessions is open and
-the device allows notifications; it keeps nothing (no account, no list). The development inbox lists it with `GET /api/dev/push?employeeId=`.
 
 ### Roles and zone access
 
@@ -210,50 +206,46 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
 
 ### Notifications
 
-Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
-it could not be pushed (BR-ACCOUNT-12). Each type of `NotificationTypes.All` has a push policy and the roles it is sent
-to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
+Every notification a module sends is kept in the list of its recipient account (BR-ACCOUNT-12). There is no push
+notification: staff read the list, and the mandatory types also go out by SMS (below). Each type of `NotificationTypes.All`
+has the roles it is sent to and, for a mandatory type, its SMS rule (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
 
-| Type | Content | Push | Roles |
+| Type | Content | Kind | Roles |
 |---|---|---|---|
-| `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
-| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | always (mandatory) | Owner, Zone Manager |
-| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Zone Manager; Owner when the zone has none |
-| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
-| `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
-| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
-| `EMPLOYEE_LOGIN_CODE` | MSG-LABOR-08, the login code of the employee app (LABOR-03), only to the account that issued it | unless turned off | Owner, Zone Manager |
-| `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | unless turned off | Owner |
-| `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
-| `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
-| `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
-| `HARVEST_PLAN_HANDED_OVER` | a Zone Manager handed a harvest plan over ("Bàn giao", 24/11/2026), not to an Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the plan | unless turned off | Owner |
-| `PURCHASE_SHIFT_ASSIGNED` | the Owner or the manager responsible chose the employee for a purchase request: the shift is already a work assignment (24/11/2026), nothing to answer; message code `MINI_APP_NOTIFICATION`; opens the request | unless turned off | Employee |
-| `LANE_DAMAGED` | a lane of a raft is reported damaged (12/11/2026), not to the Owner who reported it; message code `MINI_APP_NOTIFICATION` (no SRS message exists); opens the raft | unless turned off | Owner |
-| `LANE_OUT_OF_SERVICE` | a lane is put out of service (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
-| `LANE_PROGRESS_CHANGED` | the seeded or harvested percentage of a lane is changed by hand, `PUT /api/rafts/{raftId}/lanes/{n}/progress` (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | unless turned off | Owner |
-| `NURSERY_RECORDED` | a nursery batch (ươm giống) is started, edited, cancelled, completed or its survivors or shares corrected (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the batch | unless turned off | Owner |
-| `HARVEST_LOT_AUTO_CLOSE_WARNING` | MSG-HARVEST-05, from the daily close check (GFR-05), once for each close date of a lot still for sale that the next check closes: to the Zone Managers of the zone (All zones too), or to the Owners when it has none | unless turned off | Owner, Zone Manager |
-| `CYCLE_CLOSE_REMINDER` | MSG-CYCLE-08, once per cycle, when a harvest makes every seeded lane Harvested: to the Zone Managers of the zone (All zones too), or to the Owners when it has none, not to the Owner who recorded it | always (mandatory) | Owner, Zone Manager |
-| `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
-| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
-| `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
-| `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it. A cancellation of a payment found Confirmed, with no `rowVersion` sent (it may have lost a race with a confirmation), is allowed and writes a second audit row `CustomerPayment.CancelledAfterConfirm` (payment code, reason, who confirmed it and when) beside `CustomerPayment.Cancelled` | always (mandatory) | Owner |
-| `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
-| `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
-| `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
-| `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | unless turned off | Owner |
-| `SALES_RETURN_RECORDED` | MSG-CLAIM-05, a new sales return (CLAIM-03); to the Accountants, only when money is owed back, the same message goes as `CUSTOMER_MONEY_OWED_BACK` | unless turned off | Owner |
-| `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | unless turned off | Trader |
+| `WATER_ALERT` | MSG-WATER-03 | mandatory (also SMS) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | mandatory (also SMS) | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | list | Zone Manager; Owner when the zone has none |
+| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | mandatory (also SMS) | Owner |
+| `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | mandatory (also SMS) | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | list | Owner |
+| `EMPLOYEE_LOGIN_CODE` | MSG-LABOR-08, the login code of the employee app (LABOR-03), only to the account that issued it | list | Owner, Zone Manager |
+| `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | list | Owner |
+| `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | list | Owner |
+| `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | list | Owner |
+| `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | list | Owner |
+| `HARVEST_PLAN_HANDED_OVER` | a Zone Manager handed a harvest plan over ("Bàn giao", 24/11/2026), not to an Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the plan | list | Owner |
+| `PURCHASE_SHIFT_ASSIGNED` | the Owner or the manager responsible chose the employee for a purchase request: the shift is already a work assignment (24/11/2026), nothing to answer; message code `MINI_APP_NOTIFICATION`; opens the request | list | Employee |
+| `LANE_DAMAGED` | a lane of a raft is reported damaged (12/11/2026), not to the Owner who reported it; message code `MINI_APP_NOTIFICATION` (no SRS message exists); opens the raft | list | Owner |
+| `LANE_OUT_OF_SERVICE` | a lane is put out of service (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | list | Owner |
+| `LANE_PROGRESS_CHANGED` | the seeded or harvested percentage of a lane is changed by hand, `PUT /api/rafts/{raftId}/lanes/{n}/progress` (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the raft | list | Owner |
+| `NURSERY_RECORDED` | a nursery batch (ươm giống) is started, edited, cancelled, completed or its survivors or shares corrected (12/11/2026), not to the Owner who did it; message code `MINI_APP_NOTIFICATION`; opens the batch | list | Owner |
+| `HARVEST_LOT_AUTO_CLOSE_WARNING` | MSG-HARVEST-05, from the daily close check (GFR-05), once for each close date of a lot still for sale that the next check closes: to the Zone Managers of the zone (All zones too), or to the Owners when it has none | list | Owner, Zone Manager |
+| `CYCLE_CLOSE_REMINDER` | MSG-CYCLE-08, once per cycle, when a harvest makes every seeded lane Harvested: to the Zone Managers of the zone (All zones too), or to the Owners when it has none, not to the Owner who recorded it | mandatory (also SMS) | Owner, Zone Manager |
+| `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | list | Owner |
+| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | list | Owner, Accountant |
+| `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | mandatory (also SMS) | Owner |
+| `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it. A cancellation of a payment found Confirmed, with no `rowVersion` sent (it may have lost a race with a confirmation), is allowed and writes a second audit row `CustomerPayment.CancelledAfterConfirm` (payment code, reason, who confirmed it and when) beside `CustomerPayment.Cancelled` | mandatory (also SMS) | Owner |
+| `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | list | Trader |
+| `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | list | Owner |
+| `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | list | Trader |
+| `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | list | Owner |
+| `SALES_RETURN_RECORDED` | MSG-CLAIM-05, a new sales return (CLAIM-03); to the Accountants, only when money is owed back, the same message goes as `CUSTOMER_MONEY_OWED_BACK` | list | Owner |
+| `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | list | Trader |
 
-- Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
-  holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
-  turned off; list-only types are not offered. `pushAllowedOnDevice` is false when no device registered by a logged-in
-  session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
 - List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
   list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
   `title`/`body` and the `messageCode` with `messageParams`, a JSON object of atomic values (never an English phrase) from
-  which the apps build the text in Vietnamese or English; a push carries the same code and parameters. Dates are ISO
+  which the apps build the text in Vietnamese or English; Dates are ISO
   dates, times ISO 8601 with the Vietnam offset:
 
   | Code | `messageParams` |
@@ -271,8 +263,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-DEBT-03 | one transaction: `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `customer_name` (null: no customer profile), `debt_amount` (the debt after it; below zero: money owed back; null without a profile); a list of confirmations: `user_name`, `transaction_kind` = `Confirmations`, `confirmed_codes` (the first 10), `confirmed_count`, `confirmed_more_count`, `confirmed_amount`, `cancelled_codes` (the first 10), `cancelled_count`, `cancelled_more_count`, `cancelled_amount`, `amount` (both together), `debts`: `[{ customer_name, debt_amount }]` after the cancellations (the first 5), `debts_more_count`; the text names the same ("PT000001, …, PT000010 and 189 more"), so a list of 200 fits the notification row |
   | MSG-TRACE-05 | `cooperative_short_name`, `lot_code`, `invoice_codes` (list), `cooperative_phone` (null: none set up yet, the text says "the cooperative") |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
-  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
-  notification id.
+  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed.
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
   sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
   them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
@@ -293,13 +284,13 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   cut / left out, as for list rows.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
-  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
+  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS is queued with the save and sent once, only after the save
   commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
   recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
   at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
   never a bank account number. The SMS of a list of confirmations and cancellations (`CUSTOMER_PAYMENT_TRANSACTION`,
   `MoneyToOwnerSplit`, PM answer of 12/11/2026) shows the two totals apart, "Customer payment transaction: thu 5,000,000 VND,
-  huy 300,000 VND." (a part of 0 is left out); the `amount` of the push and the list stays their sum. Operational texts read as their fields do, digits included. At 160 the values, allowed
+  huy 300,000 VND." (a part of 0 is left out); the `amount` of the list stays their sum. Operational texts read as their fields do, digits included. At 160 the values, allowed
   ranges, time, expiry date and, for a new purchase request, kg and pickup date stay; in order the free text gives way to
   a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
   closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
@@ -416,7 +407,7 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `POST /api/me/sales-invoices/{id}/quality-claims` (trader, multipart: `description` up to 2000 characters, one `photos` part per photo, 1 to 10 JPEG or PNG of at most 10 MB; 201 with the claim, code `KN000123`, and MSG-GEN-05). Only an invoice of the trader's own profile (a profile merged into theirs counts; else 404) that is not cancelled, has no sales return (sales returns come with CLAIM-03: the check is the seam `IInvoiceSalesReturnCheck`) and has no other open claim, Awaiting response or with an offer the trader has not answered (409 MSG-GEN-09, one filtered unique index per invoice). A photo that cannot be uploaded answers 502 MSG-GEN-03 and saves nothing. The Owner gets MSG-CLAIM-01 (not a mandatory type). A finished claim (rejected, accepted or declined) does not stop a new one and OMTS sets no time limit.
 - `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer, `offerAmount`, the response note and the `answer` of the trader (note, time). The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
-- `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", priceCutAmount?, note?, rowVersion }`; the claim becomes **Offer made**, 3704; `priceCutAmount` is its own field, required for a price cut, above 0, at most the invoice total, whole dong, and refused for a return: 400 MSG-GEN-01 `Price cut amount`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader accepts. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
+- `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", priceCutAmount?, note?, rowVersion }`; the claim becomes **Offer made**, 3704; `priceCutAmount` is its own field, required for a price cut, above 0, at most the invoice total, whole dong, and refused for a return: 400 MSG-GEN-01 `Price cut amount`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader accepts. Neither changes here. The trader gets a list row and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
 - POST /api/me/quality-claims/{id}/accept-offer and /decline-offer (trader, { note? } up to 1000 characters): the trader of the claim answers an offer once, while it is Offer made; the claim becomes Accepted (3703) or Offer declined (3705), with nswer on the claim and an audit row (QualityClaim.OfferAccepted / OfferDeclined). 200 with the claim and MSG-GEN-05; 404 for another trader's claim; 409 MSG-GEN-09 when the claim is not waiting for an answer (a second answer sees the status that won). The Owner is not notified of the answer (no message of the SRS for it, see the PM question); migration ClaimOfferMadeAndAnswer moved the claims accepted before to Offer made.
 
 
@@ -717,7 +708,7 @@ its next run (catch-up at start, like the other reminders), with that day as the
 lot saved meanwhile (a sale, a close by hand, the other instance) is read and checked once more at once.
 
 The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
-It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
+It notifies the active Cooperative Owners only (mandatory), once when a record becomes Expiring soon (30 days or fewer,
 MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02); a record found already Expired gets the Expired notice only.
 Every license of an In Use zone that is not Replaced is reminded on its own state, not only the newest one: a Replaced
 license and the licenses of a Discontinued zone are not. After a resume, each of these licenses gets the notice of its

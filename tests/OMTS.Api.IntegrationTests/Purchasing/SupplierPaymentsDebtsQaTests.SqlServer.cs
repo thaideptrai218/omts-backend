@@ -163,9 +163,9 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.Equal(expected, told.Select(n => JsonDocument.Parse(n.MessageParams!).RootElement.GetProperty("debt_amount").GetDecimal()).OrderDescending());
     }
 
-    // A payment and a cancel at once, a double cancel and a repeated key, each sent again on MSG06 as a client does: no server error, the debt is right, one row and one push each.
+    // A payment and a cancel at once, a double cancel and a repeated key, each sent again on MSG06 as a client does: no server error, the debt is right, one row each.
     [SqlServerFact]
-    public async Task Payments_cancels_and_retries_at_once_leave_the_right_debt_one_notification_and_one_push_each()
+    public async Task Payments_cancels_and_retries_at_once_leave_the_right_debt_one_notification_each()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -211,8 +211,6 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         // A cancelled payment: its record and its cancellation. The retried key: its record once.
         Assert.All(toCancel, c => Assert.Equal(2, mine.Count(n => n.RelatedRecordId == c.Id())));
         Assert.Single(mine, n => n.RelatedRecordId == keyed.Id);
-        var pushes = host.Api.Services.GetRequiredService<FakePushSender>().Inbox.List(host.Owner.Account.Id.ToString());
-        Assert.Single(pushes, p => p.MessageParams is { } values && values.TryGetProperty("payment_code", out var code) && code.GetString() == keyed.Code);
     }
 
     // Allocated only once the payment is valid and confirmed; a refused request spends no number; bank references compare as SQL Server does.

@@ -62,7 +62,7 @@ internal static class DemoDataSeeder
 
         // The steps act through the real services, so their mandatory types (new purchase requests, water alerts) queue an SMS:
         // demo data must not text anyone through a sender that could reach a real phone.
-        services.GetRequiredService<PushOutbox>().DropsMandatorySms = !context.SmsSenderReachesNoPhone;
+        services.GetRequiredService<MandatorySmsOutbox>().DropsMandatorySms = !context.SmsSenderReachesNoPhone;
 
         var messages = new List<string>();
         // A system action like the bootstrap itself: no acting account yet.

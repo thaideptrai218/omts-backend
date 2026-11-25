@@ -69,9 +69,7 @@ internal sealed class LoginSessionRepository(OmtsDbContext db) : ILoginSessionRe
 
     public async Task<int> DeleteEndedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
-        // Batches keep each delete (and its locks) small. The push device rows are released first: a session that is
-        // gone cannot deliver anything, and the foreign key would refuse the delete otherwise. Both statements are
-        // repeatable, so a failure in between is finished by the next run.
+        // Batches keep each delete (and its locks) small; the delete is repeatable, so a failure is finished by the next run.
         const int batchSize = 500;
         var deleted = 0;
         while (true)
@@ -87,9 +85,6 @@ internal sealed class LoginSessionRepository(OmtsDbContext db) : ILoginSessionRe
                 return deleted;
             }
 
-            await db.PushDevices
-                .Where(d => d.LoginSessionId != null && ids.Contains(d.LoginSessionId.Value))
-                .ExecuteUpdateAsync(set => set.SetProperty(d => d.LoginSessionId, (Guid?)null), cancellationToken);
             deleted += await db.LoginSessions.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(cancellationToken);
         }
     }

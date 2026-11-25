@@ -171,24 +171,6 @@ public class EmployeeLoginCodeTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Contains(code, row.Body);
         Assert.False(row.IsMandatory);
         Assert.Empty(await factory.QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.RecipientAccountId == world.OwnerAccount.Id && n.Type == NotificationTypes.EmployeeLoginCode).ToListAsync()));
-        var push = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(world.ManagerAccount.Id.ToString()).Single(m => m.NotificationId == row.Id);
-        Assert.Equal("MSG-LABOR-08", push.MessageCode);
         Assert.Empty(factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(worker.Phone));
-        Assert.Empty(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(worker.Id.ToString()));
-    }
-
-    // Preferences (ACCOUNT-07): a normal type, so the issuer can turn its push off and the row is still kept (BR-ACCOUNT-12).
-    [Fact]
-    public async Task The_issuer_can_turn_the_push_of_the_code_off_and_the_row_is_still_kept()
-    {
-        var world = await WorldAsync(factory);
-        var worker = await AddWorkerAsync(world);
-        var off = await world.Manager.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = NotificationTypes.EmployeeLoginCode, push = false } } });
-        Assert.Equal(HttpStatusCode.OK, off.StatusCode);
-
-        await IssueCodeAsync(world.Manager, worker.Id);
-
-        Assert.Single(await factory.QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.RecipientAccountId == world.ManagerAccount.Id && n.Type == NotificationTypes.EmployeeLoginCode).ToListAsync()));
-        Assert.Empty(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(world.ManagerAccount.Id.ToString()).Where(m => m.Text.StartsWith(NotificationTypes.EmployeeLoginCode, StringComparison.Ordinal)));
     }
 }

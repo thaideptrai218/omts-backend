@@ -141,15 +141,14 @@ public class HarvestLotsQaTestsFiles
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(firstUrl.Split('?')[0])).StatusCode);
     }
 
-    // The save fails with a conflict: no lot, no row, no push, no file, and the same send works next.
+    // The save fails with a conflict: no lot, no row, no file, and the same send works next.
     [Fact]
-    public async Task A_failed_save_pushes_nothing_stores_nothing_and_the_next_send_works()
+    public async Task A_failed_save_notifies_nothing_stores_nothing_and_the_next_send_works()
     {
         using var api = new FileFaultApiFactory();
         var raft = await api.SeededRaftAsync(1);
         var owner = raft.Owner;
         var manager = await api.ManagerAsync(raft.ZoneId);
-        var pushes = api.Services.GetRequiredService<FakePushSender>().Inbox;
         // The plan is made first: the fault is for the save of the lot, not for the save of the plan.
         var fields = await (new HarvestFields { Photos = [Jpeg] }.FinishedLanes(1)).PlannedAsync(raft.RaftId);
         api.Faults.FailNextSave(Conflict);
@@ -159,13 +158,10 @@ public class HarvestLotsQaTestsFiles
         Assert.Equal("MSG06", answer.Text("code"));
         Assert.Empty(StoredKeys(api, Category));
         Assert.Equal(0, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "HARVEST_LOT_RECORDED" || n.Type == "CYCLE_CLOSE_REMINDER")));
-        Assert.DoesNotContain(pushes.List(owner.Account.Id.ToString()), m => m.Subject == "New harvest lot");
-        Assert.DoesNotContain(pushes.List(manager.Account.Id.ToString()), m => m.Subject == "Reminder to close a cultivation cycle");
         Assert.Null(await api.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == raft.CycleId).Select(c => c.CloseRemindedAt).SingleAsync()));
 
         await manager.Client.HarvestLotAsync(raft.RaftId, fields);
 
-        Assert.Contains(pushes.List(owner.Account.Id.ToString()), m => m.Subject == "New harvest lot");
         Assert.Single(await api.NoticesAsync("CYCLE_CLOSE_REMINDER", raft.CycleId));
     }
 

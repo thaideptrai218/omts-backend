@@ -2885,49 +2885,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("LoginSessions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Identity.PushDevice", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("LastSeenAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("LoginSessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("PermissionGranted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Platform")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTimeOffset>("RegisteredAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccountId");
-
-                    b.HasIndex("LoginSessionId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.ToTable("PushDevices");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3225,13 +3182,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("PreviousDeviceSecretHash")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
-
-                    b.Property<bool>("PushPermissionGranted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("PushToken")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -9092,35 +9042,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsMany("OMTS.Domain.Entities.Identity.NotificationPreference", "NotificationPreferences", b1 =>
-                        {
-                            b1.Property<Guid>("AccountId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<int>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("int");
-
-                            b1.Property<bool>("Push")
-                                .HasColumnType("bit");
-
-                            b1.Property<string>("Type")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)");
-
-                            b1.HasKey("AccountId", "Id");
-
-                            b1.ToTable("Accounts");
-
-                            b1.ToJson("NotificationPreferences");
-
-                            b1.WithOwner()
-                                .HasForeignKey("AccountId");
-                        });
-
-                    b.Navigation("NotificationPreferences");
-
                     b.Navigation("Status");
                 });
 
@@ -9260,24 +9181,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Account");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Identity.PushDevice", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
-                        .WithMany()
-                        .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Identity.LoginSession", "LoginSession")
-                        .WithMany()
-                        .HasForeignKey("LoginSessionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Account");
-
-                    b.Navigation("LoginSession");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.VerificationCode", b =>

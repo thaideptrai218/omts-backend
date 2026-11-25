@@ -11,7 +11,7 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// BR-PURCHASE-05 for receipts: MSG-PURCHASE-01 to the Owner when a receipt is completed, and MSG-PURCHASE-08 to the
 /// Accountant and the Owner whenever the supplier debt is below zero after a cancellation, also when it already was before
 /// (PM 03/11). The Owner receives them also when the Owner did the action. A draft, a return, a cancellation that leaves the
-/// debt at zero or more and a correction send nothing. The rows join the caller's unit of work; push goes out after its commit.
+/// debt at zero or more and a correction send nothing. The rows join the caller's unit of work.
 /// </summary>
 public sealed class PurchaseReceiptNotifications(
     IZoneRecipientQuery recipients,

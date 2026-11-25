@@ -4,16 +4,16 @@ using OMTS.Application.Features.Authorization.Models;
 namespace OMTS.Application.Features.Notifications;
 
 /// <summary>One notification type of the catalogue (<see cref="NotificationTypes.All"/>).</summary>
-/// <param name="Name">English name shown in the preferences (SCR-ACCOUNT-06).</param>
-/// <param name="Roles">Who receives the type; the preferences of an account offer the types of the roles it holds.</param>
+/// <param name="Name">English name of the type.</param>
+/// <param name="Roles">Who receives the type.</param>
 /// <param name="Open">How opening the related record re-checks the access of the user (GFR-02, BR-ACCOUNT-12).</param>
 /// <param name="Sms">Who also gets the notification by SMS and how it reads; null: no SMS. Every mandatory type names one.</param>
 public sealed record NotificationTypeDefinition(
-    string Code, string Name, NotificationPushPolicy PushPolicy, IReadOnlyList<NotificationRole> Roles, NotificationOpenAccess Open,
+    string Code, string Name, IReadOnlyList<NotificationRole> Roles, NotificationOpenAccess Open,
     NotificationSmsRule? Sms = null)
 {
-    /// <summary>Always pushed; the push cannot be turned off (BR-ACCOUNT-11).</summary>
-    public bool IsMandatory => PushPolicy == NotificationPushPolicy.AlwaysPush;
+    /// <summary>Mandatory (BR-ACCOUNT-11): every mandatory type names an SMS rule, so it also reaches its recipients by SMS.</summary>
+    public bool IsMandatory => Sms is not null;
 }
 
 /// <summary>

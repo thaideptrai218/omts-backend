@@ -84,7 +84,7 @@ public partial class StagingDemoQaPasswordAndFakeTests
         var usesFake = api.GetTypes()
             .Where(t => t.IsAssignableTo(typeof(Microsoft.AspNetCore.Mvc.ControllerBase)))
             .Where(t => t.GetConstructors().SelectMany(c => c.GetParameters()).Any(p =>
-                p.ParameterType == typeof(FakeSmsSender) || p.ParameterType == typeof(FakeEmailSender) || p.ParameterType == typeof(FakePushSender) || p.ParameterType == typeof(FakeMessageInbox)))
+                p.ParameterType == typeof(FakeSmsSender) || p.ParameterType == typeof(FakeEmailSender) || p.ParameterType == typeof(FakeMessageInbox)))
             .ToList();
         Assert.Equal([typeof(DevInboxController)], usesFake);
     }

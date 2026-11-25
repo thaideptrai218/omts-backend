@@ -9,7 +9,7 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.QualityClaims;
 
 /// <summary>
-/// MSG-CLAIM-01 and MSG-CLAIM-02, added to the caller's save (GFR-06): the push goes after it commits, and the SMS row is delivered by the caller afterwards, so a message that fails undoes nothing.
+/// MSG-CLAIM-01 and MSG-CLAIM-02, added to the caller's save (GFR-06): the SMS row is delivered by the caller afterwards, so a message that fails undoes nothing.
 /// </summary>
 public sealed class QualityClaimNotifications(
     INotificationDispatcher notifications,

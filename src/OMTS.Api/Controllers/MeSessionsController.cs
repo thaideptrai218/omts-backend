@@ -39,9 +39,8 @@ public sealed class MeSessionsController(SessionManagementService sessionManagem
         Ok(await sessionManagement.ListDevicesAsync(currentUser.AccountId!.Value, currentUser.SessionId, cancellationToken));
 
     /// <summary>
-    /// Ends the caller's sessions on one device. Always 204, also when the device is unknown or already signed out. The route
-    /// shares its prefix with <c>DELETE devices/{token}</c> (a push token), so a device key must have the exact shape of one:
-    /// 43 base64url characters, the unpadded encoding of a SHA-256 value. A push token never has that shape.
+    /// Ends the caller's sessions on one device. Always 204, also when the device is unknown or already signed out. A device key has the exact shape
+    /// of one: 43 base64url characters, the unpadded encoding of a SHA-256 value.
     /// </summary>
     [HttpDelete("devices/{deviceKey:regex(^[[A-Za-z0-9_-]]{{43}}$)}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

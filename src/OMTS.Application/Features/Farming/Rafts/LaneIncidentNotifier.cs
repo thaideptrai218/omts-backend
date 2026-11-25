@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Farming.Rafts;
 
 /// <summary>
 /// The notices of lane incidents (decision of 12/11/2026): the Cooperative Owner is told when a lane is reported damaged or put out of service, unless the Owner did it. The notice is saved with the
-/// incident and pushed after it commits. A repair is told to nobody: it only clears what the damage notice said. The SRS has no message for these, so the text is a generic notice
+/// incident. A repair is told to nobody: it only clears what the damage notice said. The SRS has no message for these, so the text is a generic notice
 /// (<c>MINI_APP_NOTIFICATION</c>, as the other notices without an SRS code) and opens the raft.
 /// </summary>
 public sealed class LaneIncidentNotifier(IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications)

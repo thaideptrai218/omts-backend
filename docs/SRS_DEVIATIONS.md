@@ -74,7 +74,7 @@ Ba quyết định của chủ HTX ngày 24/11/2026 (OMTS-227, chờ PM đưa v�
 
 ## Tích hợp chưa có nhà cung cấp
 
-Các phần sau chạy bằng bản giả trong Development và chưa có nhà cung cấp thật: Payment Notification Service (API-12), SMS, email và push. OCR đọc ảnh đồng hồ đo nước (WATER-01) có bản thật chạy offline bằng PaddleOCR ([deployment-ocr.md](deployment-ocr.md)); số đọc được chỉ là gợi ý, người đo vẫn xác nhận. Chi tiết: [operations-reference.md](operations-reference.md#external-services-development).
+Các phần sau chạy bằng bản giả trong Development và chưa có nhà cung cấp thật: Payment Notification Service (API-12), SMS và email. OCR đọc ảnh đồng hồ đo nước (WATER-01) có bản thật chạy offline bằng PaddleOCR ([deployment-ocr.md](deployment-ocr.md)); số đọc được chỉ là gợi ý, người đo vẫn xác nhận. Chi tiết: [operations-reference.md](operations-reference.md#external-services-development).
 
 ## Câu hỏi mở phía backend
 

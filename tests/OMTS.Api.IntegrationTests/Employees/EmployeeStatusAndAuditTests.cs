@@ -89,7 +89,7 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal([(id, today.AddDays(-2))], records.RemovedAfter);
     }
 
-    // LABOR-01.3 step 5 and BR-LABOR-04: kept in the Owner's list and not pushed, matched by the phone number.
+    // LABOR-01.3 step 5 and BR-LABOR-04: kept in the Owner's list only, matched by the phone number.
     [Fact]
     public async Task A_staff_account_with_the_phone_of_the_employee_reminds_the_owner_and_is_not_locked()
     {

@@ -15,10 +15,9 @@ x-api: &api
     # Signed download links point at the API itself (/api/files/local/...), so phones and browsers can open them.
     Storage__Provider: Local
     Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?set it in .env}
-    # Nothing leaves the machine: codes and notifications are kept in the dev inbox (GET /api/dev/sms, /email, /push).
+    # Nothing leaves the machine: codes and notifications are kept in the dev inbox (GET /api/dev/sms, /email).
     Email__Provider: Fake
     Sms__Provider: Fake
-    Push__Provider: Fake
     Ocr__Provider: Fake
     # Demo cooperative and first Owner (fake data); the seed gives the Owner the demo password listed in the README.
     Bootstrap__Cooperative__FullName: "HTX Thủy sản Trung Nam"

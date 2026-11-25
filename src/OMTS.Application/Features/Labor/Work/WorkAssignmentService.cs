@@ -23,7 +23,7 @@ public sealed record LineCrewChange(IReadOnlyList<string> Added, IReadOnlyList<s
 /// LABOR-02: a Zone Manager assigns employees a job type and a raft for a date, edits or removes an assignment until the employee is
 /// checked in, and changes the job of a whole crew during the day (BR-LABOR-03). The Cooperative Owner does the same in every zone.
 /// The client asks MSG-LABOR-06 and MSG-GEN-04 before it sends. Notifying the employee (MSG-LABOR-05) needs the employee app and its
-/// linked device (LABOR-06), which does not exist yet, so nothing is pushed.
+/// linked device (LABOR-06), which does not exist yet, so the employee is not told.
 /// </summary>
 public sealed class WorkAssignmentService(
     IWorkAssignmentRepository assignments,

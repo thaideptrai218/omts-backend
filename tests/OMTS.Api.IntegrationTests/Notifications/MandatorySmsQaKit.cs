@@ -10,18 +10,13 @@ namespace OMTS.Api.IntegrationTests.Notifications;
 /// <summary>Helpers of the QA tests of the mandatory SMS: providers that misbehave in one way each, and a host outside Development.</summary>
 public static class MandatorySmsQaKit
 {
-    public static WaterApiFactory Host(ISmsSender? sms = null, IPushSender? push = null, params (string Key, string Value)[] settings) => new(
+    public static WaterApiFactory Host(ISmsSender? sms = null, params (string Key, string Value)[] settings) => new(
         settings.ToDictionary(s => s.Key, s => s.Value),
         services =>
         {
             if (sms is not null)
             {
                 services.AddSingleton(sms);
-            }
-
-            if (push is not null)
-            {
-                services.AddSingleton(push);
             }
         });
 
@@ -152,35 +147,5 @@ public static class MandatorySmsQaKit
             Interlocked.Increment(ref _delivered);
             return DeliveryResult.Sent("id");
         }
-    }
-
-    /// <summary>A push provider that blocks its thread until released.</summary>
-    public sealed class BlockingPushSender : IPushSender, IDisposable
-    {
-        private readonly ManualResetEventSlim _release = new();
-        private int _calls;
-
-        public int Calls => Volatile.Read(ref _calls);
-
-        public void Release() => _release.Set();
-
-        public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref _calls);
-            _release.Wait(TimeSpan.FromSeconds(60), CancellationToken.None);
-            return Task.FromResult(DeliveryResult.Sent("id"));
-        }
-
-        public void Dispose() => _release.Set();
-    }
-
-    /// <summary>A push provider that never answers and ignores its cancellation, until released.</summary>
-    public sealed class HangingPushSender : IPushSender
-    {
-        private readonly TaskCompletionSource<DeliveryResult> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public void Release() => _answer.TrySetResult(DeliveryResult.Sent("id"));
-
-        public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default) => _answer.Task;
     }
 }

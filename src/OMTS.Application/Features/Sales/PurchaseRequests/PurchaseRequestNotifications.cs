@@ -21,7 +21,7 @@ public sealed class PurchaseRequestNotifications(
     // "kept short for SMS" (MSG-SALE-03): the whole note stays in the notification list and on the request.
     private const int MaxNoteInSms = 80;
 
-    /// <summary>MSG-SALE-01, a mandatory type: always pushed (BR-ACCOUNT-11).</summary>
+    /// <summary>MSG-SALE-01, a mandatory type (BR-ACCOUNT-11).</summary>
     public async Task NewRequestAsync(PurchaseRequest request, CancellationToken cancellationToken) => await notifications.NotifyAsync(
         await owners.GetActiveOwnerIdsAsync(cancellationToken),
         new NotificationContent(

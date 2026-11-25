@@ -40,7 +40,6 @@ public class WaterCorrectionConflictTests
         var audit = Assert.Single(await api.AuditOfAsync(id), e => e.Action == "WaterMeasurement.Corrected");
         Assert.Contains("\"Salinity\":21", audit.Before);
         Assert.Single(await api.AlertsOfAsync(id), n => n.RecipientAccountId == manager.Id);
-        Assert.Single(api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString()), m => m.Text.Contains("corrected measurement"));
     }
 
     [Fact]
@@ -168,7 +167,7 @@ public class WaterCorrectionConflictTests
     }
 
     /// <summary>
-    /// A lost save ends as a real one on SQL Server does: nothing written, and the push messages stay queued until the use
+    /// A lost save ends as a real one on SQL Server does: nothing written, and the SMS messages stay queued until the use
     /// case discards its changes. The in-memory database cannot show that by itself, as it writes the rows of a failing save one by one.
     /// </summary>
     private sealed class LosingUnitOfWork(IUnitOfWork inner, LostSaves saves) : IUnitOfWork

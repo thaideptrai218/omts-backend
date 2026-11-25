@@ -29,7 +29,6 @@ internal static class DemoOnSharedServerKit
                 // The test host loads appsettings.Development.json whatever the environment; these are the shared-server values.
                 .UseSetting("Ocr:Provider", "")
                 .UseSetting("Sms:Provider", "None")
-                .UseSetting("Push:Provider", "None")
                 .UseSetting(DemoSeedGate.AllowOutsideDevelopmentKey, flag);
             if (password is not null)
             {
@@ -49,7 +48,6 @@ internal static class DemoOnSharedServerKit
             ["Storage:Local:SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
             ["Ocr:Provider"] = "",
             ["Sms:Provider"] = "None",
-            ["Push:Provider"] = "None",
             [DemoSeedGate.AllowOutsideDevelopmentKey] = "true",
             [DemoSeedGate.PasswordKey] = password,
         }).WithWebHostBuilder(b => b.UseEnvironment(environment));

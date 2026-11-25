@@ -36,8 +36,7 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
         var receipt = new PurchaseReceipt { Code = NewCode(), SupplierId = supplier.Id };
         var purchaseReturn = new PurchaseReturn { Code = NewCode(), ReceiptId = receipt.Id, SupplierId = receipt.SupplierId, Reason = "Hỏng" };
         var payment = new SupplierPayment { SupplierId = supplier.Id, Amount = 1 };
-        var device = new PushDevice { AccountId = account.Id, Token = NewCode(), Platform = "android" };
-        await factory.UseDbAsync(db => db.AddRange(raft, measurement, license, employee, supplier, item, receipt, purchaseReturn, payment, device));
+        await factory.UseDbAsync(db => db.AddRange(raft, measurement, license, employee, supplier, item, receipt, purchaseReturn, payment));
 
         var expected = new (string Type, Guid Id, Guid? Zone)[]
         {
@@ -57,7 +56,6 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
             (RelatedRecordTypes.PurchaseReceipt, receipt.Id, null),
             (nameof(PurchaseReturn), purchaseReturn.Id, null),
             (nameof(SupplierPayment), payment.Id, null),
-            (nameof(PushDevice), device.Id, null),
         };
 
         foreach (var (type, id, zoneId) in expected)

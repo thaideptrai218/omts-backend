@@ -6,14 +6,14 @@ using OMTS.Infrastructure.Messaging.Fakes;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// Development only: what the fake SMS, email and push senders "delivered" (verification codes,
+/// Development only: what the fake SMS and email senders "delivered" (verification codes,
 /// notifications), so web/mobile developers and tests can continue a flow without a real provider.
 /// </summary>
 [ApiController]
 [Route("api/dev")]
 [AllowAnonymous]
 [DevelopmentOnly]
-public sealed class DevInboxController(FakeSmsSender sms, FakeEmailSender email, FakePushSender push) : ControllerBase
+public sealed class DevInboxController(FakeSmsSender sms, FakeEmailSender email) : ControllerBase
 {
     [HttpGet("sms")]
     public IReadOnlyList<FakeMessage> ListSms(string? phoneNumber) => sms.Inbox.List(phoneNumber);
@@ -32,17 +32,6 @@ public sealed class DevInboxController(FakeSmsSender sms, FakeEmailSender email,
     public IActionResult ClearEmail()
     {
         email.Inbox.Clear();
-        return NoContent();
-    }
-
-    /// <summary>Pushes to an account (<c>accountId</c>) or to an employee of the employee app (<c>employeeId</c>); no filter lists all.</summary>
-    [HttpGet("push")]
-    public IReadOnlyList<FakeMessage> ListPush(Guid? accountId, Guid? employeeId) => push.Inbox.List((accountId ?? employeeId)?.ToString());
-
-    [HttpDelete("push")]
-    public IActionResult ClearPush()
-    {
-        push.Inbox.Clear();
         return NoContent();
     }
 }

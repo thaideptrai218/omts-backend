@@ -93,21 +93,6 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(("Personal profile saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
     }
 
-    // ACCOUNT-07 step 3: MSG-GEN-05; MSG-ACCOUNT-21 only when push is refused by every device.
-    [Fact]
-    public async Task Notification_preferences_save_carries_msg_gen_05_and_no_notice_code_when_push_is_not_asked()
-    {
-        var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(owner.Username);
-
-        var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } }))
-            .BodyAsync(HttpStatusCode.OK);
-
-        Assert.Equal(("Notification preferences saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
-        Assert.Equal(JsonValueKind.Null, saved.GetProperty("notice").ValueKind);
-        Assert.Equal(JsonValueKind.Null, saved.GetProperty("noticeCode").ValueKind);
-    }
-
     // ACCOUNT-03: MSG-ACCOUNT-20 for every identifier (BR-ACCOUNT-07), MSG-ACCOUNT-10 after the reset.
     [Fact]
     public async Task Recovery_carries_msg_account_20_then_msg_account_10()

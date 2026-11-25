@@ -10,10 +10,10 @@ namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
 /// GFR-04: the daily check of each zone In Use with an Open cycle (<see cref="WaterOverdueRule"/>), one zone per call so
-/// that a conflict on one zone costs only that zone. A zone that is due gets MSG-WATER-06, kept and pushed (normal type), to
+/// that a conflict on one zone costs only that zone. A zone that is due gets MSG-WATER-06, kept in the list (not mandatory), to
 /// its Zone Managers or, when it has none, to the Cooperative Owners. The job has no actor, so nobody is left out as in the
 /// water alert. The zone holds the day of its last reminder, saved with the notifications: a lost save keeps neither, and
-/// its push is never sent, so the next try sends one.
+/// nothing is kept, so the next try sends one.
 /// </summary>
 public sealed class WaterMeasurementOverdueReminder(
     IWaterMeasurementRepository measurements,

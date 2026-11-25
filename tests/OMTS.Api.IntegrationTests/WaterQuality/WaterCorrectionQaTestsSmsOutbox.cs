@@ -15,17 +15,17 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// QA of the changed <c>PushOutboxInterceptor</c> as any module sees it, one request scope on a real SQL Server: pushes go out
+/// QA of <c>MandatorySmsOutboxInterceptor</c> as any module sees it, one request scope on a real SQL Server: mandatory SMS go out
 /// after a success, not after a failure, and a later success in the same scope is not affected.
 /// </summary>
-public class WaterCorrectionQaTestsPushOutbox
+public class WaterCorrectionQaTestsSmsOutbox
 {
     [SqlServerFact]
-    public async Task A_push_goes_out_after_the_save_commits_and_never_twice()
+    public async Task An_sms_goes_out_after_the_save_commits_and_never_twice()
     {
         await using var test = await Scoped.StartAsync();
 
-        test.Outbox.Enqueue(test.Push("first"));
+        test.Outbox.Enqueue(test.Sms("first"));
         Assert.Empty(test.Inbox());
         await test.UnitOfWork.SaveChangesAsync();
         await test.UnitOfWork.SaveChangesAsync();
@@ -34,40 +34,40 @@ public class WaterCorrectionQaTestsPushOutbox
     }
 
     [SqlServerFact]
-    public async Task A_conflict_sends_no_push_and_after_a_discard_only_the_new_one_goes_out()
+    public async Task A_conflict_sends_no_sms_and_after_a_discard_only_the_new_one_goes_out()
     {
         await using var test = await Scoped.StartAsync();
         await test.LoseNextSaveAsync();
-        test.Outbox.Enqueue(test.Push("lost"));
+        test.Outbox.Enqueue(test.Sms("lost"));
 
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() => test.UnitOfWork.SaveChangesAsync());
         Assert.Empty(test.Inbox());
 
         test.UnitOfWork.DiscardChanges();
-        test.Outbox.Enqueue(test.Push("rerun"));
+        test.Outbox.Enqueue(test.Sms("rerun"));
         await test.UnitOfWork.SaveChangesAsync();
 
         Assert.Equal(["rerun"], test.Inbox());
     }
 
     [SqlServerFact]
-    public async Task A_success_keeps_its_push_when_a_later_save_of_the_request_conflicts_or_fails()
+    public async Task A_success_keeps_its_sms_when_a_later_save_of_the_request_conflicts_or_fails()
     {
         await using var test = await Scoped.StartAsync();
-        test.Outbox.Enqueue(test.Push("saved"));
+        test.Outbox.Enqueue(test.Sms("saved"));
         await test.UnitOfWork.SaveChangesAsync();
 
         await test.LoseNextSaveAsync();
-        test.Outbox.Enqueue(test.Push("conflict"));
+        test.Outbox.Enqueue(test.Sms("conflict"));
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() => test.UnitOfWork.SaveChangesAsync());
         test.UnitOfWork.DiscardChanges();
 
         test.Db.Rafts.Add(new Raft { ZoneId = test.Zone.Id, Code = test.RaftCode });
-        test.Outbox.Enqueue(test.Push("duplicate"));
+        test.Outbox.Enqueue(test.Sms("duplicate"));
         await Assert.ThrowsAsync<DuplicateRecordException>(() => test.UnitOfWork.SaveChangesAsync());
         test.UnitOfWork.DiscardChanges();
 
-        test.Outbox.Enqueue(test.Push("last"));
+        test.Outbox.Enqueue(test.Sms("last"));
         await test.UnitOfWork.SaveChangesAsync();
 
         Assert.Equal(["last", "saved"], test.Inbox().Order(StringComparer.Ordinal));
@@ -75,9 +75,9 @@ public class WaterCorrectionQaTestsPushOutbox
 
     // IUnitOfWork.ReloadAsync is documented for "retry after a conflict" and AuthService, CurrentPasswordProof and
     // VerificationService retry that way. A module that notifies and retries so keeps its Notification row (it stays Added),
-    // so its push must stay too: BR-ACCOUNT-11 "always pushed".
+    // so its SMS must stay too: BR-ACCOUNT-11 mandatory types also go by SMS.
     [SqlServerFact]
-    public async Task A_notification_saved_by_a_reload_retry_is_still_pushed()
+    public async Task A_notification_saved_by_a_reload_retry_still_sends_its_sms()
     {
         await using var test = await Scoped.StartAsync();
         var zone = await test.LoseNextSaveAsync();
@@ -107,7 +107,7 @@ public class WaterCorrectionQaTestsPushOutbox
 
         public IUnitOfWork UnitOfWork => scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        public IPushOutbox Outbox => scope.ServiceProvider.GetRequiredService<IPushOutbox>();
+        public IMandatorySmsOutbox Outbox => scope.ServiceProvider.GetRequiredService<IMandatorySmsOutbox>();
 
         public INotificationDispatcher Dispatcher => scope.ServiceProvider.GetRequiredService<INotificationDispatcher>();
 
@@ -120,10 +120,10 @@ public class WaterCorrectionQaTestsPushOutbox
             return new Scoped(database, api, api.Services.CreateScope(), seeded.Zone, seeded.Raft.Code, account);
         }
 
-        public PushMessage Push(string body) => new(account.Id, "QA", "QA", body, null, null, []);
+        public MandatorySmsMessage Sms(string body) => new(account.Id, "QA", account.PhoneNumber, body);
 
         public IReadOnlyList<string> Inbox() =>
-            api.Services.GetRequiredService<FakePushSender>().Inbox.List(account.Id.ToString()).Select(m => m.Text.Split(": ", 2)[1]).Order(StringComparer.Ordinal).ToList();
+            api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(account.PhoneNumber!).Select(m => m.Text).Order(StringComparer.Ordinal).ToList();
 
         /// <summary>Reads the zone in this scope, then changes its row from elsewhere: the next save of a change to it conflicts.</summary>
         public async Task<FarmingZone> LoseNextSaveAsync()

@@ -100,7 +100,7 @@ public class EmployeeAppQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     // Finding L2: the probe documented today's shared budget (a 429 here). The fix splits the policies, so the probe now asserts the recommendation:
-    // staff logins no longer use up the employee app's per-IP budget (its own limit is tested in EmployeeAppPushAndLimitTests).
+    // staff logins no longer use up the employee app's per-IP budget (its own limit is tested in EmployeeAppRateLimitTests).
     [Fact]
     public async Task Finding_staff_logins_do_not_use_up_the_employee_app_per_ip_budget()
     {
@@ -195,7 +195,7 @@ public class EmployeeAppQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         }
 
         // The real token still works, so the refusals above are the forgery's doing.
-        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(linked).PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await factory.AsEmployee(linked).GetAsync(Probe)).StatusCode);
     }
 
     // GBR-02 / data leaks: the secrets of the employee app never reach the logs.

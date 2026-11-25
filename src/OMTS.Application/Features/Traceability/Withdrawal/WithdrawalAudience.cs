@@ -4,7 +4,7 @@ namespace OMTS.Application.Features.Traceability.Withdrawal;
 
 /// <summary>One trader to notify of a withdrawal (BR-TRACE-07): a customer profile on at least one current sales invoice of the lot, with all those invoices, the oldest first.</summary>
 /// <param name="PhoneNumber">Null when the profile has none: nothing can be sent and the Cooperative Owner is told to call (TRACE-04 step 7).</param>
-/// <param name="TraderAccountId">The trader account the profile is linked to: the notice is also in its list and pushed (TRACE-04.1); null without one.</param>
+/// <param name="TraderAccountId">The trader account the profile is linked to: the notice is also in its list (TRACE-04.1); null without one.</param>
 public sealed record WithdrawalTrader(Guid CustomerId, string CustomerName, string? PhoneNumber, Guid? TraderAccountId, IReadOnlyList<string> InvoiceCodes);
 
 /// <summary>

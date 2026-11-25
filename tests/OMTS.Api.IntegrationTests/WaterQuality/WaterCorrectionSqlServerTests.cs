@@ -62,9 +62,6 @@ public class WaterCorrectionSqlServerTests
         var received = await db.Notifications.AsNoTracking().Where(n => n.RecipientAccountId == otherOwner.Id && n.RelatedRecordId == id).ToListAsync();
         Assert.Equal(notices.Count(n => n == WaterCorrectionNotice.CorrectedAlert), received.Count(n => n.Type == NotificationTypes.WaterAlert));
         Assert.Equal(notices.Count(n => n == WaterCorrectionNotice.AlertWithdrawn), received.Count(n => n.Type == NotificationTypes.WaterAlertWithdrawn));
-        // The pushes of the attempts that lost are dropped with them (EF Core reports a conflict apart from a failed save).
-        var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(otherOwner.Id.ToString());
-        Assert.Equal(received.Count, pushed.Count);
     }
 
     [SqlServerFact]

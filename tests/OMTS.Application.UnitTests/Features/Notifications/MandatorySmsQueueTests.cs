@@ -10,7 +10,7 @@ public class MandatorySmsQueueTests
 
     // A money type as the sibling branches will register it (SUPPLIER_TRANSACTION): this branch has none yet.
     private static readonly NotificationTypeDefinition MoneyType = new(
-        "SUPPLIER_TRANSACTION", "Supplier payment", NotificationPushPolicy.AlwaysPush, [NotificationRole.CooperativeOwner],
+        "SUPPLIER_TRANSACTION", "Supplier payment", [NotificationRole.CooperativeOwner],
         NotificationOpenAccess.OwnerOnly, NotificationSmsRule.MoneyToOwner("amount"));
 
     private static NotificationTypeDefinition Type(string code) => NotificationTypes.Find(code)!;

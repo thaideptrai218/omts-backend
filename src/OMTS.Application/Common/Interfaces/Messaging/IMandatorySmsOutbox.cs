@@ -2,7 +2,7 @@ namespace OMTS.Application.Common.Interfaces.Messaging;
 
 /// <summary>
 /// The SMS of the mandatory notifications waiting for the current unit of work. They share the queue and the lifecycle of
-/// the push messages (<see cref="IPushOutbox"/>): sent once, only after the save commits, and dropped when it fails.
+/// sent once, only after the save commits, and dropped when it fails.
 /// </summary>
 public interface IMandatorySmsOutbox
 {

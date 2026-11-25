@@ -176,35 +176,6 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
         Assert.Equal(all, paged);
     }
 
-    // The preferences are one JSON value of the account row (optimistic concurrency): concurrent saves either succeed or
-    // answer 409 MSG06, never 500, and the stored choice is one that was answered as saved.
-    [SqlServerFact]
-    public async Task Concurrent_preference_saves_answer_saved_or_409_and_never_lose_a_saved_choice_silently()
-    {
-        var (database, api, _, client, _) = await SetUpAsync();
-        await using var databaseLifetime = database;
-        await using var apiLifetime = api;
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => client.SavePushAsync(("WATER_MEASUREMENT_OVERDUE", i % 2 == 0))));
-
-        var saved = new List<bool>();
-        for (var i = 0; i < responses.Length; i++)
-        {
-            if (responses[i].StatusCode == HttpStatusCode.OK)
-            {
-                saved.Add(i % 2 == 0);
-                continue;
-            }
-
-            Assert.True(responses[i].StatusCode == HttpStatusCode.Conflict, $"{(int)responses[i].StatusCode} {await responses[i].Content.ReadAsStringAsync()}");
-            Assert.Equal("MSG06", await responses[i].ErrorCodeAsync());
-        }
-
-        output.WriteLine($"saved: {saved.Count}, 409: {responses.Length - saved.Count}");
-        Assert.NotEmpty(saved);
-        Assert.Contains((await client.OfferedTypesAsync())["WATER_MEASUREMENT_OVERDUE"].Push, saved);
-    }
-
     private static async Task<(SqlServerTestDatabase Database, SqlServerApiFactory Api, Account Owner, HttpClient Client, FarmingZone Zone)> SetUpAsync()
     {
         var database = SqlServerTestDatabase.Create();

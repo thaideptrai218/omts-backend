@@ -6,7 +6,7 @@ using OMTS.Domain.Entities.Harvest;
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>
-/// The notifications of a harvest plan, saved with the change and pushed after it commits. The Owner is not told of their own action (operational notice, PM decision OMTS-216), so an Owner who hands a plan
+/// The notifications of a harvest plan, saved with the change. The Owner is not told of their own action (operational notice, PM decision OMTS-216), so an Owner who hands a plan
 /// over in a zone with no Zone Manager, or who leaves lanes out, tells nobody but the other Owners.
 /// </summary>
 public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications)

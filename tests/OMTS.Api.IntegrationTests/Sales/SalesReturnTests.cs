@@ -309,21 +309,6 @@ public class SalesReturnTests
         await (await owner.PostReturnAsync(invoice.Id(), ReturnBody(invoice, "ThrownAway"))).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
     }
 
-    [Fact]
-    public async Task A_push_that_fails_undoes_nothing()
-    {
-        var (api, sale) = await StartAsync();
-        using var _ = api;
-        var owner = sale.Owner.Client;
-        var invoice = await OnDebtAsync(sale, sale.LotId, 10m);
-        api.RefusePushTo(sale.Owner.Account.Id);
-
-        await owner.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"));
-
-        Assert.Single(await api.ReturnsOfAsync(invoice.Id()));
-        Assert.Single(await api.ReturnNoticesAsync(invoice.Id()));
-    }
-
     // The return keeps its record of a line by id, with no foreign key: after a cancelled return, a correction may remove the line.
     [Fact]
     public async Task A_correction_after_a_cancelled_return_may_remove_a_line_of_that_return()

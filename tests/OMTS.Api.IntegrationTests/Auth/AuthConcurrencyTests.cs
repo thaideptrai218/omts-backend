@@ -132,7 +132,7 @@ public class AuthConcurrencyTests
 
     private sealed class RotateBeforeSaveUnitOfWork(OmtsDbContext db, RotationRace race) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db, new PushOutbox());
+        private readonly UnitOfWork _inner = new(db, new MandatorySmsOutbox());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

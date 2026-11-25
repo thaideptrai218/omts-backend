@@ -375,21 +375,21 @@ public class SeedingQaTestsSqlServer(Xunit.Abstractions.ITestOutputHelper output
         await (await owner.RemoveSeedingAsync(removedRecord.Id(), rowVersion: removedRecord.Text("rowVersion"))).ReadAsync(HttpStatusCode.NoContent);
     }
 
-    // CYCLE-02.1 "notified once": the push too, not only the row, whoever lost the parallel marks; a lost mark pushes nothing.
+    // CYCLE-02.1 "notified once": the row too, whoever lost the parallel marks; a lost mark notifies nobody.
     [SqlServerFact]
-    public async Task Parallel_marks_push_to_the_owner_once()
+    public async Task Parallel_marks_notify_the_owner_once()
     {
         var (host, owner, zoneId, _, _) = await StartAsync();
         await using var _host = host;
         var manager = await host.StaffInZoneAsync(zoneId);
-        var inbox = host.Api.Services.GetRequiredService<OMTS.Infrastructure.Messaging.Fakes.FakePushSender>().Inbox;
-        var before = inbox.List(host.Owner.Account.Id.ToString()).Count;
+        Task<int> ListedAsync() => host.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == host.Owner.Account.Id));
+        var before = await ListedAsync();
 
         for (var round = 0; round < 4; round++)
         {
             var cycle = await NewCycleAsync(owner, zoneId);
             await AssertAnsweredAsync($"round {round}", await InParallelAsync(4, _ => manager.Client.PostSeedingCompleteAsync(cycle.Id(), cycle.Text("rowVersion"), confirmEmpty: true)));
-            Assert.Equal(before + round + 1, inbox.List(host.Owner.Account.Id.ToString()).Count);
+            Assert.Equal(before + round + 1, await ListedAsync());
         }
     }
 

@@ -322,7 +322,6 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         Assert.Equal("MSG06", await (await pending).ErrorCodeAsync());
         Assert.Equal(0, await host.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "CYCLE_CLOSE_REMINDER")));
         Assert.Null(await host.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == raft.CycleId).Select(c => c.CloseRemindedAt).SingleAsync()));
-        Assert.DoesNotContain(host.Api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Account.Id.ToString()), m => m.Subject == "Reminder to close a cultivation cycle");
 
         await (await manager.Client.PutHarvestLotAsync(lot.Id(), Correction(lot, HarvestFields.OfLanes(1).FinishedLanes(1)))).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(1, await host.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "CYCLE_CLOSE_REMINDER" && n.RecipientAccountId == manager.Account.Id)));

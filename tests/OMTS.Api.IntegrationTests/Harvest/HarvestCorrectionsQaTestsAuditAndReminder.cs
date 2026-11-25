@@ -189,8 +189,6 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
         Assert.Equal(1, await RemindersAsync(api, raft.CycleId, second.Account.Id));
         var marker = await MarkerAsync(api, raft.CycleId);
         Assert.NotNull(marker);
-        var pushes = api.Services.GetRequiredService<FakePushSender>().Inbox.List(second.Account.Id.ToString());
-        Assert.Single(pushes, m => m.Subject == "Reminder to close a cultivation cycle");
     }
 
     // OMTS-216: an Owner is not told of their own act. With no manager in the zone the other Owners are; with only the acting Owner nobody is, and the answer alone says it.

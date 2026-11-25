@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Cultivation;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Enums;
@@ -13,14 +14,11 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
-/// <summary>MSG-HARVEST-01 to the Owner, a normal type, and MSG-CYCLE-08 (AC-13, BR-CYCLE-07), always pushed (BR-ACCOUNT-11). An Owner is not told of their own harvest (PM decision OMTS-216).</summary>
+/// <summary>MSG-HARVEST-01 to the Owner, a normal type, and MSG-CYCLE-08 (AC-13, BR-CYCLE-07), mandatory (BR-ACCOUNT-11). An Owner is not told of their own harvest (PM decision OMTS-216).</summary>
 public class HarvestLotNotificationTests
 {
     private const string LotType = "HARVEST_LOT_RECORDED";
     private const string ReminderType = "CYCLE_CLOSE_REMINDER";
-
-    private static IReadOnlyList<string?> PushSubjects(AuthApiFactory factory, Guid accountId) =>
-        factory.Services.GetRequiredService<FakePushSender>().Inbox.List(accountId.ToString()).Select(m => m.Subject).ToList();
 
     [Fact]
     public async Task A_lot_of_a_zone_manager_tells_every_owner_once_with_the_srs_text_and_not_the_manager()
@@ -47,7 +45,6 @@ public class HarvestLotNotificationTests
             Assert.Equal((raftCode, date.ToString("yyyy-MM-dd"), code), (parameters.RootElement.Text("raft_code"), parameters.RootElement.Text("harvest_date"), parameters.RootElement.Text("lot_code")));
             Assert.Equal((8, 385.5m), (parameters.RootElement.GetProperty("cage_count").GetInt32(), parameters.RootElement.GetProperty("estimated_kg").GetDecimal()));
         });
-        Assert.Contains("New harvest lot", PushSubjects(factory, raft.Owner.Account.Id));
     }
 
     [Fact]
@@ -64,25 +61,9 @@ public class HarvestLotNotificationTests
         Assert.Contains(other.Account.Id, told);
     }
 
-    // BR-ACCOUNT-11 does not list the harvest notification among the mandatory types: the Owner can turn its push off, and it stays in the list.
-    [Fact]
-    public async Task The_owner_can_turn_off_the_push_of_a_new_lot_and_the_row_stays_in_the_list()
-    {
-        using var factory = new AuthApiFactory();
-        var raft = await factory.SeededRaftAsync();
-        var manager = await factory.ManagerAsync(raft.ZoneId);
-        var off = await raft.Owner.Client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = LotType, push = false } } });
-        off.EnsureSuccessStatusCode();
-
-        var lot = await manager.Client.HarvestLotAsync(raft.RaftId);
-
-        Assert.Contains(await factory.NoticesAsync(LotType, lot.Id()), n => n.RecipientAccountId == raft.Owner.Account.Id);
-        Assert.DoesNotContain("New harvest lot", PushSubjects(factory, raft.Owner.Account.Id));
-    }
-
     // AC-13: lanes 1 to 9 Harvested, lane 10 Growing: nothing yet. Lane 10 finished: the Zone Managers of the zone receive it.
     [Fact]
-    public async Task Ac_13_the_last_seeded_lane_finished_reminds_every_zone_manager_of_the_zone_and_all_zones_and_is_always_pushed()
+    public async Task Ac_13_the_last_seeded_lane_finished_reminds_every_zone_manager_of_the_zone_and_all_zones_and_is_mandatory()
     {
         using var factory = new AuthApiFactory();
         var setup = await factory.OwnerAsync();
@@ -116,29 +97,6 @@ public class HarvestLotNotificationTests
             using var parameters = JsonDocument.Parse(n.MessageParams!);
             Assert.Equal(raftCode, parameters.RootElement.Text("raft_code"));
         });
-        Assert.Contains("Reminder to close a cultivation cycle", PushSubjects(factory, second.Account.Id));
-        Assert.Empty(PushSubjects(factory, elsewhere.Account.Id));
-        Assert.Empty(PushSubjects(factory, accountant.Account.Id));
-    }
-
-    // BR-ACCOUNT-11: the push of a mandatory type cannot be turned off.
-    [Fact]
-    public async Task The_reminder_is_pushed_whatever_the_preferences_hold_and_cannot_be_turned_off()
-    {
-        using var factory = new AuthApiFactory();
-        var raft = await factory.SeededRaftAsync(1);
-        var manager = await factory.ManagerAsync(raft.ZoneId);
-        var refused = await manager.Client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = ReminderType, push = false } } });
-        var preferences = await manager.Client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences");
-        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Contains(ReminderType, preferences.GetRawText());
-
-        // A row left from an older database does not stop it either.
-        await factory.UpdateAsync<OMTS.Domain.Entities.Identity.Account>(manager.Account.Id, a => a.NotificationPreferences.Add(new OMTS.Domain.Entities.Identity.NotificationPreference { Type = ReminderType, Push = false }));
-
-        await manager.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
-
-        Assert.Contains("Reminder to close a cultivation cycle", PushSubjects(factory, manager.Account.Id));
     }
 
     [Fact]
@@ -233,18 +191,12 @@ public class HarvestLotNotificationTests
     }
 
     [Fact]
-    public async Task The_types_are_offered_to_the_roles_that_receive_them()
+    public void The_types_go_to_the_roles_that_receive_them()
     {
-        using var factory = new AuthApiFactory();
-        var raft = await factory.SeededRaftAsync(1);
-        var manager = await factory.ManagerAsync(raft.ZoneId);
+        var lot = NotificationTypes.Find(LotType)!;
+        var reminder = NotificationTypes.Find(ReminderType)!;
 
-        var ofOwner = (await raft.Owner.Client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetRawText();
-        var ofManager = (await manager.Client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetRawText();
-
-        Assert.Contains(LotType, ofOwner);
-        Assert.Contains(ReminderType, ofOwner);
-        Assert.DoesNotContain(LotType, ofManager);
-        Assert.Contains(ReminderType, ofManager);
+        Assert.Equal([NotificationRole.CooperativeOwner], lot.Roles);
+        Assert.Equal([NotificationRole.CooperativeOwner, NotificationRole.ZoneManager], reminder.Roles);
     }
 }

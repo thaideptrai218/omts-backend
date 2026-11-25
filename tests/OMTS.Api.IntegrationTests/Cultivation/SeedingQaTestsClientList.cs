@@ -144,25 +144,18 @@ public class SeedingQaTestsClientList(AuthApiFactory factory) : IClassFixture<Au
         Assert.True((await owner.ZoneRowAsync(setup.ZoneId, setup.RaftId)).Flag("canCancel"));
     }
 
-    // Client list §4: the type on the preferences of an Owner only, push on by default and it can be turned off; the row stays in the list then.
+    // Client list §4: the new notice goes to the Owners only and stays in the list.
     [Fact]
-    public async Task The_new_notice_is_an_owner_preference_that_can_be_turned_off_and_stays_in_the_list()
+    public async Task The_new_notice_goes_to_the_owner_only_and_stays_in_the_list()
     {
         var setup = await factory.CycleAsync();
-        var owner = setup.Owner.Client;
         var manager = await factory.ManagerAsync(setup.ZoneId);
 
-        static async Task<Dictionary<string, JsonElement>> TypesAsync(HttpClient client) =>
-            (await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetProperty("types").EnumerateArray().ToDictionary(i => i.Text("type"));
-
-        var mine = await TypesAsync(owner);
-        Assert.True(mine["CYCLE_SEEDING_COMPLETED"].Flag("push"));
-        Assert.DoesNotContain("CYCLE_SEEDING_COMPLETED", (await TypesAsync(manager.Client)).Keys);
-
-        (await owner.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "CYCLE_SEEDING_COMPLETED", push = false } } })).EnsureSuccessStatusCode();
         await manager.Client.MarkSeedingCompleteAsync(setup.CycleId);
 
-        Assert.Contains(await factory.SeedingNoticesAsync(setup.CycleId), n => n.RecipientAccountId == setup.Owner.Account.Id);
+        var notices = await factory.SeedingNoticesAsync(setup.CycleId);
+        Assert.Contains(notices, n => n.RecipientAccountId == setup.Owner.Account.Id);
+        Assert.DoesNotContain(notices, n => n.RecipientAccountId == manager.Account.Id);
     }
 
     // Client list §5: the audit rows: values as codes and numbers, only the changed fields, the zone and the raft code.

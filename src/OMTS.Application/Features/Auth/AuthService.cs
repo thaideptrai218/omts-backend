@@ -21,7 +21,6 @@ public sealed class AuthService(
     IAccessGrantRepository grants,
     IEmployeeRepository employees,
     IOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions> testRoles,
-    IPushDeviceRepository pushDevices,
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
@@ -219,8 +218,7 @@ public sealed class AuthService(
     /// <param name="authMethod">How the person proved their identity; ignored when <paramref name="replacesSessionId"/> names a session.</param>
     /// <param name="deviceId">The client's random device id, hashed before it is stored; null, empty or <c>unknown</c> means no device.</param>
     /// <param name="replacesSessionId">
-    /// The caller's session that a password change just revoked: the push devices it registered belong to this
-    /// device and move to the new session, so the device keeps its notifications. The new session also keeps that
+    /// The caller's session that a password change just revoked: the new session keeps that
     /// session's device and sign-in method, so the device does not drop out of the device list.
     /// </param>
     /// <returns>
@@ -255,14 +253,6 @@ public sealed class AuthService(
         var refreshToken = tokenService.CreateRefreshToken(session.Id);
         session.RefreshTokenHash = tokenService.HashRefreshToken(refreshToken);
         sessions.Add(session);
-        if (replacesSessionId is { } replaced)
-        {
-            foreach (var device in await pushDevices.ListForSessionAsync(replaced, cancellationToken))
-            {
-                device.LoginSessionId = session.Id;
-            }
-        }
-
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // The caller checked the status before this save. A lock that committed meanwhile revoked only the sessions it

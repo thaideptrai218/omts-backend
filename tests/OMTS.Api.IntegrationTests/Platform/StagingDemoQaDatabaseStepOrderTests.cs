@@ -200,6 +200,5 @@ public partial class StagingDemoQaDatabaseTests
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.LoginSessions.AnyAsync());
         Assert.False(await db.VerificationCodes.AnyAsync());
-        Assert.False(await db.PushDevices.AnyAsync());
     }
 }

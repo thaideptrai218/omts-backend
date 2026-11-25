@@ -1,7 +1,6 @@
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
-using static OMTS.Application.Features.Notifications.NotificationPushPolicy;
 using static OMTS.Application.Features.Notifications.NotificationRole;
 
 namespace OMTS.Application.Features.Notifications;
@@ -40,15 +39,15 @@ public static class NotificationTypes
 
     /// <summary>To the trader: the Cooperative Owner approved the request.</summary>
 
-    /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
+    /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept in the list only (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
     /// <summary>
     /// MSG-LABOR-08, the login code of the employee app, to the account that issued it (LABOR-03 step 4, BR-LABOR-02): a normal type,
-    /// kept in the list and pushed unless turned off, and never sent to the employee.
+    /// kept in the list, and never sent to the employee.
     /// </summary>
     public const string EmployeeLoginCode = "EMPLOYEE_LOGIN_CODE";
-    /// <summary>MSG-LABOR-23, a new employee request, to the Owner (LABOR-10 step 6, BR-LABOR-04); push can be turned off.</summary>
+    /// <summary>MSG-LABOR-23, a new employee request, to the Owner (LABOR-10 step 6, BR-LABOR-04).</summary>
     public const string EmployeeRequestNew = "EMPLOYEE_REQUEST_NEW";
 
     /// <summary>MSG-SALE-01, a new purchase request, to the Owner (BR-SALE-03); mandatory (BR-ACCOUNT-11).</summary>
@@ -87,7 +86,7 @@ public static class NotificationTypes
     /// <summary>MSG-CYCLE-06, the summary of a closed cycle with the figures of the close day, to the Cooperative Owner (CYCLE-06 step 6). BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string CycleClosed = "CYCLE_CLOSED";
 
-    /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
+    /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05).</summary>
     public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
 
     /// <summary>MSG-PURCHASE-08, a receipt cancellation after which the supplier debt is below zero, to the Accountant and the Owner (BR-PURCHASE-05).</summary>
@@ -139,106 +138,106 @@ public static class NotificationTypes
 
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
-        new("WORK_ASSIGNMENT", "work assignment", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("NEW_ORDER", "new order", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new("TRACE_QR_SENT", "trace qr sent", NeverPush, [Trader], NotificationOpenAccess.TraderOfTheRecord),
-        new("WORK_PLAN_REQUESTED", "work plan requested", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
-        new("WORK_PLAN_RESPONDED", "work plan responded", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new("WORK_PLAN_STAFF_RESPONDED", "work plan staff responded", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
-        new("PURCHASE_SHIFT_INVITED", "purchase shift invited", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("PURCHASE_SHIFT_ASSIGNED", "purchase shift assigned", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("PURCHASE_SHIFT_RESPONDED", "purchase shift responded", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new("PURCHASE_SHIFT_CLOSED", "purchase shift closed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("PURCHASE_SHIFT_CONFIRMED", "purchase shift confirmed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("EMPLOYEE_LEAVE_REQUESTED", "employee leave requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new("EMPLOYEE_LEAVE_REVIEWED", "employee leave reviewed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
-        new("PURCHASE_REQUEST_RESPONDED", "purchase request responded", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
-        new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
+        new("WORK_ASSIGNMENT", "work assignment", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("NEW_ORDER", "new order", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("TRACE_QR_SENT", "trace qr sent", [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new("WORK_PLAN_REQUESTED", "work plan requested", [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
+        new("WORK_PLAN_RESPONDED", "work plan responded", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("WORK_PLAN_STAFF_RESPONDED", "work plan staff responded", [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
+        new("PURCHASE_SHIFT_INVITED", "purchase shift invited", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_SHIFT_ASSIGNED", "purchase shift assigned", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_SHIFT_RESPONDED", "purchase shift responded", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("PURCHASE_SHIFT_CLOSED", "purchase shift closed", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_SHIFT_CONFIRMED", "purchase shift confirmed", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("EMPLOYEE_LEAVE_REQUESTED", "employee leave requested", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("EMPLOYEE_LEAVE_REVIEWED", "employee leave reviewed", [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_REQUEST_RESPONDED", "purchase request responded", [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(WaterAlert, "Water alert", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View),
             NotificationSmsRule.MessageTextTo(CooperativeOwner, ZoneManager)),
         // The withdrawal is part of the mandatory water alert: BR-ACCOUNT-11 names WATER-02, which sends it (gap Q21).
-        new(WaterAlertWithdrawn, "Water alert withdrawn", AlwaysPush, [CooperativeOwner, ZoneManager],
+        new(WaterAlertWithdrawn, "Water alert withdrawn", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View),
             NotificationSmsRule.MessageTextTo(CooperativeOwner, ZoneManager)),
         // Opens Record water measurement (WATER-01) with the zone chosen (GFR-04).
-        new(WaterMeasurementOverdue, "Water measurement reminder", Default, [CooperativeOwner, ZoneManager],
+        new(WaterMeasurementOverdue, "Water measurement reminder", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
-        new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+        new(ZoneLicenseExpiry, "Zone license expiry reminder", [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
-        new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+        new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
-        new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(StaffAccountLockReminder, "Reminder to lock a staff account", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Issued by the Owner or a Zone Manager of the employee (BR-LABOR-02); the row opens nothing (the code is in its text).
-        new(EmployeeLoginCode, "Employee login code", Default, [CooperativeOwner, ZoneManager],
+        new(EmployeeLoginCode, "Employee login code", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.LaborWorkers, PermissionAction.Edit)),
         // Opens Review employee request (LABOR-05.1).
-        new(EmployeeRequestNew, "New employee request", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(EmployeeRequestNew, "New employee request", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens Respond to purchase request (SALE-03.2).
-        new(PurchaseRequestNew, "New purchase request", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+        new(PurchaseRequestNew, "New purchase request", [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
-        new(PurchaseRequestCancelled, "Purchase request cancelled", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(PurchaseRequestCancelled, "Purchase request cancelled", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens Track purchases (SALE-10.2), for the trader the request belongs to now.
-        new(PurchaseRequestResponse, "Response to a purchase request", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
-        new(CycleSeedingCompleted, "Seeding finished", Default, [CooperativeOwner],
+        new(PurchaseRequestResponse, "Response to a purchase request", [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(CycleSeedingCompleted, "Seeding finished", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
-        new(HarvestLotRecorded, "New harvest lot", Default, [CooperativeOwner],
+        new(HarvestLotRecorded, "New harvest lot", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),
         // Open the raft with its lanes, where the repair or the out-of-service is recorded.
-        new(LaneDamaged, "Lane damaged", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
-        new(LaneOutOfService, "Lane out of service", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
-        new(LaneProgressChanged, "Lane progress changed", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(LaneDamaged, "Lane damaged", [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(LaneOutOfService, "Lane out of service", [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(LaneProgressChanged, "Lane progress changed", [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opens the nursery batch (ươm giống), in its zone.
-        new(NurseryRecorded, "Nursery recorded", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(NurseryRecorded, "Nursery recorded", [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opens the lot, where it can be closed by hand (HARVEST-02).
-        new(HarvestLotAutoCloseWarning, "Harvest lot closing automatically", Default, [CooperativeOwner, ZoneManager],
+        new(HarvestLotAutoCloseWarning, "Harvest lot closing automatically", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),
         // Mandatory (BR-ACCOUNT-11), so it has an SMS: to the Owner only, as decided for every type but the water alert (OMTS-216, 03/11).
-        new(CycleCloseReminder, "Reminder to close a cultivation cycle", AlwaysPush, [CooperativeOwner, ZoneManager],
+        new(CycleCloseReminder, "Reminder to close a cultivation cycle", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View),
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         // Opens the progress view of the closed cycle on its close date (CYCLE-05.2).
-        new(CycleClosed, "Cultivation cycle closed", Default, [CooperativeOwner],
+        new(CycleClosed, "Cultivation cycle closed", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opening a purchase receipt follows the role only, whatever its zone (BR-FARM-08). Only the transaction of the
         // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
-        new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],
+        new(PurchaseReceiptCompleted, "New purchase receipt", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
-        new(PurchaseReceiptCancelledPaidInAdvance, "Supplier paid in advance after a receipt cancellation", Default, [CooperativeOwner, Accountant],
+        new(PurchaseReceiptCancelledPaidInAdvance, "Supplier paid in advance after a receipt cancellation", [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
-        new(SupplierTransaction, "Supplier payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+        new(SupplierTransaction, "Supplier payment transaction", [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
-        new(SupplierSmsBudget, "Supplier payment SMS budget of the day", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new(CultivationLogRecorded, "New cultivation log", Default, [CooperativeOwner],
+        new(SupplierSmsBudget, "Supplier payment SMS budget of the day", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(CultivationLogRecorded, "New cultivation log", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationLogs, PermissionAction.View)),
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
-        new(SaleCompleted, "New sale", Default, [CooperativeOwner],
+        new(SaleCompleted, "New sale", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
         // Goes to the person who sold (a Zone Manager or the Owner) and the Owner; it opens nothing: the sale was never saved as an invoice.
-        new(PendingSaleStopped, "Sale stopped at the end of the day", Default, [CooperativeOwner, ZoneManager], NotificationOpenAccess.OwnerOnly),
+        new(PendingSaleStopped, "Sale stopped at the end of the day", [CooperativeOwner, ZoneManager], NotificationOpenAccess.OwnerOnly),
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only. A list of confirmations and cancellations shows the
-        // total confirmed and the total cancelled apart in the SMS (PM answer 12/11/2026), the amount of the push and the list staying their sum.
-        new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+        // total confirmed and the total cancelled apart in the SMS (PM answer 12/11/2026), the amount of the list staying their sum.
+        new(CustomerPaymentTransaction, "Customer payment transaction", [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwnerSplit("amount", "confirmed_amount", "cancelled_amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
-        new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(ProvenanceWithdrawn, "Origin information withdrawn", [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // Opens the plan; a Zone Manager holds the right to view the plans handed to its zones.
-        new(HarvestPlanAssigned, "Harvest plan assigned", Default, [CooperativeOwner, ZoneManager],
+        new(HarvestPlanAssigned, "Harvest plan assigned", [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
-        new(HarvestPlanLanesSkipped, "Harvest plan lanes left out", Default, [CooperativeOwner],
+        new(HarvestPlanLanesSkipped, "Harvest plan lanes left out", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
-        new(HarvestPlanHandedOver, "Harvest plan handed over", Default, [CooperativeOwner],
+        new(HarvestPlanHandedOver, "Harvest plan handed over", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
-        new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
+        new(CustomerMoneyOwedBack, "Money owed back to a customer", [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
-        new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
-        new(QualityClaimNew, "New quality claim", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(TraderAccessRequested, "Trader access requested", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(TraderAccessApproved, "Trader access approved", [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(QualityClaimNew, "New quality claim", [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens the claim (CLAIM-02 response), for the trader the claim belongs to now.
-        new(QualityClaimResponse, "Response to your quality claim", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(QualityClaimResponse, "Response to your quality claim", [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // Opens the invoice (SALE-09), which shows the return.
-        new(SalesReturnRecorded, "New sales return", Default, [CooperativeOwner],
+        new(SalesReturnRecorded, "New sales return", [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
     ];
 
@@ -246,34 +245,4 @@ public static class NotificationTypes
 
     /// <summary>The registered type, or null.</summary>
     public static NotificationTypeDefinition? Find(string? code) => code is null ? null : ByCode.GetValueOrDefault(code);
-
-    /// <summary>The types a person holding <paramref name="roles"/> can receive and that are offered in the preferences.</summary>
-    public static IReadOnlyList<NotificationTypeDefinition> OfferedTo(IReadOnlySet<NotificationRole> roles) =>
-        All.Where(t => t.PushPolicy != NeverPush && t.Roles.Any(roles.Contains)).ToList();
-    private static readonly Dictionary<string, string> CategoryByType = new()
-    {
-        [WaterAlert] = NotificationCategories.WaterAlerts,
-        [WaterMeasurementOverdue] = NotificationCategories.DeadlineReminders,
-        [ZoneLicenseExpiry] = NotificationCategories.DeadlineReminders,
-        [WorkAssignment] = NotificationCategories.Work,
-        ["WORK_PLAN_REQUESTED"] = NotificationCategories.Work,
-        ["WORK_PLAN_RESPONDED"] = NotificationCategories.Work,
-        ["WORK_PLAN_STAFF_RESPONDED"] = NotificationCategories.Work,
-        ["PURCHASE_SHIFT_INVITED"] = NotificationCategories.Work,
-        ["PURCHASE_SHIFT_ASSIGNED"] = NotificationCategories.Work,
-        ["PURCHASE_SHIFT_RESPONDED"] = NotificationCategories.Work,
-        ["PURCHASE_SHIFT_CLOSED"] = NotificationCategories.Work,
-        ["PURCHASE_SHIFT_CONFIRMED"] = NotificationCategories.Work,
-        ["EMPLOYEE_LEAVE_REQUESTED"] = NotificationCategories.Work,
-        ["EMPLOYEE_LEAVE_REVIEWED"] = NotificationCategories.Work,
-        [NewOrder] = NotificationCategories.Orders,
-        ["PURCHASE_REQUEST_RESPONDED"] = NotificationCategories.Orders,
-        ["PURCHASE_REQUEST_CANCELLED"] = NotificationCategories.Orders,
-        [TraceQrSent] = NotificationCategories.TraceabilityQrSent,
-        [TraderAccessRequested] = NotificationCategories.Work,
-        [TraderAccessApproved] = NotificationCategories.Work,
-    };
-
-    /// <summary>Preference category of a type; an unknown type is its own category.</summary>
-    public static string CategoryOf(string type) => CategoryByType.GetValueOrDefault(type, type);
 }

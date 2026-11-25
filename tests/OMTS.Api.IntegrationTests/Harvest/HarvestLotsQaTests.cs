@@ -81,8 +81,6 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(new[] { manager.Account.Id, allZones.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.All(rows, n => Assert.Equal(("MSG-CYCLE-08", true), (n.MessageCode, n.IsMandatory)));
         Assert.DoesNotContain(rows, n => n.RecipientAccountId == elsewhere.Account.Id || n.RecipientAccountId == accountant.Account.Id || n.RecipientAccountId == owner.Account.Id);
-        var pushes = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Account.Id.ToString());
-        Assert.Contains(pushes, m => m.Subject == "Reminder to close a cultivation cycle");
         Assert.False((await manager.Client.HarvestScreenAsync(raftId)).Flag("canRecordHarvest"));
     }
 

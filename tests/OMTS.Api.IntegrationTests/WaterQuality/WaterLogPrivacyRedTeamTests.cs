@@ -10,7 +10,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// No personal data in the logs of the water flows (QA red team): recording with an alert and push, a failed
+/// No personal data in the logs of the water flows (QA red team): recording with an alert, a failed
 /// recognition, correcting, voiding, exporting, reading and the overdue reminder log ids and codes, never a
 /// phone number, email or display name.
 /// </summary>

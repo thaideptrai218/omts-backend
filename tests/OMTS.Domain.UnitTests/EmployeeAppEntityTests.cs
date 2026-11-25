@@ -64,9 +64,9 @@ public class EmployeeAppEntityTests
     }
 
     [Fact]
-    public void Unlinking_a_device_keeps_the_first_reason_and_forgets_the_push_token()
+    public void Unlinking_a_device_keeps_the_first_reason()
     {
-        var device = new EmployeeDevice { PushToken = "token", PushPermissionGranted = true, LinkedAt = Now };
+        var device = new EmployeeDevice { LinkedAt = Now };
 
         device.Unlink(Now.AddDays(1), EmployeeDeviceUnlinkReason.NewDevice);
         device.Unlink(Now.AddDays(2), EmployeeDeviceUnlinkReason.PhoneChanged);
@@ -74,8 +74,6 @@ public class EmployeeAppEntityTests
         Assert.False(device.IsLinked);
         Assert.Equal(Now.AddDays(1), device.UnlinkedAt);
         Assert.Equal(EmployeeDeviceUnlinkReason.NewDevice, device.UnlinkReason);
-        Assert.Null(device.PushToken);
-        Assert.False(device.PushPermissionGranted);
         Assert.True(new EmployeeDevice().IsLinked);
     }
 

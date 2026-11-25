@@ -159,9 +159,9 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         Assert.DoesNotContain(factory.Logs.Lines, l => l.Contains("999900000099"));
     }
 
-    // LABOR-01.3 step 5, BR-LABOR-04: the Owners' list, not pushed, whoever ends the employment.
+    // LABOR-01.3 step 5, BR-LABOR-04: the Owners' list only, whoever ends the employment.
     [Fact]
-    public async Task The_lock_reminder_goes_to_active_owners_only_is_never_pushed_and_holds_no_personal_field()
+    public async Task The_lock_reminder_goes_to_active_owners_only_and_holds_no_personal_field()
     {
         using var host = new AuthApiFactory();
         var (owner, zone, _) = await SetupAsync(host);
@@ -181,17 +181,10 @@ public class EmployeesV2QaPrivacyTests(AuthApiFactory factory) : IClassFixture<A
         Assert.All(rows, n => Assert.DoesNotContain("Riêng tư", n.Body));
         Assert.All(rows, n => Assert.DoesNotContain("999900000099", n.Body));
         Assert.All(rows, n => Assert.DoesNotContain(staff.PhoneNumber!, n.Body));
-        Assert.Empty(host.Services.GetRequiredService<FakePushSender>().Inbox.List());
 
-        // ACCOUNT-07 does not offer it, and a crafted preference changes nothing.
-        var preferences = await (await owner.GetAsync("/api/me/notification-preferences")).JsonAsync(HttpStatusCode.OK);
-        Assert.DoesNotContain("STAFF_ACCOUNT_LOCK_REMINDER", preferences.GetRawText());
-        var crafted = await owner.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "STAFF_ACCOUNT_LOCK_REMINDER", push = true } } });
-        Assert.True((int)crafted.StatusCode < 500);
         var second = await host.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Staff);
         var again = IdOf(await CreateAsync(owner, Profile($"Again {NewCode()}", second.PhoneNumber, zone.Id)));
         await EndAsync(owner, again);
-        Assert.Empty(host.Services.GetRequiredService<FakePushSender>().Inbox.List());
 
         // The list and the opening of the record work for the Owner; no one else reaches the notification.
         var list = await (await owner.GetAsync("/api/me/notifications")).JsonAsync(HttpStatusCode.OK);

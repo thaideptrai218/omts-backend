@@ -38,7 +38,7 @@ public class QualityClaimRespondTests
     private static List<Notification> Rows(IEnumerable<Notification> rows, string type) => rows.OfType(type).ToList();
 
     [Fact]
-    public async Task Accepting_records_the_offer_tells_the_trader_by_push_and_sms_and_changes_neither_invoice_nor_debt()
+    public async Task Accepting_records_the_offer_tells_the_trader_in_the_list_and_by_sms_and_changes_neither_invoice_nor_debt()
     {
         using var api = new QualityClaimApiFactory();
         var c = await ClaimedAsync(api);
@@ -60,7 +60,6 @@ public class QualityClaimRespondTests
         var sending = Assert.Single(rows.Sendings());
         Assert.Equal((StatusIds.MessageDelivery.Sent, profile.PhoneNumber), (sending.DeliveryStatusId, sending.PhoneNumber));
         Assert.Single(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(profile.PhoneNumber!));
-        Assert.Contains(api.Services.GetRequiredService<FakePushSender>().Inbox.List(c.World.Trader.Account.Id.ToString()), p => p.NotificationId == inApp.Id);
 
         var invoiceAfter = await api.QueryAsync(db => db.SalesInvoices.AsNoTracking().SingleAsync(i => i.Id == c.World.InvoiceId));
         Assert.Equal((invoiceBefore.StatusId, invoiceBefore.Total, invoiceBefore.PriceCutTotal), (invoiceAfter.StatusId, invoiceAfter.Total, invoiceAfter.PriceCutTotal));
@@ -111,7 +110,6 @@ public class QualityClaimRespondTests
         using var api = new QualityClaimApiFactory();
         var c = await ClaimedAsync(api);
         api.RefuseSmsTo(c.World.Trader.Profile.PhoneNumber!);
-        api.RefusePushTo(c.World.Trader.Account.Id);
 
         var answer = await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion)).ReadAsync(HttpStatusCode.OK);
 

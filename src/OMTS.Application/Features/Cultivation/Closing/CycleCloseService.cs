@@ -165,7 +165,7 @@ public sealed class CycleCloseService(
             ["laneNumbers"] = summary.NotHarvestedLanes,
         });
 
-    /// <summary>MSG-CYCLE-06 to the Cooperative Owners, saved with the close and pushed after it commits; an Owner who closed is not told of their own action (PM decision OMTS-216).</summary>
+    /// <summary>MSG-CYCLE-06 to the Cooperative Owners, saved with the close; an Owner who closed is not told of their own action (PM decision OMTS-216).</summary>
     private async Task NotifyOwnersAsync(CultivationCycle cycle, CycleSummary closed, CancellationToken cancellationToken)
     {
         var owners = await recipients.GetCooperativeOwnersAsync(cancellationToken);

@@ -11,7 +11,7 @@ namespace OMTS.Infrastructure.Persistence;
 /// All repositories of a request share the scoped <see cref="OmtsDbContext"/>, so one save commits
 /// their changes together; interceptors (permission cache) run here.
 /// </summary>
-internal sealed class UnitOfWork(OmtsDbContext db, PushOutbox outbox) : IUnitOfWork
+internal sealed class UnitOfWork(OmtsDbContext db, MandatorySmsOutbox outbox) : IUnitOfWork
 {
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

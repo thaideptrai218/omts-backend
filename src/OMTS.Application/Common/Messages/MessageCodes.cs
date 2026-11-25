@@ -75,7 +75,6 @@ public static class MessageCodes
     public const string Account18 = "MSG-ACCOUNT-18";
     public const string Account19 = "MSG-ACCOUNT-19";
     public const string Account20 = "MSG-ACCOUNT-20";
-    public const string Account21 = "MSG-ACCOUNT-21";
     public const string Account22 = "MSG-ACCOUNT-22";
     public const string Account23 = "MSG-ACCOUNT-23";
 
@@ -256,7 +255,6 @@ public static class MessageCodes
         public const string Msg18 = "MSG18";
         public const string Msg19 = "MSG19";
         public const string Msg20 = "MSG20";
-        public const string Msg22 = "MSG22";
         public const string Msg25 = "MSG25";
         public const string Msg26 = "MSG26";
         public const string Msg27 = "MSG27";

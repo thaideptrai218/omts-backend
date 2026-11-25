@@ -116,8 +116,6 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
     public async Task Certifications_are_reminded_to_the_owner_once_per_state()
     {
         var owner = await factory.OwnerAsync();
-        await factory.UpdateAsync<Account>(owner.Account.Id,
-            a => a.NotificationPreferences.Add(new NotificationPreference { Type = NotificationTypes.CooperativeCertificationExpiry, Push = false }));
         var manager = (await factory.StaffAccountAsync(await factory.ZoneEntityAsync((await owner.Client.CreateZoneAsync()).Id()))).Account.Id;
         var everywhere = (await factory.StaffAccountAsync(null, StaffRole.Accountant)).Account.Id;
         var expiring = await owner.Client.CreateCertificationAsync(new CertificationFields { ExpiryDate = Today.AddDays(15) });
@@ -147,14 +145,12 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
         Assert.Empty(await CertificationNoticesAsync(far.Id()));
         Assert.Empty(await CertificationNoticesAsync(never.Id()));
 
-        // Mandatory: pushed although the stored choice is off, with atomic parameters.
-        var pushed = Assert.Single(factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Account.Id.ToString()),
-            p => p.Text.StartsWith("COOPERATIVE_CERTIFICATION_EXPIRY:", StringComparison.Ordinal) && p.MessageCode == "MSG-FARM-01"
-                && p.MessageParams!.Value.GetProperty("certification_number").GetString() == expiring.Text("number"));
+        // The row carries atomic parameters.
+        var reminder = Assert.Single(await CertificationNoticesAsync(expiring.Id()), n => n.RecipientAccountId == owner.Account.Id && n.MessageCode == "MSG-FARM-01");
+        var parameters = System.Text.Json.JsonDocument.Parse(reminder.MessageParams!).RootElement;
         Assert.Equal(
             (expiring.Text("name"), Today.AddDays(15).ToString("yyyy-MM-dd"), 15),
-            (pushed.MessageParams!.Value.GetProperty("certification_name").GetString(), pushed.MessageParams!.Value.GetProperty("expiry_date").GetString(),
-                pushed.MessageParams!.Value.GetProperty("days").GetInt32()));
+            (parameters.GetProperty("certification_name").GetString(), parameters.GetProperty("expiry_date").GetString(), parameters.GetProperty("days").GetInt32()));
 
         // Expired: one more notice; a new expiry date re-arms the reminders.
         await Job.RunOnceAsync(Today.AddDays(16));

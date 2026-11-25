@@ -337,7 +337,7 @@ public class AccountRulesSqlServerTests
         var createdAt = DateTimeOffset.UtcNow.AddDays(-daysOld);
         DateTimeOffset? verifiedAt = verified ? createdAt : null;
         return db.Database.ExecuteSqlAsync(
-            $"INSERT INTO Accounts (Id, Username, DisplayName, PasswordHash, SubjectType, StatusId, FailedLoginCount, MustChangePassword, CreatedAt, NotificationPreferences, Email, EmailVerifiedAt) VALUES ({id}, {username}, {username}, N'x', N'Staff', 301, 0, 0, {createdAt}, N'[]', {email}, {verifiedAt})");
+            $"INSERT INTO Accounts (Id, Username, DisplayName, PasswordHash, SubjectType, StatusId, FailedLoginCount, MustChangePassword, CreatedAt, Email, EmailVerifiedAt) VALUES ({id}, {username}, {username}, N'x', N'Staff', 301, 0, 0, {createdAt}, {email}, {verifiedAt})");
     }
 
     private static string SmsCode(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> api, string phone) =>

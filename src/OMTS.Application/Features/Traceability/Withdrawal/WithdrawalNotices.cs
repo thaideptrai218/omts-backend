@@ -12,7 +12,7 @@ public sealed record QueuedWithdrawalNotice(WithdrawalTrader Trader, Notificatio
 /// <summary>
 /// TRACE-04 steps 6 and TRACE-04.1: one MSG-TRACE-05 per trader, listing their invoices (BR-TRACE-07), added to the caller's save. The sending to the phone is kept with its delivery status
 /// (BR-SALE-09) and delivered by the caller after the save, all at once (<see cref="TraderMessageService.DeliverAllAsync"/>); a profile without a phone gets a Not sent row at once. A trader with an
-/// active account also gets the notice in its list, pushed after the save. Nothing here saves.
+/// active account also gets the notice in its list. Nothing here saves.
 /// </summary>
 public sealed class WithdrawalNotices(
     ICooperativeRepository cooperatives, INotificationRepository notifications, INotificationDispatcher dispatcher, TraderMessageService traderMessages)
@@ -35,7 +35,7 @@ public sealed class WithdrawalNotices(
         var cooperativeName = cooperative.ShortName ?? cooperative.FullName;
         var accountIds = traders.Where(t => t.TraderAccountId is not null).Select(t => t.TraderAccountId!.Value).Distinct().ToList();
         // Locked accounts get nothing in a list (as the dispatcher does): one query for every trader.
-        HashSet<Guid> active = accountIds.Count == 0 ? [] : (await notifications.GetPreferencesAsync(accountIds, cancellationToken)).Keys.ToHashSet();
+        HashSet<Guid> active = accountIds.Count == 0 ? [] : (await notifications.GetActiveAccountIdsAsync(accountIds, cancellationToken)).ToHashSet();
 
         var queued = new List<QueuedWithdrawalNotice>(traders.Count);
         foreach (var trader in traders)

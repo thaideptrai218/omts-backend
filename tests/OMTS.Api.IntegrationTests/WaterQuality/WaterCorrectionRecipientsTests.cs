@@ -59,14 +59,12 @@ public class WaterCorrectionRecipientsTests(AuthApiFactory api) : IClassFixture<
         Assert.All(withdrawn, n => Assert.Contains($"{manager.DisplayName} voided the measurement. Reason: Đo nhầm.", n.Body));
     }
 
-    // Default for a PM question: MSG-WATER-04 is mandatory, as the alert is. Turning its push off does not stop it.
+    // Default for a PM question: MSG-WATER-04 is mandatory, as the alert is. It is kept whatever else is configured.
     [Fact]
-    public async Task The_withdrawal_is_mandatory_and_pushed_once_with_its_atomic_parameters()
+    public async Task The_withdrawal_is_mandatory_and_kept_with_its_atomic_parameters()
     {
         var z = await api.ZoneAsync();
         var (_, manager) = await api.StaffAsync(z.Zone);
-        await api.UseDbAsync(db => db.Accounts.Single(a => a.Id == manager.Id).NotificationPreferences.Add(
-            new NotificationPreference { Type = NotificationTypes.WaterAlertWithdrawn, Push = false }));
         var saved = await z.RecordedAsync(9m, 20m);
 
         await z.Owner.VoidAsync(saved.Id(), reason: "Đo nhầm");
@@ -76,7 +74,5 @@ public class WaterCorrectionRecipientsTests(AuthApiFactory api) : IClassFixture<
         Assert.Contains("\"corrected_or_voided\":\"voided\"", withdrawn.MessageParams);
         Assert.Contains("\"reason\":\"Đo nhầm\"", withdrawn.MessageParams);
         Assert.Contains($"\"user_name\":\"{z.OwnerAccount.DisplayName}\"", withdrawn.MessageParams);
-        var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString());
-        Assert.Single(pushed, m => m.Text.Contains("was withdrawn"));
     }
 }

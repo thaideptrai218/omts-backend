@@ -29,11 +29,6 @@ public class EmployeeDevice : Entity
 
     public string? DeviceName { get; set; }
 
-    /// <summary>Where the employee push goes; null when none was registered, and cleared when the device is unlinked.</summary>
-    public string? PushToken { get; set; }
-
-    public bool PushPermissionGranted { get; set; }
-
     public DateTimeOffset LinkedAt { get; set; }
 
     /// <summary>The login code whose entry linked the device.</summary>
@@ -65,7 +60,5 @@ public class EmployeeDevice : Entity
 
         UnlinkedAt = now;
         UnlinkReason = reason;
-        PushToken = null;
-        PushPermissionGranted = false;
     }
 }

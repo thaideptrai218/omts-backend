@@ -94,7 +94,7 @@ public class EmployeeAppRulesTests
         Assert.Equal(["employee_name", "reason"], message.Parameters!.Keys);
     }
 
-    // BR-LABOR-02, BR-LABOR-04: the code goes to the issuer's account as a normal type (push unless turned off), never by SMS and never to the employee.
+    // BR-LABOR-02, BR-LABOR-04: the code goes to the issuer's account as a normal type (kept in the list), never by SMS and never to the employee.
     [Fact]
     public void The_notification_of_the_code_is_a_normal_type_of_the_owner_and_the_zone_manager_with_no_sms()
     {
@@ -102,7 +102,7 @@ public class EmployeeAppRulesTests
 
         Assert.NotNull(type);
         Assert.False(type.IsMandatory);
-        Assert.Equal(NotificationPushPolicy.Default, type.PushPolicy);
+        Assert.False(type.IsMandatory);
         Assert.Equal([NotificationRole.CooperativeOwner, NotificationRole.ZoneManager], type.Roles);
         Assert.Null(type.Sms);
         Assert.DoesNotContain(NotificationRole.Trader, type.Roles);

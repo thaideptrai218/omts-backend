@@ -35,8 +35,8 @@ public interface ILoginSessionRepository
     Task<LoginSession?> GetLatestForDeviceAsync(Guid accountId, string deviceKey, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Deletes sessions whose refresh lifetime ended, or that were revoked, before <paramref name="cutoff"/>, and detaches the push
-    /// devices that still point to them. Runs in batches and saves by itself; returns the number of sessions deleted.
+    /// Deletes sessions whose refresh lifetime ended, or that were revoked, before <paramref name="cutoff"/>.
+    /// Runs in batches and saves by itself; returns the number of sessions deleted.
     /// </summary>
     Task<int> DeleteEndedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken);
 

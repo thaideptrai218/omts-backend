@@ -11,7 +11,7 @@ namespace OMTS.Api.IntegrationTests.Audit;
 
 /// <summary>
 /// QA of OMTS-216 PR 0.6 (GBR-02, NFR-01): the audit-writing flows the first secret scan did not run, ACCOUNT-01 (by phone,
-/// the only way now), ACCOUNT-05.1 email and phone changes, ACCOUNT-04 and a push device moving to another account, write
+/// the only way now), ACCOUNT-05.1 email and phone changes, ACCOUNT-04, write
 /// no password, code, token or hash, and no ACCOUNT-10 answer shows one.
 /// </summary>
 public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -50,11 +50,6 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var phoneToken = await VerifyAsync(trader, phoneChange, Keep(secrets, factory.LastSmsCode(newPhone)));
         await ReadAsync(await trader.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = Keep(secrets, phoneToken) }));
 
-        // The device logs in with the Owner account: its push token moves (PushDevice.Moved).
-        var pushToken = Keep(secrets, $"ExponentPushToken[{NewCode()}{NewCode()}]");
-        await ReadAsync(await trader.PostAsJsonAsync("/api/me/devices", new { token = pushToken, platform = "android", permissionGranted = true }), HttpStatusCode.NoContent, HttpStatusCode.OK);
-        await ReadAsync(await owner.PostAsJsonAsync("/api/me/devices", new { token = pushToken, platform = "android", permissionGranted = true }), HttpStatusCode.NoContent, HttpStatusCode.OK);
-
         Guid[] accounts = [traderId, secondTraderId];
         string[] targets = [phone, secondPhone, email, newPhone];
         secrets.AddRange(await factory.QueryAsync(db => db.Accounts.Where(a => accounts.Contains(a.Id)).Select(a => a.PasswordHash).ToListAsync()));
@@ -63,13 +58,12 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         secrets.AddRange(await factory.QueryAsync(db => db.LoginSessions.Where(s => accounts.Contains(s.AccountId)).Select(s => s.RefreshTokenHash).ToListAsync()));
         Assert.All(secrets, s => Assert.False(string.IsNullOrEmpty(s)));
 
-        var deviceId = await factory.QueryAsync(db => db.PushDevices.Where(d => d.Token == pushToken).Select(d => d.Id).SingleAsync());
-        Guid?[] records = [traderId, secondTraderId, deviceId];
+        Guid?[] records = [traderId, secondTraderId];
         Guid?[] actors = [traderId, secondTraderId];
         var stored = await factory.QueryAsync(db => db.AuditEvents
             .Where(e => records.Contains(e.RecordId) || actors.Contains(e.ActorAccountId)).ToListAsync());
         Assert.Superset(
-            new HashSet<string> { "Account.ContactChanged", "Account.PasswordChanged", "PushDevice.Moved" },
+            new HashSet<string> { "Account.ContactChanged", "Account.PasswordChanged" },
             stored.Select(e => e.Action).ToHashSet());
         Assert.Equal(2, stored.Count(e => e.Action == "Account.ContactChanged"));
         foreach (var e in stored)
@@ -78,7 +72,7 @@ public class AuditSecretFlowsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         }
 
         var answers = new List<string> { await owner.GetStringAsync("/api/audit-events/facets") };
-        foreach (var query in new[] { $"actorAccountId={traderId}", $"actorAccountId={secondTraderId}", $"actorAccountId={ownerAccount.Id}&action=PushDevice.Moved" })
+        foreach (var query in new[] { $"actorAccountId={traderId}", $"actorAccountId={secondTraderId}", $"actorAccountId={ownerAccount.Id}&action=Account.PasswordChanged" })
         {
             var list = await owner.GetStringAsync($"/api/audit-events?{query}");
             answers.Add(list);

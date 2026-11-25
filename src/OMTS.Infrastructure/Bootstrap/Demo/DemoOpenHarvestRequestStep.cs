@@ -13,7 +13,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// for a request of the product the cycle farms, see <see cref="DemoCycleProductStep"/>). Then ten test orders (13/11/2026), three or four for each of the three products, from different customers, with 8 to 20
 /// cages due today or tomorrow, whose note names the seed type the product is sold from, so the Owner can try recording a harvest for every product. The requests are written Accepted directly, as that step writes
 /// its own, because an accepted request through the API needs a work plan and staff the demo has none of; the rules a lot is recorded under (<c>PurchaseRequestRules.RefusesHarvestLotAsync</c>) look at the status,
-/// the harvest mark and the invoices only, and are not changed. No SMS or push is queued, so no sender is reached. They move no stock: a request reserves nothing (BR-SALE-01). They are made only when a raft of
+/// the harvest mark and the invoices only, and are not changed. No SMS is queued, so no sender is reached. They move no stock: a request reserves nothing (BR-SALE-01). They are made only when a raft of
 /// an In Use zone has an Open cycle and a usable lane (In Use, not damaged, not out of service) to harvest, and none asks for pay later, so the demo sales step never picks them. They run after the lots and the
 /// sales of the demo, so neither takes them.
 /// </summary>

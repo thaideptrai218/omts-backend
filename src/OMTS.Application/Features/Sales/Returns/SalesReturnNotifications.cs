@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.Sales.Returns;
 
 /// <summary>
 /// CLAIM-03 step 9, MSG-CLAIM-05: to the Cooperative Owners; when the customer debt is now below zero also to the Accountants, as the owed-back type, who pay the money back in DEBT-02. The rows join
-/// the save and are pushed after it commits, so a failed push never undoes the return (GFR-06). A cancellation sends none (BR-CLAIM-03).
+/// the save and a failed SMS never undoes the return (GFR-06). A cancellation sends none (BR-CLAIM-03).
 /// </summary>
 public sealed class SalesReturnNotifications(IZoneRecipientQuery recipients, IAccountRepository accounts, INotificationDispatcher notifications, ICurrentUser currentUser)
 {

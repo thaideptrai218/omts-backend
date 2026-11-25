@@ -243,8 +243,6 @@ public class SupplierPaymentSameDebtReadingSqlServerTests
         Assert.Equal((900_000m, 900_000m), (first.Money("debtAfter"), second.Money("debtAfter")));
         Assert.Equal(1, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.SupplierId == world.SupplierId)));
         Assert.Equal(1, await host.QueryAsync(db => db.Notifications.CountAsync(n => n.RelatedRecordId == first.Id() && n.RecipientAccountId == host.Owner.Account.Id)));
-        var pushes = api.Services.GetRequiredService<FakePushSender>().Inbox.List(host.Owner.Account.Id.ToString());
-        Assert.Single(pushes, p => p.MessageParams is { } values && values.TryGetProperty("payment_code", out var code) && code.GetString() == first.GetProperty("code").GetString());
     }
 
     // A loser to another payment holds no payment of its key: MSG06, and the same key then records it, once.

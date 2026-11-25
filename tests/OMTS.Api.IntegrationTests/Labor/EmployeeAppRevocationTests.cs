@@ -117,13 +117,13 @@ public class EmployeeAppRevocationTests(AuthApiFactory factory) : IClassFixture<
         var linked = await LinkDeviceAsync(host, world, worker);
         await EndAsync(world.Owner, worker.Id, Today());
         var phone = host.AsEmployee(linked);
-        Assert.Equal(HttpStatusCode.NoContent, (await phone.PutAsJsonAsync(PushToken, new { pushToken = "still-employed", pushPermissionGranted = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await phone.GetAsync(Probe)).StatusCode);
 
         Assert.Equal(1, await host.Services.GetRequiredService<EmploymentEndJob>().RunOnceAsync(Today().AddDays(1)));
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await phone.PostAsync(Logout, null)).StatusCode);
         var device = await host.DeviceAsync(linked);
-        Assert.Equal((false, (EmployeeDeviceUnlinkReason?)EmployeeDeviceUnlinkReason.EmploymentEnded, null), (device.IsLinked, device.UnlinkReason, device.PushToken));
+        Assert.Equal((false, (EmployeeDeviceUnlinkReason?)EmployeeDeviceUnlinkReason.EmploymentEnded), (device.IsLinked, device.UnlinkReason));
         Assert.All(await host.SessionsAsync(worker.Id), s => Assert.NotNull(s.RevokedAt));
         var unlinked = Assert.Single(await host.AuditAsync(worker.Id, "Employee.DeviceUnlinked"));
         Assert.Equal(((Guid?)null, (Guid?)null), (unlinked.ActorAccountId, unlinked.ActorEmployeeId));
