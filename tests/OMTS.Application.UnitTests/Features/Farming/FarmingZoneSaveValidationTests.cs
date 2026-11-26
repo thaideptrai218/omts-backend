@@ -98,15 +98,27 @@ public class FarmingZoneSaveValidationTests
     }
 
     [Fact]
-    public void An_edit_without_a_pin_clears_the_pin_of_a_zone_that_has_no_boundary()
+    public void An_edit_without_a_pin_keeps_the_pin_of_a_zone_that_has_no_boundary()
     {
         var zone = new FarmingZone { Latitude = 21.05m, Longitude = 107.35m };
         FarmingZoneService.Validate(Request(), out var values);
 
-        FarmingZoneService.Apply(zone, values, keepPin: false);
+        FarmingZoneService.Apply(zone, values, keepPin: FarmingZoneService.KeepsPin(zone, values));
 
-        Assert.Null(zone.Latitude);
-        Assert.Null(zone.Longitude);
+        Assert.Equal(21.05m, zone.Latitude);
+        Assert.Equal(107.35m, zone.Longitude);
+    }
+
+    [Fact]
+    public void An_edit_that_sends_a_pin_moves_the_pin_of_a_zone_that_has_no_boundary()
+    {
+        var zone = new FarmingZone { Latitude = 21.05m, Longitude = 107.35m };
+        FarmingZoneService.Validate(Request(latitude: 21.1m, longitude: 107.4m), out var values);
+
+        FarmingZoneService.Apply(zone, values, keepPin: FarmingZoneService.KeepsPin(zone, values));
+
+        Assert.Equal(21.1m, zone.Latitude);
+        Assert.Equal(107.4m, zone.Longitude);
     }
 
     [Fact]

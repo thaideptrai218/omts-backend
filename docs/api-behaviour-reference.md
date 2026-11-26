@@ -198,7 +198,7 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   optional and still checked when sent: the pin is both numbers or none, (0, 0) and a swapped pair are refused, a pin outside
   Vietnam only warns (`COORDINATES_OUTSIDE_VIETNAM`). Once a zone has a boundary its pin belongs to the server (see below): an edit
   never moves or wipes it, whatever `latitude` and `longitude` it sends or omits. An edit of a zone without a boundary that omits
-  the pin clears it, like any other omitted field.
+  the pin keeps the stored pin (the apps have no pin field any more); sending both numbers moves it.
 - Zone boundary (PM decision 25/11/2026, warn, never block): `PUT /api/zones/{id}/boundary` (Owner, In Use zone, `rowVersion`
   as the edit) with `{ boundary, rowVersion }` saves the licensed sea area the app read from the photographed map, as RFC 7946
   GeoJSON in WGS84 (positions `[longitude, latitude]`): a `FeatureCollection` of 1 to 10 `Feature`s, each a `Polygon` of one

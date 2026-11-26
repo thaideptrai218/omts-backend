@@ -148,7 +148,7 @@ public sealed class FarmingZoneService(
 
         var before = Snapshot(zone);
         // Once the zone has a boundary its pin is the boundary's centroid, set by the server: the edit never moves or wipes it.
-        Apply(zone, values, keepPin: zone.BoundaryGeoJson is not null);
+        Apply(zone, values, keepPin: KeepsPin(zone, values));
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(zone));
         if (changedAfter is not null)
         {
@@ -340,6 +340,12 @@ public sealed class FarmingZoneService(
         values = new ZoneValues(code, name, location, latitude, longitude, request.Area);
         return check;
     }
+
+    /// <summary>
+    /// An edit keeps the stored pin when the zone has a boundary (the pin is its centroid) or when the edit sends no pin: the apps
+    /// no longer have a pin field, so an omitted pin means "unchanged", never "clear".
+    /// </summary>
+    internal static bool KeepsPin(FarmingZone zone, ZoneValues values) => zone.BoundaryGeoJson is not null || values.Latitude is null;
 
     /// <param name="keepPin">The zone has a boundary: its pin is the boundary's centroid and the values sent for it are ignored.</param>
     internal static void Apply(FarmingZone zone, ZoneValues values, bool keepPin)
