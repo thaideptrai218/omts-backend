@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -13,6 +14,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Verification;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.AccessManagement;
@@ -62,10 +64,16 @@ public sealed class StaffAccountService(
         Employee? employee = null;
         if (request.EmployeeId is { } employeeId)
         {
-            employee = await employees.GetByIdAsync(employeeId, cancellationToken);
+            employee = await employees.GetForEditAsync(employeeId, cancellationToken);
             if (employee is null || employee.AccountId is not null || employee.StatusId != StatusIds.Employee.Working)
             {
                 return AppError.Invalid("Employee");
+            }
+
+            // A seasonal worker has no login account (owner decision of 26/11/2026): same MSG-GEN-01 "Account" as the employee side.
+            if (EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today()) == EmployeeType.SeasonalWorker)
+            {
+                return AppError.Invalid("Account");
             }
         }
 
@@ -311,7 +319,7 @@ public sealed class StaffAccountService(
     /// <summary>
     /// "Xóa người dùng" (soft delete, Owner only): the account gets status Deleted, every session ends, its Effective pairs are revoked and
     /// the linked employee is unlinked (so it can be given another account); the row stays, so audit and history keep showing the name.
-    /// The username, phone number and email stay reserved. Refused: another subject type (the Owner account, traders: 403), the caller's own
+    /// The username, phone number and email are freed (see <see cref="DeletedAccountIdentifiers"/>). Refused: another subject type (the Owner account, traders: 403), the caller's own
     /// account (403), an account already Deleted (409), no or a too long reason (400), a stale rowVersion when one is sent (409).
     /// </summary>
     public async Task<Result<StaffAccountView>> DeleteAsync(Guid id, DeleteAccountRequest request, CancellationToken cancellationToken)
@@ -365,6 +373,8 @@ public sealed class StaffAccountService(
         }
 
         audit.RecordStatusChange(nameof(Account), account.Id, account.Username, from, StatusIds.Account.Deleted, reason);
+        // The audit row above keeps the real username; the row itself frees username, phone and email for a new account.
+        DeletedAccountIdentifiers.Release(account);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         // As for a lock: a login that stored its session while this save was running is swept now.
         await sessions.RevokeAllAsync(account.Id, timeProvider.GetUtcNow(), "Account deleted", cancellationToken);

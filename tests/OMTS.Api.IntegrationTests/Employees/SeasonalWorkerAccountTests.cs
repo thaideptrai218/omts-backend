@@ -68,6 +68,27 @@ public class SeasonalWorkerAccountTests(AuthApiFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task No_path_binds_an_account_to_a_seasonal_worker_but_staff_still_links()
+    {
+        var (owner, zone, role) = await SetupAsync(factory);
+        var seasonal = await CreateAsync(owner, SeasonalProfile($"No bind {NewCode()}", NewPhone()));
+        var staff = await CreateAsync(owner, StaffProfile($"Bind ok {NewCode()}", NewPhone(), zone.Id));
+        var free = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Free", username = $"s{NewCode()}", phoneNumber = NewPhone(), grants = new[] { new { zoneId = zone.Id, roleId = role.Id } } });
+        var freeId = (await free.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("account").GetProperty("id").GetGuid();
+
+        var link = await owner.PostAsJsonAsync($"/api/employees/{IdOf(seasonal)}/account/link", new { accountId = freeId });
+        var create = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Seasonal", username = $"s{NewCode()}", phoneNumber = NewPhone(), employeeId = IdOf(seasonal) });
+        var linkStaff = await owner.PostAsJsonAsync($"/api/employees/{IdOf(staff)}/account/link", new { accountId = freeId });
+
+        Assert.Equal(HttpStatusCode.BadRequest, link.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+        Assert.Equal("Account", (await link.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
+        Assert.Equal("Account", (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
+        Assert.Equal(HttpStatusCode.OK, linkStaff.StatusCode);
+        Assert.Null((await factory.QueryAsync(db => db.Employees.AsNoTracking().SingleAsync(e => e.Id == IdOf(seasonal)))).AccountId);
+    }
+
+    [Fact]
     public async Task A_staff_employee_still_needs_a_zone_and_gets_no_account_unless_the_owner_issues_one()
     {
         var (owner, zone, _) = await SetupAsync(factory);

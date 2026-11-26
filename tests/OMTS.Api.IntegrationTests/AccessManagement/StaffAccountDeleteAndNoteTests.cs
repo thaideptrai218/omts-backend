@@ -99,7 +99,7 @@ public class StaffAccountDeleteAndNoteTests(AuthApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task Delete_unlinks_the_employee_and_keeps_the_username_phone_and_email_reserved()
+    public async Task Delete_unlinks_the_employee_and_frees_the_username_phone_and_email_for_a_new_account()
     {
         var (owner, zone, role) = await SetupAsync();
         var employee = await EmployeeRequests.CreateAsync(owner, EmployeeRequests.StaffProfile($"Có tài khoản {NewCode()}", NewPhone(), zone.Id));
@@ -110,18 +110,25 @@ public class StaffAccountDeleteAndNoteTests(AuthApiFactory factory) : IClassFixt
         Assert.Equal(employeeId, created.GetProperty("account").GetProperty("employeeId").GetGuid());
 
         var deleted = await (await owner.PostAsJsonAsync($"/api/accounts/{id}/delete", new { reason = "Nghỉ" })).Content.ReadFromJsonAsync<JsonElement>();
-        var again = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Mới", username, phoneNumber = NewPhone() });
-        var samePhone = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Mới", username = $"s{NewCode()}", phoneNumber = phone });
-        var sameEmail = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Mới", username = $"s{NewCode()}", phoneNumber = NewPhone(), email });
 
         Assert.Equal(JsonValueKind.Null, deleted.GetProperty("employeeId").ValueKind);
         Assert.Null((await factory.QueryAsync(db => db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId))).AccountId);
-        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, samePhone.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, sameEmail.StatusCode);
-        // The employee can be given another account.
-        var next = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Có NV 2", username = $"s{NewCode()}", phoneNumber = NewPhone(), employeeId });
+        // The deleted row keeps its id and display name and carries the marker.
+        var shortId = id.ToString("N")[..8];
+        Assert.Equal($"{username}~deleted-{shortId}", deleted.GetProperty("username").GetString());
+        Assert.Equal($"{phone}~{shortId}", deleted.GetProperty("phoneNumber").GetString());
+        Assert.Equal($"{email}~deleted-{shortId}", deleted.GetProperty("email").GetString());
+        Assert.Equal("Có NV", deleted.GetProperty("displayName").GetString());
+        // A new account takes the same username, phone and email, and the same employee, right away.
+        var next = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Mới", username, phoneNumber = phone, email, employeeId });
         Assert.Equal(HttpStatusCode.Created, next.StatusCode);
+        // The deleted row is still listed with includeDeleted and its name still resolves in the audit trail.
+        var withDeleted = await owner.GetFromJsonAsync<JsonElement>($"/api/accounts?search={shortId}&includeDeleted=true");
+        Assert.Equal("Có NV", Assert.Single(withDeleted.GetProperty("items").EnumerateArray()).GetProperty("displayName").GetString());
+        Assert.True(await factory.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.RecordId == id && e.Action == "Account.StatusChanged" && e.RecordCode == username)));
+        // The old username no longer finds the deleted row, so a login by it reaches the new account only.
+        Assert.Equal(id, (await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == id))).Id);
+        Assert.Equal(1, await factory.QueryAsync(db => db.Accounts.CountAsync(a => a.Username == username)));
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Validation;
+using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Constants;
@@ -111,6 +112,13 @@ public sealed class DeploymentBootstrapper(
 
         await db.SaveChangesAsync(cancellationToken);
 
+        // Accounts deleted before the "cách A" rule (26/11/2026) free their username, phone and email now. Idempotent.
+        var released = await ReleaseDeletedAccountIdentifiersAsync(cancellationToken);
+        if (released > 0)
+        {
+            messages.Add($"Deleted accounts: {released} had their username, phone and email freed.");
+        }
+
         if (seedDemoData)
         {
             // After the save above: the demo steps act as the Owner, which must exist in the database. The
@@ -123,6 +131,22 @@ public sealed class DeploymentBootstrapper(
         messages.Add(await addressCodes.RunAsync(cancellationToken));
 
         return new BootstrapOutcome(Success, messages);
+    }
+
+    private async Task<int> ReleaseDeletedAccountIdentifiersAsync(CancellationToken cancellationToken)
+    {
+        var deleted = await db.Accounts.Where(a => a.StatusId == StatusIds.Account.Deleted && !a.Username.Contains(DeletedAccountIdentifiers.Marker)).ToListAsync(cancellationToken);
+        foreach (var account in deleted)
+        {
+            DeletedAccountIdentifiers.Release(account);
+        }
+
+        if (deleted.Count > 0)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return deleted.Count;
     }
 
     private async Task<int> MissingStatusCatalogRowsAsync(CancellationToken cancellationToken)

@@ -341,7 +341,13 @@ public sealed class EmployeeService(
             return AppError.Invalid("Account");
         }
 
-        var linkable = await staffAccounts.GetLinkableAsync(accountId, cancellationToken);
+        // A seasonal worker has no login account (owner decision of 26/11/2026).
+        if (EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today()) == EmployeeType.SeasonalWorker)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        var linkable =await staffAccounts.GetLinkableAsync(accountId, cancellationToken);
         if (!linkable.IsSuccess)
         {
             return linkable.Error!;
