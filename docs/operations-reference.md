@@ -24,9 +24,9 @@ An answer sends an SMS, so with an SMS sender other than Fake or None the reques
 such a sender gets no mandatory SMS of the seed either (new purchase requests, water alerts).
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C) and one water
 measurement a day for the 30 days before the seed day, going round the rafts In Use of the zone, each with its temperature
-and a placeholder meter photo: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
-26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the Zone Managers' inboxes hold four
-sets of water alerts (the demo records as the Owner, who is not told of their own action). Phone numbers are fake
+and a placeholder meter photo: three readings outside the thresholds and one voided reading (a measurement is never corrected,
+only voided), so the Zone Managers' inboxes hold three sets of water alerts (the demo records as the Owner, who is not told of
+their own action). Phone numbers are fake
 (`0900 000 0xx`).
 
 Rafts `B1-01`, `B1-02`, `B2-01`, `B2-02` have material usage inside their Open cycles, and `B1-06`, `B2-06` a repair with no cycle, recorded by the zone's manager.

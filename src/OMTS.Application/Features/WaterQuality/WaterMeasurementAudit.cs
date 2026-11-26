@@ -8,6 +8,8 @@ public static class WaterMeasurementAudit
 {
     public const string RecordType = nameof(WaterMeasurement);
     public const string Created = "WaterMeasurement.Created";
+
+    /// <summary>Written until 26/11/2026, when corrections were removed; the audit log keeps those rows and reads them as before.</summary>
     public const string Corrected = "WaterMeasurement.Corrected";
     public const string Voided = "WaterMeasurement.Voided";
     public const string ThresholdUpdated = "WaterThreshold.Updated";

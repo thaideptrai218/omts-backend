@@ -11,7 +11,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
-/// <summary>QA of WATER-02 PRE-2, BR-WATER-06, GBR-01 and the matrix §I.4.4: who may correct or void what.</summary>
+/// <summary>QA of WATER-02 PRE-2, BR-WATER-06, GBR-01 and the matrix §I.4.4: who may void what.</summary>
 public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     private async Task<(HttpClient Client, Account Account)> StaffAsync(StaffRole role, FarmingZone? zone)
@@ -36,11 +36,10 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
 
         await RevokeAsync(await PairOfAsync(account));
         await api.GrantAsync(account, StaffRole.ZoneManager, other.Zone);
-        Assert.Equal(HttpStatusCode.Forbidden, (await manager.CorrectAsync(saved.Id(), 7.1m, 20m, raftId: z.Raft.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.VoidAsync(saved.Id())).StatusCode);
 
         await api.GrantAsync(account, StaffRole.ZoneManager, z.Zone);
-        Assert.Equal(HttpStatusCode.OK, (await manager.CorrectAsync(saved.Id(), 7.1m, 20m, raftId: z.Raft.Id)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.VoidAsync(saved.Id())).StatusCode);
     }
 
     [Fact]
@@ -55,14 +54,12 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         await RevokeAsync(await PairOfAsync(account));
         await api.GrantAsync(account, StaffRole.ZoneManager, zone: null);
 
-        Assert.Equal(HttpStatusCode.OK, (await manager.CorrectAsync(own.Id(), 7.1m, 20m)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.VoidAsync(own.Id())).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await manager.CorrectAsync(others.Id(), 7.1m, 20m)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.VoidAsync(others.Id())).StatusCode);
     }
 
     [Fact]
-    public async Task The_owner_changes_any_also_of_a_locked_recorder_and_of_another_owner()
+    public async Task The_owner_voids_any_also_of_a_locked_recorder_and_of_another_owner()
     {
         var z = await api.ZoneAsync();
         var (manager, account) = await StaffAsync(StaffRole.ZoneManager, z.Zone);
@@ -73,13 +70,12 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         var secondOwnerClient = await api.LoginAsync(secondOwner.Username, password);
         var byOwner = await z.RecordedAsync(7m, 20m);
 
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(byLocked.Id(), 7.1m, 20m)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await secondOwnerClient.CorrectAsync(byOwner.Id(), 7.1m, 20m)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(byLocked.Id())).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await secondOwnerClient.VoidAsync(byOwner.Id())).StatusCode);
     }
 
     [Fact]
-    public async Task A_recorder_turned_accountant_cannot_change_their_own_and_an_all_zones_accountant_nothing()
+    public async Task A_recorder_turned_accountant_cannot_void_their_own_and_an_all_zones_accountant_nothing()
     {
         var z = await api.ZoneAsync();
         var (client, account) = await StaffAsync(StaffRole.ZoneManager, z.Zone);
@@ -90,11 +86,9 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
 
         foreach (var caller in new[] { client, allZones })
         {
-            foreach (var response in new[] { await caller.CorrectAsync(own.Id(), 7.1m, 20m, raftId: z.Raft.Id), await caller.VoidAsync(own.Id()) })
-            {
-                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-                Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-            }
+            var response = await caller.VoidAsync(own.Id());
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
     }
 
@@ -108,9 +102,7 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         var traderClient = await api.LoginAsync(trader.Username, password);
         var anonymous = api.CreateClient();
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await traderClient.CorrectAsync(saved.Id(), 7m, 20m, raftId: z.Raft.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await traderClient.VoidAsync(saved.Id())).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.CorrectAsync(saved.Id(), 7m, 20m, raftId: z.Raft.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.VoidAsync(saved.Id())).StatusCode);
 
         var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == saved.Id()));
@@ -127,9 +119,7 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         var own = await z.RecordedAsync(7m, 20m, client: manager);
         await manager.VoidAsync(own.Id());
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await manager.CorrectAsync(others.Id(), 99m, 20m, reason: null, raftId: z.Raft.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.VoidAsync(others.Id(), reason: null)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await manager.CorrectAsync(own.Id(), 99m, 20m, reason: null, raftId: z.Raft.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await manager.VoidAsync(own.Id(), reason: null)).StatusCode);
     }
 
@@ -147,7 +137,7 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         Assert.Contains("Water measurement is Voided", (await refused.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
 
         await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => zone.StatusId = StatusIds.Usage.InUse);
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(saved.Id(), 7.1m, 20m)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(saved.Id())).StatusCode);
     }
 
     // GBR-02: the person who did it, and the recorder stays who recorded it.
@@ -157,15 +147,13 @@ public class WaterCorrectionQaTestsAccess(AuthApiFactory api) : IClassFixture<Au
         var z = await api.ZoneAsync();
         var (manager, account) = await StaffAsync(StaffRole.ZoneManager, z.Zone);
         var saved = await z.RecordedAsync(7m, 20m, client: manager);
+        var byManagerToo = await z.RecordedAsync(7m, 20m, client: manager);
 
-        await manager.CorrectAsync(saved.Id(), 7.1m, 20m);
-        await z.Owner.CorrectAsync(saved.Id(), 7.2m, 20m);
-        await z.Owner.VoidAsync(saved.Id());
+        await manager.VoidAsync(saved.Id());
+        await z.Owner.VoidAsync(byManagerToo.Id());
 
-        var audit = await api.AuditOfAsync(saved.Id());
-        Assert.Single(audit, e => e.Action == "WaterMeasurement.Corrected" && e.ActorAccountId == account.Id);
-        Assert.Single(audit, e => e.Action == "WaterMeasurement.Corrected" && e.ActorAccountId == z.OwnerAccount.Id);
-        Assert.Single(audit, e => e.Action == "WaterMeasurement.Voided" && e.ActorAccountId == z.OwnerAccount.Id);
+        Assert.Single(await api.AuditOfAsync(saved.Id()), e => e.Action == "WaterMeasurement.Voided" && e.ActorAccountId == account.Id);
+        Assert.Single(await api.AuditOfAsync(byManagerToo.Id()), e => e.Action == "WaterMeasurement.Voided" && e.ActorAccountId == z.OwnerAccount.Id);
         var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == saved.Id()));
         Assert.Equal(account.Id, stored.MeasuredByAccountId);
     }

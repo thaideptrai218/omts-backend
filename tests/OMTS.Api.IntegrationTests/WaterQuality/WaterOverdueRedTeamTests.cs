@@ -67,29 +67,25 @@ public class WaterOverdueRedTeamTests
     }
 
     [Fact]
-    public async Task A_void_moves_the_base_back_and_a_correction_moves_it_to_its_new_time()
+    public async Task A_void_moves_the_base_back()
     {
         await using var api = new WaterApiFactory();
         var voidedLater = await api.ZoneAsync();
-        var corrected = await api.ZoneAsync();
         var notMeasuredAgain = await api.ZoneAsync();
         var fortyDaysAgo = DateTimeOffset.UtcNow.AddDays(-40);
-        foreach (var z in new[] { voidedLater, corrected, notMeasuredAgain })
+        foreach (var z in new[] { voidedLater, notMeasuredAgain })
         {
             await z.OpenCycleAsync(Today.AddMonths(-6));
         }
 
         await voidedLater.RecordedAsync(7m, 20m, measuredAt: fortyDaysAgo);
         var recent = await voidedLater.RecordedAsync(7.1m, 20m);
-        var old = await corrected.RecordedAsync(7m, 20m, measuredAt: fortyDaysAgo);
-        Assert.Equal(HttpStatusCode.OK, (await corrected.Owner.CorrectAsync(old.Id(), 7m, 20m)).StatusCode);
         await notMeasuredAgain.RecordedAsync(7m, 20m, measuredAt: fortyDaysAgo);
         // A recognition saves no measurement, so it moves nothing.
         Assert.Equal(HttpStatusCode.OK, (await notMeasuredAgain.RecognizeAsync("ph7.2_sal20")).StatusCode);
 
         Assert.Equal(1, await api.RemindOnAsync(Today));
         Assert.Empty(await api.RemindersOfAsync(voidedLater.Zone));
-        Assert.Empty(await api.RemindersOfAsync(corrected.Zone));
         Assert.NotEmpty(await api.RemindersOfAsync(notMeasuredAgain.Zone));
 
         Assert.Equal(HttpStatusCode.OK, (await voidedLater.Owner.VoidAsync(recent.Id())).StatusCode);
@@ -97,7 +93,6 @@ public class WaterOverdueRedTeamTests
 
         var fortyDaysAgoLocal = BusinessClock.ToBusinessDate(fortyDaysAgo);
         Assert.All(await api.RemindersOfAsync(voidedLater.Zone), n => Assert.Contains($"since {Named(fortyDaysAgoLocal)}.", n.Body));
-        Assert.Empty(await api.RemindersOfAsync(corrected.Zone));
     }
 
     // PM 03/11: no re-arm. A void moves the base, the repeat still counts a month from the last reminder.

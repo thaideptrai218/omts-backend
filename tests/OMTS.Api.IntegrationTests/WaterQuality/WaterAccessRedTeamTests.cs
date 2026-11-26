@@ -37,7 +37,6 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
                 ("detail", () => client.GetAsync($"/api/water-measurements/{confirmed.Id()}")),
                 ("record", () => z.RecordAsync(7m, 20m, client: client)),
                 ("recognize", () => z.RecognizeAsync(client: client)),
-                ("correct", () => client.CorrectAsync(confirmed.Id(), 7.1m, 20m)),
                 ("void", () => client.VoidAsync(confirmed.Id())),
                 ("thresholds list", () => client.GetAsync("/api/water-thresholds")),
                 ("zone thresholds", () => client.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds")),
@@ -117,17 +116,10 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         // WATER-01…03 are No for the Accountant (§I.4.4), whatever zone its pair names.
         var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
-        var responses = new[]
-        {
-            await accountant.VoidAsync(saved.Id()),
-            await accountant.CorrectAsync(saved.Id(), 7.1m, 20m, raftId: z.Raft.Id),
-        };
+        var response = await accountant.VoidAsync(saved.Id());
 
-        foreach (var response in responses)
-        {
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-        }
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
 
         Assert.Equal(StatusIds.WaterMeasurement.Active,
             await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == saved.Id()).Select(m => m.StatusId).SingleAsync()));

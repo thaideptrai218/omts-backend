@@ -46,7 +46,7 @@ public class DemoWaterSeedQaTests
         var ownerId = await db.Accounts.Where(a => a.Username == "owner").Select(a => a.Id).SingleAsync();
         var water = await db.WaterMeasurements.AsNoTracking().Include(m => m.Zone).ToListAsync();
 
-        // Three readings stay outside the thresholds; the mistyped salinity (2.6 ‰) alerted too, before its fix, so four sets of alerts.
+        // Three readings stay outside the thresholds, so three sets of alerts.
         var alerted = water.Where(m => m.AlertedAt is not null).ToList();
         Assert.Equal(3, alerted.Count);
         Assert.All(alerted, m => Assert.True(m.ThresholdExceeded && m.ViolatedValues is { Length: > 0 }, m.Zone.Code));
@@ -64,16 +64,12 @@ public class DemoWaterSeedQaTests
 
         // Only alerts: no reminder, no other water notification.
         Assert.Equal(
-            4,
+            3,
             await db.Notifications.Where(n => n.Type == NotificationTypes.WaterAlert).Select(n => n.RelatedRecordId).Distinct().CountAsync());
         Assert.False(await db.Notifications.AnyAsync(n => n.Type == NotificationTypes.WaterMeasurementOverdue));
 
-        // The correction changes the same record: salinity 26.0, a reason in the audit log, its alert no longer current.
-        var correctedId = await db.AuditEvents.Where(e => e.Action == WaterMeasurementAudit.Corrected).Select(e => e.RecordId).SingleAsync();
-        var correction = Assert.Single(water, m => m.Id == correctedId);
-        Assert.Equal((StatusIds.WaterMeasurement.Active, 26.0m), (correction.StatusId, correction.Salinity));
-        Assert.Null(correction.AlertedAt);
-        Assert.Equal("DEMO-01", correction.Zone.Code);
+        // No reading is corrected: only one is voided.
+        Assert.DoesNotContain(water, m => m.Salinity == 2.6m);
         var voided = Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided);
         Assert.Equal("DEMO-02", voided.Zone.Code);
 
@@ -87,9 +83,7 @@ public class DemoWaterSeedQaTests
             .Where(e => e.Action.StartsWith("WaterMeasurement.") || e.Action == WaterMeasurementAudit.ThresholdUpdated)
             .ToListAsync();
         Assert.Equal(60, audit.Count(e => e.Action == WaterMeasurementAudit.Created));
-        var corrected = Assert.Single(audit, e => e.Action == WaterMeasurementAudit.Corrected && e.RecordId == correction.Id);
-        Assert.False(string.IsNullOrWhiteSpace(corrected.Reason));
-        Assert.Contains("\"Salinity\":2.6", corrected.Before);
+        Assert.DoesNotContain(audit, e => e.Action == WaterMeasurementAudit.Corrected);
         Assert.Equal(1, audit.Count(e => e.Action == WaterMeasurementAudit.Voided && e.RecordId == voided.Id));
         Assert.Equal(2, audit.Count(e => e.Action == WaterMeasurementAudit.ThresholdUpdated));
         Assert.All(audit, e => Assert.Equal(ownerId, e.ActorAccountId));

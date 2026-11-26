@@ -95,18 +95,16 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     public async Task Values_with_more_than_two_decimals_are_refused_not_rounded()
     {
         var z = await api.ZoneAsync();
-        var saved = await z.RecordedAsync(7m, 20m);
+        await z.RecordedAsync(7m, 20m);
 
         var record = await z.RecordAsync(7.125m, 20m);
         var salinity = await z.RecordAsync(7m, 20.005m);
         var temperature = await z.RecordAsync(7m, 20m, 25.005m);
-        var correct = await z.Owner.CorrectAsync(saved.Id(), 7.125m, 20m);
         var threshold = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 6.555m, phMax = 8.5m, salinityMin = 15m, salinityMax = 30m });
 
         Assert.Equal("pH", await FieldAsync(record));
         Assert.Equal("Salinity", await FieldAsync(salinity));
         Assert.Equal("Temperature", await FieldAsync(temperature));
-        Assert.Equal("pH", await FieldAsync(correct));
         Assert.Equal("pH minimum", await FieldAsync(threshold));
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
         var zone = await api.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id));
@@ -129,26 +127,6 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         Assert.All(zones, zone => Assert.Equal((6.5m, 8.5m, 15m, 30m), (zone.PhMin!.Value, zone.PhMax!.Value, zone.SalinityMin!.Value, zone.SalinityMax!.Value)));
         Assert.Equal(0, await own.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "WaterThreshold.Updated")));
         Assert.NotEqual(a.Zone.Id, b.Zone.Id);
-    }
-
-    [Fact]
-    public async Task Corrections_keep_the_thresholds_of_the_measurement_when_the_zone_changes_in_between()
-    {
-        var z = await api.ZoneAsync();
-        var (_, manager) = await api.StaffAsync(z.Zone);
-        var saved = await z.RecordedAsync(8.0m, 20m);
-        await SetPhAsync(z, 6.5m, 9.5m);
-        var first = await SavedOkAsync(await z.Owner.CorrectAsync(saved.Id(), 8.4m, 20m));
-        await SetPhAsync(z, 6.5m, 8.0m);
-
-        var second = await SavedOkAsync(await z.Owner.CorrectAsync(saved.Id(), 8.6m, 20m));
-
-        Assert.Equal("None", first.Text("alertState"));
-        Assert.Equal(8.5m, first.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Equal("Active", second.Text("alertState"));
-        Assert.Equal("pH 8.60 > 8.50", second.Text("violatedValues"));
-        Assert.Equal(8.5m, second.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Single(await api.AlertsOfAsync(saved.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
     private static async Task SetPhAsync(WaterZone z, decimal min, decimal max)

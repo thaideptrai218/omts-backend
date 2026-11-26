@@ -40,28 +40,6 @@ public class MandatorySmsQaSqlServerTests
     private static string[] Statuses(HttpResponseMessage[] responses) => responses.Select(r => ((int)r.StatusCode).ToString()).ToArray();
 
     [Fact(Skip = "The SQL Server SMS race tests still use the water model before SRS 27/10 (draft and confirm, record version, no raft or photo); port them to the new recording (OMTS-219).")]
-    public async Task Parallel_corrections_of_one_measurement_send_one_sms_per_recipient()
-    {
-        await using var database = SqlServerTestDatabase.Create();
-        var zone = await SeedZoneAsync(database);
-        await using var api = new SqlServerApiFactory(database);
-        var owner = await api.AddAccountAsync(NewCode(), NewPassword());
-        var (manager, client) = await ManagerAsync(api, zone.Id);
-        var recorded = await client.PostAsJsonAsync($"/api/zones/{zone.Id}/water-measurements", Measurement());
-        var id = (await recorded.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        Assert.Single(api.SmsTo(owner));
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => client.PostAsJsonAsync(
-            $"/api/water-measurements/{id}/corrections",
-            new { ph = 9.3m + (i / 100m), salinity = 20m, measuredAt = DateTimeOffset.UtcNow.AddMinutes(-5), reason = "Wrong reading", recordVersion = 1 })));
-
-        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
-        Assert.All(responses, r => Assert.True((int)r.StatusCode < 500, string.Join(",", Statuses(responses))));
-        Assert.Equal(2, api.SmsTo(owner).Count);
-        Assert.Equal(2, api.SmsTo(manager).Count);
-    }
-
-    [Fact(Skip = "The SQL Server SMS race tests still use the water model before SRS 27/10 (draft and confirm, record version, no raft or photo); port them to the new recording (OMTS-219).")]
     public async Task Parallel_different_measurements_send_one_sms_each()
     {
         await using var database = SqlServerTestDatabase.Create();

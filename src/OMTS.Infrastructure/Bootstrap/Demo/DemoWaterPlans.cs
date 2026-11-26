@@ -10,8 +10,7 @@ internal sealed record DemoWaterReading(int DaysAgo, TimeOnly Time, string RaftC
 /// <summary>
 /// WATER-01…WATER-04 demo data of the In Use demo zones: their thresholds and one reading a day for the 30 days before
 /// the first seed day, going round the rafts In Use of the zone. Three readings are outside the thresholds (an algae
-/// bloom, heavy rain, a storm), one reading is corrected (a salinity typed without its decimal point, itself an alert)
-/// and one is voided (meter not calibrated).
+/// bloom, heavy rain, a storm) and one is voided (meter not calibrated).
 /// </summary>
 internal static class DemoWaterPlans
 {
@@ -25,11 +24,7 @@ internal static class DemoWaterPlans
     /// <summary>Thresholds for oysters in Vân Đồn bay: pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C.</summary>
     public static readonly SetWaterThresholdsRequest Thresholds = new(7.5m, 8.5m, 18m, 32m, 15m, 32m);
 
-    /// <summary>The reading recorded with salinity 2.6 ‰ and corrected to 26.0 ‰ (WATER-02).</summary>
-    public static readonly (string Zone, int DaysAgo, decimal TypedSalinity, decimal Salinity, string Reason) Correction =
-        (DemoFarmingZoneStep.ZoneOne, 7, 2.6m, 26.0m, "Nhập nhầm dấu thập phân: độ mặn đúng trên máy đo là 26,0 ‰, không phải 2,6 ‰.");
-
-    /// <summary>The reading voided afterwards (WATER-02): that day has no valid measurement.</summary>
+    /// <summary>The reading voided (WATER-02): that day has no valid measurement.</summary>
     public static readonly (string Zone, int DaysAgo, string Reason) Void =
         (DemoFarmingZoneStep.ZoneTwo, 10, "Máy đo pH chưa được hiệu chuẩn lại, kết quả đo không dùng được.");
 
@@ -54,10 +49,6 @@ internal static class DemoWaterPlans
         if (OutsideThresholds.TryGetValue((zone, daysAgo), out var outside))
         {
             (ph, salinity) = outside;
-        }
-        else if ((zone, daysAgo) == (Correction.Zone, Correction.DaysAgo))
-        {
-            salinity = Correction.TypedSalinity;
         }
 
         var raft = DemoRaftStep.RaftCode(zone, daysAgo % RaftsInUse + 1);

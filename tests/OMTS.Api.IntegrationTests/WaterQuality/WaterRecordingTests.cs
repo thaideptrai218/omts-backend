@@ -199,7 +199,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         foreach (var path in new[]
         {
             "/api/zones/{zoneId}/water-measurements/recognize", "/api/zones/{zoneId}/water-measurements",
-            "/api/water-measurements/{id}/corrections", "/api/zones/{zoneId}/water-thresholds",
+            "/api/water-measurements/{id}/void", "/api/zones/{zoneId}/water-thresholds",
         })
         {
             Assert.True(paths.TryGetProperty(path, out _), path);
@@ -207,6 +207,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
 
         Assert.False(paths.TryGetProperty("/api/zones/{zoneId}/water-measurements/with-photo", out _));
         Assert.False(paths.TryGetProperty("/api/water-measurements/{id}/confirm", out _));
+        Assert.False(paths.TryGetProperty("/api/water-measurements/{id}/corrections", out _));
     }
 
     private Task<int> NotificationsOfAsync(Guid accountId) =>

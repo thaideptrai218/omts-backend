@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 public class WaterSqlServerRedTeamTests
 {
     [SqlServerFact]
-    public async Task Racing_void_and_correction_of_one_record_let_exactly_one_win_and_leave_it_consistent()
+    public async Task Racing_voids_of_one_record_let_exactly_one_win_and_leave_it_consistent()
     {
         await using var database = SqlServerTestDatabase.Create();
         var seeded = await WaterSqlServerKit.SeedAsync(database);
@@ -28,12 +28,11 @@ public class WaterSqlServerRedTeamTests
 
         var responses = await Task.WhenAll(
             client.VoidAsync(id),
-            client.CorrectAsync(id, 7.3m, 20m),
             client.VoidAsync(id),
-            client.CorrectAsync(id, 7.4m, 20m));
+            client.VoidAsync(id));
 
-        // Whoever comes after the void is told its status (MSG-GEN-09): there is no version check (NFR-09), and a correction
-        // that comes after another correction is a later edit of the same record, so it also succeeds.
+        // Whoever comes after the void is told its status (MSG-GEN-09): there is no version check (NFR-09).
+        Assert.Single(responses, r => r.IsSuccessStatusCode);
         foreach (var refused in responses.Where(r => !r.IsSuccessStatusCode))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
@@ -98,26 +97,22 @@ public class WaterSqlServerRedTeamTests
     }
 
     [SqlServerFact]
-    public async Task Reasons_of_exactly_1000_characters_are_stored_in_full_for_corrections_and_voids()
+    public async Task A_void_reason_of_exactly_1000_characters_is_stored_in_full()
     {
         await using var database = SqlServerTestDatabase.Create();
         var seeded = await WaterSqlServerKit.SeedAsync(database);
         await using var api = new SqlServerApiFactory(database);
         var client = await LoginAsync(api, (await api.AddAccountAsync($"o{NewCode()}", Password)).Username);
-        var toCorrect = await seeded.RecordAsync(client, 7m, 20m, 25m);
         var toVoid = await seeded.RecordAsync(client, 7m, 20m, 25m);
-        // 1000 UTF-16 units each, ending in a Vietnamese letter (nvarchar keeps it).
-        var correctionReason = new string('c', 999) + "ố";
+        // 1000 UTF-16 units, ending in a Vietnamese letter (nvarchar keeps it).
         var voidReason = new string('v', 999) + "ữ";
 
-        var corrected = await client.CorrectAsync(toCorrect, 7.1m, 20m, reason: correctionReason);
         var voided = await client.VoidAsync(toVoid, reason: voidReason);
 
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
         await using var db = database.CreateContext();
         Assert.Equal(voidReason, await db.WaterMeasurements.Where(m => m.Id == toVoid).Select(m => m.VoidReason).SingleAsync());
-        Assert.Equal(correctionReason, await db.AuditEvents.Where(e => e.RecordId == toCorrect && e.Action == "WaterMeasurement.Corrected").Select(e => e.Reason).SingleAsync());
+        Assert.Equal(voidReason, await db.AuditEvents.Where(e => e.RecordId == toVoid && e.Action == "WaterMeasurement.Voided").Select(e => e.Reason).SingleAsync());
     }
 
     private static async Task<HttpClient> LoginAsync(SqlServerApiFactory api, string username)

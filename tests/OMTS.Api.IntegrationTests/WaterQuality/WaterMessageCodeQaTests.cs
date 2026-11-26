@@ -53,10 +53,10 @@ public class WaterMessageCodeQaTests(AuthApiFactory api) : IClassFixture<AuthApi
         var saved = await z.RecordedAsync(7m, 20m);
         Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(saved.Id())).StatusCode);
 
-        var corrected = await (await z.Owner.CorrectAsync(saved.Id(), 7.4m, 20m))
+        var voidedAgain = await (await z.Owner.VoidAsync(saved.Id()))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61");
 
-        Assert.Equal("Water measurement is Voided and cannot be used for this action.", corrected.Detail());
+        Assert.Equal("Water measurement is Voided and cannot be used for this action.", voidedAgain.Detail());
     }
 
     // SRS WATER-01.2 / MSG-WATER-01: "could not read one or more values … {indicator_list}". A reading without salinity

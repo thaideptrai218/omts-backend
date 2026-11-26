@@ -11,7 +11,7 @@ public sealed record WaterThresholds(
     public static WaterThresholds Of(FarmingZone zone) =>
         new(zone.PhMin, zone.PhMax, zone.SalinityMin, zone.SalinityMax, zone.TemperatureMin, zone.TemperatureMax);
 
-    /// <summary>The thresholds stored with a measurement (BR-WATER-04); corrections are evaluated against them.</summary>
+    /// <summary>The thresholds stored with a measurement (BR-WATER-04); the measurement is always judged against them.</summary>
     public static WaterThresholds UsedBy(WaterMeasurement measurement) => new(
         measurement.PhMinUsed, measurement.PhMaxUsed, measurement.SalinityMinUsed, measurement.SalinityMaxUsed,
         measurement.TemperatureMinUsed, measurement.TemperatureMaxUsed);

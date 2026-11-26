@@ -30,14 +30,6 @@ public abstract class WaterNoticeTestBase(AuthApiFactory api)
     protected static async Task<Guid> RecordAsync(WaterZone z, decimal ph, decimal salinity, DateTimeOffset measuredAt) =>
         (await z.RecordedAsync(ph, salinity, measuredAt: measuredAt)).Id();
 
-    protected static async Task<JsonElement> CorrectedAsync(
-        WaterZone z, Guid id, decimal ph, decimal salinity, DateTimeOffset measuredAt, string reason = "Sai số", Guid? raftId = null)
-    {
-        var response = await z.Owner.CorrectAsync(id, ph, salinity, reason: reason, measuredAt: measuredAt, raftId: raftId ?? z.Raft.Id);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
     protected async Task<List<Notification>> ManagerAlertsAsync(Guid id, Account manager) =>
         (await api.AlertsOfAsync(id)).Where(n => n.RecipientAccountId == manager.Id).ToList();
 }

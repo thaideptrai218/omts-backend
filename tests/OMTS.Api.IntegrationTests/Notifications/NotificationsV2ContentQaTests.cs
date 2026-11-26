@@ -26,10 +26,10 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
     // Generated per run, so no password-like literal is committed (secret scanners).
     private static readonly string TestPassword = NewPassword();
 
-    // MSG-WATER-03 (BR-WATER-05): zone, raft, time and each value outside; "(corrected measurement)" after a correction.
+    // MSG-WATER-03 (BR-WATER-05): zone, raft, time and each value outside.
     // The parameters are atomic (QA 0.5 finding #1): corrected flag, ISO time, structured values outside.
     [Fact]
-    public async Task A_water_alert_and_its_correction_store_msg_water_03_with_every_placeholder()
+    public async Task A_water_alert_stores_msg_water_03_with_every_placeholder()
     {
         var z = await factory.ZoneAsync();
         // The Owner records here, so the alerts reach the zone's manager (the Owner is not told of their own action).
@@ -37,29 +37,21 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var measuredAt = Minute(DateTimeOffset.UtcNow.AddMinutes(-30));
         var time = BusinessClock.Format(measuredAt);
         var id = (await z.RecordedAsync(9.1m, 20m, measuredAt: measuredAt)).GetProperty("id").GetGuid();
-        var corrected = await z.Owner.CorrectAsync(id, 9.4m, 31m, measuredAt: measuredAt);
-        Assert.True(corrected.StatusCode == HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
 
-        // Newest first: the correction changed the same record, both notifications point to it.
         var items = (await manager.NotificationPageAsync()).Items().Where(i => i.GetProperty("relatedRecordId").GetGuid() == id).ToList();
-        Assert.Equal(2, items.Count);
-        var correction = items.Single(i => i.GetProperty("messageParams").GetProperty("corrected").GetBoolean());
-        var alert = items.Single(i => !i.GetProperty("messageParams").GetProperty("corrected").GetBoolean());
+        var alert = Assert.Single(items);
 
         AssertAlert(alert, false, [("PH", 9.1m, null, "High", 6.5m, 8.5m)]);
         Assert.Equal($"Water alert: zone {z.Zone.Name}, raft {z.Raft.Code}, measured on {time}. pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", alert.GetProperty("body").GetString());
-        AssertAlert(correction, true, [("PH", 9.4m, null, "High", 6.5m, 8.5m), ("SALINITY", 31m, "‰", "High", 15m, 30m)]);
-        Assert.EndsWith(". pH 9.4 is too high (allowed 6.5–8.5); Salinity 31 ‰ is too high (allowed 15–30 ‰). Please check the water.", correction.GetProperty("body").GetString());
-        Assert.StartsWith($"Water alert (corrected measurement): zone {z.Zone.Name}, raft {z.Raft.Code}, measured on {time}.", correction.GetProperty("body").GetString());
 
-        // The first alert still opens: its measurement exists (shown with its current values).
+        // The alert opens while its measurement exists (shown with its current values).
         var open = await manager.OpenNotificationAsync(alert.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, open.StatusCode);
         Assert.Equal(z.Zone.Id, (await open.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("zoneId").GetGuid());
 
         // ACCOUNT-08.0.E1: a removed measurement has no code to name.
         await factory.UseDbAsync(db => db.WaterMeasurements.Remove(db.WaterMeasurements.Single(m => m.Id == id)));
-        var removed = await manager.OpenNotificationAsync(correction.GetProperty("id").GetGuid());
+        var removed = await manager.OpenNotificationAsync(alert.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
         var problem = await removed.ProblemAsync();
         Assert.Equal(("MSG-ACCOUNT-22", "Water measurement no longer exists."), (problem.GetProperty("code").GetString(), problem.GetProperty("detail").GetString()));
