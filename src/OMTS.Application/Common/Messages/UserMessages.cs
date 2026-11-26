@@ -284,21 +284,21 @@ public static class UserMessages
     public static UserMessage OcrValuesNotRead(string indicatorList) => new(
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
-    /// <summary>MSG-WATER-02 (WATER-01 step 8): before saving, a value is outside the water thresholds of the zone.</summary>
+    /// <summary>MSG-WATER-02 (WATER-01 step 8) in Vietnamese: before saving, a value is outside the water thresholds of the zone.</summary>
     /// <param name="valuesOutside">Each value outside with its allowed range.</param>
     public static UserMessage WaterValuesOutsideBeforeSave(IReadOnlyList<WaterValueOutside> valuesOutside) => new(
-        Water02, $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the meter again before you save.");
+        Water02, $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Vui lòng kiểm tra lại máy đo trước khi lưu.");
 
-    /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
-    /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
+    /// <summary>MSG-WATER-03 (BR-WATER-05) in Vietnamese: the water alert notification.</summary>
+    /// <param name="corrected">The alert of a corrected measurement: "(phép đo đã hiệu chỉnh)" in the text.</param>
     /// <param name="raftCode">The raft where the water was measured.</param>
     /// <param name="measuredAt">Shown in Vietnam time.</param>
     /// <param name="valuesOutside">Each value outside with its allowed range.</param>
     public static UserMessage WaterAlert(
         bool corrected, string zoneName, string raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
         Water03,
-        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode}, measured on {BusinessClock.Format(measuredAt)}. "
-            + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
+        $"Cảnh báo nước{(corrected ? " (phép đo đã hiệu chỉnh)" : "")}: vùng {zoneName}, bè {raftCode}, đo lúc {BusinessClock.Format(measuredAt)}. "
+            + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Vui lòng kiểm tra nước.",
         Legacy.Msg27)
     {
         Parameters = new Dictionary<string, object?>

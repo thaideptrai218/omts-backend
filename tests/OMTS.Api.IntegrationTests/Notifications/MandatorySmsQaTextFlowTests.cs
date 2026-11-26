@@ -82,9 +82,9 @@ public class MandatorySmsQaTextFlowTests(AuthApiFactory api) : IClassFixture<Aut
         await z.RecordedAsync(7.5m, 12m, client: manager);
 
         var text = Assert.Single(api.SmsTo(z.OwnerAccount)).Text;
-        Assert.StartsWith("Water alert: zone Vung Cai Rong, raft ", text);
-        Assert.Contains(", measured on ", text);
-        Assert.Contains("Salinity 12 ppt is too low (allowed 15-30 ppt). Please check the water.", text);
+        Assert.StartsWith("Canh bao nuoc: vung Vung Cai Rong, be ", text);
+        Assert.Contains(", do luc ", text);
+        Assert.Contains("Do man 12 ppt thap hon muc cho phep 15 ppt. Vui long kiem tra nuoc.", text);
         Assert.True(text.Length <= 160, text);
     }
 
@@ -106,7 +106,7 @@ public class MandatorySmsQaTextFlowTests(AuthApiFactory api) : IClassFixture<Aut
         await host.Services.GetRequiredService<ZoneLicenseReminderJob>().RunOnceAsync(FarmingKit.Today);
 
         Assert.NotEmpty(host.SmsTo(owner.Account).Where(m => m.Text.Contains("GP-LOG-CHECK")));
-        foreach (var detail in new[] { manager.PhoneNumber!, z.OwnerAccount.PhoneNumber!, owner.Account.PhoneNumber!, "Please check the water", "Please renew it", "GP-LOG-CHECK" })
+        foreach (var detail in new[] { manager.PhoneNumber!, z.OwnerAccount.PhoneNumber!, owner.Account.PhoneNumber!, "Vui long kiem tra nuoc", "Please renew it", "GP-LOG-CHECK" })
         {
             Assert.DoesNotContain(host.Logs.Lines, l => l.Contains(detail, StringComparison.Ordinal));
         }

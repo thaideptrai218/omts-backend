@@ -33,7 +33,7 @@ public class WaterAlertRecipientsTests(AuthApiFactory api) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
         Assert.Equal(body.Id(), (await again.Content.ReadFromJsonAsync<JsonElement>()).Id());
         Assert.Equal("Active", body.Text("alertState"));
-        Assert.Equal("pH 9.10 > 8.50", body.Text("violatedValues"));
+        Assert.Equal("pH 9,1 cao hơn mức cho phép 8,5", body.Text("violatedValues"));
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
 
         var alerts = await api.AlertsOfAsync(body.Id());
@@ -42,15 +42,15 @@ public class WaterAlertRecipientsTests(AuthApiFactory api) : IClassFixture<AuthA
         Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
         Assert.DoesNotContain(alerts, n => n.RecipientAccountId == otherZoneManager.Id);
         Assert.All(alerts, n => Assert.True(n.IsMandatory));
-        // MSG-WATER-03: zone, raft, time and each value outside with its allowed range.
+        // MSG-WATER-03: zone, raft, time and each value outside with the limit it crossed.
         Assert.All(alerts, n =>
         {
             Assert.Equal("MSG-WATER-03", n.MessageCode);
-            Assert.StartsWith($"Water alert: zone {z.Zone.Name}, raft {z.Raft.Code}, measured on ", n.Body);
-            Assert.EndsWith(". pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", n.Body);
+            Assert.StartsWith($"Cảnh báo nước: vùng {z.Zone.Name}, bè {z.Raft.Code}, đo lúc ", n.Body);
+            Assert.EndsWith(". pH 9,1 cao hơn mức cho phép 8,5. Vui lòng kiểm tra nước.", n.Body);
         });
         var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString());
-        Assert.Single(pushed, m => m.Text.Contains("pH 9.1 is too high (allowed 6.5–8.5)."));
+        Assert.Single(pushed, m => m.Text.Contains("pH 9,1 cao hơn mức cho phép 8,5."));
     }
 
     [Fact]
@@ -98,9 +98,9 @@ public class WaterAlertRecipientsTests(AuthApiFactory api) : IClassFixture<AuthA
 
         var body = await z.RecordedAsync(5.9m, 31.2m, client: manager, temperature: 36.5m);
 
-        Assert.Equal("pH 5.90 < 6.50; Salinity 31.20 > 30.00; Temperature 36.50 > 35.00", body.Text("violatedValues"));
+        Assert.Equal("pH 5,9 thấp hơn mức cho phép 6,5; Độ mặn 31,2 ‰ cao hơn mức cho phép 30 ‰; Nhiệt độ 36,5 °C cao hơn mức cho phép 35 °C", body.Text("violatedValues"));
         Assert.Single(await api.AlertsOfAsync(body.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id
-            && n.Body!.EndsWith(". pH 5.9 is too low (allowed 6.5–8.5); Salinity 31.2 ‰ is too high (allowed 15–30 ‰); Temperature 36.5 °C is too high (allowed 10–35 °C). Please check the water.", StringComparison.Ordinal));
+            && n.Body!.EndsWith(". pH 5,9 thấp hơn mức cho phép 6,5; Độ mặn 31,2 ‰ cao hơn mức cho phép 30 ‰; Nhiệt độ 36,5 °C cao hơn mức cho phép 35 °C. Vui lòng kiểm tra nước.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class WaterAlertRecipientsTests(AuthApiFactory api) : IClassFixture<AuthA
 
         var body = await z.RecordedAsync(7m, 20m, client: manager, temperature: 9m);
 
-        Assert.Equal("Temperature 9.00 < 10.00", body.Text("violatedValues"));
+        Assert.Equal("Nhiệt độ 9 °C thấp hơn mức cho phép 10 °C", body.Text("violatedValues"));
         Assert.NotEmpty(await api.AlertsOfAsync(body.Id()));
     }
 }

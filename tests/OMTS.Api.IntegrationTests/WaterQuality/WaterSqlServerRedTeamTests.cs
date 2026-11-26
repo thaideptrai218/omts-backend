@@ -84,9 +84,9 @@ public class WaterSqlServerRedTeamTests
         await using var db = database.CreateContext();
         var stored = await db.WaterMeasurements.AsNoTracking().ToDictionaryAsync(m => m.Id);
         Assert.Equal((14.00m, 50.00m, 45.00m), (stored[high].Ph, stored[high].Salinity, stored[high].Temperature));
-        Assert.Equal("pH 14.00 > 13.99; Salinity 50.00 > 49.99; Temperature 45.00 > 44.99", stored[high].ViolatedValues);
+        Assert.Equal("pH 14 cao hơn mức cho phép 13,99; Độ mặn 50 ‰ cao hơn mức cho phép 49,99 ‰; Nhiệt độ 45 °C cao hơn mức cho phép 44,99 °C", stored[high].ViolatedValues);
         Assert.Equal((0m, 0m, 0m), (stored[low].Ph, stored[low].Salinity, stored[low].Temperature));
-        Assert.Equal("pH 0.00 < 0.01; Salinity 0.00 < 0.01; Temperature 0.00 < 0.01", stored[low].ViolatedValues);
+        Assert.Equal("pH 0 thấp hơn mức cho phép 0,01; Độ mặn 0 ‰ thấp hơn mức cho phép 0,01 ‰; Nhiệt độ 0 °C thấp hơn mức cho phép 0,01 °C", stored[low].ViolatedValues);
         Assert.Equal((0.01m, 13.99m, 0.01m, 49.99m, 0.01m, 44.99m), (
             stored[high].PhMinUsed!.Value, stored[high].PhMaxUsed!.Value, stored[high].SalinityMinUsed!.Value, stored[high].SalinityMaxUsed!.Value,
             stored[high].TemperatureMinUsed!.Value, stored[high].TemperatureMaxUsed!.Value));

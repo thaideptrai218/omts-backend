@@ -31,8 +31,8 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
         await z.RecordedAsync(9.1m, 20m, client: managerClient);
 
         var toOwner = Assert.Single(api.SmsTo(z.OwnerAccount));
-        Assert.StartsWith($"Water alert: zone {z.Zone.Name},", toOwner.Text);
-        Assert.Contains("pH 9.1 is too high", toOwner.Text);
+        Assert.StartsWith($"Canh bao nuoc: vung {z.Zone.Name},", toOwner.Text);
+        Assert.Contains("pH 9,1 cao hon muc cho phep", toOwner.Text);
         // A Zone Manager still gets the safety alert of their own reading (decision 3 is about the Owner).
         Assert.Single(api.SmsTo(manager));
         Assert.Single(api.SmsTo(otherManager));
@@ -130,6 +130,6 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
         await z.RecordedAsync(9.1m, 20m, client: managerClient);
 
         var inbox = await api.CreateClient().GetFromJsonAsync<JsonElement>($"/api/dev/sms?phoneNumber={z.OwnerAccount.PhoneNumber}");
-        Assert.StartsWith("Water alert", inbox[0].GetProperty("text").GetString());
+        Assert.StartsWith("Canh bao nuoc", inbox[0].GetProperty("text").GetString());
     }
 }

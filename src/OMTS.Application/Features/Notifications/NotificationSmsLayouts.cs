@@ -30,7 +30,7 @@ internal static class NotificationSmsLayouts
     private const int CustomerMinimum = 12;
     private const int ProductMinimum = 12;
 
-    private const string CheckTheWater = " Please check the water.";
+    private const string CheckTheWater = " Vui lòng kiểm tra nước.";
     private const string RenewIt = " Please renew it and record the new one.";
     private const string AskTheZoneManager = " Please ask the Zone Manager to check the oysters, then respond.";
 
@@ -78,8 +78,8 @@ internal static class NotificationSmsLayouts
 
         string Full(IReadOnlyList<string> free) => UserMessages.WaterAlert(corrected, free[0], free[1], measuredAt, values).Text;
         string Short(IReadOnlyList<string> free) =>
-            $"Water alert{(corrected ? " (corrected)" : "")}: zone {free[0]}, raft {free[1]}, at {BusinessClock.Format(measuredAt)}. "
-            + $"{string.Join("; ", values.Select(v => v.Describe().Replace(" is too ", " ")))}.";
+            $"Cảnh báo nước{(corrected ? " (đã hiệu chỉnh)" : "")}: vùng {free[0]}, bè {free[1]}, lúc {BusinessClock.Format(measuredAt)}. "
+            + $"{string.Join("; ", values.Select(v => v.DescribeBrief()))}.";
 
         return new NotificationSmsLayout(
             [new SmsFreeText(zone, ZoneMinimum), new SmsFreeText(raft, RaftMinimum)],

@@ -178,6 +178,6 @@ public class MandatorySmsDeliveryTests
             Assert.DoesNotContain(api.Logs.Lines, l => l.Contains(detail, StringComparison.Ordinal));
         }
 
-        Assert.DoesNotContain(api.Logs.Lines, l => l.Contains("Please check the water", StringComparison.Ordinal));
+        Assert.DoesNotContain(api.Logs.Lines, l => l.Contains("Vui long kiem tra nuoc", StringComparison.Ordinal));
     }
 }

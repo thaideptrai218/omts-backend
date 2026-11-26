@@ -30,7 +30,8 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Trace06 = "No current sales invoice sells harvest lot {lot_code}; no trader will be notified.";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
-    private const string Water03 = "Water alert {correction_note}: zone {zone_name}, raft {raft_code}, measured on {measurement_time}. {values_outside}. Please check the water.";
+    // MSG-WATER-03 is worded in Vietnamese (the alert reaches the users in Vietnamese by inbox, push, Zalo and SMS); the placeholders are the SRS ones.
+    private const string Water03 = "Cảnh báo nước {correction_note}: vùng {zone_name}, bè {raft_code}, đo lúc {measurement_time}. {values_outside}. Vui lòng kiểm tra nước.";
     private const string Water04 = "The water alert of zone {zone_name} (measured on {measurement_time}) was withdrawn: {user_name} {corrected_or_voided} the measurement. Reason: {reason}.";
     private const string Water06 ="Zone {zone_name} has had no water measurement since {last_date}. Please measure the water and record the result in OMTS.";
 
@@ -120,12 +121,12 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "water-03" => (
             "MSG-WATER-03", Water03,
             UserMessages.WaterAlert(false, "Vùng A", "BE-01", MeasuredAt, [SalinityLow]),
-            "Water alert: zone Vùng A, raft BE-01, measured on 06:30 20/10/2026. Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the water.",
+            "Cảnh báo nước: vùng Vùng A, bè BE-01, đo lúc 06:30 20/10/2026. Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰. Vui lòng kiểm tra nước.",
             """{"corrected":false,"zone_name":"Vùng A","raft_code":"BE-01","measurement_time":"2026-10-20T06:30:00+07:00","values_outside":[{"indicator":"SALINITY","value":12,"unit":"‰","direction":"Low","min":15,"max":30}]}"""),
         "water-03-corrected" => (
             "MSG-WATER-03", Water03,
             UserMessages.WaterAlert(true, "Vùng A", "BE-01", MeasuredAt, [PhHigh, SalinityLow]),
-            "Water alert (corrected measurement): zone Vùng A, raft BE-01, measured on 06:30 20/10/2026. pH 9.1 is too high (allowed 7.5–8.5); Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the water.",
+            "Cảnh báo nước (phép đo đã hiệu chỉnh): vùng Vùng A, bè BE-01, đo lúc 06:30 20/10/2026. pH 9,1 cao hơn mức cho phép 8,5; Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰. Vui lòng kiểm tra nước.",
             """{"corrected":true,"zone_name":"Vùng A","raft_code":"BE-01","measurement_time":"2026-10-20T06:30:00+07:00","values_outside":[{"indicator":"PH","value":9.1,"unit":null,"direction":"High","min":7.5,"max":8.5},{"indicator":"SALINITY","value":12,"unit":"‰","direction":"Low","min":15,"max":30}]}"""),
         "water-04-corrected" => (
             "MSG-WATER-04", Water04,

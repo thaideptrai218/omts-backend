@@ -152,7 +152,7 @@ public class MandatorySmsQaCommitAndConfigTests
 
         var inbox = await api.CreateClient().GetFromJsonAsync<JsonElement>($"/api/dev/sms?phoneNumber={manager.PhoneNumber}");
         Assert.Equal(1, inbox.GetArrayLength());
-        Assert.StartsWith("Water alert: zone", inbox[0].GetProperty("text").GetString());
+        Assert.StartsWith("Canh bao nuoc: vung", inbox[0].GetProperty("text").GetString());
     }
 
     [Theory]
