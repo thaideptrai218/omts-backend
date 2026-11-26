@@ -43,7 +43,8 @@ public sealed record GeminiJsonResult(bool Ok, JsonElement? Json, string? ErrorC
 }
 
 /// <summary>
-/// Gemini <c>generateContent</c> with one image and a JSON answer. Never throws for a provider problem (a failed result
+/// A vision model call with one image and a JSON answer: Gemini <c>generateContent</c>, or Qwen chat completions (which takes the schema
+/// as prompt text) when Qwen is the provider or the fallback (docs/ocr-qwen.md). Never throws for a provider problem (a failed result
 /// instead); only the caller's own cancellation cancels. The timeout, model and thinking budget come from the
 /// reader's settings.
 /// </summary>

@@ -38,6 +38,11 @@ x-api-environment: &api-environment
   # (a billed key for real photos). The photos go to Google. Unset: nothing is read and users type the values.
   Ocr__Provider: ${OCR_PROVIDER:-}
   Ocr__Gemini__ApiKey: ${OCR_GEMINI_API_KEY:-}
+  # Qwen (Alibaba Cloud Model Studio, Singapore) reads the photo again when Gemini fails, docs/ocr-qwen.md: OCR_FALLBACK=Qwen needs
+  # OCR_QWEN_API_KEY (the host does not start without it). OCR_PROVIDER=Qwen makes Qwen the only reader. The photos go to Alibaba Cloud.
+  Ocr__Fallback: ${OCR_FALLBACK:-}
+  Ocr__Qwen__ApiKey: ${OCR_QWEN_API_KEY:-}
+  Ocr__Qwen__Readers__ZoneMap__Model: ${OCR_QWEN_ZONEMAP_MODEL:-qwen3.8-omni-flash}
   Zalo__Provider: ${ZALO_PROVIDER:-}
   Zalo__AppSecret: ${ZALO_APP_SECRET:-}
   # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy

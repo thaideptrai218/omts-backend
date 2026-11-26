@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OMTS.Api.IntegrationTests" />
+    <InternalsVisibleTo Include="OMTS.Infrastructure.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

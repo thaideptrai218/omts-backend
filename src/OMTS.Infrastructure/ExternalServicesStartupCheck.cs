@@ -36,13 +36,7 @@ internal sealed class ExternalServicesStartupCheck(
         services.GetRequiredService<IPushSender>();
         services.GetRequiredService<IFileStorage>();
         services.GetRequiredService<IOcrService>();
-        if (ocr.Value.Provider == OcrProviderOptions.GeminiProvider)
-        {
-            var readers = ocr.Value.Gemini.Readers;
-            logger.LogInformation(
-                "OCR provider Gemini: meter {Meter} ({MeterTimeout} s), licence map {ZoneMap} ({ZoneMapTimeout} s), raft form {RaftForm} ({RaftFormTimeout} s)",
-                readers.Meter.Model, readers.Meter.TimeoutSeconds, readers.ZoneMap.Model, readers.ZoneMap.TimeoutSeconds, readers.RaftForm.Model, readers.RaftForm.TimeoutSeconds);
-        }
+        LogOcrProviders();
 
         services.GetRequiredService<IZaloOpenApi>();
         services.GetRequiredService<IPaymentNotificationService>();
@@ -86,10 +80,15 @@ internal sealed class ExternalServicesStartupCheck(
             logger.LogWarning("Email provider is Fake: emails are NOT sent.");
         }
 
-        if (ocr.Value.Provider != OcrProviderOptions.GeminiProvider)
+        if (!ocr.Value.ReadsWithModel)
         {
             logger.LogWarning(
-                "OCR provider '{Provider}' is not Gemini: meter photos, licence maps and raft forms are NOT read; users enter the values.", ocr.Value.Provider);
+                "OCR provider '{Provider}' is not Gemini or Qwen: meter photos, licence maps and raft forms are NOT read; users enter the values.", ocr.Value.Provider);
+        }
+
+        if (!string.IsNullOrEmpty(ocr.Value.Fallback) && !ocr.Value.UsesQwenFallback && ocr.Value.Provider != OcrProviderOptions.QwenProvider)
+        {
+            logger.LogWarning("Ocr:Fallback is '{Fallback}' but the provider is '{Provider}': the fallback is used only behind Gemini.", ocr.Value.Fallback, ocr.Value.Provider);
         }
         logger.LogWarning("Payment notification provider is not configured: no receiving bank account can be accepted (MSG-DEBT-02), so VietQR stays out of use.");
 
@@ -99,6 +98,28 @@ internal sealed class ExternalServicesStartupCheck(
         }
 
         return Task.CompletedTask;
+    }
+
+    private void LogOcrProviders()
+    {
+        var value = ocr.Value;
+        if (value.Provider == OcrProviderOptions.GeminiProvider)
+        {
+            var readers = value.Gemini.Readers;
+            logger.LogInformation(
+                "OCR provider Gemini: meter {Meter} ({MeterTimeout} s), licence map {ZoneMap} ({ZoneMapTimeout} s), raft form {RaftForm} ({RaftFormTimeout} s)",
+                readers.Meter.Model, readers.Meter.TimeoutSeconds, readers.ZoneMap.Model, readers.ZoneMap.TimeoutSeconds, readers.RaftForm.Model, readers.RaftForm.TimeoutSeconds);
+        }
+
+        if (value.Provider == OcrProviderOptions.QwenProvider || value.UsesQwenFallback)
+        {
+            var readers = value.Qwen.Readers;
+            logger.LogInformation(
+                "OCR provider {Role} Qwen: meter {Meter} ({MeterTimeout} s), licence map {ZoneMap} ({ZoneMapTimeout} s), raft form {RaftForm} ({RaftFormTimeout} s), thinking {Thinking}, scan budget {Budget} s",
+                value.Provider == OcrProviderOptions.QwenProvider ? "primary" : "fallback",
+                readers.Meter.Model, readers.Meter.TimeoutSeconds, readers.ZoneMap.Model, readers.ZoneMap.TimeoutSeconds, readers.RaftForm.Model, readers.RaftForm.TimeoutSeconds,
+                value.Qwen.DisableThinking ? "off" : "model default", value.ReadBudgetSeconds);
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
