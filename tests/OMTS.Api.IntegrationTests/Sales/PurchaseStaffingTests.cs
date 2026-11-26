@@ -14,7 +14,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Sales;
 
 /// <summary>
-/// Quyết định 24/11/2026 (thay quyết định 31/10/2026): Chủ HTX chọn nhân viên thì ca thành phân công ngay, nhân viên chỉ nhận thông báo, đơn vẫn "Chờ phản hồi" và nhận đơn chỉ cần đã có kế hoạch nhân công.
+/// Quyết định 25/11/2026 (trở lại quyết định 31/10/2026, thay "phân công ngay" ngày 24/11/2026): người phụ trách mời nhân viên, đơn chờ nhân viên;
+/// mỗi người đồng ý hoặc từ chối ca; đủ người đồng ý thì Chủ HTX mới nhận đơn, không đủ thì mời thêm hoặc Chủ HTX từ chối đơn.
 /// </summary>
 public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -43,7 +44,7 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
     }
 
     [Fact]
-    public async Task Choosing_the_staff_makes_the_assignments_at_once_and_the_owner_accepts_without_any_agreement()
+    public async Task Hundred_cages_needs_five_agreements_before_the_owner_can_accept()
     {
         var (owner, trader, row) = await SetupAsync();
         // Without a staffing plan there is nothing to accept.
@@ -53,17 +54,24 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         await PlanAsync(owner, row, crew.Select(c => c.Employee.Id).ToArray());
 
         row = await GetAsync(owner, row.Id);
-        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, row.StatusId);
-        Assert.Equal(5, row.Staffing!.RequiredEmployees); Assert.Equal(5, row.Staffing.ApprovedEmployees); Assert.True(row.Staffing.HasEnoughStaff);
-        Assert.Equal(5, await AssignmentsAsync(crew));
-        // The employee gets a plain notice and has nothing to answer.
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId);
+        Assert.Equal(5, row.Staffing!.RequiredEmployees); Assert.Equal(0, row.Staffing.ApprovedEmployees); Assert.False(row.Staffing.HasEnoughStaff);
+        // Invited, not assigned: each employee gets an invitation to answer.
+        Assert.Equal(0, await AssignmentsAsync(crew));
         foreach (var c in crew)
-            Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == c.Employee.AccountId && n.Type == "PURCHASE_SHIFT_ASSIGNED")));
-        var mine = await InvitationAsync(crew[0].Client);
-        Assert.False(mine.CanRespond); Assert.True(mine.Approved);
-        Assert.Equal(HttpStatusCode.BadRequest, (await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{mine.Id}/response", new RespondPurchaseShift(false, "Bận", mine.RowVersion))).StatusCode);
+            Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == c.Employee.AccountId && n.Type == "PURCHASE_SHIFT_INVITED")));
+        Assert.True((await InvitationAsync(crew[0].Client)).CanRespond);
 
-        // The plan is the only condition: the cages and the pickup must be those of the plan.
+        for (var i = 0; i < 4; i++) await ReplyAsync(crew[i].Client, true);
+        row = await GetAsync(owner, row.Id);
+        Assert.Equal(4, row.Staffing!.ApprovedEmployees); Assert.False(row.Staffing.HasEnoughStaff);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, row)).StatusCode);
+
+        await ReplyAsync(crew[4].Client, true);
+        row = await GetAsync(owner, row.Id);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId); Assert.True(row.Staffing!.HasEnoughStaff);
+        Assert.Equal(0, await AssignmentsAsync(crew));
+        // The cages and the pickup must be those of the plan.
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept",
             new AcceptPurchaseRequest(80, Day, false, null, row.RowVersion))).StatusCode);
         await Success(await AcceptAsync(owner, row));
@@ -72,36 +80,72 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(StatusIds.PurchaseRequest.Accepted, result.StatusId); Assert.Equal(100, result.Response!.AcceptedCages);
         var invitations = (await owner.GetFromJsonAsync<List<PurchaseShiftInvitationView>>($"/api/purchase-requests/{row.Id}/staffing"))!;
         Assert.Equal(5, invitations.Count); Assert.All(invitations, i => Assert.True(i.Approved));
-        // Accepting makes no second assignment: the ones made when the staff was chosen stay the only ones.
+        // Accepting makes the work assignments of the staff who agreed, and tells them.
         Assert.Equal(5, await AssignmentsAsync(crew));
+        foreach (var c in crew)
+            Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == c.Employee.AccountId && n.Type == "PURCHASE_SHIFT_CONFIRMED")));
         await Success(await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest("Đổi lịch", result.RowVersion)));
         Assert.False(await factory.QueryAsync(db => db.Set<PurchaseShiftInvitation>().AnyAsync(i => i.PurchaseRequestId == row.Id && i.ReservedWorkDate != null)));
         Assert.Equal(0, await AssignmentsAsync(crew));
     }
 
     [Fact]
-    public async Task The_owner_can_add_staff_later_and_a_decline_releases_the_assignments()
+    public async Task Refusals_keep_the_request_waiting_the_responsible_invites_more_or_the_owner_declines_with_a_reason()
     {
         var (owner, trader, row) = await SetupAsync(); var crew = await CrewAsync(6);
         await PlanAsync(owner, row, crew.Take(5).Select(c => c.Employee.Id).ToArray());
+        await ReplyAsync(crew[0].Client, false, "Bận việc gia đình");
+        for (var i = 1; i < 5; i++) await ReplyAsync(crew[i].Client, true);
         row = await GetAsync(owner, row.Id);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId); Assert.Equal(4, row.Staffing!.ApprovedEmployees);
+        Assert.Equal(1, row.Staffing.DeclinedEmployees); Assert.False(row.Staffing.HasEnoughStaff);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, row)).StatusCode);
+        // The owner hears of each answer with how far the staffing got.
+        Assert.True(await factory.QueryAsync(db => db.Notifications.AnyAsync(n => n.Type == "PURCHASE_SHIFT_RESPONDED" && n.RelatedRecordCode == row.Code && n.Body != null && n.Body.Contains("Mới có 4/5 người đồng ý"))));
+
         await Success(await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", Plan(row, [crew[5].Employee.Id])));
+        var answers = (await owner.GetFromJsonAsync<List<PurchaseShiftInvitationView>>($"/api/purchase-requests/{row.Id}/staffing"))!;
+        Assert.Equal("Bận việc gia đình", answers.Single(i => i.EmployeeId == crew[0].Employee.Id).Reason);
+        Assert.Null(answers.Single(i => i.EmployeeId == crew[5].Employee.Id).Approved);
         row = await GetAsync(owner, row.Id);
-        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, row.StatusId); Assert.Equal(6, row.Staffing!.ApprovedEmployees);
-        Assert.Equal(6, await AssignmentsAsync(crew));
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline",
             new DeclinePurchaseRequest(" ", row.RowVersion))).StatusCode);
 
-        await Success(await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline", new DeclinePurchaseRequest("Không đủ hàng cho ngày nhận", row.RowVersion)));
+        await Success(await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline", new DeclinePurchaseRequest("Không đủ nhân viên cho ngày nhận", row.RowVersion)));
 
         var result = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
-        Assert.Equal(StatusIds.PurchaseRequest.Declined, result.StatusId);
+        Assert.Equal(StatusIds.PurchaseRequest.Declined, result.StatusId); Assert.Equal("Không đủ nhân viên cho ngày nhận", result.Response!.Note);
         Assert.False(await factory.QueryAsync(db => db.Set<PurchaseShiftInvitation>().AnyAsync(i => i.PurchaseRequestId == row.Id && i.ReservedWorkDate != null)));
         Assert.Equal(0, await AssignmentsAsync(crew));
+        var pending = await InvitationAsync(crew[5].Client);
+        Assert.False(pending.CanRespond);
+        Assert.Equal(HttpStatusCode.BadRequest, (await crew[5].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{pending.Id}/response",
+            new RespondPurchaseShift(true, null, pending.RowVersion))).StatusCode);
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == crew[5].Employee.AccountId && n.Type == "PURCHASE_SHIFT_CLOSED")));
     }
 
     [Fact]
-    public async Task Only_the_owner_staffs_and_an_employee_has_no_invitation_to_answer()
+    public async Task Once_there_are_enough_no_one_else_can_agree_and_accepting_closes_the_unanswered_invitations()
+    {
+        var (owner, _, row) = await SetupAsync(20); var crew = await CrewAsync(2);
+        await PlanAsync(owner, row, [crew[0].Employee.Id, crew[1].Employee.Id], 20, 20);
+        await ReplyAsync(crew[0].Client, true);
+        var late = await InvitationAsync(crew[1].Client);
+        Assert.False(late.CanRespond);
+        Assert.Equal(HttpStatusCode.BadRequest, (await crew[1].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{late.Id}/response",
+            new RespondPurchaseShift(true, null, late.RowVersion))).StatusCode);
+        Assert.True(await factory.QueryAsync(db => db.Notifications.AnyAsync(n => n.Type == "PURCHASE_SHIFT_RESPONDED" && n.RelatedRecordCode == row.Code && n.Body != null && n.Body.Contains("Đã đủ 1/1 người, Chủ HTX có thể nhận đơn"))));
+
+        await Success(await AcceptAsync(owner, await GetAsync(owner, row.Id)));
+
+        Assert.Equal(1, await AssignmentsAsync(crew));
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == crew[0].Employee.AccountId && n.Type == "PURCHASE_SHIFT_CONFIRMED")));
+        Assert.Equal(0, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == crew[1].Employee.AccountId && n.Type == "PURCHASE_SHIFT_CONFIRMED")));
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == crew[1].Employee.AccountId && n.Type == "PURCHASE_SHIFT_CLOSED")));
+    }
+
+    [Fact]
+    public async Task Employees_can_only_answer_their_own_invitation_and_retries_do_not_duplicate_notifications()
     {
         var (owner, trader, row) = await SetupAsync(); var crew = await CrewAsync(2);
         await PlanAsync(owner, row, [crew[0].Employee.Id]);
@@ -111,24 +155,26 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", body)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await crew[0].Client.GetAsync($"/api/purchase-requests/{row.Id}/staffing")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", Plan(row, [crew[0].Employee.Id]))).StatusCode);
-        // The employee does not answer: the old answer route is closed for a request that is not waiting for staff.
-        Assert.Equal(HttpStatusCode.BadRequest, (await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", body)).StatusCode);
+        await Success(await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", body));
+        await Success(await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", body));
+        Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(a => a.RecordId == invite.Id && a.Action == "PurchaseShift.Responded")));
+        Assert.Equal(HttpStatusCode.Conflict, (await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", body with { Approved = false, Reason = "Đổi ý" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await crew[0].Client.GetAsync($"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day.AddDays(63):yyyy-MM-dd}")).StatusCode);
-        Assert.Equal(0, await factory.QueryAsync(db => db.AuditEvents.CountAsync(a => a.RecordId == invite.Id && a.Action == "PurchaseShift.Responded")));
     }
 
     [Fact]
-    public async Task Same_employee_cannot_be_staffed_for_two_orders_on_one_day_and_cancellation_releases_the_day()
+    public async Task Same_employee_cannot_count_for_two_orders_on_one_day_and_cancellation_releases_the_day()
     {
         var (owner, trader, row) = await SetupAsync(); var (_, _, other) = await SetupAsync(); var crew = await CrewAsync(1);
-        await PlanAsync(owner, row, [crew[0].Employee.Id]);
-        // The assignment of the first order already holds the employee that day.
-        await PlanAsync(owner, other, [crew[0].Employee.Id], expect: HttpStatusCode.BadRequest);
+        // An employee may be invited to two requests of the same day; the first agreement holds the day.
+        await PlanAsync(owner, row, [crew[0].Employee.Id]); await PlanAsync(owner, other, [crew[0].Employee.Id]);
+        var invitations = (await crew[0].Client.GetFromJsonAsync<List<MyPurchaseShiftView>>(Range))!;
+        var first = invitations.Single(i => i.PurchaseRequestId == row.Id); var second = invitations.Single(i => i.PurchaseRequestId == other.Id);
+        await Success(await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{first.Id}/response", new RespondPurchaseShift(true, null, first.RowVersion)));
+        Assert.Equal(HttpStatusCode.BadRequest, (await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{second.Id}/response", new RespondPurchaseShift(true, null, second.RowVersion))).StatusCode);
         row = await GetAsync(owner, row.Id);
         await Success(await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest("Đổi lịch", row.RowVersion)));
-
-        await PlanAsync(owner, other, [crew[0].Employee.Id], newPlan: false);
-
+        await Success(await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{second.Id}/response", new RespondPurchaseShift(true, null, second.RowVersion)));
         Assert.Equal(1, (await GetAsync(owner, other.Id)).Staffing!.ApprovedEmployees);
     }
 
@@ -158,7 +204,30 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
     }
 
     [Fact]
-    public async Task Plan_is_immutable_after_the_staff_is_chosen_and_capacity_rounds_up_without_overflow()
+    public async Task An_employee_who_agreed_and_then_became_unavailable_is_rechecked_before_accepting()
+    {
+        var (owner, _, row) = await SetupAsync(20); var crew = await CrewAsync(1);
+        await PlanAsync(owner, row, [crew[0].Employee.Id], 20, 20);
+        await ReplyAsync(crew[0].Client, true);
+        // Leave approved after the agreement (LABOR-05): the acceptance is refused until it no longer holds.
+        await factory.UseDbAsync(db => db.EmployeeRequests.Add(new EmployeeRequest
+        {
+            EmployeeId = crew[0].Employee.Id, Type = EmployeeRequestType.Leave, FromDate = Day, ToDate = Day, Reason = "Nghỉ phép",
+            SentAt = DateTimeOffset.UtcNow, StatusId = StatusIds.EmployeeRequest.Approved, ClientOperationId = Guid.NewGuid(),
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, await GetAsync(owner, row.Id))).StatusCode);
+        await factory.UseDbAsync(db => db.EmployeeRequests.Single(r => r.EmployeeId == crew[0].Employee.Id).StatusId = StatusIds.EmployeeRequest.Rejected);
+        await factory.UseDbAsync(db => db.Accounts.Single(a => a.Id == crew[0].Employee.AccountId).StatusId = StatusIds.Account.Locked);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, await GetAsync(owner, row.Id))).StatusCode);
+        await factory.UseDbAsync(db => db.Accounts.Single(a => a.Id == crew[0].Employee.AccountId).StatusId = StatusIds.Account.Active);
+
+        await Success(await AcceptAsync(owner, await GetAsync(owner, row.Id)));
+
+        Assert.Equal(1, await AssignmentsAsync(crew));
+    }
+
+    [Fact]
+    public async Task Plan_is_immutable_after_invites_and_capacity_rounds_up_without_overflow()
     {
         var (owner, _, row) = await SetupAsync(); var crew = await CrewAsync(2);
         await PlanAsync(owner, row, [crew[0].Employee.Id], 21, 20);
@@ -167,6 +236,9 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
             Plan(row, [crew[1].Employee.Id]) with { CagesPerEmployeePerDay = 0 },
             Plan(row, [crew[1].Employee.Id]) with { EmployeeIds = [crew[1].Employee.Id, crew[1].Employee.Id] } })
             Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", invalid)).StatusCode);
+        // A refusal needs a reason.
+        var invite = await InvitationAsync(crew[0].Client);
+        Assert.Equal(HttpStatusCode.BadRequest, (await crew[0].Client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(false, " ", invite.RowVersion))).StatusCode);
         var (_, _, large) = await SetupAsync(int.MaxValue);
         await PlanAsync(owner, large, [crew[1].Employee.Id], int.MaxValue, int.MaxValue);
         Assert.Equal(1, (await GetAsync(owner, large.Id)).Staffing!.RequiredEmployees);
@@ -201,7 +273,9 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         Assert.DoesNotContain(options, e => e.Id == crew[1].Employee.Id);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         await Success(await client.PostAsJsonAsync($"/api/work-plans/{plan.Id}/assignments", new OMTS.Application.Features.Workforce.Dtos.AssignWorkDayPlan([crew[0].Employee.Id], plan.RowVersion)));
-        Assert.Equal(1, await factory.QueryAsync(db => db.WorkAssignments.CountAsync(a => a.Date == Day && a.EmployeeId == crew[0].Employee.Id)));
+        // Invited, not yet assigned: the employee answers first.
+        Assert.True((await InvitationAsync(crew[0].Client)).CanRespond);
+        Assert.Equal(0, await factory.QueryAsync(db => db.WorkAssignments.CountAsync(a => a.Date == Day && a.EmployeeId == crew[0].Employee.Id)));
     }
 
     private Task<int> AssignmentsAsync(List<(Employee Employee, HttpClient Client)> crew)
@@ -210,7 +284,7 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         return factory.QueryAsync(db => db.WorkAssignments.CountAsync(a => a.Date == Day && ids.Contains(a.EmployeeId)));
     }
 
-    private static string Range =>$"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}";
+    private static string Range => $"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}";
     private async Task<(HttpClient Owner, HttpClient Trader, PurchaseRequestView Row)> SetupAsync(int cages = 100)
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password);
@@ -238,16 +312,13 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
     }
     private static PlanPurchaseStaffing Plan(PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20) => new(cages, Day, Day, capacity, ids, null, row.RowVersion);
     /// <summary>Makes the work plan of the request (once) and posts the staffing; answers the status of the staffing call, and fails the test when it is not <paramref name="expect"/> (OK by default).</summary>
-    private async Task<HttpStatusCode> PlanAsync(HttpClient owner, PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20, HttpStatusCode expect = HttpStatusCode.OK, bool newPlan = true)
+    private async Task<HttpStatusCode> PlanAsync(HttpClient owner, PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20, HttpStatusCode expect = HttpStatusCode.OK)
     {
-        if (newPlan)
-        {
-            var zone = await factory.AddZoneAsync(NewCode());
-            var raft = new OMTS.Domain.Entities.Farming.Raft { ZoneId = zone.Id, Code = NewCode() };
-            var job = new JobType { Name = NewCode() };
-            await factory.UseDbAsync(db => { db.Rafts.Add(raft); db.Set<JobType>().Add(job); });
-            await WorkPlanTestKit.SelfPlanAsync(owner, raft.Id, job.Id, Day, row.Id, cages, capacity, Day);
-        }
+        var zone = await factory.AddZoneAsync(NewCode());
+        var raft = new OMTS.Domain.Entities.Farming.Raft { ZoneId = zone.Id, Code = NewCode() };
+        var job = new JobType { Name = NewCode() };
+        await factory.UseDbAsync(db => { db.Rafts.Add(raft); db.Set<JobType>().Add(job); });
+        await WorkPlanTestKit.SelfPlanAsync(owner, raft.Id, job.Id, Day, row.Id, cages, capacity, Day);
 
         row = await GetAsync(owner, row.Id);
         var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", Plan(row, ids, cages, capacity));
@@ -257,5 +328,10 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
     private static async Task<PurchaseRequestView> GetAsync(HttpClient owner, Guid id) => (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{id}"))!;
     private static Task<HttpResponseMessage> AcceptAsync(HttpClient owner, PurchaseRequestView row) => owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", new AcceptPurchaseRequest(row.Staffing?.Cages ?? row.RequestedCages, Day, false, null, row.RowVersion));
     private static async Task<MyPurchaseShiftView> InvitationAsync(HttpClient client) => Assert.Single((await client.GetFromJsonAsync<List<MyPurchaseShiftView>>(Range))!);
+    private static async Task ReplyAsync(HttpClient client, bool approve, string? reason = null)
+    {
+        var invite = await InvitationAsync(client);
+        await Success(await client.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(approve, reason, invite.RowVersion)));
+    }
     private static async Task Success(HttpResponseMessage response) => Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
 }
