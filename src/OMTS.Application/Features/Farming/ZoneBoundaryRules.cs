@@ -59,6 +59,63 @@ internal static class ZoneBoundaryRules
     }
 
     /// <summary>
+    /// The pin of a zone with a boundary: the centroid of all its areas, each weighted by its own area, rounded to the 6 decimals of the
+    /// columns. Taken on longitude and latitude directly: scaling an axis scales every area alike and leaves centroids where they
+    /// are, so this equals the metric centroid. An area with no surface counts by the mean of its corners, and null is returned
+    /// when the boundary has no ring.
+    /// </summary>
+    public static (decimal Latitude, decimal Longitude)? Centroid(ZoneBoundary? boundary)
+    {
+        if (boundary is null)
+        {
+            return null;
+        }
+
+        double weight = 0, weightedLon = 0, weightedLat = 0;
+        double fallbackLon = 0, fallbackLat = 0;
+        var rings = 0;
+        foreach (var ring in Rings(boundary))
+        {
+            var (area, lon, lat) = RingCentroid(ring);
+            weight += area;
+            weightedLon += area * lon;
+            weightedLat += area * lat;
+            (fallbackLon, fallbackLat, rings) = (fallbackLon + lon, fallbackLat + lat, rings + 1);
+        }
+
+        if (rings == 0)
+        {
+            return null;
+        }
+
+        var (centreLon, centreLat) = weight > 0 ? (weightedLon / weight, weightedLat / weight) : (fallbackLon / rings, fallbackLat / rings);
+        return (Math.Round((decimal)centreLat, 6, MidpointRounding.AwayFromZero), Math.Round((decimal)centreLon, 6, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>The surface (square degrees) and the centroid of one ring; a ring with no surface answers 0 and the mean of its corners.</summary>
+    private static (double Area, double Longitude, double Latitude) RingCentroid(IReadOnlyList<IReadOnlyList<double>> ring)
+    {
+        // Offsets from the first corner keep the products small and exact enough.
+        var (x0, y0) = (ring[0][0], ring[0][1]);
+        double twiceArea = 0, sumX = 0, sumY = 0;
+        for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+        {
+            var (xj, yj, xi, yi) = (ring[j][0] - x0, ring[j][1] - y0, ring[i][0] - x0, ring[i][1] - y0);
+            var cross = xj * yi - xi * yj;
+            twiceArea += cross;
+            sumX += (xj + xi) * cross;
+            sumY += (yj + yi) * cross;
+        }
+
+        if (twiceArea == 0)
+        {
+            return (0, ring.Average(p => p[0]), ring.Average(p => p[1]));
+        }
+
+        return (Math.Abs(twiceArea) / 2, x0 + sumX / (3 * twiceArea), y0 + sumY / (3 * twiceArea));
+    }
+
+    /// <summary>
     /// How far outside every area of the boundary the point is, in metres to the nearest edge; null when it is inside an area,
     /// within <see cref="EdgeToleranceM"/> of an edge, or the boundary has no ring.
     /// </summary>

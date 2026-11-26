@@ -38,6 +38,9 @@ public class CoordinateRulesTests
     }
 
     [Fact]
+    public void A_zone_without_a_pin_never_makes_a_raft_far_from_it() => Assert.Empty(CoordinateRules.ForRaft(21.13m, 107.43m, null, null));
+
+    [Fact]
     public void A_raft_without_a_pin_never_warns() => Assert.Empty(CoordinateRules.ForRaft(null, null, 21.07m, 107.43m));
 
     [Fact]

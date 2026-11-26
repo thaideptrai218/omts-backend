@@ -105,7 +105,7 @@ public sealed class FarmingZoneService(
         }
 
         var zone = new FarmingZone { CooperativeId = cooperative.Id };
-        Apply(zone, values);
+        Apply(zone, values, keepPin: false);
         zones.Add(zone);
         audit.Record(new AuditEntry("FarmingZone.Created", RecordType) { RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, After = Snapshot(zone) });
         if (await SaveAsync(zone, exceptZoneId: null, cancellationToken) is { } duplicate)
@@ -147,7 +147,8 @@ public sealed class FarmingZoneService(
         }
 
         var before = Snapshot(zone);
-        Apply(zone, values);
+        // Once the zone has a boundary its pin is the boundary's centroid, set by the server: the edit never moves or wipes it.
+        Apply(zone, values, keepPin: zone.BoundaryGeoJson is not null);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(zone));
         if (changedAfter is not null)
         {
@@ -197,6 +198,12 @@ public sealed class FarmingZoneService(
 
         var before = BoundarySnapshot(zone);
         zone.BoundaryGeoJson = ZoneBoundaryJson.Write(boundary);
+        if (ZoneBoundaryRules.Centroid(boundary) is { } pin)
+        {
+            // The pin of a zone with a boundary is its centroid; clearing the boundary keeps the last pin.
+            (zone.Latitude, zone.Longitude) = (pin.Latitude, pin.Longitude);
+        }
+
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, BoundarySnapshot(zone));
         if (changedAfter is not null)
         {
@@ -320,32 +327,39 @@ public sealed class FarmingZoneService(
             RowVersionGuard.Encode(zone.RowVersion));
     }
 
-    private static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values)
+    /// <summary>Code and name are required; location, area and the pin are optional and checked when sent (a pin needs both numbers).</summary>
+    internal static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values)
     {
         var check = new FieldCheck();
         var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
-        var location = check.Required(request.Location, "Location", 500);
-        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: true);
-        check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
+        var location = check.Optional(request.Location, "Location", 500);
+        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: false);
+        check.Check(request.Area is null or (> 0 and < 100_000_000_000_000m), "Area");
         values = new ZoneValues(code, name, location, latitude, longitude, request.Area);
         return check;
     }
 
-    private static void Apply(FarmingZone zone, ZoneValues values)
+    /// <param name="keepPin">The zone has a boundary: its pin is the boundary's centroid and the values sent for it are ignored.</param>
+    internal static void Apply(FarmingZone zone, ZoneValues values, bool keepPin)
     {
         zone.Code = values.Code;
         zone.Name = values.Name;
         zone.Location = values.Location;
-        zone.Latitude = values.Latitude;
-        zone.Longitude = values.Longitude;
+        if (!keepPin)
+        {
+            zone.Latitude = values.Latitude;
+            zone.Longitude = values.Longitude;
+        }
+
         zone.Area = values.Area;
     }
 
     private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area };
 
-    /// <summary>The boundary as the GeoJSON it is (not as an escaped text), so the audit log shows and compares it as such.</summary>
-    private static object BoundarySnapshot(FarmingZone z) => new { Boundary = z.BoundaryGeoJson is { } json ? JsonNode.Parse(json) : null };
+    /// <summary>The boundary as the GeoJSON it is (not as an escaped text), so the audit log shows and compares it as such, with the pin a boundary sets.</summary>
+    private static object BoundarySnapshot(FarmingZone z) =>
+        new { Boundary = z.BoundaryGeoJson is { } json ? JsonNode.Parse(json) : null, z.Latitude, z.Longitude };
 
-    private sealed record ZoneValues(string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area);
+    internal sealed record ZoneValues(string Code, string Name, string? Location, decimal? Latitude, decimal? Longitude, decimal? Area);
 }

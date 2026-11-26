@@ -109,6 +109,58 @@ public class ZoneBoundaryRulesTests
         Assert.Empty(ZoneBoundaryRules.ForRafts(null, rafts));
     }
 
+    [Fact]
+    public void The_centroid_of_one_rectangle_is_its_middle_whatever_the_orientation_and_the_closing()
+    {
+        var (latitude, longitude) = ZoneBoundaryRules.Centroid(Boundary(Square))!.Value;
+        Assert.Equal(21.05m, latitude);
+        Assert.Equal(107.35m, longitude);
+
+        Assert.Equal((latitude, longitude), ZoneBoundaryRules.Centroid(Boundary(Square.Reverse().ToList()))!.Value);
+        Assert.Equal((latitude, longitude), ZoneBoundaryRules.Centroid(Boundary(Square.SkipLast(1).ToList()))!.Value);
+    }
+
+    [Fact]
+    public void The_centroid_of_several_areas_is_weighted_by_area()
+    {
+        // One cell of 0.01 x 0.01 degree at x 0..1 and a cell three times as wide at x 2..5, both y 0..1.
+        var small = Cells(0, 0, 1, 0, 1, 1, 0, 1, 0, 0);
+        var large = Cells(2, 0, 5, 0, 5, 1, 2, 1, 2, 0);
+
+        var (latitude, longitude) = ZoneBoundaryRules.Centroid(Boundary(small, large))!.Value;
+
+        // Longitude: (1 * 0.5 + 3 * 3.5) / 4 = 2.75 cells; latitude: the middle of the cells.
+        Assert.Equal(21.005m, latitude);
+        Assert.Equal(107.3275m, longitude);
+    }
+
+    [Fact]
+    public void The_centroid_of_a_concave_area_is_not_the_mean_of_its_corners()
+    {
+        // An "L" of three cells: a 2 x 1 base and a 1 x 1 arm above its left cell. The mean of the six corners is (1, 1);
+        // the area weights give base (1, 0.5) with area 2 and arm (0.5, 1.5) with area 1, so (5/6, 5/6).
+        var l = Cells(0, 0, 2, 0, 2, 1, 1, 1, 1, 2, 0, 2, 0, 0);
+
+        var (latitude, longitude) = ZoneBoundaryRules.Centroid(Boundary(l))!.Value;
+
+        Assert.Equal(21.008333m, latitude);
+        Assert.Equal(107.308333m, longitude);
+    }
+
+    [Fact]
+    public void The_centroid_is_rounded_to_six_decimals_and_absent_without_a_boundary()
+    {
+        // A triangle whose centroid has an endless fraction.
+        var triangle = Ring(107.0, 21.0, 107.1, 21.0, 107.0, 21.1, 107.0, 21.0);
+
+        var (latitude, longitude) = ZoneBoundaryRules.Centroid(Boundary(triangle))!.Value;
+
+        Assert.Equal(21.033333m, latitude);
+        Assert.Equal(107.033333m, longitude);
+        Assert.Null(ZoneBoundaryRules.Centroid(null));
+        Assert.Null(ZoneBoundaryRules.Centroid(new ZoneBoundary("FeatureCollection", [])));
+    }
+
     private static double X(double cells) => 107.30 + cells * 0.01;
 
     private static double Y(double cells) => 21.00 + cells * 0.01;
