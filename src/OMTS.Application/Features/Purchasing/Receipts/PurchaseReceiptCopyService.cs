@@ -16,11 +16,6 @@ public sealed class PurchaseReceiptCopyService(
     public async Task<Result<PurchaseReceiptCopy>> CopyAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var source = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (source is not null && !await access.SeesAsync(source.ZoneId, cancellationToken))
-        {
-            source = null;
-        }
-
         if (source is null)
         {
             return AppError.NotFound;

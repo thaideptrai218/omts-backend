@@ -79,7 +79,7 @@ public sealed record ExportedFile(string FileName, string ContentType, byte[] Co
 
 /// <summary>
 /// PURCHASE-03 – search purchase receipts with totals, the material cost of rafts from their material usages, the receivers, and the Excel export.
-/// The Owner and the Accountant (view and export) see every receipt; a Zone Manager only the receipts of the zones of its pairs, and never one with no zone (owner decision of 25/11/2026, see <see cref="PurchaseReceiptAccess"/>).
+/// The zone of a receipt filters only: the Zone Manager, the Owner and the Accountant (view and export) see every receipt (BR-FARM-08).
 /// </summary>
 public sealed class PurchaseReceiptQueryService(
     IPurchaseReceiptRepository receipts,
@@ -90,7 +90,6 @@ public sealed class PurchaseReceiptQueryService(
     ISpreadsheetWriter spreadsheets,
     IStatusCatalog statusCatalog,
     ISeedLotRegisterQuery seedLots,
-    PurchaseReceiptAccess access,
     TimeProvider timeProvider)
 {
     public async Task<Result<PurchaseReceiptSearchResult>> SearchAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
@@ -118,7 +117,7 @@ public sealed class PurchaseReceiptQueryService(
     public async Task<Result<IReadOnlyList<ReceiptPaymentView>>> PaymentsAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        return receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken)
+        return receipt is null
             ? AppError.NotFound
             : Result<IReadOnlyList<ReceiptPaymentView>>.Success(await allocations.PaymentsOfAsync(receipt.Id, receipt.SupplierId, cancellationToken));
     }
@@ -164,16 +163,12 @@ public sealed class PurchaseReceiptQueryService(
 
     /// <summary>
     /// The raft filter of the list and of the material cost: every raft, Discontinued ones included because old receipts name
-    /// them. A Zone Manager gets the rafts of its zones only; the Owner and the Accountant every raft. It
+    /// them. Receipts follow the role only, whatever their zone (BR-FARM-08), so whoever may view them may filter by any raft. It
     /// is how an Accountant, who may not read rafts (§I.4.4 FARM-04 No), fills a filter of PURCHASE-03 (R), so it holds id and
     /// codes only.
     /// </summary>
-    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken)
-    {
-        // A Zone Manager filters by the rafts of the zones it sees receipts of.
-        var scope = await access.ScopeAsync(cancellationToken);
-        return await rafts.ListForLookupAsync(scope.All ? PermittedZones.Everywhere : new PermittedZones(false, scope.ZoneIds), cancellationToken);
-    }
+    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken) =>
+        await rafts.ListForLookupAsync(PermittedZones.Everywhere, cancellationToken);
 
     /// <summary>PURCHASE-03.2: the receipts and the totals shown, as an .xlsx file (Export: Zone Manager and Owner).</summary>
     public async Task<Result<ExportedFile>> ExportAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
@@ -248,11 +243,9 @@ public sealed class PurchaseReceiptQueryService(
         var (from, to) = period.Value;
         var statusIds = Merged(query.StatusId, query.StatusIds);
         var itemGroups = Merged(query.ItemGroup, query.ItemGroups);
-        // A Zone Manager lists the receipts of its zones only (the zones asked for are limited to them); the Owner and the Accountant list every receipt.
-        var zones = (await access.ScopeAsync(cancellationToken)).Limit(query.ZoneIds is { Length: > 0 } ? query.ZoneIds : null);
         return new PurchaseReceiptFilter(
             itemGroups is null ? query.ItemGroup : null, query.ItemId, query.RaftId, query.SupplierId, statusIds is null ? query.StatusId : null, from, to, query.Code,
-            query.Search, statusIds, itemGroups, zones,
+            query.Search, statusIds, itemGroups, query.ZoneIds is { Length: > 0 } ? query.ZoneIds : null,
             sort, query.SortDir == "desc" || (query.SortDir is null && query.SortBy is null), query.Kind);
     }
 

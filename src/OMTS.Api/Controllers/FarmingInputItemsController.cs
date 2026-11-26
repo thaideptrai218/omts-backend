@@ -188,7 +188,7 @@ public sealed class InputInventorySettingsController(InputInventorySettingsServi
         (await settings.UpdateAsync(request, cancellationToken)).ToActionResult(Ok);
 }
 
-/// <summary>"Thiết lập giá" of a purchase receipt: the cost price and the last purchase price of its items; the update is the Owner's and the Zone Manager's of the zone of the receipt.</summary>
+/// <summary>"Thiết lập giá" of a purchase receipt: the cost price and the last purchase price of its items; the update is the Owner's and the Zone Manager's (PURCHASE_RECEIPTS Edit, any zone).</summary>
 [ApiController]
 [Authorize]
 public sealed class ReceiptPriceSetupController(ReceiptPriceSetupService priceSetup) : ControllerBase

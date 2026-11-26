@@ -75,12 +75,13 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     /// <summary>
-    /// The conflict of the merge. The purchase side (since 25/11/2026 a Zone Manager sees the receipts of its zones only, an Accountant every receipt). The raft side: the lookup of the zones of the pairs.
+    /// The conflict of the merge. The purchase side: receipts have no zone and follow the role only (BR-FARM-08). The raft side: the lookup of the zones of the pairs.
     /// PURCHASE-03 and SCR-PURCHASE-01 give the Zone Manager and the Accountant the raft filter, and PURCHASE-03.1 shows each line with its raft, so a person of one zone already
     /// reads the raft codes of every zone on the receipts: the filter has to offer them, or a listed receipt could not be found by its own raft. Only BR-PURCHASE-01 limits rafts, and
     /// only on a line being written.
     /// </summary>
     [Theory]
+    [InlineData(StaffRole.ZoneManager)]
     [InlineData(StaffRole.Accountant)]
     public async Task The_lookup_of_a_person_of_one_zone_finds_every_raft_their_role_reads_on_receipts(StaffRole role)
     {
@@ -110,8 +111,7 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var world = await factory.WorldAsync();
         var (_, raftB) = await factory.ZoneWithRaftAsync();
         var manager = (await factory.StaffAsync(world.Zone)).Client;
-        // A Zone Manager sees the receipts, and so the rafts of the filter, of its own zones only (decision of 25/11/2026).
-        Assert.DoesNotContain(raftB.Id, (await manager.GetFromJsonAsync<JsonElement>(Lookup)).EnumerateArray().Select(r => r.Id()));
+        Assert.Contains(raftB.Id, (await manager.GetFromJsonAsync<JsonElement>(Lookup)).EnumerateArray().Select(r => r.Id()));
 
         var refused = await manager.PostReceiptAsync(new ReceiptBody { SupplierId = world.SupplierId, Complete = true, Lines = [new LineBody(world.Material, 1m, 1m, RaftId: raftB.Id)] });
 

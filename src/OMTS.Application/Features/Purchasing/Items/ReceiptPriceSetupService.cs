@@ -2,8 +2,6 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
-using OMTS.Application.Features.Authorization.Models;
-using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Domain.Entities.Purchasing;
 
 namespace OMTS.Application.Features.Purchasing.Items;
@@ -14,28 +12,22 @@ namespace OMTS.Application.Features.Purchasing.Items;
 /// the item, naming this receipt; the cost of past movements stays.
 /// </summary>
 public sealed class ReceiptPriceSetupService(
-    IPurchaseReceiptRepository receipts, IFarmingInputItemRepository items, InputStockLedger ledger, AuditLogService audit, IUnitOfWork unitOfWork, PurchaseReceiptAccess access)
+    IPurchaseReceiptRepository receipts, IFarmingInputItemRepository items, InputStockLedger ledger, AuditLogService audit, IUnitOfWork unitOfWork)
 {
     private const decimal MaxCost = 1_000_000_000_000m;
 
     public async Task<Result<ReceiptPriceSetupView>> GetAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        return receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken) ? AppError.NotFound : await ViewAsync(receipt, cancellationToken);
+        return receipt is null ? AppError.NotFound : await ViewAsync(receipt, cancellationToken);
     }
 
     public async Task<Result<ReceiptPriceSetupView>> UpdateAsync(Guid receiptId, UpdateReceiptPriceSetupRequest request, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
+        if (receipt is null)
         {
             return AppError.NotFound;
-        }
-
-        // The Owner, or a Zone Manager on a receipt of its own zone ("thiết lập giá" of the receipts it records).
-        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Edit, cancellationToken) is { } zoneRefused)
-        {
-            return zoneRefused;
         }
 
         var inputs = request.Items ?? [];

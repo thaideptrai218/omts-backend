@@ -45,23 +45,20 @@ Kế toán (`ACCOUNTANT`) không đổi. Chủ HTX không bị ảnh hưởng (q
 
 ---
 
-## Bổ sung 25/11/2026: Quản lý vùng được làm Mua hàng trong vùng của mình (đảo "Quản lý vùng không có Mua hàng")
+## Bổ sung 25/11/2026, sửa 26/11/2026: Quản lý vùng làm Mua hàng như Chủ HTX, KHÔNG giới hạn vùng (kho chung)
 
-**Người chốt:** chủ HTX. **Phạm vi:** backend (`FixedRoles`, `PurchaseReceiptAccess` và các service phiếu nhập, trả hàng nhập, thiết lập giá). **Tình trạng:** đã sửa code; chạy được trên InMemory (test tích hợp `PurchaseReceiptZoneScopeTests`), chưa chạy trên SQL Server. **Chờ PM:** đưa vào SRS §I.4.4 (PURCHASE-01 đến 07).
+**Người chốt:** chủ HTX. **Phạm vi:** backend (`FixedRoles`; thiết lập giá `PUT /api/purchase-receipts/{id}/price-setup`). **Chờ PM:** đưa vào SRS §I.4.4 (PURCHASE-01 đến 07).
 
-Quyết định ngày 20/11 ở trên giữ cho Quản lý vùng `PURCHASE_RECEIPTS` và `SUPPLIERS` nhưng phía Web hiểu là "Quản lý vùng không có Mua hàng". Từ nay Quản lý vùng làm trong Mua hàng mọi việc Chủ HTX làm, **nhưng chỉ trong các vùng được cấp**:
+Quyết định ngày 20/11 ở trên được đảo: Quản lý vùng có Mua hàng. Bản ghi ngày 25/11 giới hạn phiếu theo vùng được chủ HTX **sửa lại ngày 26/11: không giới hạn vùng, vì kho dùng chung và mua hàng xưa nay không theo vùng**. Quản lý vùng làm trong Mua hàng đúng những việc Chủ HTX làm, ở mọi vùng:
 
 | Việc | Quản lý vùng |
 |---|---|
-| Phiếu nhập vật tư, giống (tạo nháp, sửa, hoàn tất, xóa nháp, hủy) | Có, chỉ phiếu thuộc vùng của mình; phải chọn một vùng của mình khi tạo (thiếu vùng: 400 `Zone`; vùng khác: 403) |
-| Trả hàng nhập (từ phiếu hoặc không phiếu) | Có, theo vùng của phiếu (phiếu không vùng thì không) |
-| Thiết lập giá trên phiếu của mình (`PUT .../price-setup`) | Có (trước đây chỉ Chủ HTX) |
-| Xem nhà cung cấp | Có (`SUPPLIERS` chỉ còn View) |
+| Phiếu nhập vật tư, giống (tạo nháp, sửa, hoàn tất, xóa nháp, hủy), xem, danh sách, xuất | Có, mọi vùng (quy tắc cũ giữ: nháp/phiếu hoàn tất do người lập hoặc Chủ HTX sửa, hủy) |
+| Trả hàng nhập (từ phiếu hoặc không phiếu) | Có, mọi vùng |
+| Thiết lập giá trên phiếu (`PUT .../price-setup`) | Có (trước đây chỉ Chủ HTX) |
+| Xem nhà cung cấp, lịch sử, tổng đã mua, bộ lọc bè | Có, mọi vùng |
 | Tạo, sửa, xuất nhà cung cấp (dữ liệu gốc) | **Không** (Chủ HTX; Kế toán giữ View và Export) |
 | Thanh toán nhà cung cấp, công nợ nhà cung cấp | **Không** (Kế toán và Chủ HTX) |
-| Phiếu của vùng khác | Không thấy (404 theo id, không có trong danh sách) |
-| Phiếu không có vùng | Chỉ Chủ HTX và Kế toán |
-| Lịch sử và chi tiết nhà cung cấp, bộ lọc bè | Chỉ phiếu và bè của vùng mình; "Tổng đã mua" của nhà cung cấp ẩn (cộng cả mọi vùng) |
 | Ảnh/tệp hóa đơn của phiếu | Mô-đun chưa có tệp đính kèm nên không có gì để phân quyền |
 
-Chủ HTX và Kế toán vẫn thấy mọi phiếu (Kế toán chỉ xem và xuất). Chi tiết API: [api-behaviour-reference.md](api-behaviour-reference.md), mục "Purchasing (Mua hàng) of a Zone Manager". Ảnh hưởng phía Web: menu Mua hàng của Quản lý vùng mở lại cho phiếu nhập, trả hàng, thiết lập giá; nút tạo, sửa nhà cung cấp và thanh toán nhà cung cấp ẩn; form phiếu của Quản lý vùng bắt buộc chọn vùng. `backendFunctionCatalog` của Web nên giữ `PURCHASE_RECEIPTS` như cũ và đổi `SUPPLIERS` của vai trò `ZONE_MANAGER` thành chỉ View.
+Quyền của vai trò `ZONE_MANAGER` trong mua hàng: `PURCHASE_RECEIPTS` View, Create, Edit, Delete, Export; `SUPPLIERS` chỉ View; không có `SUPPLIER_PAYMENTS`. Chi tiết API: [api-behaviour-reference.md](api-behaviour-reference.md), mục "Purchasing (Mua hàng) of a Zone Manager". Ảnh hưởng phía Web: menu Mua hàng của Quản lý vùng mở cho phiếu nhập, trả hàng, thiết lập giá, ở mọi vùng, không bắt chọn vùng; nút tạo, sửa nhà cung cấp và thanh toán nhà cung cấp ẩn. `backendFunctionCatalog` của Web nên giữ `PURCHASE_RECEIPTS` như cũ và đổi `SUPPLIERS` của vai trò `ZONE_MANAGER` thành chỉ View.

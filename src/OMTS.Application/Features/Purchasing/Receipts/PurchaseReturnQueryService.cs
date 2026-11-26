@@ -19,13 +19,10 @@ public sealed class PurchaseReturnQueryService(
     IAccountRepository accounts,
     ISpreadsheetWriter spreadsheets,
     IStatusCatalog statusCatalog,
-    PurchaseReceiptAccess access,
     TimeProvider timeProvider)
 {
     public async Task<Result<PurchaseReturnView>> GetAsync(Guid returnId, CancellationToken cancellationToken) =>
-        await receipts.GetReturnAsync(returnId, cancellationToken) is not { } found || !await access.SeesAsync(found.ZoneId, cancellationToken)
-            ? AppError.NotFound
-            : await ViewAsync(returnId, cancellationToken);
+        await receipts.GetReturnAsync(returnId, cancellationToken) is null ? AppError.NotFound : await ViewAsync(returnId, cancellationToken);
 
     public async Task<PurchaseReturnView> ViewAsync(Guid returnId, CancellationToken cancellationToken)
     {
@@ -57,8 +54,7 @@ public sealed class PurchaseReturnQueryService(
         }
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / 100), Math.Clamp(query.PageSize, 1, 100));
-        var scoped = filter.Value! with { ZoneIds = (await access.ScopeAsync(cancellationToken)).Limit(filter.Value!.ZoneIds) };
-        var (found, total, totalValue) = await receipts.SearchReturnsAsync(scoped, page, pageSize, cancellationToken);
+        var (found, total, totalValue) = await receipts.SearchReturnsAsync(filter.Value!, page, pageSize, cancellationToken);
         var empty = total == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new PurchaseReturnSearchResult(
             new Paged<PurchaseReturnRow>(await RowsAsync(found, cancellationToken), page, pageSize, total),
@@ -73,8 +69,7 @@ public sealed class PurchaseReturnQueryService(
             return filter.Error!;
         }
 
-        var scoped = filter.Value! with { ZoneIds = (await access.ScopeAsync(cancellationToken)).Limit(filter.Value!.ZoneIds) };
-        var rows = await RowsAsync(await receipts.ListReturnsAsync(scoped, cancellationToken), cancellationToken);
+        var rows = await RowsAsync(await receipts.ListReturnsAsync(filter.Value!, cancellationToken), cancellationToken);
         var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
         [
             r.Code, r.ReturnDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.ReceiptCode, r.Zone?.Name, r.Status, r.Value, r.Discount, r.NetValue, r.Refunded,

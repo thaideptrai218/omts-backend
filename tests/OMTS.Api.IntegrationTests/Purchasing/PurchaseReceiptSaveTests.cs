@@ -198,20 +198,19 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task A_zone_manager_reads_lists_and_creates_receipts_of_its_own_zones_only_and_the_accountant_only_reads()
+    public async Task Receipts_have_no_zone_any_zone_manager_reads_lists_and_creates_and_the_accountant_only_reads()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 10_000));
         var (otherZone, otherRaft) = await factory.ZoneWithRaftAsync();
         var elsewhere = await factory.ZoneManagerAsync(otherZone);
 
-        // Decision of 25/11/2026: the receipt is of zone A, so the manager of another zone neither reads nor lists it.
-        Assert.Equal(HttpStatusCode.NotFound, (await elsewhere.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).StatusCode);
+        await (await elsewhere.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
         var listed = await (await elsewhere.GetAsync($"/api/purchase-receipts?supplierId={world.SupplierId}")).ReadAsync(HttpStatusCode.OK);
-        Assert.DoesNotContain(receipt.Id(), listed.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
-        // A receipt of any supplier, in its own zone and with a raft of that zone; a raft of zone A stays refused.
-        await (await elsewhere.PostReceiptAsync(world.Body(new LineBody(world.Material, 1, 1000, RaftId: otherRaft.Id)) with { Complete = true, ZoneId = otherZone.Id })).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal("Line 1 raft", await (await elsewhere.PostReceiptAsync(world.Body(world.MaterialForRaft(1, 1000)) with { ZoneId = otherZone.Id })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Contains(receipt.Id(), listed.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
+        // A receipt of any supplier, with a raft of the manager's own zone; a raft of zone A stays refused.
+        await (await elsewhere.PostReceiptAsync(world.Body(new LineBody(world.Material, 1, 1000, RaftId: otherRaft.Id)) with { Complete = true })).ReadAsync(HttpStatusCode.Created);
+        Assert.Equal("Line 1 raft", await (await elsewhere.PostReceiptAsync(world.Body(world.MaterialForRaft(1, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(HttpStatusCode.OK, (await elsewhere.GetAsync($"/api/purchase-receipts/export?supplierId={world.SupplierId}")).StatusCode);
 
         // PURCHASE-03 R for the Accountant: reads and exports every receipt (the export is part of PURCHASE-03), writes nothing.

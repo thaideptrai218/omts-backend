@@ -28,7 +28,7 @@ public sealed class ReceiptKindTests
             StubProxy.Create<IFarmingInputItemRepository>(h => h["GetByIdsAsync"] = a => items.Where(i => ((IReadOnlyCollection<Guid>)a[0]!).Contains(i.Id)).ToList()),
             StubProxy.Create<IFarmingZoneRepository>(_ => { }),
             StubProxy.Create<IAccountRepository>(_ => { }),
-            new PurchaseReceiptAccess(guard, new Fakes.FakeCurrentUser(null), null!),
+            new PurchaseReceiptAccess(guard, new Fakes.FakeCurrentUser(null)),
             new Fakes.FixedTimeProvider(Now));
     }
 

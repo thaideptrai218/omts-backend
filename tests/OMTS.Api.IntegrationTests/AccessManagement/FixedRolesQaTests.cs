@@ -195,10 +195,10 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     // AC-01 on live endpoints: Zone A – Zone Manager and Zone C – Accountant. Purchase receipts have no zone (BR-FARM-08):
-    // the Accountant pair reads every receipt, the Zone Manager pair writes those of zone A only; suppliers and supplier
+    // the Zone Manager role reads, writes and exports every receipt, but names rafts of zone A only; suppliers and supplier
     // payments have no zone either and follow each role.
     [Fact]
-    public async Task An_accountant_pair_reads_every_receipt_and_a_zone_manager_pair_writes_receipts_and_rafts_of_its_own_zone_only()
+    public async Task Zone_manager_and_accountant_pairs_reach_every_receipt_by_role_and_rafts_of_their_own_zones_only()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (a, b, c) = (await factory.WorldAsync(owner), await factory.WorldAsync(owner), await factory.WorldAsync(owner));
@@ -220,12 +220,11 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Superset(new HashSet<Guid> { receiptA, receiptB, receiptC }, listed.ToHashSet());
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-receipts/export")).StatusCode);
 
-        // The Zone Manager pair writes receipts of its own zone A only (decision of 25/11/2026), with the rafts of A: never B or C.
-        await (await client.PostReceiptAsync(a.Body(new LineBody(a.Material, 1, 1_000, RaftId: a.Raft.Id)))).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostReceiptAsync(b.Body(new LineBody(b.Material, 1, 1_000, RaftId: b.Raft.Id)))).StatusCode);
+        // The rafts offered on a line are those of the Zone Manager pair's zone (BR-PURCHASE-01): A, never B or C.
+        await (await client.PostReceiptAsync(b.Body(new LineBody(b.Material, 1, 1_000, RaftId: a.Raft.Id)))).ReadAsync(HttpStatusCode.Created);
         foreach (var raft in new[] { b.Raft, c.Raft })
         {
-            Assert.Equal("Line 1 raft", await (await client.PostReceiptAsync(a.Body(new LineBody(a.Material, 1, 1_000, RaftId: raft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+            Assert.Equal("Line 1 raft", await (await client.PostReceiptAsync(b.Body(new LineBody(b.Material, 1, 1_000, RaftId: raft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
 
         // Cancelling stays with the person who recorded the receipt or the Owner (BR-PURCHASE-09).
@@ -234,7 +233,7 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         // No zone: suppliers by the Zone Manager role, supplier payments and debts by the Accountant role, in every zone.
         await (await client.GetAsync($"/api/supplier-debts/{b.SupplierId}")).ReadAsync(HttpStatusCode.OK);
         await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, Amount = 1_000, ConfirmAdvance = true })).ReadAsync(HttpStatusCode.Created);
-        // Supplier master data is the Owner's: neither pair creates a supplier.
+        // Supplier master data is the Owner's (decision of 25/11/2026): neither pair creates a supplier.
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = AcsTestKit.NewPhone() })).StatusCode);
     }
 

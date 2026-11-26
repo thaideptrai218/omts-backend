@@ -104,7 +104,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.False(over.TryGetProperty("limit", out _));
     }
 
-    // §I.4.4 PURCHASE-02 Owner Full, Zone Manager Full in the zones of its pairs (decision of 25/11/2026), others No; PURCHASE-03 adds Accountant R; the cancel is the Owner's.
+    // §I.4.4 PURCHASE-02 Owner Full, Zone Manager Full* (no zone: role only, BR-FARM-08), others No; PURCHASE-03 adds Accountant R; the cancel is the Owner's.
     [Fact]
     public async Task Each_return_endpoint_answers_each_actor_as_the_matrix_says()
     {
@@ -116,16 +116,15 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         var trader = await LoginAsNewAsync(SubjectType.Trader);
         var anonymous = factory.CreateClient();
 
-        // A line for a raft of another zone: the receipt is of the zone of the world, so the manager of the other zone does not find it.
+        // A line for a raft of another zone: receipts and returns follow the role only, also there.
         var receipt = await world.CompletedAsync(new LineBody(world.Material, 100, 1_000, RaftId: otherRaft.Id));
         var line = receipt.LineOf(world.Material);
         var returnId = Newest(await world.ReturnAsync(receipt.Id(), line, 1));
         var returnUrl = $"/api/purchase-returns/{returnId}";
 
         await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal(HttpStatusCode.NotFound, (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await otherManager.GetAsync(returnUrl)).StatusCode);
-        foreach (var reader in new[] { world.Owner, manager, accountant })
+        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ReadAsync(HttpStatusCode.Created);
+        foreach (var reader in new[] { world.Owner, manager, otherManager, accountant })
         {
             await (await reader.GetAsync(returnUrl)).ReadAsync(HttpStatusCode.OK);
         }
@@ -148,7 +147,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(returnUrl)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.CancelReturnAsync(returnId, "Nobody")).StatusCode);
 
-        Assert.Equal(2, await ReturnCountAsync(receipt.Id()));
+        Assert.Equal(3, await ReturnCountAsync(receipt.Id()));
         await (await world.Owner.CancelReturnAsync(returnId, "Not sent back")).ReadAsync(HttpStatusCode.OK);
     }
 

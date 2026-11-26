@@ -159,7 +159,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var first = await world.PaidAsync(200_000, new LineBody(world.Other, 10, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 50_000)));
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
-        var elsewhere = await (await factory.ZoneManagerAsync(otherZone)).CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { Complete = true, ZoneId = otherZone.Id });
+        var elsewhere = await (await factory.ZoneManagerAsync(otherZone)).CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { Complete = true });
 
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
         // The supplier debt is PURCHASE-04, which the Zone Manager does not hold (§I.4.4): not on the supplier detail.
@@ -167,10 +167,10 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var history = view.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id(), elsewhere.Id() }, history);
 
-        // A Zone Manager sees the receipts of its own zone only (decision of 25/11/2026), not the one of the other zone.
+        // Receipts have no zone limit (shared warehouse, decision of 26/11/2026): a Zone Manager of another zone sees them all.
         var manager = await factory.ZoneManagerAsync(world.Zone);
         var managerView = await manager.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
-        Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id() }, managerView.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet());
+        Assert.Equal(history, managerView.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet());
     }
 
     [Fact]

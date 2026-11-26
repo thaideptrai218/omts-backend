@@ -42,7 +42,7 @@ public static class FixedRoles
         [
             Full(CultivationCycles), Full(CultivationLogs), Full(WaterMeasurements), Full(Harvests), Full(HarvestLots),
             Full(LotTracing), Full(Provenance), Full(PurchaseReceipts),
-            // Owner decision of 25/11/2026: a Zone Manager reads the suppliers to pick one on a receipt of its zones but neither creates nor edits them (supplier master data is the Owner's), nor pays them (the Accountant's).
+            // Owner decision of 25/11/2026, corrected 26/11/2026: the Zone Manager holds PURCHASE_RECEIPTS in full in every zone (shared warehouse, no zone limit) but only reads the suppliers (master data is the Owner's) and does not pay them (the Accountant's).
             new(Suppliers, [View]),
             // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
             new(LaborWorkers, [View, Create, Edit]),

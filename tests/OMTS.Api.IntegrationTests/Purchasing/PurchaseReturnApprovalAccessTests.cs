@@ -91,7 +91,7 @@ public class PurchaseReturnApprovalAccessTests(AuthApiFactory factory) : IClassF
     }
 
     [Fact]
-    public async Task Returns_follow_the_zone_of_the_receipt_a_zone_manager_of_the_zone_creates_and_reads_them_another_finds_none_and_the_accountant_only_reads()
+    public async Task Returns_follow_the_role_only_any_zone_manager_creates_and_reads_them_and_the_accountant_only_reads()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 9_000));
@@ -100,13 +100,10 @@ public class PurchaseReturnApprovalAccessTests(AuthApiFactory factory) : IClassF
         var returnId = created.GetProperty("returns")[0].Id();
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
-        // A return is of the zone of its receipt (decision of 25/11/2026): the Zone Manager of that zone reads and returns, the one of another zone finds nothing.
+        // Receipts and returns have no zone (BR-FARM-08): a Zone Manager of another zone reads and returns too.
         var otherManager = await factory.ZoneManagerAsync(otherZone);
-        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
-        Assert.Equal(HttpStatusCode.NotFound, (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1) with { OwnerApproved = true })).StatusCode);
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        await (await manager.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
-        await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1) with { OwnerApproved = true })).ReadAsync(HttpStatusCode.Created);
+        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
+        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1) with { OwnerApproved = true })).ReadAsync(HttpStatusCode.Created);
         // The Accountant views receipts and returns but creates none (§I.4.4 PURCHASE-02 No, PURCHASE-03 R).
         var viewer = await factory.AccountantAsync(world.Zone);
         await (await viewer.PostReturnAsync(receipt.Id(), Return(line, 1) with { OwnerApproved = true })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

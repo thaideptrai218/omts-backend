@@ -23,8 +23,8 @@ public interface ISupplierRepository
     /// <summary>Every matching supplier, in the order of the filter (the export).</summary>
     Task<IReadOnlyList<SupplierFigureRow>> ListAsync(SupplierSearchFilter filter, CancellationToken cancellationToken);
 
-    /// <summary>One page of the purchase receipts of the supplier, any status, and its returns except Drafts, newest first; <paramref name="zoneIds"/> (null: all) limits both to the zones a Zone Manager sees, those with no zone excluded.</summary>
-    Task<(IReadOnlyList<SupplierHistoryRow> Items, int Total)> HistoryAsync(Guid supplierId, IReadOnlyCollection<Guid>? zoneIds, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>One page of the purchase receipts of the supplier, any status, and its returns except Drafts, newest first.</summary>
+    Task<(IReadOnlyList<SupplierHistoryRow> Items, int Total)> HistoryAsync(Guid supplierId, int page, int pageSize, CancellationToken cancellationToken);
 
     void Add(Supplier supplier);
 }

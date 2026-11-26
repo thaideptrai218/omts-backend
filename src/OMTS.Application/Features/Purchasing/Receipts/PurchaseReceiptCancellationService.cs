@@ -5,7 +5,6 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
-using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Domain.Constants;
@@ -39,7 +38,7 @@ public sealed class PurchaseReceiptCancellationService(
     public async Task<Result<Done>> RemoveAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
+        if (receipt is null)
         {
             return AppError.NotFound;
         }
@@ -47,11 +46,6 @@ public sealed class PurchaseReceiptCancellationService(
         if (!await access.MayChangeAsync(receipt, cancellationToken))
         {
             return AppError.Forbidden;
-        }
-
-        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Delete, cancellationToken) is { } zoneRefused)
-        {
-            return zoneRefused;
         }
 
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Draft)
@@ -168,7 +162,7 @@ public sealed class PurchaseReceiptCancellationService(
     private async Task<(PurchaseReceipt? Receipt, AppError? Refused)> CancellableAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
-        if (receipt is null || !await access.SeesAsync(receipt.ZoneId, cancellationToken))
+        if (receipt is null)
         {
             return (null, AppError.NotFound);
         }
@@ -176,11 +170,6 @@ public sealed class PurchaseReceiptCancellationService(
         if (!await access.MayChangeAsync(receipt, cancellationToken))
         {
             return (receipt, AppError.Forbidden);
-        }
-
-        if (await access.RefuseWriteAsync(receipt.ZoneId, PermissionAction.Delete, cancellationToken) is { } zoneRefused)
-        {
-            return (receipt, zoneRefused);
         }
 
         // A Draft is removed instead (PURCHASE-06.1); a Cancelled receipt stays cancelled.
