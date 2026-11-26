@@ -116,10 +116,11 @@ jobs:
             coverage=(--collect:"XPlat Code Coverage" --results-directory "./coverage/${{ matrix.name }}")
           fi
           if [ "${{ matrix.name }}" = "unit" ]; then
-            # Both projects run even when the first fails, so one run shows every failure.
+            # All projects run even when the first fails, so one run shows every failure.
             status=0
             dotnet test tests/OMTS.Domain.UnitTests -c Release --no-build "${coverage[@]}" || status=1
             dotnet test tests/OMTS.Application.UnitTests -c Release --no-build "${coverage[@]}" || status=1
+            dotnet test tests/OMTS.Infrastructure.UnitTests -c Release --no-build "${coverage[@]}" || status=1
             exit $status
           else
             dotnet test tests/OMTS.Api.IntegrationTests -c Release --no-build --filter "${{ matrix.filter }}" "${coverage[@]}"
