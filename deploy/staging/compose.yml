@@ -43,6 +43,7 @@ x-api-environment: &api-environment
   Ocr__Fallback: ${OCR_FALLBACK:-}
   Ocr__Qwen__ApiKey: ${OCR_QWEN_API_KEY:-}
   Ocr__Qwen__Readers__ZoneMap__Model: ${OCR_QWEN_ZONEMAP_MODEL:-qwen3.8-omni-flash}
+  Ocr__Qwen__DisableThinking: ${OCR_QWEN_DISABLE_THINKING:-true}
   Zalo__Provider: ${ZALO_PROVIDER:-}
   Zalo__AppSecret: ${ZALO_APP_SECRET:-}
   # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy
