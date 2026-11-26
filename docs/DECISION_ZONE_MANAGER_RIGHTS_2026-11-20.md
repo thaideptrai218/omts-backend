@@ -61,6 +61,7 @@ Quyết định ngày 20/11 ở trên giữ cho Quản lý vùng `PURCHASE_RECEI
 | Thanh toán nhà cung cấp, công nợ nhà cung cấp | **Không** (Kế toán và Chủ HTX) |
 | Phiếu của vùng khác | Không thấy (404 theo id, không có trong danh sách) |
 | Phiếu không có vùng | Chỉ Chủ HTX và Kế toán |
+| Lịch sử và chi tiết nhà cung cấp, bộ lọc bè | Chỉ phiếu và bè của vùng mình; "Tổng đã mua" của nhà cung cấp ẩn (cộng cả mọi vùng) |
 | Ảnh/tệp hóa đơn của phiếu | Mô-đun chưa có tệp đính kèm nên không có gì để phân quyền |
 
 Chủ HTX và Kế toán vẫn thấy mọi phiếu (Kế toán chỉ xem và xuất). Chi tiết API: [api-behaviour-reference.md](api-behaviour-reference.md), mục "Purchasing (Mua hàng) of a Zone Manager". Ảnh hưởng phía Web: menu Mua hàng của Quản lý vùng mở lại cho phiếu nhập, trả hàng, thiết lập giá; nút tạo, sửa nhà cung cấp và thanh toán nhà cung cấp ẩn; form phiếu của Quản lý vùng bắt buộc chọn vùng. `backendFunctionCatalog` của Web nên giữ `PURCHASE_RECEIPTS` như cũ và đổi `SUPPLIERS` của vai trò `ZONE_MANAGER` thành chỉ View.

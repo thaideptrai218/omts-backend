@@ -125,7 +125,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Zone_managers_of_any_zone_keep_the_certificates_of_a_supplier_the_owner_added()
+    public async Task Zone_managers_cannot_change_the_certificates_of_a_supplier_the_owner_keeps()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var supplierId = await owner.CreateSupplierAsync("Material");
@@ -134,10 +134,12 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         var managerA = await factory.ZoneManagerAsync(zoneA);
         var managerB = await factory.ZoneManagerAsync(zoneB);
 
-        // The supplier has no zone (BR-PURCHASE-06): a pair in any zone is enough (BR-FARM-08).
-        var added = await (await managerA.PostAsync($"{Suppliers}/{supplierId}/certificates", Form("vietgap.pdf"))).ReadAsync(HttpStatusCode.OK);
+        // Supplier master data is the Owner's (decision of 25/11/2026): a Zone Manager only reads suppliers.
+        Assert.Equal(HttpStatusCode.Forbidden, (await managerA.PostAsync($"{Suppliers}/{supplierId}/certificates", Form("vietgap.pdf"))).StatusCode);
+        var added = await (await owner.PostAsync($"{Suppliers}/{supplierId}/certificates", Form("vietgap.pdf"))).ReadAsync(HttpStatusCode.OK);
         Assert.Single(added.GetProperty("certificates").EnumerateArray());
-        var removed = await (await managerB.DeleteAsync($"{Suppliers}/{supplierId}/certificates/0")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.Forbidden, (await managerB.DeleteAsync($"{Suppliers}/{supplierId}/certificates/0")).StatusCode);
+        var removed = await (await owner.DeleteAsync($"{Suppliers}/{supplierId}/certificates/0")).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(removed.GetProperty("certificates").EnumerateArray());
 
         Assert.Equal(["Supplier.Created", "Supplier.Updated", "Supplier.Updated"], await factory.AuditActionsAsync(supplierId));

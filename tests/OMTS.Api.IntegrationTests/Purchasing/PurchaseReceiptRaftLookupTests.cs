@@ -52,20 +52,32 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
         Assert.Contains(raftA, await IdsAsync(owner));
     }
 
-    // Receipts have no zone and follow the role only (BR-FARM-08): a pair in one zone sees the receipts of every raft, so the
-    // filter offers every raft too, or a receipt on the list could not be filtered by its own raft.
-    [Theory]
-    [InlineData(StaffRole.ZoneManager)]
-    [InlineData(StaffRole.Accountant)]
-    public async Task Staff_of_one_zone_and_staff_of_all_zones_get_every_raft(StaffRole role)
+    // An Accountant (view and export) reads the receipts of every zone, so the filter offers every raft, or a receipt on the list could not be filtered by its own raft.
+    [Fact]
+    public async Task An_accountant_of_one_zone_and_of_all_zones_gets_every_raft()
     {
         var (_, zoneA, _, raftA, raftB) = await ArrangeAsync();
 
-        var ofZone = await IdsAsync((await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), role)).Client);
+        var ofZone = await IdsAsync((await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), StaffRole.Accountant)).Client);
         Assert.Contains(raftA, ofZone);
         Assert.Contains(raftB, ofZone);
 
-        var everywhere = await IdsAsync((await factory.StaffAsync(null, role)).Client);
+        var everywhere = await IdsAsync((await factory.StaffAsync(null, StaffRole.Accountant)).Client);
+        Assert.Contains(raftA, everywhere);
+        Assert.Contains(raftB, everywhere);
+    }
+
+    // A Zone Manager sees the receipts of its zones only (decision of 25/11/2026), so it filters by the rafts of those zones.
+    [Fact]
+    public async Task A_zone_manager_gets_the_rafts_of_its_zones_and_one_at_all_zones_gets_every_raft()
+    {
+        var (_, zoneA, _, raftA, raftB) = await ArrangeAsync();
+
+        var ofZone = await IdsAsync((await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), StaffRole.ZoneManager)).Client);
+        Assert.Contains(raftA, ofZone);
+        Assert.DoesNotContain(raftB, ofZone);
+
+        var everywhere = await IdsAsync((await factory.StaffAsync(null, StaffRole.ZoneManager)).Client);
         Assert.Contains(raftA, everywhere);
         Assert.Contains(raftB, everywhere);
     }

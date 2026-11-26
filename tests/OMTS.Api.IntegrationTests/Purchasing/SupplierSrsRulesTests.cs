@@ -87,7 +87,7 @@ public class SupplierSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task Zone_managers_maintain_every_supplier_the_accountant_views_them_and_only_the_owner_writes_items()
+    public async Task Zone_managers_read_every_supplier_the_owner_maintains_the_accountant_views_them_and_only_the_owner_writes_items()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (zoneA, _) = await factory.ZoneWithRaftAsync();
@@ -97,16 +97,24 @@ public class SupplierSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         // A pair in one zone is enough: suppliers have no zone and follow the role only (BR-FARM-08).
         var accountant = await factory.AccountantAsync(zoneB);
 
-        // A supplier added by the Zone Manager of zone A is maintained by the Zone Manager of zone B.
-        var id = await managerA.CreateSupplierAsync("Seed");
+        // Supplier master data is the Owner's (decision of 25/11/2026): every Zone Manager reads the supplier, none creates or maintains one.
+        var id = await owner.CreateSupplierAsync("Seed");
         var view = await managerB.GetFromJsonAsync<JsonElement>($"{Suppliers}/{id}");
+        await (await managerA.GetAsync($"{Suppliers}?pageSize=100")).ReadAsync(HttpStatusCode.OK);
+        await (await managerA.PostAsJsonAsync(Suppliers, new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await managerB.PutAsJsonAsync($"{Suppliers}/{id}", new
         {
             name = "Trại giống Bạch Long", supplierType = "Seed", phoneNumber = view.GetProperty("phoneNumber").GetString(), address = "Cát Hải",
             rowVersion = view.GetProperty("rowVersion").GetString(),
+        })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await managerB.PostAsync($"{Suppliers}/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await owner.PutAsJsonAsync($"{Suppliers}/{id}", new
+        {
+            name = "Trại giống Bạch Long", supplierType = "Seed", phoneNumber = view.GetProperty("phoneNumber").GetString(), address = "Cát Hải",
+            rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        await (await managerB.PostAsync($"{Suppliers}/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        await (await managerA.PostAsync($"{Suppliers}/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PostAsync($"{Suppliers}/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PostAsync($"{Suppliers}/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
 
         // The Accountant views suppliers (payee of a supplier payment) and maintains none.
         Assert.Contains(

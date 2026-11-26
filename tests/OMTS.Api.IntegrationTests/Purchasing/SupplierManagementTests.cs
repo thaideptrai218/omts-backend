@@ -161,7 +161,7 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task A_zone_manager_sees_total_purchased_but_never_the_debt()
+    public async Task A_zone_manager_sees_neither_the_total_purchased_of_every_zone_nor_the_debt()
     {
         var world = await factory.WorldAsync();
         var tag = NewCode();
@@ -171,7 +171,9 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
 
         var row = Items(await ListAsync(manager, $"search={tag}")).Single();
 
-        Assert.Equal(100_000m, row.Money("totalPurchased"));
+        // The total sums the receipts of every zone, which a Zone Manager (receipts of its zones only) does not read (decision of 25/11/2026); the Owner does.
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("totalPurchased").ValueKind);
+        Assert.Equal(100_000m, Items(await ListAsync(world.Owner, $"search={tag}")).Single().Money("totalPurchased"));
         Assert.Equal(JsonValueKind.Null, row.GetProperty("currentDebt").ValueKind);
     }
 
@@ -202,20 +204,18 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
 
         Assert.Equal(await world.DebtAsync(), row.Money("currentDebt"));
         Assert.Equal(70_000m, row.Money("currentDebt"));
+        // The Accountant sees the receipts of every zone, so also the total purchased.
         Assert.Equal(100_000m, row.Money("totalPurchased"));
     }
 
     [Fact]
-    public async Task The_export_of_a_zone_manager_has_no_debt_column_and_the_accountant_may_export()
+    public async Task A_zone_manager_does_not_export_suppliers_and_the_accountant_does()
     {
         var world = await factory.WorldAsync();
         var manager = await factory.ZoneManagerAsync(world.Zone);
 
-        var file = await (await manager.GetAsync($"{Url}/export")).Content.ReadAsByteArrayAsync();
-        using var workbook = new XLWorkbook(new MemoryStream(file));
-        var headers = workbook.Worksheets.First().Row(1).CellsUsed().Select(c => c.GetString()).ToList();
-        Assert.Contains("Total purchased", headers);
-        Assert.DoesNotContain("Current debt", headers);
+        // Exporting the supplier list is the Owner's and the Accountant's (decision of 25/11/2026).
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync($"{Url}/export")).StatusCode);
 
         var accountant = await factory.AccountantAsync();
         Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync($"{Url}/export")).StatusCode);
