@@ -21,6 +21,7 @@ public class ZoneManagerPurchasingRightsTests
         // The Zone Manager keeps the receipts, returns and price setup (PURCHASE_RECEIPTS) in every zone.
         var receipts = zoneManager.Single(p => p.FunctionCode == PurchaseReceipts);
         Assert.True(receipts.CanView && receipts.CanCreate && receipts.CanEdit && receipts.CanDelete);
-        Assert.False(accountant.Single(p => p.FunctionCode == PurchaseReceipts).CanCreate);
+        // Owner decision of 26/11/2026: the Accountant does the accounting side of purchasing in full, so it creates receipts too.
+        Assert.True(accountant.Single(p => p.FunctionCode == PurchaseReceipts).CanCreate);
     }
 }

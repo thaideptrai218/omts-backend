@@ -119,23 +119,19 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         await manager.CreateReceiptAsync(new ReceiptBody { SupplierId = world.SupplierId, Complete = true, Lines = [new LineBody(world.Material, 1m, 1m, RaftId: world.Raft.Id)] });
     }
 
-    // §I.4.4: PURCHASE-03 R for the Accountant, No on PURCHASE-01, -02 and -06, the rules the removed PurchasingFlowTests held for zones, now by role.
+    // Owner decision of 26/11/2026: the Accountant holds PURCHASE_RECEIPTS in full (it records receipts), while a Zone Manager still has no debts or payments.
     [Fact]
-    public async Task An_accountant_only_reads_receipts_and_a_zone_manager_is_refused_the_debts_and_payments()
+    public async Task An_accountant_records_receipts_and_a_zone_manager_is_refused_the_debts_and_payments()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 2m, 1_000m));
-        var line = receipt.LineOf(world.Seed);
         var accountant = (await factory.StaffAsync(world.Zone, StaffRole.Accountant)).Client;
         var manager = (await factory.StaffAsync(world.Zone)).Client;
 
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.PostReceiptAsync(new ReceiptBody { SupplierId = world.SupplierId, Lines = [new LineBody(world.Seed, 1m, 1m)] })).ReadAsync(HttpStatusCode.Created);
         foreach (var refused in new[]
         {
-            await accountant.PostReceiptAsync(new ReceiptBody { SupplierId = world.SupplierId, Lines = [new LineBody(world.Seed, 1m, 1m)] }),
-            await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { OwnerApproved = true, Lines = [new ReturnLineBody(line, 1m)] }),
-            await accountant.CancelAsync(receipt.Id(), "Wrong"),
-            await accountant.EditLineAsync(receipt.Id(), line, unitPrice: 1),
             await manager.GetAsync("/api/supplier-debts"),
             await manager.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1m }),
         })

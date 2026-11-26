@@ -47,7 +47,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task Anonymous_gets_401_traders_MSG_GEN_08_and_the_accountant_only_reads_on_every_receipt_endpoint()
+    public async Task Anonymous_gets_401_traders_MSG_GEN_08_and_the_accountant_reads_on_every_receipt_endpoint()
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
@@ -70,9 +70,14 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
                 Assert.True(await response.CodeOrStatusAsync() == "403 MSG-GEN-08", $"{method} {path}: {await response.CodeOrStatusAsync()}");
             }
 
+            // Owner decision of 26/11/2026: the Accountant holds PURCHASE_RECEIPTS in full, so only its reads are checked here (its writes are the Owner's flow, covered elsewhere).
+            if (write)
+            {
+                continue;
+            }
+
             using var read = await accountant.SendAsync(new HttpRequestMessage(method, path) { Content = body() });
-            var outcome = write ? await read.CodeOrStatusAsync() : $"{(int)read.StatusCode}";
-            Assert.True(outcome == (write ? "403 MSG-GEN-08" : "200"), $"accountant {method} {path}: {outcome}");
+            Assert.True(read.StatusCode == HttpStatusCode.OK, $"accountant {method} {path}: {(int)read.StatusCode}");
         }
 
         // Nothing changed: no receipt added, the draft is still a Draft, the receipt still Completed without a return.

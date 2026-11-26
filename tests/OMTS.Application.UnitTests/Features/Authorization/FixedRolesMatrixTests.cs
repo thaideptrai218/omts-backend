@@ -106,23 +106,33 @@ public class FixedRolesMatrixTests
     /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1). The Accountant also
     /// looks up, adds, edits and exports customers (the customer screen holds their debts and payments), but does not delete them.
     /// The Accountant prints and exports sales invoices too (SALE-09 R in the SRS; PM answer 12/11/2026, OMTS-224 [5.1]).
-    /// Payroll (decision of 19/11/2026, Q2): the Accountant views and exports the sheets, payslips and labour costs but neither prepares, finalizes nor pays (LABOR-12 and LABOR-14 stay with the Owner),
+    /// Payroll (decision of 26/11/2026): the Accountant prepares, edits, exports and pays (finalizing and cancelling stay with the Owner),
     /// and it reads the employee list (LABOR_WORKERS View) to match a payslip to a person, without editing it.
     /// </summary>
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
-        [("PURCHASE-07", StaffRole.Accountant)] = RExport,
+        // Owner decision of 26/11/2026 (tester round 1): the Accountant does the accounting side of purchasing in full: suppliers, receipts (create, edit, cancel, export) and input issues.
+        [("PURCHASE-07", StaffRole.Accountant)] = Full,
+        [("PURCHASE-01", StaffRole.Accountant)] = Full,
+        [("PURCHASE-02", StaffRole.Accountant)] = Full,
+        [("PURCHASE-03", StaffRole.Accountant)] = Full,
+        [("PURCHASE-06", StaffRole.Accountant)] = Full,
+        [("INPUT-ISSUES", StaffRole.Accountant)] = Full,
         // Owner decision of 25/11/2026: a Zone Manager only views the suppliers (it picks one on a receipt of its zones); creating, editing and exporting them is the Owner's, and paying them the Accountant's.
         [("PURCHASE-07", StaffRole.ZoneManager)] = R,
-        [("PURCHASE-03", StaffRole.Accountant)] = RExport,
         [("SALE-04", StaffRole.Accountant)] = Full,
         [("SALE-04.2", StaffRole.Accountant)] = RExport,
-        [("INPUT-ISSUES", StaffRole.Accountant)] = RExport,
         [("PRODUCT-DISPOSALS", StaffRole.Accountant)] = RExport,
         [("SALE-09", StaffRole.Accountant)] = RExport,
         [("LABOR-01", StaffRole.Accountant)] = R,
-        [("LABOR-12", StaffRole.Accountant)] = RExport,
-        [("LABOR-14", StaffRole.Accountant)] = No,
+        // Payroll (decision of 26/11/2026, reversing 19/11 Q2): the Accountant prepares, edits and exports sheets and pays wages (the matrix columns LABOR-12 and LABOR-14); finalizing stays the Owner's.
+        // The farming records (tester round 1, BUG-74): the Accountant only views them in every zone it is granted.
+        [("CYCLE-04", StaffRole.Accountant)] = R,
+        [("CYCLE-05", StaffRole.Accountant)] = R,
+        [("WATER-03", StaffRole.Accountant)] = R,
+        [("HARVEST-01", StaffRole.Accountant)] = R,
+        [("HARVEST-02", StaffRole.Accountant)] = R,
+        [("HARVEST-04", StaffRole.Accountant)] = R,
     };
 
     [Theory]

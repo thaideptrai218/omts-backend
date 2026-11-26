@@ -144,7 +144,16 @@ public sealed class AccessGrantService(
                 RecordId = grant.Id,
                 RecordCode = account.Username,
                 ZoneId = grant.ZoneId,
-                After = new { AccountId = account.Id, Role = role.Code, grant.ZoneId },
+                // GBR-02: what the log shows is the role and the zone in words (code, name, scope), not only ids.
+                After = new
+                {
+                    AccountId = account.Id,
+                    Role = role.Code,
+                    grant.ZoneId,
+                    ZoneCode = draft.ZoneId is { } zid ? zonesById[zid].Code : null,
+                    ZoneName = draft.ZoneId is { } zname ? zonesById[zname].Name : null,
+                    Scope = draft.ZoneId is null ? "AllZones" : "SpecificZone",
+                },
             });
             added.Add(grant);
         }

@@ -118,10 +118,8 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         var supplierId = await owner.CreateSupplierAsync();
 
         await (await client.GetAsync($"{Suppliers}/{supplierId}")).ReadAsync(HttpStatusCode.OK);
-        var phone = NewPhone();
-        await (await client.PostAsJsonAsync(Suppliers, new { name = "Trại giống", supplierType = "Seed", phoneNumber = phone })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await client.PostAsync($"{Suppliers}/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        Assert.False(await factory.QueryAsync(db => db.Suppliers.AnyAsync(s => s.PhoneNumber == phone)));
+        // The Accountant keeps its own rights (it manages suppliers, 26/11/2026); what the revoked Zone Manager pair opened stays closed: the work day board.
+        await (await client.GetAsync("/api/workforce/assignments")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

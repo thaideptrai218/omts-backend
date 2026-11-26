@@ -105,15 +105,17 @@ public class FixedRolesScopeQaTests
             Assert.Equal([ZoneC], zones.ZoneIds);
         }
 
-        // View and export on invoices (SALE-09, PM answer 12/11/2026) but no creation, view and export on receipts (PURCHASE-03 R
-        // includes the export), nothing of the Zone Manager.
+        // View and export on invoices (SALE-09, PM answer 12/11/2026) but no creation; purchasing is the Accountant's in full (26/11/2026): receipts and suppliers.
         Assert.True(access.Allows(SalesInvoices, Export, PermissionScope.ZoneScoped, ZoneC));
-        Assert.False(access.Allows(PurchaseReceipts, Create, PermissionScope.AnyZone, null));
+        Assert.True(access.Allows(PurchaseReceipts, Create, PermissionScope.AnyZone, null));
         Assert.True(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneC));
-        Assert.False(access.Allows(Suppliers, Create, PermissionScope.AnyZone, null));
-        Assert.False(access.Allows(WaterMeasurements, View, PermissionScope.ZoneScoped, ZoneC));
-        Assert.True(access.PermittedZonesFor(WaterMeasurements, View).IsEmpty);
+        Assert.True(access.Allows(Suppliers, Create, PermissionScope.AnyZone, null));
+        // The farming records are only viewed (26/11/2026): the water of its own zone is readable, never written.
+        Assert.True(access.Allows(WaterMeasurements, View, PermissionScope.ZoneScoped, ZoneC));
+        Assert.False(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneC));
+        Assert.False(access.Allows(WaterMeasurements, View, PermissionScope.ZoneScoped, ZoneA));
+        Assert.Equal([ZoneC], access.PermittedZonesFor(WaterMeasurements, View).ZoneIds);
     }
 
     // AC-01, FARM-05 POST-2: Zone A – Zone Manager and Zone C – Accountant; each role keeps to the zones of its own pairs.
@@ -133,24 +135,26 @@ public class FixedRolesScopeQaTests
         Assert.Equal([ZoneC], access.PermittedZonesFor(SalesInvoices, Export).ZoneIds);
         // Purchase receipts have no zone: every receipt for the Zone Manager role, rafts of zone A only (PairZonesFor).
         Assert.True(access.PermittedZonesFor(PurchaseReceipts, Delete).AllZones);
-        Assert.Equal([ZoneA], access.PairZonesFor(PurchaseReceipts, Create).ZoneIds);
+        // The Accountant pair of zone C creates receipts too (26/11/2026), so its zone is among the rafts a receipt may name.
+        Assert.Equal(new HashSet<Guid> { ZoneA, ZoneC }, access.PairZonesFor(PurchaseReceipts, Create).ZoneIds.ToHashSet());
         Assert.True(access.Allows(PurchaseReceipts, Create, PermissionScope.NoZone, null));
         Assert.False(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(SalesReports, View, PermissionScope.ZoneScoped, ZoneA));
 
-        // Records with no zone: suppliers are read by the Zone Manager role (never created or edited, 25/11/2026), supplier payments are the Accountant role's.
+        // Records with no zone follow the role only: suppliers are the Accountant role's in full (26/11/2026, the Zone Manager role only reads them), as are supplier payments.
         Assert.True(access.Allows(Suppliers, View, PermissionScope.ZoneScoped, ZoneB));
-        Assert.False(access.Allows(Suppliers, Create, PermissionScope.ZoneScoped, ZoneB));
-        Assert.False(access.Allows(Suppliers, Edit, PermissionScope.ZoneScoped, ZoneB));
+        Assert.True(access.Allows(Suppliers, Create, PermissionScope.ZoneScoped, ZoneB));
+        Assert.True(access.Allows(Suppliers, Edit, PermissionScope.ZoneScoped, ZoneB));
         Assert.True(access.Allows(SupplierPayments, Create, PermissionScope.NoZone, null));
-        // Payroll: the Accountant role views and exports, it never prepares or pays (19/11/2026).
+        // Payroll: the Accountant role prepares, edits and exports (26/11/2026).
         Assert.True(access.Allows(Payroll, View, PermissionScope.ZoneScoped, ZoneA));
-        Assert.False(access.Allows(Payroll, Create, PermissionScope.ZoneScoped, ZoneA));
+        Assert.True(access.Allows(Payroll, Create, PermissionScope.ZoneScoped, ZoneA));
 
         var described = access.DescribeFunctions().ToDictionary(f => f.Function);
         Assert.Equal([ZoneC], described[SalesInvoices].ZoneIds);
         Assert.True(described[SupplierPayments].AllZones);
-        Assert.Equal([ZoneA], described[WaterMeasurements].ZoneIds);
+        // The Zone Manager pair of zone A works the water there; the Accountant pair of zone C only views it.
+        Assert.Equal(new HashSet<Guid> { ZoneA, ZoneC }, described[WaterMeasurements].ZoneIds.ToHashSet());
     }
 
     // PURCHASE-04/05, DEBT-02/03, LABOR-11/12, REPORT-01…03 are No for the Zone Manager, even at All zones; FARM-06 is Owner-only.

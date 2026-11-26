@@ -83,7 +83,7 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
 
     // The picked raft works in the filters of the same caller: the point of the lookup.
     [Fact]
-    public async Task An_accountant_filters_receipts_and_costs_by_a_raft_of_the_lookup_but_cannot_read_that_raft()
+    public async Task An_accountant_filters_receipts_and_costs_by_a_raft_of_the_lookup_and_may_read_that_raft()
     {
         var (_, zoneA, _, raftA, _) = await ArrangeAsync();
         var accountant = (await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), StaffRole.Accountant)).Client;
@@ -92,7 +92,8 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
 
         await (await accountant.GetAsync($"/api/purchase-receipts?raftId={picked}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync($"/api/purchase-receipts/raft-material-costs?raftId={picked}")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("MSG-GEN-08", await (await accountant.GetAsync($"/api/rafts/{picked}")).ErrorCodeAsync());
+        // Owner decision of 26/11/2026: the Accountant views the farming records of its zones, rafts included.
+        await (await accountant.GetAsync($"/api/rafts/{picked}")).ReadAsync(HttpStatusCode.OK);
     }
 
     [Fact]

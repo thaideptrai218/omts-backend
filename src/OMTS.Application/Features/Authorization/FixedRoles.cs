@@ -58,15 +58,18 @@ public static class FixedRoles
         StaffRole.Accountant,
         AccountantCode,
         "Accountant",
-        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll (view and export) and sales reports; usually granted at All zones.",
+        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll, suppliers, purchase receipts, input issues and sales reports, and a view of the farming records; usually granted at All zones.",
         [
             Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(SalesReports), Full(CashBookOperations), Full(CashBookSettings),
-            // Payroll is the Owner's to prepare, finalize and pay (PAY-01); the Accountant reads and exports the sheets, payslips, payments and labour costs to reconcile the cash book (decision of 19/11/2026, Q2).
-            new(Payroll, [View, Export]),
+            // Owner decision of 26/11/2026 (reversing 19/11, Q2): the Accountant prepares and edits payroll sheets and pays wages (View, Create, Edit, Export). Finalizing and cancelling a sheet stay the Owner's.
+            new(Payroll, [View, Create, Edit, Export]),
+            // Owner decision of 26/11/2026 (tester round 1, BUG-74): the Accountant reads the farming records of every zone it is granted (zones, rafts, cycles, logs, harvests, water) but never works them.
+            new(CultivationCycles, [View]), new(CultivationLogs, [View]), new(WaterMeasurements, [View]), new(Harvests, [View]), new(HarvestLots, [View]),
+            // The accounting side of purchasing is the Accountant's in full: suppliers, receipts and input issues (owner decision of 26/11/2026).
+            Full(PurchaseReceipts), Full(Suppliers), Full(InputIssues),
             // The employee list is read to match a payslip or a wage voucher to a person; no personal or bank data (it is shown only to those who maintain the employee) and no editing.
             new(LaborWorkers, [View]),
-            // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
-            new(InputIssues, [View, Export]),
+            // Input issues are the Accountant's in full (above); input item disposals stay with it as before.
             Full(InputDisposals),
             // The Accountant views and exports the product disposals of every zone it is granted; recording one is the Zone Manager's or the Owner's.
             new(ProductDisposals, [View, Export]),
@@ -74,15 +77,10 @@ public static class FixedRoles
             new(SalesOrders, [View, Export]),
             // SALE-09: the Accountant also prints and exports the invoice list and one invoice (PM answer 12/11/2026, OMTS-224 [5.1]); creating, correcting and cancelling stay with the Zone Manager and the Owner.
             new(SalesInvoices, [View, Export]),
-            // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
-            new(PurchaseReceipts, [View, Export]),
             // TRACE-02 is R for the Accountant: the trace result is viewed, not exported (TRACE-02.2 is the Zone Manager's).
             new(LotTracing, [View]),
             // Customers are looked up, added and kept up to date by the Accountant too (the customer screen holds their debts and payments); no delete.
             new(Customers, [View, Create, Edit, Export]),
-            // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05) and the Accountant may export the list it
-            // already sees. §I.4.4 shows PURCHASE-07 as No; this deviation was confirmed by the user.
-            new(Suppliers, [View, Export]),
         ]);
 
     /// <summary>
