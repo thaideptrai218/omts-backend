@@ -34,11 +34,10 @@ x-api-environment: &api-environment
   Storage__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in .env}
   Storage__R2__Bucket: ${R2_BUCKET:-omts-files-staging}
   Sms__Provider: None
-  # WATER-01 meter photos: OCR_PROVIDER=Paddle reads them with the "ocr" service below (profile ocr, docs/deployment-ocr.md).
-  # Unset: nothing is read and users type the values. OCR_METER_LAYOUT names unlabelled display values top to bottom (e.g. Ph,Temperature).
+  # Photo reading (meter, licence map, raft form) with Google Gemini, docs/ocr-gemini.md: OCR_PROVIDER=Gemini needs OCR_GEMINI_API_KEY
+  # (a billed key for real photos). The photos go to Google. Unset: nothing is read and users type the values.
   Ocr__Provider: ${OCR_PROVIDER:-}
-  Ocr__Paddle__BaseUrl: http://ocr:8000
-  Ocr__Paddle__Layout: ${OCR_METER_LAYOUT:-}
+  Ocr__Gemini__ApiKey: ${OCR_GEMINI_API_KEY:-}
   Zalo__Provider: ${ZALO_PROVIDER:-}
   Zalo__AppSecret: ${ZALO_APP_SECRET:-}
   # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy
@@ -164,22 +163,6 @@ services:
     mem_limit: 64m
     memswap_limit: 64m
     oom_score_adj: 500
-    logging: *logging
-    restart: unless-stopped
-
-  # PaddleOCR sidecar for WATER-01 (tools/ocr-service): reads meter photos offline, inside this network only (no port).
-  # Started only with COMPOSE_PROFILES containing ocr; OCR_IMAGE pins its image (ghcr.io/<owner>/omts-backend-ocr:sha-xxxxxxx,
-  # built by the "OCR image" workflow). Measured peak 373 MB at 640 px; OCR is optional, so it is stopped first under memory
-  # pressure (the API then answers "not read" and users type the values).
-  ocr:
-    image: ${OCR_IMAGE:-}
-    profiles: ["ocr"]
-    environment:
-      OCR_MAX_SIDE: "640"
-      OCR_CPU_THREADS: "2"
-    mem_limit: 600m
-    memswap_limit: 600m
-    oom_score_adj: 800
     logging: *logging
     restart: unless-stopped
 

@@ -36,6 +36,15 @@ public sealed class RateLimitOptions
 
     /// <summary>The public provenance page (ORIGIN-01): a page opened by hand needs a few, a client trying QR codes many.</summary>
     public int ProvenancePagesPerMinute { get; set; } = 60;
+
+    /// <summary>Meter photos read by Gemini (WATER-01 recognize), per signed-in account and hour: each costs one paid call.</summary>
+    public int WaterRecognitionsPerHour { get; set; } = 60;
+
+    /// <summary>Licence map scans (one Flash call of up to 90 s each), per signed-in account and hour.</summary>
+    public int ZoneMapScansPerHour { get; set; } = 20;
+
+    /// <summary>Raft form scans, per signed-in account and hour.</summary>
+    public int RaftFormScansPerHour { get; set; } = 30;
 }
 
 /// <summary>
@@ -53,6 +62,9 @@ public static class RateLimitingExtensions
     public const string TaxLookups = "tax-lookups";
     public const string PaymentNotifications = "payment-notifications";
     public const string ProvenancePages = "provenance-pages";
+    public const string WaterRecognitions = "water-recognitions";
+    public const string ZoneMapScans = "zone-map-scans";
+    public const string RaftFormScans = "raft-form-scans";
 
     public static IServiceCollection AddOmtsRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
@@ -78,6 +90,9 @@ public static class RateLimitingExtensions
             options.AddPolicy(TaxLookups, context => PerAccount(context, o => o.TaxLookupsPerMinute));
             options.AddPolicy(PaymentNotifications,context => PerClient(context, o => o.PaymentNotificationsPerMinute));
             options.AddPolicy(ProvenancePages, context => PerClient(context, o => o.ProvenancePagesPerMinute));
+            options.AddPolicy(WaterRecognitions, context => PerAccount(context, o => o.WaterRecognitionsPerHour, TimeSpan.FromHours(1)));
+            options.AddPolicy(ZoneMapScans, context => PerAccount(context, o => o.ZoneMapScansPerHour, TimeSpan.FromHours(1)));
+            options.AddPolicy(RaftFormScans, context => PerAccount(context, o => o.RaftFormScansPerHour, TimeSpan.FromHours(1)));
         });
         return services;
     }
@@ -95,7 +110,7 @@ public static class RateLimitingExtensions
     /// the limiter), so a forged token cannot burn another account's budget. A caller without an accepted token is limited per client IP
     /// under a separate key and gets 401 anyway.
     /// </summary>
-    private static RateLimitPartition<string> PerAccount(HttpContext context, Func<RateLimitOptions, int> permits)
+    private static RateLimitPartition<string> PerAccount(HttpContext context, Func<RateLimitOptions, int> permits, TimeSpan? window = null)
     {
         var account = context.User.FindFirstValue(OmtsClaimTypes.Subject);
         if (string.IsNullOrEmpty(account))
@@ -106,7 +121,7 @@ public static class RateLimitingExtensions
         var limit = permits(context.RequestServices.GetRequiredService<IOptions<RateLimitOptions>>().Value);
         return RateLimitPartition.GetFixedWindowLimiter(
             $"account:{account}",
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = window ?? TimeSpan.FromMinutes(1), QueueLimit = 0 });
     }
 
     internal static string ClientKey(IPAddress? address)

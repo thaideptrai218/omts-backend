@@ -275,6 +275,7 @@ public static class MessageCodes
         public const string UnexpectedError = "UNEXPECTED_ERROR";
         public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
+        public const string OcrBusy = "OCR_BUSY";
 
         /// <summary>
         /// Old codes still sent as <c>code</c>, because the SRS 27/10 catalogue has no message for the situation yet,
@@ -284,14 +285,14 @@ public static class MessageCodes
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
-        /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED: technical codes.</item>
+        /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED, OCR_BUSY: technical codes.</item>
         /// </list>
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
             Msg04, Msg05, Msg06, Msg19, Msg57, Msg58, MiniAppNotification,
             ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked, ZaloDeviceRevoked,
-            NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
+            NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired, OcrBusy,
         };
     }
 }

@@ -194,6 +194,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
+        // Asynchronous photo scans (licence map, raft form): the shared start/poll gateway and one service per scan.
+        services.AddScoped<OMTS.Application.Features.Scans.PhotoScanGateway>();
+        services.AddScoped<OMTS.Application.Features.Farming.Zones.BoundaryScan.ZoneBoundaryScanService>();
+        services.AddScoped<OMTS.Application.Features.Farming.Rafts.FormScan.RaftFormScanService>();
         services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();

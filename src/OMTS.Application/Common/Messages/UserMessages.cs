@@ -1578,6 +1578,10 @@ public static class UserMessages
     public static readonly UserMessage TooManyRequests = new(
         Legacy.TooManyRequests, "Too many requests from this device. Please wait a minute and try again.");
 
+    /// <summary>Technical: the queue of photo scans (licence map, raft form) is full; the client asks again in a few minutes.</summary>
+    public static readonly UserMessage OcrBusy = new(
+        Legacy.OcrBusy, "Máy chủ đang bận đọc ảnh, vui lòng thử lại sau ít phút.");
+
     /// <summary>Technical: an unexpected server error; details are only in the server log.</summary>
     public static readonly UserMessage UnexpectedError = new(Legacy.UnexpectedError, "An unexpected error occurred. Please try again later.");
 

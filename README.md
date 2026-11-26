@@ -173,6 +173,7 @@ A shared server runs in **Staging**, with an empty database, `seed --bootstrap -
 |---|---|
 | [docs/api-behaviour-reference.md](docs/api-behaviour-reference.md) | Detailed rules: authentication and sessions, roles, notifications, provenance, sales, claims, workforce, audit, VietQR, background jobs |
 | [docs/operations-reference.md](docs/operations-reference.md) | Demo data, external-service adapters, deployment, configuration keys, shared server |
+| [docs/ocr-gemini.md](docs/ocr-gemini.md) | Reading photos with Google Gemini (meter, licence map, raft form): provider, keys, models, privacy, async scans |
 | [docs/cage-order-harvest.md](docs/cage-order-harvest.md) | Cage requests, staffing and harvest completion: workflow, persistence, remaining slices |
 | [docs/SRS_DEVIATIONS.md](docs/SRS_DEVIATIONS.md) | Backend-side differences from SRS v8 (summary; the master list is in the web repository) |
 | [docs/sds/](docs/sds/) | Detailed design (SDS) of the modules; a PR that changes a documented module updates its SDS part |

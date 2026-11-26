@@ -1,8 +1,9 @@
 namespace OMTS.Application.Features.Farming.Zones;
 
 /// <summary>
-/// The licensed sea area of a zone, read by the app from the photographed map ("Sơ đồ khu vực biển đề nghị cấp phép nuôi
-/// trồng thủy sản") and converted to WGS84 (PM decision 25/11/2026). Written in camelCase it is RFC 7946 GeoJSON: positions
+/// The licensed sea area of a zone, read from the photographed map ("Sơ đồ khu vực biển đề nghị cấp phép nuôi trồng thủy sản"):
+/// the server reads the corner tables of the photo (<c>POST …/boundary-scans</c>, grid coordinates as written), the app converts
+/// them to WGS84 (that stays on the app, PM decision 25/11/2026) and the Owner reviews and saves the result. Written in camelCase it is RFC 7946 GeoJSON: positions
 /// are [longitude, latitude].
 /// </summary>
 /// <param name="Type">Always "FeatureCollection".</param>

@@ -51,6 +51,9 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("RateLimits:EmployeeAppLoginsPerMinute", "100000");
         builder.UseSetting("RateLimits:EmployeeLoginCodesPerMinute", "100000");
         builder.UseSetting("RateLimits:ProvenancePagesPerMinute", "100000");
+        builder.UseSetting("RateLimits:WaterRecognitionsPerHour", "100000");
+        builder.UseSetting("RateLimits:ZoneMapScansPerHour", "100000");
+        builder.UseSetting("RateLimits:RaftFormScansPerHour", "100000");
         // Background jobs never run on their own in tests; tests call them directly.
         builder.UseSetting("Jobs:ZoneLicenseReminder:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:WaterMeasurementOverdue:CatchUpOnStart", "false");
