@@ -9,6 +9,9 @@ the PaddleOCR sidecar and its deployment guide.
 | Sea-area licence map, corner tables (FARM-02) | `POST api/zones/{zoneId}/boundary-scans`, `GET …/{scanId}`; without a zone (create-zone form): `POST api/zones/boundary-scans`, `GET api/zones/boundary-scans/{scanId}` | asynchronous scan | `ZoneMap`: `gemini-3.5-flash`, 90 s |
 | Raft form (FARM-04) | `POST api/rafts/form-scans`, `GET …/{scanId}` | asynchronous scan | `RaftForm`: `gemini-3.5-flash-lite`, 45 s |
 
+A failed Gemini read can be retried once with Qwen (Alibaba Cloud): see [ocr-qwen.md](ocr-qwen.md) (`Ocr:Fallback=Qwen`). That page
+also says what changes for privacy, because the photo then goes to a second company.
+
 The API contract for the scans is in [api-behaviour-reference.md](api-behaviour-reference.md#farming-zones-and-licenses). The cage
 ledger scan is not part of this release.
 

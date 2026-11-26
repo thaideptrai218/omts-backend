@@ -29,6 +29,7 @@ using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
 using OMTS.Infrastructure.Ocr.Gemini;
+using OMTS.Infrastructure.Ocr.Qwen;
 using OMTS.Application.Features.Farming.Rafts.FormScan;
 using OMTS.Application.Features.Farming.Zones.BoundaryScan;
 using OMTS.Infrastructure.Payments;
@@ -379,12 +380,12 @@ public static class DependencyInjection
     {
         services.AddOptions<OcrOptions>()
             .Bind(configuration.GetSection(OcrOptions.SectionName))
-            // The recognizer waits the meter reader's timeout plus 2 s, so the Gemini client's own timeout fires first and answers TIMEOUT.
+            // The recognizer waits the meter reader's timeout plus 2 s, so the client's own timeout (the whole fallback chain's budget) fires first and answers TIMEOUT.
             .Configure<IOptions<OcrProviderOptions>>((ocr, provider) =>
             {
-                if (provider.Value.Provider == OcrProviderOptions.GeminiProvider)
+                if (provider.Value.ReadsWithModel)
                 {
-                    ocr.TimeoutSeconds = (int)Math.Ceiling(provider.Value.Gemini.Readers.Meter.TimeoutSeconds) + 2;
+                    ocr.TimeoutSeconds = (int)Math.Ceiling(provider.Value.MeterTimeoutSeconds) + 2;
                 }
             });
         services.AddOptions<OcrProviderOptions>().Bind(configuration.GetSection(OcrProviderOptions.SectionName));
@@ -394,19 +395,41 @@ public static class DependencyInjection
         // RedactLoggedHeaders: the default HttpClient logging writes request headers at Trace level; the API key header must never show.
         services.AddHttpClient<GeminiVisionClient>(http => http.Timeout = Timeout.InfiniteTimeSpan)
             .RedactLoggedHeaders(["x-goog-api-key"]);
-        services.AddTransient<IGeminiVisionClient>(provider => provider.GetRequiredService<GeminiVisionClient>());
-        // Gemini reads with the Google API; Fake only in Development/tests. Unset or unknown fails closed: no readings,
-        // MSG-WATER-01 and manual entry, instead of fabricated values. Transient: the typed HttpClient must not be kept.
+        services.AddHttpClient<QwenVisionClient>(http => http.Timeout = Timeout.InfiniteTimeSpan)
+            .RedactLoggedHeaders(["Authorization"]);
+        // The vision client the readers use: Qwen when it is the provider; Gemini, followed by Qwen when Ocr:Fallback=Qwen, otherwise.
+        // Transient: the typed HttpClients must not be kept.
+        services.AddTransient<IGeminiVisionClient>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<OcrProviderOptions>>();
+            if (options.Value.Provider == OcrProviderOptions.QwenProvider)
+            {
+                return provider.GetRequiredService<QwenVisionClient>();
+            }
+
+            var gemini = provider.GetRequiredService<GeminiVisionClient>();
+            return options.Value.UsesQwenFallback
+                ? new FallbackVisionClient(
+                    gemini, OcrProviderOptions.GeminiProvider, provider.GetRequiredService<QwenVisionClient>(), OcrProviderOptions.QwenProvider,
+                    options, provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<FallbackVisionClient>>())
+                : gemini;
+        });
+        // Gemini or Qwen read with their APIs; Fake only in Development/tests. Unset or unknown fails closed: no readings,
+        // MSG-WATER-01 and manual entry, instead of fabricated values.
         services.AddTransient<IOcrService>(provider =>
         {
             var options = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value;
+            // A mistake stops the host (the startup check resolves this service) instead of leaving every photo unread.
+            if (options.Validate() is { } problem)
+            {
+                throw new InvalidOperationException($"{OcrProviderOptions.SectionName}:Provider is '{options.Provider}' but {problem}");
+            }
+
             switch (options.Provider)
             {
                 case OcrProviderOptions.GeminiProvider:
-                    // A mistake stops the host (the startup check resolves this service) instead of leaving every photo unread.
-                    return options.Gemini.Validate() is { } problem
-                        ? throw new InvalidOperationException($"{OcrProviderOptions.SectionName}:Provider is Gemini but {problem}")
-                        : new GeminiMeterOcrService(provider.GetRequiredService<IGeminiVisionClient>());
+                case OcrProviderOptions.QwenProvider:
+                    return new GeminiMeterOcrService(provider.GetRequiredService<IGeminiVisionClient>());
                 case OcrProviderOptions.FakeProvider:
                     return provider.GetRequiredService<FakeOcrService>();
                 default:
@@ -420,13 +443,13 @@ public static class DependencyInjection
         services.AddHostedService(provider => provider.GetRequiredService<InMemoryScanQueue>());
         services.AddTransient<IZoneMapReader>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider switch
         {
-            OcrProviderOptions.GeminiProvider => new GeminiZoneMapReader(provider.GetRequiredService<IGeminiVisionClient>()),
+            OcrProviderOptions.GeminiProvider or OcrProviderOptions.QwenProvider => new GeminiZoneMapReader(provider.GetRequiredService<IGeminiVisionClient>()),
             OcrProviderOptions.FakeProvider => new FakeScanReader(),
             _ => new NotConfiguredScanReader(),
         });
         services.AddTransient<IRaftFormReader>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider switch
         {
-            OcrProviderOptions.GeminiProvider => new GeminiRaftFormReader(provider.GetRequiredService<IGeminiVisionClient>()),
+            OcrProviderOptions.GeminiProvider or OcrProviderOptions.QwenProvider => new GeminiRaftFormReader(provider.GetRequiredService<IGeminiVisionClient>()),
             OcrProviderOptions.FakeProvider => new FakeScanReader(),
             _ => new NotConfiguredScanReader(),
         });
