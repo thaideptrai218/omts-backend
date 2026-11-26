@@ -28,7 +28,9 @@ using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
-using OMTS.Infrastructure.Ocr.Paddle;
+using OMTS.Infrastructure.Ocr.Gemini;
+using OMTS.Application.Features.Farming.Rafts.FormScan;
+using OMTS.Application.Features.Farming.Zones.BoundaryScan;
 using OMTS.Infrastructure.Payments;
 using OMTS.Infrastructure.Payments.Checkout;
 using OMTS.Infrastructure.Persistence;
@@ -373,34 +375,58 @@ public static class DependencyInjection
 
     private static void AddOcr(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<OcrOptions>().Bind(configuration.GetSection(OcrOptions.SectionName));
+        services.AddOptions<OcrOptions>()
+            .Bind(configuration.GetSection(OcrOptions.SectionName))
+            // The recognizer waits the meter reader's timeout plus 2 s, so the Gemini client's own timeout fires first and answers TIMEOUT.
+            .Configure<IOptions<OcrProviderOptions>>((ocr, provider) =>
+            {
+                if (provider.Value.Provider == OcrProviderOptions.GeminiProvider)
+                {
+                    ocr.TimeoutSeconds = (int)Math.Ceiling(provider.Value.Gemini.Readers.Meter.TimeoutSeconds) + 2;
+                }
+            });
         services.AddOptions<OcrProviderOptions>().Bind(configuration.GetSection(OcrProviderOptions.SectionName));
         services.AddSingleton<FakeOcrService>();
         services.AddSingleton<NotConfiguredOcrService>();
-        services.AddHttpClient<PaddleOcrService>((provider, http) =>
-        {
-            var paddle = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Paddle;
-            // Only the Paddle provider needs the URL; the provider switch below rejects it empty.
-            if (Uri.TryCreate(paddle.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var baseUrl))
-            {
-                http.BaseAddress = baseUrl;
-            }
-
-            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, paddle.HttpTimeoutSeconds));
-        });
-        // Paddle reads with the sidecar; Fake only in Development/tests. Unset or unknown fails closed: no readings,
+        // The per-call timeout is the reader's (a linked token): the HttpClient's own 100 s must not cut a 90 s read short.
+        // RedactLoggedHeaders: the default HttpClient logging writes request headers at Trace level; the API key header must never show.
+        services.AddHttpClient<GeminiVisionClient>(http => http.Timeout = Timeout.InfiniteTimeSpan)
+            .RedactLoggedHeaders(["x-goog-api-key"]);
+        services.AddTransient<IGeminiVisionClient>(provider => provider.GetRequiredService<GeminiVisionClient>());
+        // Gemini reads with the Google API; Fake only in Development/tests. Unset or unknown fails closed: no readings,
         // MSG-WATER-01 and manual entry, instead of fabricated values. Transient: the typed HttpClient must not be kept.
-        services.AddTransient<IOcrService>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value switch
+        services.AddTransient<IOcrService>(provider =>
         {
-            // "ocr:8000" parses as an absolute URI with the scheme "ocr": require http or https.
-            { Provider: OcrProviderOptions.PaddleProvider, Paddle.BaseUrl: var url }
-                when !Uri.TryCreate(url, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https") =>
-                throw new InvalidOperationException(
-                    $"{OcrProviderOptions.SectionName}:Paddle:BaseUrl must be an absolute URL (e.g. http://ocr:8000) when {OcrProviderOptions.SectionName}:Provider is Paddle."),
-            // Profile() throws on an unknown Layout indicator: a typo stops the host instead of leaving values unread.
-            { Provider: OcrProviderOptions.PaddleProvider, Paddle: var paddle } when paddle.Profile() is not null => provider.GetRequiredService<PaddleOcrService>(),
-            { Provider: OcrProviderOptions.FakeProvider } => provider.GetRequiredService<FakeOcrService>(),
-            _ => provider.GetRequiredService<NotConfiguredOcrService>(),
+            var options = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value;
+            switch (options.Provider)
+            {
+                case OcrProviderOptions.GeminiProvider:
+                    // A mistake stops the host (the startup check resolves this service) instead of leaving every photo unread.
+                    return options.Gemini.Validate() is { } problem
+                        ? throw new InvalidOperationException($"{OcrProviderOptions.SectionName}:Provider is Gemini but {problem}")
+                        : new GeminiMeterOcrService(provider.GetRequiredService<IGeminiVisionClient>());
+                case OcrProviderOptions.FakeProvider:
+                    return provider.GetRequiredService<FakeOcrService>();
+                default:
+                    return provider.GetRequiredService<NotConfiguredOcrService>();
+            }
+        });
+
+        // Asynchronous photo scans (licence map, raft form): the in-process queue and the reader of each scan.
+        services.AddSingleton<InMemoryScanQueue>();
+        services.AddSingleton<IScanQueue>(provider => provider.GetRequiredService<InMemoryScanQueue>());
+        services.AddHostedService(provider => provider.GetRequiredService<InMemoryScanQueue>());
+        services.AddTransient<IZoneMapReader>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider switch
+        {
+            OcrProviderOptions.GeminiProvider => new GeminiZoneMapReader(provider.GetRequiredService<IGeminiVisionClient>()),
+            OcrProviderOptions.FakeProvider => new FakeScanReader(),
+            _ => new NotConfiguredScanReader(),
+        });
+        services.AddTransient<IRaftFormReader>(provider => provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider switch
+        {
+            OcrProviderOptions.GeminiProvider => new GeminiRaftFormReader(provider.GetRequiredService<IGeminiVisionClient>()),
+            OcrProviderOptions.FakeProvider => new FakeScanReader(),
+            _ => new NotConfiguredScanReader(),
         });
     }
 

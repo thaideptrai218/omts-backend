@@ -204,6 +204,19 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   (`details: { count, raftCodes }`) names the In Use rafts pinned outside the new boundary. A raft create or edit pinned more
   than 1 m outside every area answers `RAFT_OUTSIDE_ZONE_BOUNDARY` (`details: { distanceM }`, whole metres to the nearest
   edge), besides `RAFT_FAR_FROM_ZONE`.
+- Licence map scan (26/11/2026, [ocr-gemini.md](ocr-gemini.md)): `POST /api/zones/{id}/boundary-scans` (Owner, zone In Use else 409
+  MSG-GEN-09; multipart `photo`, JPEG/PNG, 10 MB) answers 202 `{ scanId }`; `GET /api/zones/{id}/boundary-scans/{scanId}` answers
+  `{ status: Pending|Done|Failed, errorCode, reading }`. Only the corner-coordinate tables and the info table are read, never the
+  drawing. `reading` is `{ centralMeridian, coordinateSystem, zones: [{ name, writtenAreaHa, gridAreaHa, areaMatches, corners:
+  [{ label, x, y, lat, lon }] }] }`: `x` (northing) and `y` (easting) are VN-2000 grid metres, null when unreadable or outside
+  2.0e6…2.7e6 / 3.0e5…7.0e5; `lat`/`lon` are copied as written when the table has them; `gridAreaHa` is the shoelace area (null
+  under 3 corners); `areaMatches` is |grid − written| ≤ max(2 % of written, 0.05 ha), a warning for the review and never a save
+  block. The server does not convert to WGS84: the app does, and saves with `PUT …/boundary`. A scan is kept 15 minutes and only
+  the account that started it reads it (anyone else, another zone or another route: 404). A full queue is 503 `OCR_BUSY`
+  ("Máy chủ đang bận đọc ảnh, vui lòng thử lại sau ít phút."); over 20 scans an hour per account is 429.
+- Raft form scan (26/11/2026): `POST /api/rafts/form-scans` (Owner, like creating a raft) and `GET /api/rafts/form-scans/{scanId}`
+  work the same way; `reading` is `{ code, size, laneCount, location, notes, latitude, longitude }`, each a string copied as
+  written (trimmed, blank as null) or null, validated by the app as for a form typed by hand. 30 scans an hour per account.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).

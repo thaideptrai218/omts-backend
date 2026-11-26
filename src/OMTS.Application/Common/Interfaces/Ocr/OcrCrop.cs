@@ -4,7 +4,7 @@ namespace OMTS.Application.Common.Interfaces.Ocr;
 
 /// <summary>
 /// The part of the meter photo that shows the display, as fractions of the photo (0…1), chosen by the user in the Mini App
-/// (WATER-01 step 5). Only the OCR Service uses it: the stored evidence photo is always the whole photo.
+/// (WATER-01 step 5). The stored evidence photo is always the whole photo. The Gemini provider has no image library to crop with, so it accepts the crop and ignores it (it may become a prompt hint if that proves to help).
 /// </summary>
 public sealed record OcrCrop(double Left, double Top, double Right, double Bottom)
 {
@@ -48,7 +48,7 @@ public sealed record OcrCrop(double Left, double Top, double Right, double Botto
         return true;
     }
 
-    /// <summary>The same "left,top,right,bottom" form, as the OCR sidecar's <c>crop</c> query value.</summary>
+    /// <summary>The same "left,top,right,bottom" form that <see cref="TryParse"/> reads.</summary>
     public override string ToString() =>
         string.Join(',', new[] { Left, Top, Right, Bottom }.Select(v => v.ToString("0.####", CultureInfo.InvariantCulture)));
 }

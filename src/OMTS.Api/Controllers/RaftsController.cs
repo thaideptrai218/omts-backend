@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Farming.Rafts;
+using OMTS.Application.Features.Farming.Rafts.FormScan;
+using OMTS.Application.Features.Scans;
 using OMTS.Application.Features.Farming.Zones;
 
 namespace OMTS.Api.Controllers;
@@ -14,7 +18,7 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class RaftsController(RaftReadService reads, RaftService rafts, RaftPhotoService photos, RaftStatusService statuses) : ControllerBase
+public sealed class RaftsController(RaftReadService reads, RaftService rafts, RaftPhotoService photos, RaftStatusService statuses, RaftFormScanService formScans) : ControllerBase
 {
     [HttpGet("api/zones/{zoneId:guid}/rafts")]
     [ProducesResponseType<IReadOnlyList<RaftListItem>>(StatusCodes.Status200OK)]
@@ -33,6 +37,30 @@ public sealed class RaftsController(RaftReadService reads, RaftService rafts, Ra
     [ProducesResponseType<RaftSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(Guid zoneId, SaveRaftRequest request, CancellationToken cancellationToken) =>
         (await rafts.CreateAsync(zoneId, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+
+    /// <summary>
+    /// Starts reading a photographed raft form (multipart <c>photo</c>, JPEG/PNG, at most 10 MB) into suggestions for the create-raft
+    /// screen; same permission as creating a raft. 202 with the <c>scanId</c> to poll. A full queue is 503 OCR_BUSY, more than 30
+    /// scans an hour per account is 429. Nothing is saved.
+    /// </summary>
+    [HttpPost("api/rafts/form-scans")]
+    [RequireCooperativeOwner]
+    [EnableRateLimiting(RateLimitingExtensions.RaftFormScans)]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    [UploadField(PhotoScanGateway.PhotoField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<ScanStarted>(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> StartFormScan(IFormFile? photo, CancellationToken cancellationToken)
+    {
+        var file = photo is null ? null : await photo.ToIncomingFileAsync(cancellationToken);
+        return formScans.Start(file).ToActionResult(started => Accepted(started));
+    }
+
+    /// <summary>The form scan: <c>status</c>, <c>errorCode</c> and, when Done, the <c>reading</c> (fields copied as written). Kept 15 minutes; 404 for another account.</summary>
+    [HttpGet("api/rafts/form-scans/{scanId:guid}")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<ScanStatusView<RaftFormReading>>(StatusCodes.Status200OK)]
+    public IActionResult GetFormScan(Guid scanId) => formScans.Get(scanId).ToActionResult(Ok);
 
     [HttpGet("api/rafts/{raftId:guid}")]
     [ProducesResponseType<RaftView>(StatusCodes.Status200OK)]

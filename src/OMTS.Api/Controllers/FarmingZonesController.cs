@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Farming.Zones;
+using OMTS.Application.Features.Farming.Zones.BoundaryScan;
+using OMTS.Application.Features.Scans;
 
 namespace OMTS.Api.Controllers;
 
@@ -14,8 +18,11 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/zones")]
 [Authorize]
-public sealed class FarmingZonesController(FarmingZoneService zones) : ControllerBase
+public sealed class FarmingZonesController(FarmingZoneService zones, ZoneBoundaryScanService boundaryScans) : ControllerBase
 {
+    // A 10 MB photo plus the multipart envelope; a larger photo still reaches the validator's MSG-GEN-01.
+    private const long MaxScanUploadBytes = 12 * 1024 * 1024;
+
     /// <summary>Search by code or name; the license badge is returned to the Owner only.</summary>
     [HttpGet]
     [ProducesResponseType<Paged<FarmingZoneListItem>>(StatusCodes.Status200OK)]
@@ -67,6 +74,34 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     [ProducesResponseType<FarmingZoneSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SetBoundary(Guid zoneId, SaveZoneBoundaryRequest request, CancellationToken cancellationToken) =>
         (await zones.SetBoundaryAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Starts reading the corner tables of a photographed sea-area licence map (multipart <c>photo</c>, JPEG/PNG, at most 10 MB).
+    /// 202 with the <c>scanId</c> to poll; the zone must be In Use (409 otherwise). A full queue is 503 OCR_BUSY, more than 20 scans
+    /// an hour per account is 429. Nothing is saved.
+    /// </summary>
+    [HttpPost("{zoneId:guid}/boundary-scans")]
+    [RequireCooperativeOwner]
+    [EnableRateLimiting(RateLimitingExtensions.ZoneMapScans)]
+    [RequestSizeLimit(MaxScanUploadBytes)]
+    [UploadField(PhotoScanGateway.PhotoField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<ScanStarted>(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> StartBoundaryScan(Guid zoneId, IFormFile? photo, CancellationToken cancellationToken)
+    {
+        var file = photo is null ? null : await photo.ToIncomingFileAsync(cancellationToken);
+        return (await boundaryScans.StartAsync(zoneId, file, cancellationToken)).ToActionResult(started => Accepted(started));
+    }
+
+    /// <summary>
+    /// The scan: <c>status</c> Pending, Done or Failed (<c>errorCode</c> UNAVAILABLE, TIMEOUT, BAD_RESPONSE or NOT_CONFIGURED) and,
+    /// when Done, the <c>reading</c> with the VN-2000 corners per zone and the area checks. Kept 15 minutes; only the account that
+    /// started it can read it, anyone else gets 404.
+    /// </summary>
+    [HttpGet("{zoneId:guid}/boundary-scans/{scanId:guid}")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<ScanStatusView<ZoneMapReading>>(StatusCodes.Status200OK)]
+    public IActionResult GetBoundaryScan(Guid zoneId, Guid scanId) => boundaryScans.Get(zoneId, scanId).ToActionResult(Ok);
 
     /// <summary>Blocked with MSG-GEN-06 while In Use rafts remain in the zone.</summary>
     [HttpPost("{zoneId:guid}/discontinue")]

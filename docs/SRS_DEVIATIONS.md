@@ -82,7 +82,7 @@ Quyết định của chủ HTX ngày 25/11/2026 (chờ PM đưa vào SRS; chi t
 
 ## Tích hợp chưa có nhà cung cấp
 
-Các phần sau chạy bằng bản giả trong Development và chưa có nhà cung cấp thật: Payment Notification Service (API-12), SMS, email và push. OCR đọc ảnh đồng hồ đo nước (WATER-01) có bản thật chạy offline bằng PaddleOCR ([deployment-ocr.md](deployment-ocr.md)); số đọc được chỉ là gợi ý, người đo vẫn xác nhận. Chi tiết: [operations-reference.md](operations-reference.md#external-services-development).
+Các phần sau chạy bằng bản giả trong Development và chưa có nhà cung cấp thật: Payment Notification Service (API-12), SMS, email và push. OCR đọc ảnh đồng hồ đo nước (WATER-01) có bản thật dùng Google Gemini ([ocr-gemini.md](ocr-gemini.md)); ảnh được gửi tới Google, và khóa dùng cho ảnh thật của hợp tác xã phải là khóa có thanh toán; số đọc được chỉ là gợi ý, người đo vẫn xác nhận. Cùng nhà cung cấp đó đọc bảng tọa độ trên sơ đồ giấy phép khu biển và phiếu bè (quét bất đồng bộ, chủ hợp tác xã xác nhận trước khi lưu). Chi tiết: [operations-reference.md](operations-reference.md#external-services-development).
 
 ## Câu hỏi mở phía backend
 

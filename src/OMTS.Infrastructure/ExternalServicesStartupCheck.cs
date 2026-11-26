@@ -36,6 +36,14 @@ internal sealed class ExternalServicesStartupCheck(
         services.GetRequiredService<IPushSender>();
         services.GetRequiredService<IFileStorage>();
         services.GetRequiredService<IOcrService>();
+        if (ocr.Value.Provider == OcrProviderOptions.GeminiProvider)
+        {
+            var readers = ocr.Value.Gemini.Readers;
+            logger.LogInformation(
+                "OCR provider Gemini: meter {Meter} ({MeterTimeout} s), licence map {ZoneMap} ({ZoneMapTimeout} s), raft form {RaftForm} ({RaftFormTimeout} s)",
+                readers.Meter.Model, readers.Meter.TimeoutSeconds, readers.ZoneMap.Model, readers.ZoneMap.TimeoutSeconds, readers.RaftForm.Model, readers.RaftForm.TimeoutSeconds);
+        }
+
         services.GetRequiredService<IZaloOpenApi>();
         services.GetRequiredService<IPaymentNotificationService>();
         services.GetRequiredService<IZaloOpenApi>();
@@ -78,9 +86,10 @@ internal sealed class ExternalServicesStartupCheck(
             logger.LogWarning("Email provider is Fake: emails are NOT sent.");
         }
 
-        if (ocr.Value.Provider != OcrProviderOptions.PaddleProvider)
+        if (ocr.Value.Provider != OcrProviderOptions.GeminiProvider)
         {
-            logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
+            logger.LogWarning(
+                "OCR provider '{Provider}' is not Gemini: meter photos, licence maps and raft forms are NOT read; users enter the values.", ocr.Value.Provider);
         }
         logger.LogWarning("Payment notification provider is not configured: no receiving bank account can be accepted (MSG-DEBT-02), so VietQR stays out of use.");
 

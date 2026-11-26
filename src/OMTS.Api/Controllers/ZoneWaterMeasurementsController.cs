@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
@@ -31,6 +33,7 @@ public sealed class ZoneWaterMeasurementsController(
     /// When OCR fails, <c>ocr.status</c> is Failed and the key still comes back. A malformed crop is 400 Invalid "Crop".
     /// </summary>
     [HttpPost("recognize")]
+    [EnableRateLimiting(RateLimitingExtensions.WaterRecognitions)]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]
     [RequestSizeLimit(MaxUploadBytes)]
     [UploadField(WaterMeasurementRecordingService.PhotoField)]

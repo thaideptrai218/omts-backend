@@ -2,12 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Infrastructure.Ocr;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// WATER-01 recognize with the display crop of the Mini App, and the Paddle provider's start-up checks: a configuration
+/// WATER-01 recognize with the display crop of the Mini App, and the Gemini provider's start-up checks: a configuration
 /// mistake stops the host instead of leaving every meter photo unread.
 /// </summary>
 public class WaterOcrCropApiTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
@@ -41,15 +44,20 @@ public class WaterOcrCropApiTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     }
 
     [Theory]
-    [InlineData("", "")] // no sidecar URL
-    [InlineData("not a url", "")]
-    [InlineData("ocr:8000", "")] // parses as a URI with the scheme "ocr"
-    [InlineData("http://ocr:8000", "Ph,Oxygen")] // typo in the meter layout
-    public void The_Paddle_provider_with_a_bad_setting_stops_the_host(string baseUrl, string layout)
+    [InlineData("", "https://generativelanguage.googleapis.com/v1beta/", "gemini-3.5-flash-lite", "ApiKey")] // no key
+    [InlineData("secret-key", "http://generativelanguage.googleapis.com/v1beta/", "gemini-3.5-flash-lite", "BaseUrl")] // plain http
+    [InlineData("secret-key", "not a url", "gemini-3.5-flash-lite", "BaseUrl")]
+    [InlineData("secret-key", "https://generativelanguage.googleapis.com/v1beta/", "gemini/../x", "Model")]
+    [InlineData("secret-key", "https://generativelanguage.googleapis.com/v1beta/", "", "Model")]
+    public void The_Gemini_provider_with_a_bad_setting_stops_the_host_without_naming_the_key(string key, string baseUrl, string model, string named)
     {
-        using var factory = new PaddleFactory(baseUrl, layout);
+        using var factory = new GeminiFactory(key, baseUrl, model);
 
-        Assert.ThrowsAny<InvalidOperationException>(() => factory.CreateClient());
+        var error = Assert.ThrowsAny<InvalidOperationException>(() => factory.CreateClient());
+
+        Assert.Contains("Ocr:Gemini:", error.Message);
+        Assert.Contains(named, error.Message);
+        Assert.DoesNotContain("secret-key", error.Message);
     }
 
     private static MultipartFormDataContent CropForm(string marker, string crop)
@@ -59,16 +67,18 @@ public class WaterOcrCropApiTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         return form;
     }
 
-    /// <summary>The API as Production with the Paddle provider (the base factory always forces Fake).</summary>
-    private sealed class PaddleFactory(string baseUrl, string layout) : AuthApiFactory
+    /// <summary>The API as Production with the Gemini provider (the base factory always forces Fake).</summary>
+    private sealed class GeminiFactory(string key, string baseUrl, string model) : AuthApiFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
             builder.UseEnvironment("Production");
-            builder.UseSetting("Ocr:Provider", "Paddle");
-            builder.UseSetting("Ocr:Paddle:BaseUrl", baseUrl);
-            builder.UseSetting("Ocr:Paddle:Layout", layout);
+            builder.ConfigureTestServices(services => services.PostConfigure<OcrProviderOptions>(o =>
+            {
+                o.Provider = OcrProviderOptions.GeminiProvider;
+                (o.Gemini.ApiKey, o.Gemini.BaseUrl, o.Gemini.Readers.Meter.Model) = (key, baseUrl, model);
+            }));
         }
     }
 }
