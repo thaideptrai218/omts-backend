@@ -11,7 +11,7 @@ namespace OMTS.Application.UnitTests.Features.Notifications;
 public class NotificationSmsShorteningOrderTests
 {
     private const string Time = "06:30 20/10/2026";
-    private const string Closing = "Please check the water.";
+    private const string Closing = "Vui long kiem tra nuoc.";
     private const string RenewIt = "Please renew it and record the new one.";
 
     private static readonly DateTimeOffset MeasuredAt = new(2026, 10, 19, 23, 30, 0, TimeSpan.Zero);
@@ -41,7 +41,7 @@ public class NotificationSmsShorteningOrderTests
         var text = Alert(string.Concat(Enumerable.Repeat("Vùng nuôi hàu ", 15)), null, false, Ph);
 
         Assert.Equal(
-            $"Water alert: zone Vung nuoi hau Vung nuoi hau Vung nuoi..., raft -, measured on {Time}. pH 9.1 is too high (allowed 6.5-8.5). {Closing}",
+            $"Canh bao nuoc: vung Vung nuoi hau Vung nuoi hau Vung nuoi hau Vung..., be -, do luc {Time}. pH 9,1 cao hon muc cho phep 8,5. {Closing}",
             text);
     }
 
@@ -50,7 +50,7 @@ public class NotificationSmsShorteningOrderTests
     {
         var text = Alert(new string('A', 200), "BE-0012", false, Ph);
 
-        Assert.Contains(", raft BE-0012, measured on", text);
+        Assert.Contains(", be BE-0012, do luc", text);
         Assert.EndsWith(Closing, text);
         Assert.Equal(NotificationSmsText.MaxLength, text.Length);
     }
@@ -60,8 +60,8 @@ public class NotificationSmsShorteningOrderTests
     {
         var text = Alert(new string('A', 200), new string('B', 50), false, Ph);
 
-        Assert.Contains(", raft BBB", text);
-        Assert.Contains("zone AAAAAAAAA..., raft", text);
+        Assert.Contains(", be BBB", text);
+        Assert.Contains("vung AAAAAAAAA..., be", text);
         Assert.EndsWith(Closing, text);
         Assert.Equal(NotificationSmsText.MaxLength, text.Length);
     }
@@ -104,7 +104,7 @@ public class NotificationSmsShorteningOrderTests
         var text = Alert("Vùng nuôi hàu Vịnh Bái Tử Long khu số 2", null, false, Ph, Salinity);
 
         Assert.Equal(
-            $"Water alert: zone Vung nuoi hau..., raft -, measured on {Time}. pH 9.1 is too high (allowed 6.5-8.5); Salinity 12 ppt is too low (allowed 15-30 ppt).",
+            $"Canh bao nuoc: vung Vung nuoi hau Vinh Bai Tu..., be -, do luc {Time}. pH 9,1 cao hon muc cho phep 8,5; Do man 12 ppt thap hon muc cho phep 15 ppt.",
             text);
     }
 
@@ -126,7 +126,7 @@ public class NotificationSmsShorteningOrderTests
     {
         var text = Alert("Vùng Cái Rồng", null, true, Ph, Salinity);
 
-        Assert.Equal($"Water alert (corrected): zone Vung Cai Rong, raft -, at {Time}. pH 9.1 high (allowed 6.5-8.5); Salinity 12 ppt low (allowed 15-30 ppt).", text);
+        Assert.Equal($"Canh bao nuoc (da hieu chinh): vung Vung Cai Rong, be -, luc {Time}. pH 9,1 cao hon 8,5; Do man 12 ppt thap hon 15 ppt.", text);
     }
 
     // ---- Step 4: the worst case of the columns. The free text goes under its minimum and no fact is lost ----
@@ -143,10 +143,10 @@ public class NotificationSmsShorteningOrderTests
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.Contains(Time, text);
-        Assert.Contains("pH 99.75 ", text);
-        Assert.Contains("allowed 12.25-13.75", text);
-        Assert.Contains("Salinity 999.25 ppt ", text);
-        Assert.Contains("allowed 100.25-999.75 ppt", text);
+        Assert.Contains("pH 99,75 cao hon ", text);
+        Assert.Contains(" 13,75;", text);
+        Assert.Contains("Do man 999,25 ppt cao hon ", text);
+        Assert.Contains(" 999,75 ppt.", text);
     }
 
     [Fact]
@@ -158,8 +158,8 @@ public class NotificationSmsShorteningOrderTests
         var text = Alert(new string('A', 200), new string('B', 50), true, ph, salinity);
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
-        Assert.Contains("allowed at least 13.75", text);
-        Assert.Contains("allowed at most 999.75 ppt", text);
+        Assert.Contains("pH 99,75 thap hon 13,75;", text);
+        Assert.Contains("Do man 999,25 ppt cao hon 999,75 ppt.", text);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class NotificationSmsShorteningOrderTests
         var name = new string('A', 41);
 
         Assert.Equal(
-            $"Water alert: zone {name}, raft -, measured on {Time}. pH 9.1 is too high (allowed 6.5-8.5). {Closing}",
+            $"Canh bao nuoc: vung {name}, be -, do luc {Time}. pH 9,1 cao hon muc cho phep 8,5. {Closing}",
             Alert(name, null, false, Ph));
     }
 }

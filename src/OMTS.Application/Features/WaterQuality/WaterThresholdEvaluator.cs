@@ -1,12 +1,11 @@
-using System.Globalization;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>Result of comparing values with a threshold set.</summary>
-/// <param name="ViolatedMetrics">Indicator names, e.g. ["pH", "Salinity"].</param>
-/// <param name="ViolatedValues">Stored text, e.g. "pH 9.10 &gt; 8.50; Salinity 12.00 &lt; 15.00".</param>
+/// <param name="ViolatedMetrics">Indicator names (stable identifiers, not for display), e.g. ["pH", "Salinity"].</param>
+/// <param name="ViolatedValues">Stored text in Vietnamese, e.g. "pH 9,1 cao hơn mức cho phép 8,5; Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰".</param>
 /// <param name="ValuesOutside">The values outside with their allowed range, for MSG-WATER-02/03; empty when nothing is outside.</param>
 public sealed record ThresholdEvaluation(
     bool Exceeded, IReadOnlyList<string> ViolatedMetrics, string? ViolatedValues, IReadOnlyList<WaterValueOutside> ValuesOutside);
@@ -27,7 +26,7 @@ public static class WaterThresholdEvaluator
 
     public static ThresholdEvaluation Evaluate(decimal? ph, decimal? salinity, decimal? temperature, WaterThresholds thresholds)
     {
-        var violations = new List<(string Metric, string Stored, WaterValueOutside Outside)>();
+        var violations = new List<(string Metric, WaterValueOutside Outside)>();
         Check(PhName, WaterValueOutside.Ph, null, ph, thresholds.PhMin, thresholds.PhMax, violations);
         Check(SalinityName, WaterValueOutside.Salinity, SalinityUnit, salinity, thresholds.SalinityMin, thresholds.SalinityMax, violations);
         Check(TemperatureName, WaterValueOutside.Temperature, TemperatureUnit, temperature, thresholds.TemperatureMin, thresholds.TemperatureMax, violations);
@@ -37,13 +36,13 @@ public static class WaterThresholdEvaluator
             : new ThresholdEvaluation(
                 true,
                 violations.Select(v => v.Metric).ToList(),
-                string.Join("; ", violations.Select(v => v.Stored)),
+                string.Join("; ", violations.Select(v => v.Outside.Describe())),
                 violations.Select(v => v.Outside).ToList());
     }
 
     private static void Check(
         string metric, string indicator, string? unit, decimal? read, decimal? min, decimal? max,
-        List<(string, string, WaterValueOutside)> violations)
+        List<(string, WaterValueOutside)> violations)
     {
         if (read is not { } value)
         {
@@ -52,13 +51,11 @@ public static class WaterThresholdEvaluator
 
         if (min is { } low && value < low)
         {
-            violations.Add((metric, $"{metric} {Format(value)} < {Format(low)}", new(indicator, value, unit, WaterValueDirection.Low, min, max)));
+            violations.Add((metric, new(indicator, value, unit, WaterValueDirection.Low, min, max)));
         }
         else if (max is { } high && value > high)
         {
-            violations.Add((metric, $"{metric} {Format(value)} > {Format(high)}", new(indicator, value, unit, WaterValueDirection.High, min, max)));
+            violations.Add((metric, new(indicator, value, unit, WaterValueDirection.High, min, max)));
         }
     }
-
-    private static string Format(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 }

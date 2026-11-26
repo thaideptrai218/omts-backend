@@ -127,13 +127,13 @@ public class MandatorySmsTextQaTests
 
     // ---- M2, M3: what the alert must name reads as it is ----
 
-    // BR-WATER-05: the alert names "each value outside, with its allowed range"; the columns hold two decimals.
+    // BR-WATER-05: the alert names each value outside with the limit it crossed; the columns hold two decimals.
     [Fact]
-    public void M2_a_water_alert_keeps_its_allowed_range_when_the_limits_have_two_decimals()
+    public void M2_a_water_alert_keeps_the_crossed_limit_when_it_has_two_decimals()
     {
         var text = AlertWithZone("Vùng A", Salinity(12m, 15.25m, 30.75m));
 
-        Assert.True(text.Contains("allowed 15.25-30.75 ppt"), text);
+        Assert.True(text.Contains("thap hon muc cho phep 15,25 ppt"), text);
     }
 
     [Theory]
@@ -174,13 +174,13 @@ public class MandatorySmsTextQaTests
 
     // ---- M4: the cut at 160 removes the facts ----
 
-    // An ordinary name. BR-WATER-05: "each value outside, with its allowed range".
+    // An ordinary name. BR-WATER-05: each value outside, with the limit it crossed.
     [Fact]
-    public void M4_a_two_value_alert_on_an_ordinary_zone_name_keeps_both_values_and_ranges()
+    public void M4_a_two_value_alert_on_an_ordinary_zone_name_keeps_both_values_and_limits()
     {
         var text = AlertWithZone("Vùng nuôi hàu Vịnh Bái Tử Long khu số 2", Ph(), Salinity());
 
-        Assert.True(text.Contains("allowed 15-30 ppt"), text);
+        Assert.True(text.Contains("pH 9,1 cao hon muc cho phep 8,5") && text.Contains("Do man 12 ppt thap hon muc cho phep 15 ppt"), text);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public class MandatorySmsTextQaTests
                 "Title",
                 UserMessages.WaterAlert(true, "Vùng nuôi hàu Vịnh Bái Tử Long khu số 2", "R01", MeasuredAt, [Ph(), Salinity()])));
 
-        Assert.True(text.Contains("Salinity 12"), text);
+        Assert.True(text.Contains("Do man 12"), text);
     }
 
     // Lengths.Name is 200: a long name pushes out the value itself.
@@ -202,7 +202,7 @@ public class MandatorySmsTextQaTests
     {
         var text = AlertWithZone(string.Join(' ', Enumerable.Repeat("Vùng nuôi hàu", 12)), Ph());
 
-        Assert.True(text.Contains("pH 9.1"), text);
+        Assert.True(text.Contains("pH 9,1"), text);
     }
 
     // MSG-FARM-01: "{document} expires on {expiry_date}, in {days} days".

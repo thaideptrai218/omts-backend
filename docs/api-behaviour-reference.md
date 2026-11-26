@@ -250,6 +250,10 @@ A water measurement is never corrected: `POST /api/water-measurements/{id}/corre
 corrections already made stay in the audit log as `WaterMeasurement.Corrected` rows and are shown in the record history as before;
 MSG-WATER-03 keeps its `corrected` parameter (false for every new alert) so earlier notifications still render.
 
+### Water threshold texts are Vietnamese
+
+The texts a user reads for a value outside its thresholds are Vietnamese, built by `WaterValueOutside.Describe()`: `{name} {value}[ unit] {cao hơn|thấp hơn} mức cho phép {limit}[ unit]`, with the limit that was crossed only (the maximum for "cao hơn", the minimum for "thấp hơn"). Names are "pH", "Độ mặn", "Nhiệt độ"; units "‰" and "°C" (none for pH); numbers have a decimal comma and no trailing zeros ("pH 14 cao hơn mức cho phép 8,5; Độ mặn 10 ‰ thấp hơn mức cho phép 18 ‰; Nhiệt độ 40 °C cao hơn mức cho phép 32 °C"). This text is `violatedValues` of the measurement (list, detail, export, audit; the web shows it after "Vượt ngưỡng:"), the `thresholdWarning` text of MSG-WATER-02 and the body of MSG-WATER-03 ("Cảnh báo nước: vùng …, bè …, đo lúc …. … Vui lòng kiểm tra nước."; title "Cảnh báo chất lượng nước"). The SMS of MSG-WATER-03 is the same without marks, and its shorter wording drops "mức cho phép" ("pH 14 cao hon 8,5"). Machine fields did not change: the `valuesOutside` items (`indicator` `PH` | `SALINITY` | `TEMPERATURE`, `value`, `unit`, `direction` `High` | `Low`, `min`, `max`) and the parameters of MSG-WATER-03 stay as they were. A measurement saved before this change keeps its earlier English `violatedValues`.
+
 ### Notifications
 
 Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when

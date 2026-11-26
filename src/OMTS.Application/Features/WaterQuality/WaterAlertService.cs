@@ -17,7 +17,7 @@ namespace OMTS.Application.Features.WaterQuality;
 public sealed class WaterAlertService(
     IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications, TimeProvider timeProvider)
 {
-    public const string AlertTitle = "Water quality alert";
+    public const string AlertTitle = "Cảnh báo chất lượng nước";
     public const string WithdrawnTitle = "Water alert withdrawn";
 
     /// <summary>What the measurement's current values give against the thresholds of the measurement; changes nothing.</summary>

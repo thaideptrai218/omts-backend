@@ -31,7 +31,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         Assert.Equal(9.0m, underWider.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
         Assert.Empty(await api.AlertsOfAsync(underWider.Id()));
         Assert.Equal("Active", underNarrower.Text("alertState"));
-        Assert.Equal("pH 8.40 > 8.00", underNarrower.Text("violatedValues"));
+        Assert.Equal("pH 8,4 cao hơn mức cho phép 8", underNarrower.Text("violatedValues"));
         Assert.Single(await api.AlertsOfAsync(underNarrower.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
@@ -49,7 +49,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         var farAbove = await z.RecordedAsync(14m, 50m, temperature: 45m);
 
         Assert.Equal("Active", below.Text("alertState"));
-        Assert.Equal("pH 6.49 < 6.50; Salinity 14.99 < 15.00; Temperature 9.99 < 10.00", below.Text("violatedValues"));
+        Assert.Equal("pH 6,49 thấp hơn mức cho phép 6,5; Độ mặn 14,99 ‰ thấp hơn mức cho phép 15 ‰; Nhiệt độ 9,99 °C thấp hơn mức cho phép 10 °C", below.Text("violatedValues"));
         Assert.Equal("None", farAbove.Text("alertState"));
         Assert.Empty(await api.AlertsOfAsync(farAbove.Id()));
         Assert.Equal(JsonValueKind.Null, farAbove.GetProperty("thresholdsUsed").GetProperty("phMax").ValueKind);

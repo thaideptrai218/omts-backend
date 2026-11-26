@@ -44,7 +44,7 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var alerts = await api.AlertsOfAsync(body.Id());
         Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
         Assert.Single(alerts, n => n.RecipientAccountId == managerAccount.Id);
-        Assert.All(alerts, n => Assert.Contains("Salinity 12 ‰ is too low (allowed 15–30 ‰)", n.Body));
+        Assert.All(alerts, n => Assert.Contains("Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰", n.Body));
 
         var changed = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new
         {
@@ -58,7 +58,7 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
             (6.5m, 8.5m, 15m, 30m, 10m, 35m),
             (copy.GetProperty("phMin").GetDecimal(), copy.GetProperty("phMax").GetDecimal(), copy.GetProperty("salinityMin").GetDecimal(),
                 copy.GetProperty("salinityMax").GetDecimal(), copy.GetProperty("temperatureMin").GetDecimal(), copy.GetProperty("temperatureMax").GetDecimal()));
-        Assert.Equal(("Active", "Salinity 12.00 < 15.00"), (detail.Text("alertState"), detail.Text("violatedValues")));
+        Assert.Equal(("Active", "Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰"), (detail.Text("alertState"), detail.Text("violatedValues")));
 
         // A new measurement of 12 is inside the new thresholds and alerts nobody.
         var next = await z.RecordedAsync(7.8m, 12m, client: manager);
@@ -69,12 +69,12 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     [Theory]
     [InlineData(6.5, 15, 10, null)]
     [InlineData(8.5, 30, 35, null)]
-    [InlineData(6.49, 20, 25, "pH 6.49 < 6.50")]
-    [InlineData(8.51, 20, 25, "pH 8.51 > 8.50")]
-    [InlineData(7, 14.99, 25, "Salinity 14.99 < 15.00")]
-    [InlineData(7, 30.01, 25, "Salinity 30.01 > 30.00")]
-    [InlineData(7, 20, 9.99, "Temperature 9.99 < 10.00")]
-    [InlineData(7, 20, 35.01, "Temperature 35.01 > 35.00")]
+    [InlineData(6.49, 20, 25, "pH 6,49 thấp hơn mức cho phép 6,5")]
+    [InlineData(8.51, 20, 25, "pH 8,51 cao hơn mức cho phép 8,5")]
+    [InlineData(7, 14.99, 25, "Độ mặn 14,99 ‰ thấp hơn mức cho phép 15 ‰")]
+    [InlineData(7, 30.01, 25, "Độ mặn 30,01 ‰ cao hơn mức cho phép 30 ‰")]
+    [InlineData(7, 20, 9.99, "Nhiệt độ 9,99 °C thấp hơn mức cho phép 10 °C")]
+    [InlineData(7, 20, 35.01, "Nhiệt độ 35,01 °C cao hơn mức cho phép 35 °C")]
     public async Task A_bound_is_inside_and_one_hundredth_past_it_alerts(double ph, double salinity, double temperature, string? violated)
     {
         var z = await api.ZoneAsync();
@@ -105,8 +105,8 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var outside = await z.RecordedAsync(0m, 0m, client: manager, temperature: 35.5m);
 
         Assert.Null(inside.Text("violatedValues"));
-        Assert.Equal("Temperature 35.50 > 35.00", outside.Text("violatedValues"));
-        Assert.All(await api.AlertsOfAsync(outside.Id()), n => Assert.Contains("Temperature 35.5 °C is too high (allowed 10–35 °C)", n.Body));
+        Assert.Equal("Nhiệt độ 35,5 °C cao hơn mức cho phép 35 °C", outside.Text("violatedValues"));
+        Assert.All(await api.AlertsOfAsync(outside.Id()), n => Assert.Contains("Nhiệt độ 35,5 °C cao hơn mức cho phép 35 °C", n.Body));
     }
 
     // BR-WATER-05: the Owner and every Zone Manager with access; a locked account, a revoked pair, another zone and the Accountant are out.
@@ -144,7 +144,7 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
 
         Assert.All(alerts, n => Assert.True(n.IsMandatory));
         var pushed = api.Services.GetRequiredService<FakePushSender>().Inbox.List(pushOff.Id.ToString());
-        Assert.Contains(pushed, m => m.Text.Contains("Temperature 40 °C is too high"));
+        Assert.Contains(pushed, m => m.Text.Contains("Nhiệt độ 40 °C cao hơn mức cho phép"));
     }
 
     [Fact]

@@ -38,11 +38,11 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         Assert.Equal(HttpStatusCode.Created, recorded.StatusCode);
         Assert.Equal(("Active", "ACTIVE", 12m), (saved.Text("status"), saved.Text("statusCode"), saved.GetProperty("salinity").GetDecimal()));
         Assert.Equal("Active", saved.Text("alertState"));
-        Assert.Equal("Salinity 12.00 < 15.00", saved.Text("violatedValues"));
+        Assert.Equal("Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰", saved.Text("violatedValues"));
         var alerts = await api.AlertsOfAsync(saved.Id());
         Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
         Assert.Single(alerts, n => n.RecipientAccountId == managerAccount.Id);
-        Assert.All(alerts, n => Assert.Contains("Salinity 12 ‰ is too low (allowed 15–30 ‰)", n.Body));
+        Assert.All(alerts, n => Assert.Contains("Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰", n.Body));
 
         var changed = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new
         {
@@ -75,7 +75,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         Assert.InRange(body.GetProperty("measuredAt").GetDateTimeOffset(), before.AddSeconds(-1), DateTimeOffset.UtcNow.AddSeconds(1));
         Assert.Equal(["PH", "SALINITY"], body.GetProperty("valuesOutside").EnumerateArray().Select(v => v.Text("indicator")));
         Assert.Equal("MSG-WATER-02", body.GetProperty("thresholdWarning").Text("code"));
-        Assert.Equal("pH 9.1 is too high (allowed 6.5–8.5); Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the meter again before you save.", body.GetProperty("thresholdWarning").Text("text"));
+        Assert.Equal("pH 9,1 cao hơn mức cho phép 8,5; Độ mặn 12 ‰ thấp hơn mức cho phép 15 ‰. Vui lòng kiểm tra lại máy đo trước khi lưu.", body.GetProperty("thresholdWarning").Text("text"));
     }
 
     [Fact]

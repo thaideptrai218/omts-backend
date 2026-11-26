@@ -42,7 +42,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var alert = Assert.Single(items);
 
         AssertAlert(alert, false, [("PH", 9.1m, null, "High", 6.5m, 8.5m)]);
-        Assert.Equal($"Water alert: zone {z.Zone.Name}, raft {z.Raft.Code}, measured on {time}. pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", alert.GetProperty("body").GetString());
+        Assert.Equal($"Cảnh báo nước: vùng {z.Zone.Name}, bè {z.Raft.Code}, đo lúc {time}. pH 9,1 cao hơn mức cho phép 8,5. Vui lòng kiểm tra nước.", alert.GetProperty("body").GetString());
 
         // The alert opens while its measurement exists (shown with its current values).
         var open = await manager.OpenNotificationAsync(alert.GetProperty("id").GetGuid());

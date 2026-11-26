@@ -66,7 +66,7 @@ public class NotificationSmsTextTests
     {
         var alert = Render(NotificationTypes.Find(NotificationTypes.WaterAlert)!, WaterAlert("KV-2026-0012", WaterValue(WaterValueOutside.Ph, 9.1m)));
 
-        Assert.Contains("zone KV-2026-0012,", alert);
+        Assert.Contains("vung KV-2026-0012,", alert);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class NotificationSmsTextTests
         var text = Render(NotificationTypes.Find(NotificationTypes.WaterAlert)!, WaterAlert("Vùng Cái Rồng", WaterValue(WaterValueOutside.Salinity, 12m)));
 
         Assert.Equal(
-            "Water alert: zone Vung Cai Rong, raft -, measured on 06:30 20/10/2026. Salinity 12 ppt is too low (allowed 15-30 ppt). Please check the water.",
+            "Canh bao nuoc: vung Vung Cai Rong, be -, do luc 06:30 20/10/2026. Do man 12 ppt thap hon muc cho phep 15 ppt. Vui long kiem tra nuoc.",
             text);
     }
 
@@ -179,7 +179,7 @@ public class NotificationSmsTextTests
     {
         var text = Render(NotificationTypes.Find(NotificationTypes.WaterAlert)!, WaterAlert(zone, WaterValue(WaterValueOutside.Ph, 9.1m)));
 
-        Assert.Contains($"zone {expected},", text);
+        Assert.Contains($"vung {expected},", text);
     }
 
     [Fact]
@@ -202,8 +202,8 @@ public class NotificationSmsTextTests
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.Contains("Vung Cai Rong", text);
-        Assert.Contains("pH 9.1", text);
-        Assert.Contains("Salinity 12", text);
+        Assert.Contains("pH 9,1", text);
+        Assert.Contains("Do man 12", text);
     }
 
     [Fact]
