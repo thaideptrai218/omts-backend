@@ -2396,6 +2396,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -4379,6 +4383,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "ACCOUNT",
                             IsFinal = false,
                             SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 305,
+                            Code = "DELETED",
+                            DisplayName = "Deleted",
+                            Group = "ACCOUNT",
+                            IsFinal = true,
+                            SortOrder = 5
                         },
                         new
                         {

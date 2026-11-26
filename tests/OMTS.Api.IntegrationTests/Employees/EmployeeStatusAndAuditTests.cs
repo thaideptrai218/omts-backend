@@ -212,7 +212,7 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var tag = NewCode();
         var phone = NewPhone();
         var username = $"nv{NewCode()}";
-        var a = IdOf(await CreateAsync(owner, Profile($"{tag} A", phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role))));
+        var a = IdOf(await CreateAsync(owner, StaffProfile($"{tag} A", phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role))));
         var b = IdOf(await CreateAsync(owner, Profile($"{tag} B", NewPhone(), zone.Id)));
         var c = IdOf(await CreateAsync(owner, Profile($"{tag} C", NewPhone(), (await factory.AddZoneAsync(NewCode())).Id)));
         await EndAsync(owner, b);

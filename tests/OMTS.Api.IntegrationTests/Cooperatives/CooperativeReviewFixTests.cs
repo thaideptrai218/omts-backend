@@ -89,7 +89,7 @@ public class CooperativeReviewFixTests
     {
         using var api = new AuthApiFactory();
         var (owner, zone, role) = await SetupAsync(api);
-        var body = Profile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
+        var body = StaffProfile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
         {
             username = $"u{NewCode()}",
             grants = new[] { new { zoneId = zone.Id, roleId = role.Id }, new { zoneId = zone.Id, roleId = role.Id } },

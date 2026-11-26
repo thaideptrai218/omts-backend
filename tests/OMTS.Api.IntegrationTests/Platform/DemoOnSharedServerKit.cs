@@ -20,7 +20,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 internal static class DemoOnSharedServerKit
 {
     private static readonly string[] DemoAccounts =
-        ["ketoan", "nhanvien.chuaxacthuc", "nhanvien.doimk", "nhanvien.hethan", "nhanvien1", "nhanvien2", "nv000007", "nv000008", "owner", "quanlyvung1", "quanlyvung2", "thuonglai1", "thuonglai2"];
+        ["ketoan", "nhanvien.chuaxacthuc", "nhanvien.doimk", "nhanvien.hethan", "nhanvien1", "nhanvien2", "owner", "quanlyvung1", "quanlyvung2", "thuonglai1", "thuonglai2"];
 
     public static WebApplicationFactory<Program> Host(AuthApiFactory factory, string environment, string flag, string? password) =>
         BootstrapTests.WithSecrets(factory).WithWebHostBuilder(b =>

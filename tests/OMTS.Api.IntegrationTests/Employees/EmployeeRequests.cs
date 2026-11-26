@@ -28,7 +28,7 @@ internal static class EmployeeRequests
         return await factory.LoginAsync(account.Username);
     }
 
-    /// <summary>A valid profile of a seasonal worker (no fixed working zone, a login account of their own when there is a phone number); <paramref name="change"/> overrides single fields.</summary>
+    /// <summary>A valid profile of a seasonal worker (no fixed working zone and no login account); <paramref name="change"/> overrides single fields.</summary>
     public static Dictionary<string, object?> Profile(string name, string? phone, Guid? zoneId = null, Action<Dictionary<string, object?>>? change = null)
     {
         var body = new Dictionary<string, object?>

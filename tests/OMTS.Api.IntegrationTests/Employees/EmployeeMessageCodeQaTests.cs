@@ -38,9 +38,9 @@ public class EmployeeMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<
         var (owner, zone, role) = await SetupAsync(factory);
         var taken = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
 
-        var username = await (await owner.PostAsJsonAsync("/api/employees", Profile($"A {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(taken.Username, zone, role))))
+        var username = await (await owner.PostAsJsonAsync("/api/employees", StaffProfile($"A {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(taken.Username, zone, role))))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-ACCOUNT-09", "MSG03");
-        var phone = await (await owner.PostAsJsonAsync("/api/employees", Profile($"B {NewCode()}", taken.PhoneNumber, zone.Id, b => b["account"] = AccountBlock($"nv{NewCode()}", zone, role))))
+        var phone = await (await owner.PostAsJsonAsync("/api/employees", StaffProfile($"B {NewCode()}", taken.PhoneNumber, zone.Id, b => b["account"] = AccountBlock($"nv{NewCode()}", zone, role))))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-ACCOUNT-09", "MSG03");
 
         Assert.Equal("Username", username.Str("field"));

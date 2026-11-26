@@ -43,9 +43,6 @@ public interface IEmployeeRepository
 
     void Add(Employee employee);
 
-    /// <summary>Whether the account is linked to an employee whose type in force on <paramref name="day"/> is Seasonal worker.</summary>
-    Task<bool> IsSeasonalWorkerAccountAsync(Guid accountId, DateOnly day, CancellationToken cancellationToken);
-
     void AddWorkingZone(EmployeeWorkingZone workingZone);
 
     void RemoveWorkingZone(EmployeeWorkingZone workingZone);

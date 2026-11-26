@@ -18,12 +18,20 @@ public sealed record CreateStaffAccountRequest(
     string? Email,
     Guid? EmployeeId,
     IReadOnlyList<GrantDraft>? Grants = null,
-    SubjectType? SubjectType = null);
+    SubjectType? SubjectType = null,
+    string? Note = null);
 
-public sealed record UpdateStaffAccountRequest(string DisplayName, string Username, string PhoneNumber, string? Email, string? RowVersion);
+/// <param name="Note">The whole form is sent: null or blank clears the note.</param>
+public sealed record UpdateStaffAccountRequest(string DisplayName, string Username, string PhoneNumber, string? Email, string? RowVersion, string? Note = null);
+
+/// <param name="Reason">Required (max 1000).</param>
+/// <param name="RowVersion">The <c>rowVersion</c> of the account as the screen read it; optional, a stale one is MSG06 409.</param>
+public sealed record DeleteAccountRequest(string? Reason, string? RowVersion = null);
 
 public sealed record ReasonRequest(string? Reason);
 
+/// <param name="Note">The Owner's free note ("Ghi chú").</param>
+/// <param name="Deleted">True after "Xóa người dùng" (status Deleted); only listed with <c>includeDeleted</c>.</param>
 /// <param name="Pairs">The Effective zone–role pairs of the account (ACCOUNT-09 step 1); revoked ones are in FARM-05.</param>
 public sealed record StaffAccountView(
     Guid Id,
@@ -37,7 +45,9 @@ public sealed record StaffAccountView(
     bool MustChangePassword,
     Guid? EmployeeId,
     IReadOnlyList<StaffAccountPairView> Pairs,
-    string RowVersion);
+    string RowVersion,
+    string? Note = null,
+    bool Deleted = false);
 
 /// <summary>An Effective zone–role pair in the staff accounts list.</summary>
 /// <param name="Role">Code of the fixed role: ZONE_MANAGER or ACCOUNTANT.</param>
@@ -45,9 +55,7 @@ public sealed record StaffAccountPairView(Guid Id, Guid? ZoneId, string? ZoneNam
 
 /// <summary>Returned once, never stored in clear, never sent by SMS or email (ACCOUNT-09, BR-ACCOUNT-06).</summary>
 /// <param name="MessageCode">MSG-ACCOUNT-23, which clients fill in with the username, this password and its expiry.</param>
-/// <param name="TemporaryPasswordExpiresAt">24 hours after issue; null for the fixed initial password of a seasonal worker, which does not expire.</param>
-/// <param name="FixedPassword">True for the fixed initial password of a seasonal worker's account (the same for every seasonal worker); it must still be changed at the first login.</param>
-public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset? TemporaryPasswordExpiresAt, string MessageCode, bool FixedPassword = false);
+public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset TemporaryPasswordExpiresAt, string MessageCode);
 
 public sealed record Paged<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 

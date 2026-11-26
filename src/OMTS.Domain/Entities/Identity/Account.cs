@@ -39,6 +39,9 @@ public class Account : AuditableEntity, IHasStatus
 
     public DateTimeOffset? LastLoginAt { get; set; }
 
+    /// <summary>Free note of the Owner on the account ("Ghi chú", max 500); not shown to the account holder.</summary>
+    public string? Note { get; set; }
+
     /// <summary>
     /// Zalo user id of the Zalo Mini App user who linked this account by their Zalo phone number; unique.
     /// The id is unique per Zalo App, so changing the Zalo App unlinks everyone.

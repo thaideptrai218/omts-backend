@@ -2,14 +2,13 @@ using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
-using OMTS.Application.Common.Validation;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Employees;
 
-/// <summary>Owner decision of 25/11/2026: a seasonal worker has no fixed zone and a login with the fixed initial password; a Staff employee keeps fixed zones and a random one-time password.</summary>
+/// <summary>Owner decision of 25/11/2026: a seasonal worker has no fixed zone (and, decision of 26/11/2026, no login account); a Staff employee keeps fixed zones and a random one-time password.</summary>
 public class SeasonalWorkerRulesTests
 {
     private static readonly DateOnly Today = new(2026, 11, 25);
@@ -73,15 +72,6 @@ public class SeasonalWorkerRulesTests
 
         Assert.True(viewer.Sees(WithType(EmployeeType.SeasonalWorker)));
         Assert.False(viewer.Maintains(WithType(EmployeeType.SeasonalWorker)));
-    }
-
-    [Fact]
-    public void The_fixed_initial_password_meets_the_password_policy_and_the_usernames_are_valid()
-    {
-        Assert.Equal("OMTS@1234", SeasonalWorkerAccounts.InitialPassword);
-        Assert.True(PasswordPolicy.IsValid(SeasonalWorkerAccounts.InitialPassword));
-        Assert.Equal(["nv000012", "tv0912345678"], SeasonalAccountProvisioner.Suggestions("NV000012", "0912345678"));
-        Assert.Equal(["tv0912345678"], SeasonalAccountProvisioner.Suggestions(null, "0912345678"));
     }
 
     [Fact]

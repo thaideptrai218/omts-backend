@@ -23,6 +23,9 @@ public static class StatusIds
 
         /// <summary>The Cooperative Owner refused the request; the person may ask again.</summary>
         public const int Rejected = 304;
+
+        /// <summary>"Xóa người dùng": the Owner removed the account; it keeps its row (so history still shows the name) but is hidden from lists and can never log in.</summary>
+        public const int Deleted = 305;
     }
 
     public static class Employee

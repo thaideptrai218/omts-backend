@@ -174,7 +174,7 @@ public class EmployeeRaceSqlServerTests
         var username = $"nv{NewCode()}";
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(i =>
-            owner.PostAsJsonAsync("/api/employees", Profile($"Account {i} {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new { username }))));
+            owner.PostAsJsonAsync("/api/employees", StaffProfile($"Account {i} {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new { username }))));
 
         await AssertOneWinnerAsync(responses, HttpStatusCode.Created);
         Assert.Equal(1, await QueryAsync(api, db => db.Accounts.CountAsync(a => a.Username == username && a.SubjectType == SubjectType.Staff)));

@@ -139,11 +139,11 @@ public class AccountRulesSqlServerTests
         var zone = await AddZoneAsync(database);
 
         blind.Remaining = 2;
-        var createWithAccount = await client.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile(
+        var createWithAccount = await client.PostAsJsonAsync("/api/employees", EmployeeRequests.StaffProfile(
             $"Nhân viên {NewCode()}", NewPhone(), zone, body => body["account"] = new { username = taken.Username }));
         await AssertUsedByAnotherAsync(createWithAccount, "Username", taken.Id);
 
-        var employee = await EmployeeRequests.CreateAsync(client, EmployeeRequests.Profile($"Nhân viên {NewCode()}", NewPhone(), zone));
+        var employee = await EmployeeRequests.CreateAsync(client, EmployeeRequests.StaffProfile($"Nhân viên {NewCode()}", NewPhone(), zone));
         blind.Remaining = 2;
         var addAccount = await client.PostAsJsonAsync($"/api/employees/{employee.GetProperty("employee").GetProperty("id").GetGuid()}/account", new { username = taken.Username });
         await AssertUsedByAnotherAsync(addAccount, "Username", taken.Id);
@@ -242,8 +242,8 @@ public class AccountRulesSqlServerTests
         public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
             blind.Blind() ? Task.FromResult<Account?>(null) : inner.FindByEmailAsync(email, cancellationToken);
 
-        public Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false) =>
-            inner.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly);
+        public Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false, bool includeDeleted = false) =>
+            inner.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly, includeDeleted);
 
         public Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) => inner.ListActiveOwnerIdsAsync(cancellationToken);
 

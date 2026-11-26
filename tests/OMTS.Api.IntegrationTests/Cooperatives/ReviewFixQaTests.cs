@@ -125,7 +125,7 @@ public class ReviewFixQaTests
         var (owner, zone, _) = await SetupAsync(api);
         var username = $"qa{NewCode()}";
 
-        var response = await owner.PostAsJsonAsync("/api/employees", Profile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
+        var response = await owner.PostAsJsonAsync("/api/employees", StaffProfile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
         {
             username,
             subjectType,
@@ -148,7 +148,7 @@ public class ReviewFixQaTests
         var (owner, zone, role) = await SetupAsync(api);
         var username = $"qa{NewCode()}";
 
-        var response = await owner.PostAsJsonAsync("/api/employees", Profile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
+        var response = await owner.PostAsJsonAsync("/api/employees", StaffProfile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
         {
             username,
             subjectType = "Staff",

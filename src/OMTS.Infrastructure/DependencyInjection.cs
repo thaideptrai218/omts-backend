@@ -217,7 +217,6 @@ public static class DependencyInjection
         services.AddSingleton<IReportDocumentRenderer, ReportDocumentPdfRenderer>();
 
         services.AddScoped<AddressCodeBackfill>();
-        services.AddScoped<SeasonalAccountBackfill>();
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
 

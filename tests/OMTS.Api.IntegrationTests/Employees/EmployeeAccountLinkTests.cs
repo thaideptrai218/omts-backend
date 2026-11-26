@@ -25,7 +25,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var (owner, zone, role) = await SetupAsync(factory);
         var (name, phone, username) = ($"Đỗ Thị {NewCode()}", NewPhone(), $"nv{NewCode()}");
 
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role)));
+        var saved = await CreateAsync(owner, StaffProfile(name, phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role)));
         var id = IdOf(saved);
         var reread = await owner.GetAsync($"/api/employees/{id}");
         var account = await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Username == username));
@@ -72,7 +72,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var manager = await ManagerAsync(factory, zone);
         var (name, username) = ($"By manager {NewCode()}", $"nv{NewCode()}");
 
-        var refused = await manager.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["account"] = AccountBlock(username, zone, role); }));
+        var refused = await manager.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["account"] = AccountBlock(username, zone, role); }));
 
         Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.Employees.AnyAsync(e => e.FullName == name)));

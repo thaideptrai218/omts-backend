@@ -136,12 +136,10 @@ public sealed record EmployeeListItem(
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="TemporaryPassword">Only when a login account was created in the same save; shown once.</param>
 /// <param name="AccountMessageCode">MSG-ACCOUNT-23 with <paramref name="TemporaryPassword"/>: the client fills it in, as for a staff account.</param>
-/// <param name="FixedPassword">True when <paramref name="TemporaryPassword"/> is the fixed initial password of a seasonal worker account (the same for all of them, never expires, still changed at the first login).</param>
-/// <param name="AccountNote">Why a seasonal worker was saved without the login account every one of them has: the message code of the refusal (MSG-ACCOUNT-09: the phone number or username is another account); null otherwise.</param>
 /// <param name="DuplicateIdNumber">Another employee holds the same ID number (CCCD): the profile is saved all the same and the client shows this warning (L16). Null when there is none.</param>
 public sealed record EmployeeSaved(
     EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null, string? AccountMessageCode = null,
-    EmployeeIdNumberWarning? DuplicateIdNumber = null, bool FixedPassword = false, string? AccountNote = null);
+    EmployeeIdNumberWarning? DuplicateIdNumber = null);
 
 /// <summary>The other employee with the same ID number; <c>Message</c> is the Vietnamese warning.</summary>
 public sealed record EmployeeIdNumberWarning(Guid EmployeeId, string? Code, string FullName, string Message);
