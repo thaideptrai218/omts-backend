@@ -51,7 +51,7 @@ public class HarvestLotForm
     /// </summary>
     public string? LanePercents { get; set; }
 
-    /// <summary>One part per photo, 1 to 3 when recording and for a lot that has photos: JPEG or PNG, at most 10 MB each.</summary>
+    /// <summary>One part per photo, 0 to 3 (optional): JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 }
 

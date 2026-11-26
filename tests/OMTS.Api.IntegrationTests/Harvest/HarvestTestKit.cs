@@ -133,7 +133,7 @@ public static class HarvestTestKit
     private static async Task<(HttpResponseMessage Answer, JsonElement? Finished)> PostAndFinishAsync(HttpClient client, Guid raftId, HarvestFields? fields)
     {
         fields ??= new HarvestFields();
-        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): a test that sends none gets one, unless it asks to see the refusal (<see cref="HarvestFields.NoPhoto"/>).
+        // Photos are optional (owner decision of 26/11/2026): a test that sends none gets one for convenience, unless it asks for a lot without (<see cref="HarvestFields.NoPhoto"/>).
         if (fields.Photos.Count == 0 && !fields.NoPhoto)
         {
             fields = fields with { Photos = [FarmingTestKit.Jpeg] };

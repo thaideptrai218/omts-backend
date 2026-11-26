@@ -32,7 +32,7 @@ public sealed class HarvestLotsController(
 
     /// <summary>
     /// Records a harvest trip while the raft has an Open cycle. Multipart: one <c>laneNumbers</c> field per lane, one <c>finishedLaneNumbers</c> field per finished lane, <c>cageCount</c>,
-    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (1 to 3). The share of each product is sent as <c>productLines[i].productId</c>, <c>productLines[i].cageCount</c> and
+    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (0 to 3, optional). The share of each product is sent as <c>productLines[i].productId</c>, <c>productLines[i].cageCount</c> and
     /// optional <c>productLines[i].kg</c> (i from 0, no gap): the lot's cages and kg are then the sums of the lines (<c>cageCount</c> and <c>estimatedKg</c> are ignored) and each line adds its kg to the
     /// stock of its product. <c>harvestPlanLineId</c> records the lot from a line of a harvest plan (KHT): the lanes are then those of the line without the lanes left out (<c>laneNumbers</c> is ignored), the lot
     /// carries the plan, and the plan moves on (409 MSG-PLAN-03 when the line already has its lot). A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner

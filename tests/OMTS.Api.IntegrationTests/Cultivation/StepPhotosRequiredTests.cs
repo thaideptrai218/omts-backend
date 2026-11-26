@@ -69,22 +69,22 @@ public class StepPhotosRequiredTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task A_harvest_lot_needs_1_to_3_photos_and_an_older_lot_without_photos_can_be_read_and_corrected()
+    public async Task A_harvest_lot_takes_0_to_3_photos_and_a_lot_without_photos_can_be_read_and_corrected()
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
 
-        var none = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { NoPhoto = true })).ReadAsync(HttpStatusCode.BadRequest);
         var four = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [FarmingTestKit.Jpeg, FarmingTestKit.Jpeg, FarmingTestKit.Jpeg, FarmingTestKit.Jpeg] })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Photos", "Photos"), (none.Text("field"), four.Text("field")));
+        Assert.Equal("Photos", four.Text("field"));
         Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
 
         var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = [FarmingTestKit.Jpeg, FarmingTestKit.Jpeg] });
         Assert.Equal(2, PhotoIds(lot).Count);
         Assert.All(lot.GetProperty("photos").EnumerateArray(), p => Assert.False(string.IsNullOrEmpty(p.Text("url"))));
 
-        var emptied = await (await factory.SendCorrectionAsync(owner, lot.Id(), HarvestFields.OfLanes(1), keep: [])).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Photos", emptied.Text("field"));
+        // Photos are optional (owner decision of 26/11/2026): a correction may remove them all.
+        var emptied = await (await factory.SendCorrectionAsync(owner, lot.Id(), HarvestFields.OfLanes(1), keep: [])).ReadAsync(HttpStatusCode.OK);
+        Assert.Empty(PhotoIds(emptied.GetProperty("lot")));
 
         await factory.QueryAsync(async db =>
         {
