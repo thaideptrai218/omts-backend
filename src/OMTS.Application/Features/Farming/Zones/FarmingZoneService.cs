@@ -130,7 +130,7 @@ public sealed class FarmingZoneService(
             return WrongStatus(zone);
         }
 
-        var check = Validate(request, out var values);
+        var check = Validate(request, out var values, ignorePin: zone.BoundaryGeoJson is not null);
         if (!check.IsValid)
         {
             return check.ToError();
@@ -328,13 +328,14 @@ public sealed class FarmingZoneService(
     }
 
     /// <summary>Code and name are required; location, area and the pin are optional and checked when sent (a pin needs both numbers).</summary>
-    internal static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values)
+    /// <param name="ignorePin">The zone has a boundary: the pin sent is discarded, so it is not checked either.</param>
+    internal static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values, bool ignorePin = false)
     {
         var check = new FieldCheck();
         var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
         var location = check.Optional(request.Location, "Location", 500);
-        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: false);
+        var (latitude, longitude) = ignorePin ? (null, null) : check.Coordinates(request.Latitude, request.Longitude, required: false);
         check.Check(request.Area is null or (> 0 and < 100_000_000_000_000m), "Area");
         values = new ZoneValues(code, name, location, latitude, longitude, request.Area);
         return check;

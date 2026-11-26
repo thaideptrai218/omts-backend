@@ -236,8 +236,8 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   caller may read; a zone the caller may not read is 403, an unknown one 404, a caller who reads no raft at all 403), `pageSize`
   at most 100. An item is `{ id, zoneId, code, latitude, longitude, size, laneCount, statusId, status, lengthM, widthM, areaM2,
   damagedLaneCount, outOfServiceLaneCount, currentCycle }`; `currentCycle` is `{ id, startDate }` of the raft's Open cultivation cycle
-  or null, read in the same SQL statement as the page (a left join on the Open cycles, served by the unique index
-  `UX_CultivationCycles_RaftId_Open`; no query per raft). `GET /api/zones/{zoneId}/rafts?statusId` (a plain array by code) has the
+  or null, read in the same SQL statement as the page (a left join on the Open cycles, at most one per raft
+  by `UX_CultivationCycles_RaftId_Open`; no query per raft). `GET /api/zones/{zoneId}/rafts?statusId` (a plain array by code) has the
   same items.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,

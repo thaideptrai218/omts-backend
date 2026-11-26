@@ -27,6 +27,16 @@ public class FarmingZoneSaveValidationTests
     }
 
     [Fact]
+    public void A_zone_with_a_boundary_does_not_check_the_pin_it_discards()
+    {
+        var check = FarmingZoneService.Validate(Request(latitude: 0, longitude: 0), out var values, ignorePin: true);
+
+        Assert.True(check.IsValid);
+        Assert.Null(values.Latitude);
+        Assert.Null(values.Longitude);
+    }
+
+    [Fact]
     public void Code_and_name_stay_required()
     {
         var check = FarmingZoneService.Validate(Request(code: " ", name: null), out _);

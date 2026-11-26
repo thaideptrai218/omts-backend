@@ -56,7 +56,7 @@ public class RaftListTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
         Assert.Equal(["F-STOP", "F-ALPHA"], await CodesAsync($"zoneId={zoneId}"));
         Assert.Equal(["F-ALPHA"], await CodesAsync($"zoneId={zoneId}&statusId={StatusIds.Usage.InUse}"));
-        Assert.Equal(["F-ALPHA"], await CodesAsync($"zoneId={zoneId}&search=alph"));
+        Assert.Equal(["F-ALPHA"], await CodesAsync($"zoneId={zoneId}&search=ALPH"));
         Assert.Contains("F-BETA", await CodesAsync($"search=F-"));
         Assert.Empty(await CodesAsync($"zoneId={otherZoneId}&search=ALPHA"));
     }
