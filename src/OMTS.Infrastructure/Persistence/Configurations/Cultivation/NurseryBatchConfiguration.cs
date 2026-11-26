@@ -17,6 +17,7 @@ internal sealed class NurseryBatchConfiguration : IEntityTypeConfiguration<Nurse
         builder.HasOne(x => x.Issue).WithMany().HasForeignKey(x => x.IssueId);
         builder.ReferencesAccount(nameof(NurseryBatch.CompletedByAccountId));
         builder.ReferencesAccount(nameof(NurseryBatch.ClosedByAccountId));
+        builder.ReferencesAccount(nameof(NurseryBatch.ResponsibleAccountId));
         builder.Property(x => x.QuantityIn).HasPrecision(18, 3);
         builder.Property(x => x.Survivors).HasPrecision(18, 3);
         builder.Property(x => x.CloseLossPieces).HasPrecision(18, 3);

@@ -18,6 +18,7 @@ internal sealed class SeedingRecordConfiguration : IEntityTypeConfiguration<Seed
         builder.HasOne<NurseryBatch>().WithMany().HasForeignKey(x => x.NurseryBatchId);
         builder.HasIndex(x => x.NurseryBatchId);
         builder.ReferencesAccount(nameof(SeedingRecord.RecordedByAccountId));
+        builder.ReferencesAccount(nameof(SeedingRecord.ResponsibleAccountId));
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
         builder.Property(x => x.OverPlanReason).HasMaxLength(1000);
         builder.HasIndex(x => new { x.CycleId, x.SeedingDate });

@@ -34,6 +34,7 @@ public sealed class SeedingRecordCorrectionService(
     LanePercentGuard percents,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
+    ResponsiblePersonService responsiblePeople,
     RecordCrewService crews,
     RecordCrewAssignmentService crewAssignments,
     AuditLogService audit,
@@ -117,6 +118,12 @@ public sealed class SeedingRecordCorrectionService(
             return crewError;
         }
 
+        var (responsible, responsibleError) = await responsiblePeople.ReadAsync(raft.ZoneId, request.ResponsibleAccountId, record.ResponsibleAccountId, cancellationToken);
+        if (responsibleError is not null)
+        {
+            return responsibleError;
+        }
+
         var uploaded = await photoStore.UploadAllAsync(FileCategories.SeedingPhotos, files.Value!, cancellationToken);
         if (!uploaded.IsSuccess)
         {
@@ -141,6 +148,7 @@ public sealed class SeedingRecordCorrectionService(
 
         SeedingRecordRows.Apply(records, record, fields!, shares.Value);
         record.OverPlanReason = overPlanReason ?? record.OverPlanReason;
+        record.ResponsibleAccountId = responsible;
         var crewChange = crew is null ? null : crews.Apply(record.Crew, crew, e => new SeedingRecordEmployee { SeedingRecordId = record.Id, EmployeeId = e.Id, Employee = e });
         var photosChanged = request.ChangesPhotos || uploaded.Value!.Count > 0;
         var removedKeys = photosChanged ? SeedingPhotoRows.Replace(records, record, kept, uploaded.Value!) : [];

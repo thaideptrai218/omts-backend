@@ -30,6 +30,7 @@ public sealed class NurseryBatchEditService(
     UploadedFileSaver fileSaver,
     NurseryBatchViews views,
     NurseryNotifier notifier,
+    ResponsiblePersonService responsiblePeople,
     RecordCrewService crews,
     RecordCrewAssignmentService crewAssignments,
     ZoneAccessGuard zoneAccess,
@@ -67,6 +68,12 @@ public sealed class NurseryBatchEditService(
             return crewError;
         }
 
+        var (responsible, responsibleError) = await responsiblePeople.ReadAsync(batch.ZoneId, request.ResponsibleAccountId, batch.ResponsibleAccountId, cancellationToken);
+        if (responsibleError is not null)
+        {
+            return responsibleError;
+        }
+
         var keep = (request.KeepPhotoIds ?? []).ToHashSet();
         var kept = request.ReplacePhotos ? batch.Photos.Where(p => p.Phase == NurseryPhotoPhase.Start && keep.Contains(p.Id)).ToList() : batch.Photos.Where(p => p.Phase == NurseryPhotoPhase.Start).ToList();
         var files = StepPhotoService.Read(request.ReplacePhotos ? newPhotos : [], kept.Count, request.OtherFilePart, kept.Count == keep.Count || !request.ReplacePhotos);
@@ -92,7 +99,7 @@ public sealed class NurseryBatchEditService(
         {
             var before = NurseryValues.Snapshot(batch);
             var stockChanged = quantity != batch.QuantityIn || start != batch.StartDate;
-            (batch.QuantityIn, batch.StartDate, batch.Note) = (quantity, start, note);
+            (batch.QuantityIn, batch.StartDate, batch.Note, batch.ResponsibleAccountId) = (quantity, start, note, responsible);
             if (request.ReplacePhotos)
             {
                 removed.AddRange(NurseryPhotoRows.Replace(nurseries, batch, NurseryPhotoPhase.Start, kept, uploaded.Value!));

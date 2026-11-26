@@ -4,6 +4,7 @@ using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Cultivation;
 using OMTS.Application.Features.Cultivation.Nursery;
 
 namespace OMTS.Api.Controllers;
@@ -15,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Authorize]
 public sealed class NurseryBatchesController(
-    NurseryReadService reads, NurseryBatchService batches, NurseryBatchEditService edits, NurseryCompletionService completions) : ControllerBase
+    NurseryReadService reads, NurseryBatchService batches, NurseryBatchEditService edits, NurseryCompletionService completions, ResponsiblePersonService responsible) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -33,6 +34,12 @@ public sealed class NurseryBatchesController(
     [ProducesResponseType<AvailableNurseryList>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Available([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
         (await reads.AvailableAsync(zoneId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Who can be named "Người phụ trách" on a nursery batch or a seeding session of the zone: the caller, and for the Owner the zone's managers.</summary>
+    [HttpGet("api/zones/{zoneId:guid}/responsible-people")]
+    [ProducesResponseType<IReadOnlyList<ResponsibleOption>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ResponsiblePeople(Guid zoneId, CancellationToken cancellationToken) =>
+        (await responsible.OptionsAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
     [HttpGet("api/nursery-batches")]
     [ProducesResponseType<NurseryBatchPage>(StatusCodes.Status200OK)]

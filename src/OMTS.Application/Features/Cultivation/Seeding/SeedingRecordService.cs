@@ -34,6 +34,7 @@ public sealed class SeedingRecordService(
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     ZoneAccessGuard zoneAccess,
+    ResponsiblePersonService responsiblePeople,
     RecordCrewService crews,
     RecordCrewAssignmentService crewAssignments,
     AuditLogService audit,
@@ -86,6 +87,12 @@ public sealed class SeedingRecordService(
             return crewError;
         }
 
+        var (responsible, responsibleError) = await responsiblePeople.ReadAsync(cycle.Raft.ZoneId, request.ResponsibleAccountId ?? currentUser.AccountId, null, cancellationToken);
+        if (responsibleError is not null)
+        {
+            return responsibleError;
+        }
+
         var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: photosRequired ? StepPhotoService.MinPhotos : 0);
         if (!files.IsSuccess)
         {
@@ -122,6 +129,7 @@ public sealed class SeedingRecordService(
             NurseryBatchId = cycle.NurseryBatchId,
             OverPlanReason = overPlanReason,
             RecordedByAccountId = recorder,
+            ResponsibleAccountId = responsible,
             Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l, SeededPercent = shares.Value![l.Id] }).ToList(),
         };
 

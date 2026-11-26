@@ -42,6 +42,9 @@ public sealed class SeedingRecordForm
     /// <summary>Send true to make the crew exactly the <c>crew</c> fields, none meaning an empty crew: a form cannot send an empty list, so this is how a crew is cleared.</summary>
     public bool ReplaceCrew { get; set; }
 
+    /// <summary>"Người phụ trách": an account id from `responsible-people`. Left out: unchanged when editing, nobody on a new record.</summary>
+    public Guid? ResponsibleAccountId { get; set; }
+
     /// <summary>One part per photo, 1 to 3: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 
@@ -49,7 +52,7 @@ public sealed class SeedingRecordForm
     {
         var (numbers, quantity, lot, percents, unreadable) = Read();
         var crew = FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable);
-        return new RecordSeedingRequest(Date(SeedingDate), lot, numbers, quantity, ConfirmOverPlan, OverPlanReason, percents, unreadable, otherFilePart, crew, crewUnreadable);
+        return new RecordSeedingRequest(Date(SeedingDate), lot, numbers, quantity, ConfirmOverPlan, OverPlanReason, percents, unreadable, otherFilePart, crew, crewUnreadable, ResponsibleAccountId);
     }
 
     public CorrectSeedingRequest ToCorrect(bool otherFilePart)
@@ -58,7 +61,7 @@ public sealed class SeedingRecordForm
         var keep = KeepPhotoIds?.Select(k => Guid.TryParse(k, out var id) ? id : Guid.Empty).ToList();
         return new CorrectSeedingRequest(
             Date(SeedingDate), lot, numbers, quantity, Reason, RowVersion, ConfirmOverPlan, OverPlanReason, percents, unreadable, otherFilePart,
-            keep is not null || Photos is { Count: > 0 }, keep, FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable), crewUnreadable);
+            keep is not null || Photos is { Count: > 0 }, keep, FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable), crewUnreadable, ResponsibleAccountId);
     }
 
     private (List<int>? Lanes, decimal? Quantity, Guid? Lot, Dictionary<int, decimal>? Percents, bool Unreadable) Read()

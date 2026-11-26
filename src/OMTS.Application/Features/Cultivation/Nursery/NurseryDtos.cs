@@ -12,7 +12,7 @@ namespace OMTS.Application.Features.Cultivation.Nursery;
 /// <param name="Crew">The employees who worked on the batch (decision of 17/11/2026), optional: null when none was sent (an edit then leaves the crew as it is); an empty list clears it.</param>
 /// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record StartNurseryRequest(Guid? SeedLotId, decimal? Quantity, DateOnly? StartDate, string? Note, bool OtherFilePart = false,
-    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false, Guid? ResponsibleAccountId = null);
 
 /// <summary>
 /// NURSERY-02 edit while Nursing: a field left out stays as it is; a note sent empty is cleared. The photos change only when <paramref name="ReplacePhotos"/> is true (the form sent
@@ -20,7 +20,7 @@ public sealed record StartNurseryRequest(Guid? SeedLotId, decimal? Quantity, Dat
 /// </summary>
 public sealed record EditNurseryRequest(
     decimal? Quantity, DateOnly? StartDate, string? Note, string? RowVersion, bool ReplacePhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null, bool OtherFilePart = false,
-    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false, Guid? ResponsibleAccountId = null);
 
 /// <summary>NURSERY-02 cancel while Nursing: the reason is required and the pieces go back in the stock.</summary>
 public sealed record CancelNurseryRequest(string? Reason, string? RowVersion);
@@ -73,7 +73,7 @@ public sealed record NurseryBatchView(
     decimal? Seeded = null, decimal? Remaining = null, DateOnly? ClosedOn = null, decimal? CloseLossPieces = null, string? CloseReason = null, bool CanClose = false,
     IReadOnlyList<NurseryUsageView>? Usage = null,
     Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null,
-    IReadOnlyList<CrewMemberView>? Crew = null);
+    IReadOnlyList<CrewMemberView>? Crew = null, Guid? ResponsibleAccountId = null, string? ResponsibleName = null);
 
 /// <param name="Message">MSG-GEN-05 "Nursery batch saved.".</param>
 /// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>

@@ -98,7 +98,9 @@ public sealed class SeedingViews(
             record.OverPlanReason,
             photos,
             record.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new SeedingLanePercentView(l.Lane.LaneNumber, l.SeededPercent)).ToList(),
-            await crewAttendance.ViewAsync(record.Crew, record.SeedingDate, cancellationToken));
+            await crewAttendance.ViewAsync(record.Crew, record.SeedingDate, cancellationToken),
+            record.ResponsibleAccountId,
+            record.ResponsibleAccountId is { } responsible ? (await accounts.GetDisplayNamesAsync([responsible], cancellationToken)).GetValueOrDefault(responsible) : null);
     }
 
     /// <summary>MSG-GEN-05 "Seeding session saved.", and the offer to mark the seeding complete when no lane is left Not seeded (CYCLE-02.0 step 7).</summary>
