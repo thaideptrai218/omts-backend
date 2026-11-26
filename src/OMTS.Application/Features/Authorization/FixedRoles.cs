@@ -28,6 +28,7 @@ public static class FixedRoles
 {
     public const string ZoneManagerCode = "ZONE_MANAGER";
     public const string AccountantCode = "ACCOUNTANT";
+    public const string EmployeeCode = "EMPLOYEE";
 
     /// <summary>
     /// Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce. Selling is not the Zone Manager's
@@ -40,7 +41,9 @@ public static class FixedRoles
         "Field work in the assigned zones: cultivation, water, harvest, provenance, purchasing of seed and inputs, and workforce (work assignment and attendance of the zone). Selling is the Owner's.",
         [
             Full(CultivationCycles), Full(CultivationLogs), Full(WaterMeasurements), Full(Harvests), Full(HarvestLots),
-            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts), Full(Suppliers),
+            Full(LotTracing), Full(Provenance), Full(PurchaseReceipts),
+            // Owner decision of 25/11/2026, corrected 26/11/2026: the Zone Manager holds PURCHASE_RECEIPTS in full in every zone (shared warehouse, no zone limit) but only reads the suppliers (master data is the Owner's) and does not pay them (the Accountant's).
+            new(Suppliers, [View]),
             // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
             new(LaborWorkers, [View, Create, Edit]),
             Full(WorkAssignments), Full(Attendance),
@@ -55,15 +58,18 @@ public static class FixedRoles
         StaffRole.Accountant,
         AccountantCode,
         "Accountant",
-        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll (view and export) and sales reports; usually granted at All zones.",
+        "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll, suppliers, purchase receipts, input issues and sales reports, and a view of the farming records; usually granted at All zones.",
         [
             Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(SalesReports), Full(CashBookOperations), Full(CashBookSettings),
-            // Payroll is the Owner's to prepare, finalize and pay (PAY-01); the Accountant reads and exports the sheets, payslips, payments and labour costs to reconcile the cash book (decision of 19/11/2026, Q2).
-            new(Payroll, [View, Export]),
+            // Owner decision of 26/11/2026 (reversing 19/11, Q2): the Accountant prepares and edits payroll sheets and pays wages (View, Create, Edit, Export). Finalizing and cancelling a sheet stay the Owner's.
+            new(Payroll, [View, Create, Edit, Export]),
+            // Owner decision of 26/11/2026 (tester round 1, BUG-74): the Accountant reads the farming records of every zone it is granted (zones, rafts, cycles, logs, harvests, water) but never works them.
+            new(CultivationCycles, [View]), new(CultivationLogs, [View]), new(WaterMeasurements, [View]), new(Harvests, [View]), new(HarvestLots, [View]),
+            // The accounting side of purchasing is the Accountant's in full: suppliers, receipts and input issues (owner decision of 26/11/2026).
+            Full(PurchaseReceipts), Full(Suppliers), Full(InputIssues),
             // The employee list is read to match a payslip or a wage voucher to a person; no personal or bank data (it is shown only to those who maintain the employee) and no editing.
             new(LaborWorkers, [View]),
-            // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
-            new(InputIssues, [View, Export]),
+            // Input issues are the Accountant's in full (above); input item disposals stay with it as before.
             Full(InputDisposals),
             // The Accountant views and exports the product disposals of every zone it is granted; recording one is the Zone Manager's or the Owner's.
             new(ProductDisposals, [View, Export]),
@@ -71,24 +77,31 @@ public static class FixedRoles
             new(SalesOrders, [View, Export]),
             // SALE-09: the Accountant also prints and exports the invoice list and one invoice (PM answer 12/11/2026, OMTS-224 [5.1]); creating, correcting and cancelling stay with the Zone Manager and the Owner.
             new(SalesInvoices, [View, Export]),
-            // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
-            new(PurchaseReceipts, [View, Export]),
             // TRACE-02 is R for the Accountant: the trace result is viewed, not exported (TRACE-02.2 is the Zone Manager's).
             new(LotTracing, [View]),
             // Customers are looked up, added and kept up to date by the Accountant too (the customer screen holds their debts and payments); no delete.
             new(Customers, [View, Create, Edit, Export]),
-            // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05) and the Accountant may export the list it
-            // already sees. §I.4.4 shows PURCHASE-07 as No; this deviation was confirmed by the user.
-            new(Suppliers, [View, Export]),
         ]);
 
-    public static readonly IReadOnlyList<FixedRole> All = [ZoneManager, Accountant];
+    /// <summary>
+    /// The field employee (owner decision of 25/11/2026): every seasonal worker gets a login account holding this role at All zones. It opens no
+    /// business function of the matrix (an employee is not zone-bound and sees only the own work, which is read with the employee app token);
+    /// the pair exists so that the account may sign in (a staff account without an Effective pair cannot, MSG-ACCOUNT-07).
+    /// </summary>
+    public static readonly FixedRole Employee = new(
+        StaffRole.Employee,
+        EmployeeCode,
+        "Employee",
+        "A field employee (seasonal worker): signs in and works on the own assignments, attendance and requests; holds no function of the staff matrix.",
+        []);
+
+    public static readonly IReadOnlyList<FixedRole> All = [ZoneManager, Accountant, Employee];
 
     /// <summary>
     /// The codes of the fixed roles. A role row with any other code (an Owner-made role kept by the FixedRoles migration
     /// with a placeholder code) is not a role: its pairs give no access, no login and no zone (persistence filters on this).
     /// </summary>
-    public static readonly IReadOnlyList<string> Codes = [ZoneManagerCode, AccountantCode];
+    public static readonly IReadOnlyList<string> Codes = [ZoneManagerCode, AccountantCode, EmployeeCode];
 
     public static FixedRole Of(StaffRole role) => All.Single(r => r.Role == role);
 

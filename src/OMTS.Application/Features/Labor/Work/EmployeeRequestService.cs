@@ -366,7 +366,8 @@ public sealed class EmployeeRequestService(
             }
         }
 
-        return false;
+        // No working zone (a seasonal worker has no fixed one): any holder of ATTENDANCE Edit in some zone may review.
+        return employee is { WorkingZones.Count: 0 } && !(await zones.PermittedZonesAsync(PermissionFunctions.Attendance, PermissionAction.Edit, cancellationToken)).IsEmpty;
     }
 
     /// <summary>The first day of the range that a Finalized payroll holds (BR-LABOR-08), or null.</summary>

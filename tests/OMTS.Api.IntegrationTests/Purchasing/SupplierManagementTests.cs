@@ -206,16 +206,13 @@ public class SupplierManagementTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task The_export_of_a_zone_manager_has_no_debt_column_and_the_accountant_may_export()
+    public async Task A_zone_manager_does_not_export_suppliers_and_the_accountant_does()
     {
         var world = await factory.WorldAsync();
         var manager = await factory.ZoneManagerAsync(world.Zone);
 
-        var file = await (await manager.GetAsync($"{Url}/export")).Content.ReadAsByteArrayAsync();
-        using var workbook = new XLWorkbook(new MemoryStream(file));
-        var headers = workbook.Worksheets.First().Row(1).CellsUsed().Select(c => c.GetString()).ToList();
-        Assert.Contains("Total purchased", headers);
-        Assert.DoesNotContain("Current debt", headers);
+        // Exporting the supplier list is the Owner's and the Accountant's (decision of 25/11/2026).
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync($"{Url}/export")).StatusCode);
 
         var accountant = await factory.AccountantAsync();
         Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync($"{Url}/export")).StatusCode);

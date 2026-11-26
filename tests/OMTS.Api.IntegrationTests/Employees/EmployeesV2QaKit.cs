@@ -30,7 +30,7 @@ internal static class EmployeesV2QaKit
     }
 
     public static Dictionary<string, object?> FullProfile(string name, string? phone, params FarmingZone[] zones) =>
-        Profile(name, phone, zones[0].Id, b =>
+        StaffProfile(name, phone, zones[0].Id, b =>
         {
             b["workingZoneIds"] = zones.Select(z => z.Id).ToArray();
             b["address"] = "Riêng tư địa chỉ";

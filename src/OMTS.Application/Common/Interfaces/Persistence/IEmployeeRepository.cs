@@ -43,6 +43,9 @@ public interface IEmployeeRepository
 
     void Add(Employee employee);
 
+    /// <summary>Whether the account is linked to an employee whose type in force on <paramref name="day"/> is Seasonal worker.</summary>
+    Task<bool> IsSeasonalWorkerAccountAsync(Guid accountId, DateOnly day, CancellationToken cancellationToken);
+
     void AddWorkingZone(EmployeeWorkingZone workingZone);
 
     void RemoveWorkingZone(EmployeeWorkingZone workingZone);
@@ -72,6 +75,7 @@ public enum EmployeeSort
 /// <param name="Today">The day the employee type in force is read at.</param>
 /// <param name="Ids">Only these employees (the export of selected rows); the filters above are then left empty by the caller.</param>
 /// <param name="VisibleZoneIds">Only the employees with a working zone among these zones (a caller limited to some zones); null: every employee, an empty collection: none.</param>
+/// <param name="IncludeSeasonal">With <paramref name="VisibleZoneIds"/>: also every seasonal worker, who has no fixed zone.</param>
 public sealed record EmployeeSearchFilter(
     string? Search,
     string? PhoneNumber,
@@ -83,4 +87,5 @@ public sealed record EmployeeSearchFilter(
     EmployeeSort Sort = EmployeeSort.Default,
     bool Descending = false,
     IReadOnlyCollection<Guid>? Ids = null,
-    IReadOnlyCollection<Guid>? VisibleZoneIds = null);
+    IReadOnlyCollection<Guid>? VisibleZoneIds = null,
+    bool IncludeSeasonal = false);

@@ -138,6 +138,13 @@ public static class HarvestPlanTestKit
         return await client.PlanCommandAsync(plan.Id(), "assign");
     }
 
+    /// <summary>A plan assigned with the Owner as executor (owner decision of 25/11/2026): he harvests it himself, with no reception and no hand-over, and no Zone Manager sees it.</summary>
+    public static async Task<JsonElement> OwnerExecutedPlanAsync(this HttpClient owner, object body)
+    {
+        var plan = await owner.CreatePlanAsync(body);
+        return (await (await owner.PostAsJsonAsync($"{PlanRoute}/{plan.Id()}/assign", new { executor = "Owner" })).ReadAsync(HttpStatusCode.OK)).GetProperty("plan");
+    }
+
     /// <summary>An assigned plan that was received too ("Nhận"), pressed by <paramref name="receiver"/> (the Owner when none): lots can be recorded from it.</summary>
     public static async Task<JsonElement> ReceivedPlanAsync(this HttpClient client, object body, HttpClient? receiver = null)
     {

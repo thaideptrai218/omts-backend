@@ -9,9 +9,9 @@ using OMTS.Application.Features.Labor.Payrolls;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// LABOR-12, LABOR-13 and LABOR-14 – payroll sheets, payslips and wage payments. Everything that writes (create, reload, finalize, cancel, pay) is the Cooperative Owner's only, by a
-/// fixed rule on the account (<see cref="RequireCooperativeOwnerAttribute"/>), never by a function permission a role could be given. Reading (lists, sheets, payslips, payments, exports)
-/// is also open to the Accountant, who holds PAYROLL View and Export so it can reconcile (decision of 19/11/2026, Q2); a Zone Manager gets 403 MSG-GEN-08 on all of it.
+/// LABOR-12, LABOR-13 and LABOR-14 – payroll sheets, payslips and wage payments. Finalizing and cancelling a sheet are the Cooperative Owner's only, by a fixed rule on the account
+/// (<see cref="RequireCooperativeOwnerAttribute"/>). Creating and reloading a sheet and paying wages follow PAYROLL Create/Edit, which the Accountant holds with View and Export
+/// (owner decision of 26/11/2026, reversing 19/11 Q2); a Zone Manager gets 403 MSG-GEN-08 on all of it.
 /// Money is whole VND; dates are yyyy-MM-dd.
 /// </summary>
 [ApiController]
@@ -66,14 +66,14 @@ public sealed class PayrollsController(
     /// of the employees, 400 when the period only overlaps one, has no hours, is a Monthly period that is not a whole month, or starts after today.
     /// </summary>
     [HttpPost("payrolls")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<PayrollSheetDetail>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(CreatePayrollRequest request, CancellationToken cancellationToken) =>
         (await payrolls.CreateAsync(request, cancellationToken)).ToActionResult(sheet => StatusCode(StatusCodes.Status201Created, sheet));
 
     /// <summary>Recalculates a Provisional sheet: <c>All</c> the payslips, or <c>WorkingDaysOnly</c> the hours and pay of the payslips it has. 409 otherwise.</summary>
     [HttpPost("payrolls/{id:guid}/reload")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<PayrollSheetDetail>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Reload(Guid id, ReloadPayrollRequest request, CancellationToken cancellationToken) =>
         (await payrolls.ReloadAsync(id, request, cancellationToken)).ToActionResult(Ok);
@@ -97,7 +97,7 @@ public sealed class PayrollsController(
     /// The optional <c>Idempotency-Key</c> header makes a repeated request return the payments already saved.
     /// </summary>
     [HttpPost("payrolls/{id:guid}/payments")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<PayrollPaymentResult>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Pay(
         Guid id, PayPayrollRequest request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken cancellationToken) =>
@@ -115,7 +115,7 @@ public sealed class PayrollsController(
     /// Advance that the next Finalized sheet of the employee deducts. 201 with the id of the first voucher.
     /// </summary>
     [HttpPost("payroll-payments")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<StandalonePaymentResult>(StatusCodes.Status201Created)]
     public async Task<IActionResult> PayEmployee(
         StandalonePayrollPaymentRequest request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken cancellationToken) =>

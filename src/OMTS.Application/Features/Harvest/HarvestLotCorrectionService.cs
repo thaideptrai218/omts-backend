@@ -105,9 +105,8 @@ public sealed class HarvestLotCorrectionService(
 
         var (raft, facts) = await edits.FactsAsync(lot, cancellationToken);
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
-        // A lot that has photos keeps 1 to 3 after the correction (owner decision of 12/11/2026); one recorded before the photos stays valid without.
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(
-            newPhotos, request.OtherFilePart, kept.Count + uploadedCount, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
+        // Harvest photos are optional: 0 to 3 after the correction (owner decision of 26/11/2026).
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count + uploadedCount, kept.Count == keep.Count);
 
         // The product lines replace the lines of the lot, and the cages and kg of the lot are their sums; a lot that has lines is never left without them.
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.

@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();
         services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<SeasonalAccountProvisioner>();
         services.AddScoped<EmployeeCodeAllocator>();
         services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeFileService>();
@@ -348,6 +349,9 @@ public static class DependencyInjection
         services.AddScoped<HarvestPlanHandoverService>();
         services.AddScoped<HarvestPlanNotifier>();
         services.AddScoped<HarvestPlanStaffingService>();
+        services.AddScoped<HarvestPlanRosterService>();
+        services.AddScoped<HarvestPlanMyShiftService>();
+        services.AddScoped<HarvestPlanRosterViews>();
         services.AddScoped<HarvestPlanService>();
         services.AddScoped<HarvestPlanLaneSkipService>();
         services.AddScoped<HarvestPlanReadService>();

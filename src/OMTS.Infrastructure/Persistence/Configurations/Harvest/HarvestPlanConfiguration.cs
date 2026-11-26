@@ -17,6 +17,7 @@ internal sealed class HarvestPlanConfiguration : IEntityTypeConfiguration<Harves
             nameof(HarvestPlan.CreatedByAccountId), nameof(HarvestPlan.AssignedByAccountId), nameof(HarvestPlan.CompletedByAccountId), nameof(HarvestPlan.CancelledByAccountId));
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
+        builder.ToTable(t => t.HasCheckConstraint("CK_HarvestPlan_RequiredPeople", "[RequiredPeople] IS NULL OR [RequiredPeople] BETWEEN 1 AND 500"));
 
         // The list: by status and planned day.
         builder.HasIndex(x => new { x.StatusId, x.PlannedDate });
@@ -64,5 +65,26 @@ internal sealed class SalesOrderHarvestPlanConfiguration : IEntityTypeConfigurat
         builder.HasOne(x => x.Order).WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Plan).WithMany(p => p.Orders).HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.PlanId);
+    }
+}
+
+internal sealed class HarvestPlanStaffMemberConfiguration : IEntityTypeConfiguration<HarvestPlanStaffMember>
+{
+    public void Configure(EntityTypeBuilder<HarvestPlanStaffMember> builder)
+    {
+        builder.ToTable("HarvestPlanStaffMembers", t =>
+        {
+            t.HasCheckConstraint("CK_HarvestPlanStaffMember_State", "[State] IN ('Invited', 'Confirmed', 'ConfirmedManually', 'Declined', 'External')");
+            t.HasCheckConstraint("CK_HarvestPlanStaffMember_ManualReason", "[State] <> 'ConfirmedManually' OR ([Reason] IS NOT NULL AND [ConfirmedByAccountId] IS NOT NULL)");
+        });
+        builder.HasOne(x => x.Plan).WithMany(p => p.Staff).HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+
+        // One row per person per plan; the employee's own list of invitations.
+        builder.HasIndex(x => new { x.PlanId, x.EmployeeId }).IsUnique();
+        builder.HasIndex(x => new { x.EmployeeId, x.State });
+        builder.ReferencesAccount(nameof(HarvestPlanStaffMember.AddedByAccountId), nameof(HarvestPlanStaffMember.ConfirmedByAccountId));
+        builder.Property(x => x.Reason).HasMaxLength(500);
+        builder.Ignore(x => x.CountsAsPresent);
     }
 }

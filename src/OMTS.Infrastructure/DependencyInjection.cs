@@ -168,6 +168,7 @@ public static class DependencyInjection
         services.AddScoped<IProductDisposalRepository, ProductDisposalRepository>();
         services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
         services.AddScoped<IHarvestPlanRepository, HarvestPlanRepository>();
+        services.AddScoped<IHarvestPlanStaffRepository, HarvestPlanStaffRepository>();
         services.AddScoped<IInputStockRepository, InputStockRepository>();
         services.AddScoped<IInputUnitRepository, InputUnitRepository>();
         services.AddScoped<IInputItemCategoryRepository, InputItemCategoryRepository>();
@@ -217,6 +218,7 @@ public static class DependencyInjection
         services.AddSingleton<IReportDocumentRenderer, ReportDocumentPdfRenderer>();
 
         services.AddScoped<AddressCodeBackfill>();
+        services.AddScoped<SeasonalAccountBackfill>();
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
 

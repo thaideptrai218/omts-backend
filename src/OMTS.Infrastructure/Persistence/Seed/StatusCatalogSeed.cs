@@ -20,6 +20,8 @@ internal static class StatusCatalogSeed
         // Not in the SRS table yet: traders asking for an account from the Zalo Mini App (decision of 28/10/2026).
         NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval"),
         NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected"),
+        // Soft delete of a staff account by the Owner (decision of 26/11/2026); final: no way back.
+        NewStatus(S.Account.Deleted, G.Account, "DELETED", "Deleted", final: true),
 
         NewStatus(S.Employee.Working, G.Employee, "WORKING", "Employed"),
         NewStatus(S.Employee.Left, G.Employee, "LEFT", "Left"),

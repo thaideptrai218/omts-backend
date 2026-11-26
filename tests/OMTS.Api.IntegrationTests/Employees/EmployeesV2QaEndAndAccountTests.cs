@@ -102,7 +102,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"States {NewCode()}", NewPhone());
-        var id = IdOf(await CreateAsync(owner, Profile(name, phone, zone.Id)));
+        var id = IdOf(await CreateAsync(owner, SeasonalProfile(name, phone, zone.Id)));
         var other = await factory.AddZoneAsync(NewCode());
         var today = Today();
 
@@ -111,7 +111,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
 
         var left = await EndAsync(owner, id, today.AddDays(-1));
         var version = RowVersionOf(left);
-        var edited = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile("Ignored rename", phone, other.Id, b =>
+        var edited = await (await owner.PutAsJsonAsync($"/api/employees/{id}", SeasonalProfile("Ignored rename", phone, other.Id, b =>
         {
             b["rowVersion"] = version;
             b["employeeType"] = "Staff";
@@ -136,7 +136,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
         await factory.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Staff, a => a.Email = email);
         var (name, username) = ($"Email {NewCode()}", $"nv{NewCode()}");
 
-        var response = await owner.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id).With("account", new { username, email }));
+        var response = await owner.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id).With("account", new { username, email }));
 
         await response.Content.LoadIntoBufferAsync();
         Assert.True(response.StatusCode == HttpStatusCode.Conflict, $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
@@ -151,11 +151,11 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
     {
         var (owner, zone, role) = await SetupAsync(factory);
         var trader = await factory.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Trader);
-        var refused = await owner.PostAsJsonAsync("/api/employees", Profile($"Trader {NewCode()}", trader.PhoneNumber, zone.Id).With("account", new { username = $"nv{NewCode()}" }));
+        var refused = await owner.PostAsJsonAsync("/api/employees", StaffProfile($"Trader {NewCode()}", trader.PhoneNumber, zone.Id).With("account", new { username = $"nv{NewCode()}" }));
         Assert.Equal(("MSG-ACCOUNT-09", "Phone number"), (await refused.ErrorCodeAsync(), await FieldAsync(refused)));
 
         var username = $"nv{NewCode()}";
-        var saved = await CreateAsync(owner, Profile($"Later pair {NewCode()}", NewPhone(), zone.Id).With("account", new { username }));
+        var saved = await CreateAsync(owner, StaffProfile($"Later pair {NewCode()}", NewPhone(), zone.Id).With("account", new { username }));
         var temporary = saved.GetProperty("temporaryPassword").GetString()!;
         Assert.Equal("MSG-ACCOUNT-07", await (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = username, password = temporary })).ErrorCodeAsync());
 
@@ -185,7 +185,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var phone = NewPhone();
-        var id = IdOf(await CreateAsync(owner, Profile($"Link {NewCode()}", phone, zone.Id)));
+        var id = IdOf(await CreateAsync(owner, StaffProfile($"Link {NewCode()}", phone, zone.Id)));
         var username = $"nv{NewCode()}";
 
         var created = await (await owner.PostAsJsonAsync("/api/accounts", new { displayName = "Nhân viên", username, phoneNumber = phone, employeeId = id })).JsonAsync(HttpStatusCode.Created);
@@ -218,8 +218,8 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
         using var host = new AuthApiFactory();
         var (owner, zone, _) = await SetupAsync(host);
         var (name, phone) = ($"Linked {NewCode()}", NewPhone());
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id).With("account", new { username = $"nv{NewCode()}" }));
-        var edited = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, null, zone.Id).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
+        var saved = await CreateAsync(owner, StaffProfile(name, phone, zone.Id).With("account", new { username = $"nv{NewCode()}" }));
+        var edited = await (await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", StaffProfile(name, null, zone.Id).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
         Assert.False(edited.GetProperty("employee").GetProperty("hasStaffAccount").GetBoolean());
         Assert.Equal(JsonValueKind.Object, edited.GetProperty("employee").GetProperty("account").ValueKind);
 
@@ -275,7 +275,7 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
     {
         var (owner, zone, _) = await SetupAsync(factory);
 
-        var saved = await CreateAsync(owner, Profile($"Msg {NewCode()}", NewPhone(), zone.Id).With("account", new { username = $"nv{NewCode()}" }));
+        var saved = await CreateAsync(owner, StaffProfile($"Msg {NewCode()}", NewPhone(), zone.Id).With("account", new { username = $"nv{NewCode()}" }));
 
         Assert.Contains("MSG-ACCOUNT-23", saved.GetRawText());
     }

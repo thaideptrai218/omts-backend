@@ -12,6 +12,7 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
@@ -196,7 +197,7 @@ public sealed class HarvestPlanService(
             // Lines taken out or added can finish the plan, or leave one open; a zone a line was added in is told, as the plan was handed over before it was there.
             progress.Settle(plan, allDoneBefore);
             var brought = HarvestPlanAccess.ZoneIdsOf(plan).Except(zonesBefore).ToList();
-            if (brought.Count > 0)
+            if (brought.Count > 0 && plan.Executor == HarvestPlanExecutor.ZoneManager)
             {
                 await notifier.AssignedAsync(plan, brought, currentUser.AccountId!.Value, cancellationToken);
             }
@@ -235,6 +236,12 @@ public sealed class HarvestPlanService(
             return WrongStatus(plan);
         }
 
+        var executor = request.Executor ?? HarvestPlanExecutor.ZoneManager;
+        if (!Enum.IsDefined(executor))
+        {
+            return AppError.Invalid("Executor");
+        }
+
         if (request.RowVersion is not null && await rowVersions.CheckAsync(plan, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
@@ -262,8 +269,15 @@ public sealed class HarvestPlanService(
         var me = currentUser.AccountId!.Value;
         plan.AssignedAt = timeProvider.GetUtcNow();
         plan.AssignedByAccountId = me;
+        plan.Executor = executor;
         progress.Move(plan, StatusIds.HarvestPlan.Assigned);
-        await notifier.AssignedAsync(plan, HarvestPlanAccess.ZoneIdsOf(plan), me, cancellationToken);
+        audit.Record(new AuditEntry("HarvestPlan.ExecutorSet", RecordType) { RecordId = plan.Id, RecordCode = plan.Code, After = new { Executor = executor.ToString() } });
+        // A plan the Owner harvests himself is not handed to anyone: the Zone Managers are not told and never see it.
+        if (executor == HarvestPlanExecutor.ZoneManager)
+        {
+            await notifier.AssignedAsync(plan, HarvestPlanAccess.ZoneIdsOf(plan), me, cancellationToken);
+        }
+
         if (await SaveAsync(plan, cancellationToken) is { } error)
         {
             return error;
@@ -286,7 +300,7 @@ public sealed class HarvestPlanService(
             return AppError.Forbidden;
         }
 
-        if (!HarvestPlanRules.AllowsFinish(plan.StatusId))
+        if (!HarvestPlanRules.AllowsFinish(plan.StatusId, plan.Executor, HarvestPlanProgress.AllDone(plan)))
         {
             return WrongStatus(plan);
         }

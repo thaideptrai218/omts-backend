@@ -27,7 +27,7 @@ public sealed class HarvestPlanHandoverService(
     /// <summary>"Nhận": the plan was assigned (Assigned); it becomes Received and lots can be recorded from it.</summary>
     public async Task<Result<HarvestPlanSaved>> ReceiveAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
-        var opened = await OpenAsync(planId, request, HarvestPlanRules.AllowsReceive, cancellationToken);
+        var opened = await OpenAsync(planId, request, p => HarvestPlanRules.AllowsReceive(p.StatusId, p.Executor), cancellationToken);
         if (!opened.IsSuccess)
         {
             return opened.Error!;
@@ -40,7 +40,7 @@ public sealed class HarvestPlanHandoverService(
     /// <summary>"Bàn giao": every line of the plan has its lot or all its lanes left out; the plan becomes HandedOver and the Owners are told.</summary>
     public async Task<Result<HarvestPlanSaved>> HandOverAsync(Guid planId, HarvestPlanActionRequest request, CancellationToken cancellationToken)
     {
-        var opened = await OpenAsync(planId, request, HarvestPlanRules.AllowsHandOver, cancellationToken);
+        var opened = await OpenAsync(planId, request, p => HarvestPlanRules.AllowsHandOver(p.StatusId, p.Executor), cancellationToken);
         if (!opened.IsSuccess)
         {
             return opened.Error!;
@@ -58,7 +58,7 @@ public sealed class HarvestPlanHandoverService(
     }
 
     /// <summary>The plan, after the checks both buttons share: the caller sees it and may harvest in a zone of a line it sees, the status allows the button, and the row version is current.</summary>
-    private async Task<Result<HarvestPlan>> OpenAsync(Guid planId, HarvestPlanActionRequest request, Func<int, bool> allowsStatus, CancellationToken cancellationToken)
+    private async Task<Result<HarvestPlan>> OpenAsync(Guid planId, HarvestPlanActionRequest request, Func<HarvestPlan, bool> allowsStatus, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
         if (plan is null || !await access.MayReadAsync(plan, cancellationToken))
@@ -77,7 +77,7 @@ public sealed class HarvestPlanHandoverService(
             return AppError.Forbidden;
         }
 
-        if (!allowsStatus(plan.StatusId))
+        if (!allowsStatus(plan))
         {
             return AppError.Conflict(UserMessages.WrongStatus($"{HarvestPlanCodeService.ObjectName} {plan.Code}", statusCatalog.DisplayNameOf(plan.StatusId)));
         }

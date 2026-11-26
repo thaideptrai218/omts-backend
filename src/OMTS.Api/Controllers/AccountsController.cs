@@ -17,8 +17,8 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
 {
     [HttpGet]
     [ProducesResponseType<Paged<StaffAccountView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(string? search, int? statusId, int page = 1, int pageSize = 20, bool unlinked = false, CancellationToken cancellationToken = default) =>
-        Ok(await staffAccounts.SearchAsync(search, statusId, page, pageSize, cancellationToken, unlinked));
+    public async Task<IActionResult> Search(string? search, int? statusId, int page = 1, int pageSize = 20, bool unlinked = false, bool includeDeleted = false, CancellationToken cancellationToken = default) =>
+        Ok(await staffAccounts.SearchAsync(search, statusId, page, pageSize, cancellationToken, unlinked, includeDeleted));
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType<StaffAccountView>(StatusCodes.Status200OK)]
@@ -49,6 +49,15 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
     [ProducesResponseType<StaffAccountView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Unlock(Guid id, ReasonRequest request, CancellationToken cancellationToken) =>
         (await staffAccounts.UnlockAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// "Xóa người dùng": soft delete (status Deleted) with a required reason. The account disappears from the list (unless includeDeleted), can no longer
+    /// log in, its sessions end and pairs are revoked; the row stays so history keeps the name. 403 for the Owner account or the caller's own account.
+    /// </summary>
+    [HttpPost("{id:guid}/delete")]
+    [ProducesResponseType<StaffAccountView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Delete(Guid id, DeleteAccountRequest request, CancellationToken cancellationToken) =>
+        (await staffAccounts.DeleteAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>Issues a new temporary password to an Active account (returned once, never sent; MSG-ACCOUNT-23) and ends every session.</summary>
     [HttpPost("{id:guid}/reset-password")]

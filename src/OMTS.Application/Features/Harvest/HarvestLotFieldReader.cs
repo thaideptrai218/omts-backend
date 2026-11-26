@@ -85,10 +85,10 @@ internal static class HarvestLotFieldReader
         return null;
     }
 
-    /// <summary>The photos are checked once, as their content does not change: the answer holds why they were refused. A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026).</summary>
+    /// <summary>The photos are checked once, as their content does not change: the answer holds why they were refused. A lot holds 0 to 3 photos: they are optional (owner decision of 26/11/2026).</summary>
     /// <param name="kept">How many current photos stay on the lot.</param>
     /// <param name="keysAreKnown">Every key the client asked to keep is a photo of this lot.</param>
-    /// <param name="minimum">The least photos the lot must end with: 1 for a new lot or one that has photos; 0 for one recorded before the photos, which stays valid without.</param>
+    /// <param name="minimum">The least photos the lot must end with: 0 by default, as harvest photos are optional.</param>
     public static (IReadOnlyList<ValidatedFile> Files, string? Hint) ReadPhotos(IReadOnlyList<IncomingFile> photos, bool otherFilePart, int kept = 0, bool keysAreKnown = true, int minimum = 0)
     {
         if (otherFilePart)

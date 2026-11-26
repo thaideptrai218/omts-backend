@@ -21,11 +21,11 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
     public async Task Accountants_only_read_scoped_employees_and_traders_and_anonymous_callers_are_refused()
     {
         var (owner, zone, role) = await SetupAsync(factory);
-        var saved = await CreateAsync(owner, Profile($"Access {NewCode()}", NewPhone(), zone.Id,
+        var saved = await CreateAsync(owner, StaffProfile($"Access {NewCode()}", NewPhone(), zone.Id,
             b => { b["bankAccount"] = Bank(); b["notes"] = "Private note"; }));
         var id = IdOf(saved);
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var body = Profile($"Intruder {NewCode()}", NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["rowVersion"] = RowVersionOf(saved); });
+        var body = StaffProfile($"Intruder {NewCode()}", NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["rowVersion"] = RowVersionOf(saved); });
         var calls = new Func<HttpClient, Task<HttpResponseMessage>>[]
         {
             c => c.GetAsync("/api/employees"),
@@ -76,7 +76,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
     {
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
-        var saved = await CreateAsync(owner, Profile($"Scope {NewCode()}", NewPhone(), zoneA.Id, b => { b["bankAccount"] = Bank(); b["notes"] = "Riêng tư"; }));
+        var saved = await CreateAsync(owner, StaffProfile($"Scope {NewCode()}", NewPhone(), zoneA.Id, b => { b["bankAccount"] = Bank(); b["notes"] = "Riêng tư"; }));
         var id = IdOf(saved);
         var (inZone, otherZone, everywhere) = (await ManagerAsync(factory, zoneA), await ManagerAsync(factory, zoneB), await ManagerAsync(factory, null));
 
@@ -93,7 +93,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
 
         // The manager of another zone does not see the employee at all (decision of 24/11/2026): not found, never forbidden.
         Assert.Equal(HttpStatusCode.NotFound, (await otherZone.GetAsync($"/api/employees/{id}")).StatusCode);
-        var body = Profile("Bị đổi", null, zoneB.Id, b => b["rowVersion"] = RowVersionOf(saved));
+        var body = StaffProfile("Bị đổi", null, zoneB.Id, b => b["rowVersion"] = RowVersionOf(saved));
         foreach (var refused in new[]
         {
             await otherZone.PutAsJsonAsync($"/api/employees/{id}", body),
@@ -116,10 +116,10 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (manager, everywhere) = (await ManagerAsync(factory, zoneA), await ManagerAsync(factory, null));
         var refusedName = $"Other zone {NewCode()}";
 
-        var own = await CreateAsync(manager, ApprovedProfile($"Own {NewCode()}", NewPhone(), zoneA.Id));
-        var outside = await manager.PostAsJsonAsync("/api/employees", ApprovedProfile(refusedName, NewPhone(), zoneB.Id));
-        var both = await manager.PostAsJsonAsync("/api/employees", Profile(refusedName, NewPhone(), zoneA.Id, b => { b["ownerApproved"] = true; b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }; }));
-        var any = await CreateAsync(everywhere, ApprovedProfile($"Any {NewCode()}", NewPhone(), zoneB.Id));
+        var own = await CreateAsync(manager, ApprovedStaffProfile($"Own {NewCode()}", NewPhone(), zoneA.Id));
+        var outside = await manager.PostAsJsonAsync("/api/employees", ApprovedStaffProfile(refusedName, NewPhone(), zoneB.Id));
+        var both = await manager.PostAsJsonAsync("/api/employees", StaffProfile(refusedName, NewPhone(), zoneA.Id, b => { b["ownerApproved"] = true; b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }; }));
+        var any = await CreateAsync(everywhere, ApprovedStaffProfile($"Any {NewCode()}", NewPhone(), zoneB.Id));
 
         Assert.True(own.GetProperty("employee").GetProperty("canMaintain").GetBoolean());
         Assert.Equal("MSG-GEN-08", await outside.ErrorCodeAsync());
@@ -135,22 +135,22 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (owner, zoneA, _) = await SetupAsync(factory);
         var (zoneB, zoneC) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
         var (name, phone) = ($"Edit {NewCode()}", NewPhone());
-        var saved = await CreateAsync(owner, Profile(name, phone, zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }));
+        var saved = await CreateAsync(owner, StaffProfile(name, phone, zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }));
         var id = IdOf(saved);
         var manager = await ManagerAsync(factory, zoneA);
 
-        var tooFar = await manager.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zoneC.Id, b => b["rowVersion"] = RowVersionOf(saved)));
+        var tooFar = await manager.PutAsJsonAsync($"/api/employees/{id}", StaffProfile(name, phone, zoneC.Id, b => b["rowVersion"] = RowVersionOf(saved)));
         Assert.Equal("MSG-GEN-08", await tooFar.ErrorCodeAsync());
 
         // The form may send back the zone of the other manager or leave it out: it stays either way.
-        var withOther = await (await manager.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zoneB.Id, b => b["rowVersion"] = RowVersionOf(saved)))).Content.ReadFromJsonAsync<JsonElement>();
+        var withOther = await (await manager.PutAsJsonAsync($"/api/employees/{id}", StaffProfile(name, phone, zoneB.Id, b => b["rowVersion"] = RowVersionOf(saved)))).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal([zoneB.Id], await ZonesAsync(id));
         Assert.False(withOther.GetProperty("employee").GetProperty("canMaintain").GetBoolean());
 
         var restored = await (await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username))
-            .PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zoneA.Id, b => { b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }; b["rowVersion"] = RowVersionOf(withOther); }));
+            .PutAsJsonAsync($"/api/employees/{id}", StaffProfile(name, phone, zoneA.Id, b => { b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id }; b["rowVersion"] = RowVersionOf(withOther); }));
         var current = await restored.Content.ReadFromJsonAsync<JsonElement>();
-        var dropsOwn = await manager.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, null, b => b["rowVersion"] = RowVersionOf(current)));
+        var dropsOwn = await manager.PutAsJsonAsync($"/api/employees/{id}", StaffProfile(name, phone, null, b => b["rowVersion"] = RowVersionOf(current)));
 
         Assert.Equal(HttpStatusCode.OK, dropsOwn.StatusCode);
         Assert.Equal([zoneB.Id], await ZonesAsync(id));
@@ -161,9 +161,9 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var (name, phone) = ($"Last zone {NewCode()}", NewPhone());
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id));
+        var saved = await CreateAsync(owner, StaffProfile(name, phone, zone.Id));
 
-        var refused = await (await ManagerAsync(factory, zone)).PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, phone, null, b => b["rowVersion"] = RowVersionOf(saved)));
+        var refused = await (await ManagerAsync(factory, zone)).PutAsJsonAsync($"/api/employees/{IdOf(saved)}", StaffProfile(name, phone, null, b => b["rowVersion"] = RowVersionOf(saved)));
 
         Assert.Equal(("MSG-GEN-01", "Working zones"), (await refused.ErrorCodeAsync(), await FieldAsync(refused)));
         Assert.Equal([zone.Id], await ZonesAsync(IdOf(saved)));
@@ -176,7 +176,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (owner, zoneA, _) = await SetupAsync(factory);
         var (zoneB, closed) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
         await factory.UpdateAsync<FarmingZone>(closed.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
-        var saved = await CreateAsync(owner, Profile($"Add zone {NewCode()}", NewPhone(), zoneA.Id));
+        var saved = await CreateAsync(owner, StaffProfile($"Add zone {NewCode()}", NewPhone(), zoneA.Id));
         var id = IdOf(saved);
         var manager = await ManagerAsync(factory, zoneB);
         // A manager of zones A and B sees the employee through zone A and brings zone B in.
@@ -210,9 +210,9 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
         var tag = NewCode();
-        var other = IdOf(await CreateAsync(owner, Profile($"{tag} A other", NewPhone(), zoneB.Id)));
-        var mine = IdOf(await CreateAsync(owner, Profile($"{tag} B mine", NewPhone(), zoneA.Id)));
-        var shared = IdOf(await CreateAsync(owner, Profile($"{tag} C both", NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
+        var other = IdOf(await CreateAsync(owner, StaffProfile($"{tag} A other", NewPhone(), zoneB.Id)));
+        var mine = IdOf(await CreateAsync(owner, StaffProfile($"{tag} B mine", NewPhone(), zoneA.Id)));
+        var shared = IdOf(await CreateAsync(owner, StaffProfile($"{tag} C both", NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
 
         var managerList = await (await ManagerAsync(factory, zoneA)).GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
         var ownerList = await owner.GetFromJsonAsync<JsonElement>($"/api/employees?search={tag}");
@@ -232,7 +232,7 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
         var name = $"Shared {NewCode()}";
-        var id = IdOf(await CreateAsync(owner, Profile(name, NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
+        var id = IdOf(await CreateAsync(owner, StaffProfile(name, NewPhone(), zoneA.Id, b => b["workingZoneIds"] = new[] { zoneA.Id, zoneB.Id })));
         var managerA = await ManagerAsync(factory, zoneA);
         var managerB = await ManagerAsync(factory, zoneB);
 
@@ -253,8 +253,8 @@ public class EmployeeZoneScopeTests(AuthApiFactory factory) : IClassFixture<Auth
         var (owner, zoneA, _) = await SetupAsync(factory);
         var zoneB = await factory.AddZoneAsync(NewCode());
         var tag = NewCode();
-        var other = IdOf(await CreateAsync(owner, Profile($"{tag} out of scope", NewPhone(), zoneB.Id)));
-        var mine = IdOf(await CreateAsync(owner, Profile($"{tag} in scope", NewPhone(), zoneA.Id)));
+        var other = IdOf(await CreateAsync(owner, StaffProfile($"{tag} out of scope", NewPhone(), zoneB.Id)));
+        var mine = IdOf(await CreateAsync(owner, StaffProfile($"{tag} in scope", NewPhone(), zoneA.Id)));
         var accountantOfA = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.Accountant, zoneA))).Client;
         var accountantEverywhere = (await EmployeesV2QaKit.StaffAsync(factory, (StaffRole.Accountant, null))).Client;
 

@@ -116,8 +116,8 @@ public class EmployeeSqlServerTests
         }));
         var (refusedUser, acceptedUser) = ($"nv{NewCode()}", $"nv{NewCode()}");
 
-        var refused = await owner.PostAsJsonAsync("/api/employees", Profile($"Refused {NewCode()}", taken, zone.Id, b => b["account"] = AccountBlock(refusedUser, zone, role)));
-        var accepted = await CreateAsync(owner, Profile($"Accepted {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(acceptedUser, zone, role)));
+        var refused = await owner.PostAsJsonAsync("/api/employees", StaffProfile($"Refused {NewCode()}", taken, zone.Id, b => b["account"] = AccountBlock(refusedUser, zone, role)));
+        var accepted = await CreateAsync(owner, StaffProfile($"Accepted {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(acceptedUser, zone, role)));
 
         Assert.Equal("MSG-ACCOUNT-09", await refused.ErrorCodeAsync());
         Assert.False(await QueryAsync(api, db => db.Accounts.AnyAsync(a => a.Username == refusedUser)));

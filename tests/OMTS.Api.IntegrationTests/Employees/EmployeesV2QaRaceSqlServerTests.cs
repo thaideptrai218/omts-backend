@@ -170,13 +170,13 @@ public class EmployeesV2QaRaceSqlServerTests
         for (var round = 0; round < 4; round++)
         {
             var (name, phone) = ($"All {NewCode()}", NewPhone());
-            var saved = await CreateAsync(owner, Profile(name, phone, zoneA.Id));
+            var saved = await CreateAsync(owner, StaffProfile(name, phone, zoneA.Id));
             var (id, version) = (IdOf(saved), RowVersionOf(saved));
             var yesterday = Today().AddDays(-1).ToString("yyyy-MM-dd");
             var jobRun = job.RunOnceAsync(Today());
 
             var responses = await Task.WhenAll(
-                owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zoneA.Id).With("notes", "Song song").With("rowVersion", version)),
+                owner.PutAsJsonAsync($"/api/employees/{id}", StaffProfile(name, phone, zoneA.Id).With("notes", "Song song").With("rowVersion", version)),
                 owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = yesterday, rowVersion = version }),
                 owner.PostAsJsonAsync($"/api/employees/{id}/working-zones", new { zoneId = zoneB.Id }),
                 owner.PostAsJsonAsync($"/api/employees/{id}/account", new { username = $"nv{NewCode()}" }),
@@ -198,7 +198,7 @@ public class EmployeesV2QaRaceSqlServerTests
         var (owner, _, cooperative) = await OwnerWithCooperativeAsync(api);
         var zone = await AddZoneAsync(api, cooperative.Id);
         var phone = NewPhone();
-        var id = IdOf(await CreateAsync(owner, Profile($"Acc {NewCode()}", phone, zone.Id)));
+        var id = IdOf(await CreateAsync(owner, StaffProfile($"Acc {NewCode()}", phone, zone.Id)));
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => owner.PostAsJsonAsync($"/api/employees/{id}/account", new { username = $"nv{NewCode()}" })));
 
@@ -220,7 +220,7 @@ public class EmployeesV2QaRaceSqlServerTests
             var (phone, name) = (NewPhone(), $"Half {NewCode()}");
 
             var responses = await Task.WhenAll(
-                owner.PostAsJsonAsync("/api/employees", Profile(name, phone, zone.Id).With("account", new { username = $"nv{NewCode()}" })),
+                owner.PostAsJsonAsync("/api/employees", StaffProfile(name, phone, zone.Id).With("account", new { username = $"nv{NewCode()}" })),
                 owner.PostAsJsonAsync("/api/accounts", new { displayName = "Tài khoản", username = $"nv{NewCode()}", phoneNumber = phone }));
 
             await NoServerErrorAsync(responses);

@@ -49,7 +49,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
         var caller = await access.CallerAsync(HarvestPlanAccess.ZoneIdsOf(plan), cancellationToken);
         AccountRef? Ref(Guid? id) => id is { } value ? new AccountRef(value, names.GetValueOrDefault(value) ?? string.Empty) : null;
 
-        var inProgress = HarvestPlanRules.AllowsHarvest(plan.StatusId);
+        var inProgress = HarvestPlanRules.AllowsHarvest(plan.StatusId, plan.Executor);
         var mayHarvest = new Dictionary<Guid, bool>();
         foreach (var zoneId in visible.Select(l => l.Raft.ZoneId).Distinct())
         {
@@ -78,11 +78,11 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
 
         var hasLot = plan.Lines.Any(l => l.Lot is not null);
         return new HarvestPlanView(
-            plan.Id, plan.Code, plan.StatusId, statusCatalog.DisplayNameOf(plan.StatusId), ZonesOf(visible), plan.PlannedAt, plan.Note,
+            plan.Id, plan.Code, plan.StatusId, statusCatalog.DisplayNameOf(plan.StatusId), plan.Executor, ZonesOf(visible), plan.PlannedAt, plan.Note,
             Ref(plan.CreatedByAccountId), plan.AssignedAt, Ref(plan.AssignedByAccountId), plan.CompletedAt, plan.CancelledAt, Ref(plan.CancelledByAccountId), plan.CancelReason,
             lineViews, OrderViews(plan), Progress(visible),
-            HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow, mayHarvest.Values.Any(m => m), HarvestPlanProgress.AllDone(plan)),
-            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion));
+            HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow, mayHarvest.Values.Any(m => m), HarvestPlanProgress.AllDone(plan), plan.Executor),
+            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion), HarvestPlanRosterRules.Summary(plan));
     }
 
     public async Task<IReadOnlyList<HarvestPlanListItem>> ListItemsAsync(IReadOnlyList<HarvestPlan> plans, CancellationToken cancellationToken)
@@ -94,10 +94,11 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
         {
             var visible = HarvestPlanAccess.VisibleLines(p, scope);
             return new HarvestPlanListItem(
-                p.Id, p.Code, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), ZonesOf(visible), p.PlannedAt, p.Note,
+                p.Id, p.Code, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.Executor, ZonesOf(visible), p.PlannedAt, p.Note,
                 visible.OrderBy(l => l.LineNumber).Select(l => l.Raft.Code).Distinct().ToList(), OrderViews(p), Progress(visible),
                 names.GetValueOrDefault(p.CreatedByAccountId), RowVersionGuard.Encode(p.RowVersion),
-                visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null);
+                visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null,
+                HarvestPlanRosterRules.Summary(p));
         }).ToList();
     }
 

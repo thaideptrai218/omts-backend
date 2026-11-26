@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -18,14 +19,15 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.AccessManagement;
 
 /// <summary>
-/// ACS-09 – the Cooperative Owner creates and edits staff accounts, locks/unlocks them and issues
-/// temporary passwords; there is no delete. Owner and Trader accounts can never be managed here.
+/// ACS-09 – the Cooperative Owner creates and edits staff accounts, locks/unlocks them, issues temporary passwords and
+/// deletes them (soft: status Deleted, the row stays for the history). Owner and Trader accounts can never be managed here.
 /// </summary>
 public sealed class StaffAccountService(
     IAccountRepository accounts,
     IEmployeeRepository employees,
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
+    ICurrentUser currentUser,
     AccessGrantService grantService,
     VerificationService verification,
     IPasswordHasher passwordHasher,
@@ -37,11 +39,12 @@ public sealed class StaffAccountService(
 {
     public const int MaxDisplayNameLength = 200;
     public const int MaxReasonLength = 1000;
+    public const int MaxNoteLength = 500;
 
-    public async Task<Paged<StaffAccountView>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false)
+    public async Task<Paged<StaffAccountView>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken, bool unlinkedOnly = false, bool includeDeleted = false)
     {
         (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
-        var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly);
+        var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken, unlinkedOnly, includeDeleted);
         // One query each for the linked employees and the pairs of the whole page.
         var accountIds = items.Select(a => a.Id).ToList();
         var employeeIds = await employees.GetIdsByAccountIdsAsync(accountIds, cancellationToken);
@@ -164,8 +167,9 @@ public sealed class StaffAccountService(
     /// can follow in FARM-05), and the employee link to the unit of work without saving, so LABOR-01 can save employee,
     /// account, grants and link together.
     /// </summary>
+    /// <param name="fixedPassword">The seasonal worker's fixed initial password (<see cref="Employees.SeasonalWorkerAccounts.InitialPassword"/>): it must still be changed at the first login and does not expire; null: a random one-time temporary password.</param>
     public async Task<Result<StaffAccountWithPassword>> AddStaffAccountAsync(
-        CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken)
+        CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken, string? fixedPassword = null)
     {
         if (RefuseOtherSubjectType(request.SubjectType, request.Username) is { } refused)
         {
@@ -178,9 +182,14 @@ public sealed class StaffAccountService(
             return fields.Error!;
         }
 
+        if (!TryNote(request.Note, out var note))
+        {
+            return AppError.Invalid("Note");
+        }
+
         var (name, username, phone, email) = fields.Value!;
         var now = timeProvider.GetUtcNow();
-        var temporaryPassword = TemporaryPasswords.New();
+        var temporaryPassword = fixedPassword ?? TemporaryPasswords.New();
         var account = new Account
         {
             SubjectType = SubjectType.Staff,
@@ -189,9 +198,10 @@ public sealed class StaffAccountService(
             Username = username,
             PhoneNumber = phone,
             Email = email,
+            Note = note,
             PasswordHash = passwordHasher.Hash(temporaryPassword),
             MustChangePassword = true,
-            TemporaryPasswordIssuedAt = now,
+            TemporaryPasswordIssuedAt = fixedPassword is null ? now : Employees.SeasonalWorkerAccounts.NeverExpiresIssuedAt,
         };
         accounts.Add(account);
         if (employee is not null)
@@ -209,10 +219,11 @@ public sealed class StaffAccountService(
         {
             RecordId = account.Id,
             RecordCode = account.Username,
-            After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email, account.SubjectType, EmployeeId = employee?.Id, account.MustChangePassword },
+            After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email, account.Note, account.SubjectType, EmployeeId = employee?.Id, account.MustChangePassword },
         });
 
-        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
+        return new StaffAccountWithPassword(
+            await ViewAsync(account, cancellationToken), temporaryPassword, fixedPassword is null ? now + Account.TemporaryPasswordLifetime : null, MessageCodes.Account23, fixedPassword is not null);
     }
 
     public async Task<Result<StaffAccountView>> UpdateAsync(Guid id, UpdateStaffAccountRequest request, CancellationToken cancellationToken)
@@ -228,6 +239,16 @@ public sealed class StaffAccountService(
             return AppError.Forbidden;
         }
 
+        if (account.StatusId == StatusIds.Account.Deleted)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus("Account", statusCatalog.DisplayNameOf(account.StatusId)));
+        }
+
+        if (!TryNote(request.Note, out var newNote))
+        {
+            return AppError.Invalid("Note");
+        }
+
         var fields = await ValidateFieldsAsync(request.DisplayName, request.Username, request.PhoneNumber, request.Email, account.Id, cancellationToken);
         if (!fields.IsSuccess)
         {
@@ -240,8 +261,9 @@ public sealed class StaffAccountService(
         }
 
         var (name, username, phone, email) = fields.Value!;
-        var before = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email };
+        var before = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email, account.Note };
         account.DisplayName = name;
+        account.Note = newNote;
         account.Username = username;
         if (account.PhoneNumber != phone)
         {
@@ -263,7 +285,7 @@ public sealed class StaffAccountService(
             RecordId = account.Id,
             RecordCode = account.Username,
             Before = before,
-            After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email },
+            After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email, account.Note },
         });
         try
         {
@@ -290,6 +312,79 @@ public sealed class StaffAccountService(
         ChangeStatusAsync(id, StatusIds.Account.Locked, StatusIds.Account.Active, request.Reason, cancellationToken);
 
     /// <summary>
+    /// "Xóa người dùng" (soft delete, Owner only): the account gets status Deleted, every session ends, its Effective pairs are revoked and
+    /// the linked employee is unlinked (so it can be given another account); the row stays, so audit and history keep showing the name.
+    /// The username, phone number and email are freed (see <see cref="DeletedAccountIdentifiers"/>). Refused: another subject type (the Owner account, traders: 403), the caller's own
+    /// account (403), an account already Deleted (409), no or a too long reason (400), a stale rowVersion when one is sent (409).
+    /// </summary>
+    public async Task<Result<StaffAccountView>> DeleteAsync(Guid id, DeleteAccountRequest request, CancellationToken cancellationToken)
+    {
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrEmpty(reason) || reason.Length > MaxReasonLength)
+        {
+            return AppError.Invalid("Reason");
+        }
+
+        var account = await accounts.GetByIdAsync(id, cancellationToken);
+        if (account is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (account.SubjectType != SubjectType.Staff || account.Id == currentUser.AccountId)
+        {
+            return AppError.Forbidden;
+        }
+
+        if (account.StatusId == StatusIds.Account.Deleted)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus("Account", statusCatalog.DisplayNameOf(account.StatusId)));
+        }
+
+        if (request.RowVersion is not null && await rowVersions.CheckAccountEditAsync(account, request.RowVersion, cancellationToken) is { } stale)
+        {
+            return stale;
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var from = account.StatusId;
+        account.StatusId = StatusIds.Account.Deleted;
+        await sessions.RevokeAllAsync(account.Id, now, "Account deleted", cancellationToken);
+        foreach (var effective in await grants.ListEffectiveForAccountAsync(account.Id, cancellationToken))
+        {
+            if (await grants.GetAsync(effective.Id, account.Id, cancellationToken) is { } grant)
+            {
+                grant.StatusId = StatusIds.AccessGrant.Revoked;
+                grant.RevokedAt = now;
+                grant.RevokedByAccountId = currentUser.AccountId;
+                grant.RevokeReason = "Account deleted: " + reason;
+            }
+        }
+
+        var employee = await employees.GetByAccountIdAsync(account.Id, cancellationToken);
+        if (employee is not null)
+        {
+            employee.AccountId = null;
+        }
+
+        audit.RecordStatusChange(nameof(Account), account.Id, account.Username, from, StatusIds.Account.Deleted, reason);
+        // The audit row above keeps the real username; the row itself frees username, phone and email for a new account.
+        DeletedAccountIdentifiers.Release(account);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // As for a lock: a login that stored its session while this save was running is swept now.
+        await sessions.RevokeAllAsync(account.Id, timeProvider.GetUtcNow(), "Account deleted", cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await ViewAsync(account, cancellationToken);
+    }
+
+    /// <summary>Trimmed note, null when blank; false when longer than <see cref="MaxNoteLength"/>.</summary>
+    private static bool TryNote(string? note, out string? trimmed)
+    {
+        trimmed = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        return trimmed is null || trimmed.Length <= MaxNoteLength;
+    }
+
+    /// <summary>
     /// New temporary password (24 h, must be changed at first login) of an Active staff account (ACCOUNT-09.4); a Locked
     /// one answers MSG-GEN-09. Every session ends.
     /// </summary>
@@ -312,10 +407,12 @@ public sealed class StaffAccountService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var temporaryPassword = TemporaryPasswords.New();
+        // The account of a seasonal worker is reset to the fixed initial password, which does not expire; any other to a random one for 24 hours.
+        var seasonal = await employees.IsSeasonalWorkerAccountAsync(account.Id, timeProvider.Today(), cancellationToken);
+        var temporaryPassword = seasonal ? Employees.SeasonalWorkerAccounts.InitialPassword : TemporaryPasswords.New();
         account.PasswordHash = passwordHasher.Hash(temporaryPassword);
         account.MustChangePassword = true;
-        account.TemporaryPasswordIssuedAt = now;
+        account.TemporaryPasswordIssuedAt = seasonal ? Employees.SeasonalWorkerAccounts.NeverExpiresIssuedAt : now;
         // A fresh temporary password also lifts a temporary login lock.
         account.FailedLoginCount = 0;
         account.LockoutEndAt = null;
@@ -324,10 +421,11 @@ public sealed class StaffAccountService(
         {
             RecordId = account.Id,
             RecordCode = account.Username,
-            After = new { account.MustChangePassword, account.TemporaryPasswordIssuedAt, SessionsRevoked = true },
+            After = new { account.MustChangePassword, account.TemporaryPasswordIssuedAt, FixedPassword = seasonal, SessionsRevoked = true },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
+        return new StaffAccountWithPassword(
+            await ViewAsync(account, cancellationToken), temporaryPassword, seasonal ? null : now + Account.TemporaryPasswordLifetime, MessageCodes.Account23, seasonal);
     }
 
     private async Task<Result<StaffAccountView>> ChangeStatusAsync(Guid id, int from, int to, string? reason, CancellationToken cancellationToken)
@@ -426,5 +524,7 @@ public sealed class StaffAccountService(
         account.MustChangePassword,
         employeeId,
         pairs.Select(g => new StaffAccountPairView(g.Id, g.ZoneId, g.Zone?.Name, g.ZoneId is null, g.Role.Code, g.Role.Name)).ToList(),
-        AccountEditVersion.Of(account));
+        AccountEditVersion.Of(account),
+        account.Note,
+        account.StatusId == StatusIds.Account.Deleted);
 }

@@ -58,7 +58,7 @@ public class HarvestLotPhotoTests
     }
 
     [Fact]
-    public async Task Three_photos_are_saved_and_the_fourth_none_a_wrong_format_or_another_part_is_refused_and_stores_nothing()
+    public async Task Three_photos_are_saved_a_lot_without_photos_too_and_the_fourth_a_wrong_format_or_another_part_is_refused_and_stores_nothing()
     {
         using var factory = new AuthApiFactory();
         var raft = await factory.SeededRaftAsync();
@@ -66,8 +66,6 @@ public class HarvestLotPhotoTests
 
         var tooMany = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 4).ToList() })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("Photos", "Tối đa 3 ảnh cho mỗi lô thu hoạch."), (tooMany.Text("field"), tooMany.Text("hint")));
-        var none = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { NoPhoto = true })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Photos", none.Text("field"));
         var wrong = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Pdf] })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Photos", wrong.Text("field"));
         var part = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { PhotoField = "picture", Photos = [Jpeg] })).ReadAsync(HttpStatusCode.BadRequest);
@@ -76,6 +74,10 @@ public class HarvestLotPhotoTests
 
         var three = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 3).ToList() });
         Assert.Equal(3, KeysOf(three).Count);
+
+        // Harvest photos are optional (owner decision of 26/11/2026): a lot without any is saved.
+        var none = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { NoPhoto = true });
+        Assert.Empty(KeysOf(none));
     }
 
     [Fact]

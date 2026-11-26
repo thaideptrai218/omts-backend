@@ -270,5 +270,5 @@ public class AccountRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     };
 
     private static Dictionary<string, object?> EmployeeBody(FarmingZone zone, object account) =>
-        Employees.EmployeeRequests.Profile($"Nhân viên {NewCode()}", NewPhone(), zone.Id, body => body["account"] = account);
+        Employees.EmployeeRequests.StaffProfile($"Nhân viên {NewCode()}", NewPhone(), zone.Id, body => body["account"] = account);
 }

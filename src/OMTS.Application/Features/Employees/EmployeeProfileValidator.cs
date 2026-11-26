@@ -6,6 +6,7 @@ using OMTS.Application.Features.Labor;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Employees;
 
@@ -92,12 +93,14 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
     /// </summary>
     private AppError? EditRefusal(Employee employee, EmployeeInput input, EmployeeCaller caller)
     {
-        if (EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller).Count == 0)
+        // Only a Staff employee has a fixed working zone; a seasonal worker may have none (decision of 25/11/2026).
+        var current = EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today());
+        if ((input.Type ?? current) == EmployeeType.Staff && EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller).Count == 0)
         {
             return AppError.Invalid("Working zones");
         }
 
-        return input is { Type: { } type, TypeFrom: null } && type != EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today())
+        return input is { Type: { } type, TypeFrom: null } && type != current
             ? AppError.Invalid("Employee type date")
             : null;
     }

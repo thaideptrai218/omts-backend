@@ -44,15 +44,15 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
 
         var single = new (string Field, Dictionary<string, object?> Body)[]
         {
-            ("Full name", Profile(name, NewPhone(), zone.Id, b => b.Remove("fullName"))),
-            ("Employee type", Profile(name, NewPhone(), zone.Id, b => b.Remove("employeeType"))),
-            ("Working zones", Profile(name, NewPhone())),
-            ("Working zones", Profile(name, NewPhone(), Guid.NewGuid())),
-            ("Working zones", Profile(name, NewPhone(), discontinued.Id)),
-            ("Bank account", Profile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank("12345678ab"))),
-            ("Bank account", Profile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank(new string('1', 21)))),
-            ("Bank account", Profile(name, NewPhone(), zone.Id, b => b["bankAccount"] = new { bankName = "VCB", accountNumber = "123456", accountHolderName = new string('H', 101) })),
-            ("Bank account", Profile(name, NewPhone(), zone.Id, b => b["bankAccount"] = new { accountNumber = "123456", accountHolderName = "A" })),
+            ("Full name", StaffProfile(name, NewPhone(), zone.Id, b => b.Remove("fullName"))),
+            ("Employee type", StaffProfile(name, NewPhone(), zone.Id, b => b.Remove("employeeType"))),
+            ("Working zones", StaffProfile(name, NewPhone())),
+            ("Working zones", StaffProfile(name, NewPhone(), Guid.NewGuid())),
+            ("Working zones", StaffProfile(name, NewPhone(), discontinued.Id)),
+            ("Bank account", StaffProfile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank("12345678ab"))),
+            ("Bank account", StaffProfile(name, NewPhone(), zone.Id, b => b["bankAccount"] = Bank(new string('1', 21)))),
+            ("Bank account", StaffProfile(name, NewPhone(), zone.Id, b => b["bankAccount"] = new { bankName = "VCB", accountNumber = "123456", accountHolderName = new string('H', 101) })),
+            ("Bank account", StaffProfile(name, NewPhone(), zone.Id, b => b["bankAccount"] = new { accountNumber = "123456", accountHolderName = "A" })),
         };
 
         foreach (var (field, body) in single)
@@ -66,7 +66,7 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
         // A body that cannot be read answers like any other invalid field, never 500.
         foreach (var (key, value) in new (string, object)[] { ("employeeType", "Boss"), ("employeeTypeFrom", "soon"), ("ownerApproved", "maybe"), ("jobTypeIds", new[] { "x" }) })
         {
-            var unreadable = await owner.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id, b => b[key] = value));
+            var unreadable = await owner.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id, b => b[key] = value));
             Assert.Equal(HttpStatusCode.BadRequest, unreadable.StatusCode);
             Assert.Equal("MSG-GEN-01", await unreadable.ErrorCodeAsync());
         }
@@ -124,12 +124,12 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var phone = NewPhone();
-        var left = IdOf(await CreateAsync(owner, Profile($"Left {NewCode()}", phone, zone.Id)));
+        var left = IdOf(await CreateAsync(owner, StaffProfile($"Left {NewCode()}", phone, zone.Id)));
         await EndAsync(owner, left);
         var account = await factory.AddAccountAsync(NewCode(), Password, OMTS.Domain.Enums.SubjectType.Staff);
 
-        var sameAsLeft = await CreateAsync(owner, Profile($"New {NewCode()}", phone, zone.Id));
-        var sameAsAccount = await CreateAsync(owner, Profile($"Has account {NewCode()}", account.PhoneNumber, zone.Id));
+        var sameAsLeft = await CreateAsync(owner, StaffProfile($"New {NewCode()}", phone, zone.Id));
+        var sameAsAccount = await CreateAsync(owner, StaffProfile($"Has account {NewCode()}", account.PhoneNumber, zone.Id));
 
         Assert.Equal(phone, sameAsLeft.GetProperty("employee").GetProperty("phoneNumber").GetString());
         Assert.True(sameAsAccount.GetProperty("employee").GetProperty("hasStaffAccount").GetBoolean());

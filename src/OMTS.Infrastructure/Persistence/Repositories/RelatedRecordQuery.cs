@@ -126,7 +126,10 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
         }
 
         var zones = await db.HarvestPlanLines.AsNoTracking().Where(l => l.PlanId == id).Select(l => l.Raft.ZoneId).Distinct().ToListAsync(cancellationToken);
-        return new RelatedRecordLocation(zones.Count == 1 ? zones[0] : null, ZoneIds: zones);
+        // The employees chosen for the plan may open it from their invitation.
+        var employeeAccounts = await db.HarvestPlanStaffMembers.AsNoTracking().Where(s => s.PlanId == id && s.Employee.AccountId != null)
+            .Select(s => s.Employee.AccountId!.Value).Distinct().ToListAsync(cancellationToken);
+        return new RelatedRecordLocation(zones.Count == 1 ? zones[0] : null, EmployeeAccountIds: employeeAccounts, ZoneIds: zones);
     }
 
     private async Task<RelatedRecordLocation?> FindPurchaseRequestAsync(Guid id, CancellationToken cancellationToken)

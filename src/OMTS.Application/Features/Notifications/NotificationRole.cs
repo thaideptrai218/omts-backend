@@ -33,7 +33,7 @@ public static class NotificationRoles
         SubjectType.Staff => effectiveRoleCodes
             .Select(code => FixedRoles.FindByCode(code)?.Role)
             .OfType<StaffRole>()
-            .Select(r => r == StaffRole.ZoneManager ? NotificationRole.ZoneManager : NotificationRole.Accountant)
+            .Select(r => r switch { StaffRole.ZoneManager => NotificationRole.ZoneManager, StaffRole.Employee => NotificationRole.Employee, _ => NotificationRole.Accountant })
             .ToHashSet(),
         _ => new HashSet<NotificationRole>(),
     };

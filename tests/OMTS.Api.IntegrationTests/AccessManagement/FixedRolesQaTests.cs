@@ -118,7 +118,7 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
     // BR-FARM-07, client change list §1: GET /api/roles is "always the 2 fixed roles"; a row kept from before is not one.
     [Fact]
-    public async Task Roles_api_shows_only_the_two_fixed_roles_when_an_old_row_remains()
+    public async Task Roles_api_shows_only_the_fixed_roles_when_an_old_row_remains()
     {
         var owner = await OwnerAsync();
         var legacy = await LegacyRoleAsync();
@@ -126,7 +126,7 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var roles = await owner.GetFromJsonAsync<JsonElement>("/api/roles");
         var one = await owner.GetAsync($"/api/roles/{legacy.Id}");
 
-        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
+        Assert.Equal([FixedRoles.AccountantCode, FixedRoles.EmployeeCode, FixedRoles.ZoneManagerCode], roles.EnumerateArray().Select(r => r.Text("code")).Order());
         Assert.Equal(HttpStatusCode.NotFound, one.StatusCode);
     }
 
@@ -233,7 +233,8 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         // No zone: suppliers by the Zone Manager role, supplier payments and debts by the Accountant role, in every zone.
         await (await client.GetAsync($"/api/supplier-debts/{b.SupplierId}")).ReadAsync(HttpStatusCode.OK);
         await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, Amount = 1_000, ConfirmAdvance = true })).ReadAsync(HttpStatusCode.Created);
-        await client.CreateSupplierAsync();
+        // Supplier master data is the Owner's (decision of 25/11/2026): neither pair creates a supplier.
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = AcsTestKit.NewPhone() })).StatusCode);
     }
 
     private async Task<HttpClient> OwnerAsync()

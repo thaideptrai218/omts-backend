@@ -152,7 +152,8 @@ public sealed class AttendanceCorrectionService(
             }
         }
 
-        return false;
+        // No working zone (a seasonal worker has no fixed one): any holder of ATTENDANCE Edit in some zone may correct the day.
+        return employee.WorkingZones.Count == 0 && !(await zones.PermittedZonesAsync(PermissionFunctions.Attendance, PermissionAction.Edit, cancellationToken)).IsEmpty;
     }
 
     private async Task<bool> AllowsEveryZoneAsync(IEnumerable<Guid> zoneIds, CancellationToken cancellationToken)

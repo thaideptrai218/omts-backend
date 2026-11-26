@@ -25,7 +25,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var (owner, zone, role) = await SetupAsync(factory);
         var (name, phone, username) = ($"Đỗ Thị {NewCode()}", NewPhone(), $"nv{NewCode()}");
 
-        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role)));
+        var saved = await CreateAsync(owner, StaffProfile(name, phone, zone.Id, b => b["account"] = AccountBlock(username, zone, role)));
         var id = IdOf(saved);
         var reread = await owner.GetAsync($"/api/employees/{id}");
         var account = await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Username == username));
@@ -56,7 +56,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var username = $"nv{NewCode()}";
         var email = $"{username}@example.test";
 
-        var saved = await CreateAsync(owner, Profile($"No pair {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new { username, email }));
+        var saved = await CreateAsync(owner, StaffProfile($"No pair {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new { username, email }));
         var account = await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Username == username));
         var login = await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = username, password = saved.GetProperty("temporaryPassword").GetString() });
 
@@ -72,7 +72,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var manager = await ManagerAsync(factory, zone);
         var (name, username) = ($"By manager {NewCode()}", $"nv{NewCode()}");
 
-        var refused = await manager.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["account"] = AccountBlock(username, zone, role); }));
+        var refused = await manager.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id, b => { b["ownerApproved"] = true; b["account"] = AccountBlock(username, zone, role); }));
 
         Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.Employees.AnyAsync(e => e.FullName == name)));
@@ -103,7 +103,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
 
         foreach (var (name, phone, account, code, field) in cases)
         {
-            var response = await owner.PostAsJsonAsync("/api/employees", Profile(name, phone, zone.Id, b => b["account"] = account));
+            var response = await owner.PostAsJsonAsync("/api/employees", StaffProfile(name, phone, zone.Id, b => b["account"] = account));
             Assert.Equal(field, await FieldAsync(response));
             Assert.Equal(code, await response.ErrorCodeAsync());
             Assert.False(await factory.QueryAsync(db => db.Employees.AnyAsync(e => e.FullName == name)));
@@ -116,9 +116,9 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task Account_created_later_from_the_profile_is_linked_once_and_owner_rights_are_refused()
     {
         var (owner, zone, role) = await SetupAsync(factory);
-        var saved = await CreateAsync(owner, Profile($"Later {NewCode()}", NewPhone(), zone.Id));
+        var saved = await CreateAsync(owner, StaffProfile($"Later {NewCode()}", NewPhone(), zone.Id));
         var id = IdOf(saved);
-        var left = IdOf(await CreateAsync(owner, Profile($"Left {NewCode()}", NewPhone(), zone.Id)));
+        var left = IdOf(await CreateAsync(owner, StaffProfile($"Left {NewCode()}", NewPhone(), zone.Id)));
         await EndAsync(owner, left);
         var (username, ownerUsername) = ($"nv{NewCode()}", $"nv{NewCode()}");
 

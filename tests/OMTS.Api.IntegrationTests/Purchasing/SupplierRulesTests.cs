@@ -60,17 +60,20 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(phone, await factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == first).Select(s => s.PhoneNumber).SingleAsync()));
     }
 
-    // Done when: a Zone Manager with a supplier grant in one zone can create, edit and discontinue a supplier.
+    // Done when: the Owner creates, edits and discontinues a supplier; a Zone Manager (decision of 25/11/2026) only reads.
     [Fact]
-    public async Task A_zone_manager_with_a_grant_in_one_zone_creates_edits_discontinues_and_reactivates_with_audit()
+    public async Task The_owner_creates_edits_discontinues_and_reactivates_a_supplier_with_audit_and_a_zone_manager_is_refused_each_step()
     {
         var (zone, _) = await factory.ZoneWithRaftAsync();
         var manager = await factory.ZoneManagerAsync(zone);
+        var owner = await factory.PurchasingOwnerAsync();
 
-        var id = await manager.CreateSupplierAsync(type: "Material");
-        var view = await manager.GetFromJsonAsync<JsonElement>($"/api/suppliers/{id}");
+        // Supplier master data is the Owner's (decision of 25/11/2026): a Zone Manager only reads it.
+        await (await manager.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Material", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        var id = await owner.CreateSupplierAsync(type: "Material");
+        var view = await owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{id}");
         var phone = view.GetProperty("phoneNumber").GetString();
-        var edited = await (await manager.PutAsJsonAsync($"/api/suppliers/{id}", new
+        var edited = await (await owner.PutAsJsonAsync($"/api/suppliers/{id}", new
         {
             name = "Phao xốp Hạ Long", supplierType = "Material", phoneNumber = phone, address = "Bãi Cháy, Hạ Long", email = "phao@example.com",
             rowVersion = view.GetProperty("rowVersion").GetString(),
@@ -79,12 +82,20 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
             ("Phao xốp Hạ Long", "Bãi Cháy, Hạ Long", "phao@example.com"),
             (edited.GetProperty("name").GetString(), edited.GetProperty("address").GetString(), edited.GetProperty("email").GetString()));
 
-        var discontinued = await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
+        var discontinued = await (await owner.PostAsync($"/api/suppliers/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Discontinued", discontinued.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        var reactivated = await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        var reactivated = await (await owner.PostAsync($"/api/suppliers/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("In Use", reactivated.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        await (await owner.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+
+        var refused = new[]
+        {
+            await manager.PutAsJsonAsync($"/api/suppliers/{id}", new { name = "X", supplierType = "Material", phoneNumber = phone, rowVersion = "" }),
+            await manager.PostAsync($"/api/suppliers/{id}/discontinue", null),
+            await manager.PostAsync($"/api/suppliers/{id}/reactivate", null),
+        };
+        Assert.All(refused, r => Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode));
 
         Assert.Equal(
             ["Supplier.Created", "Supplier.Updated", "Supplier.Discontinued", "Supplier.Reactivated"],
@@ -156,7 +167,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var history = view.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id(), elsewhere.Id() }, history);
 
-        // Receipts have no zone (BR-FARM-08): a Zone Manager of another zone sees them all.
+        // Receipts have no zone limit (shared warehouse, decision of 26/11/2026): a Zone Manager of another zone sees them all.
         var manager = await factory.ZoneManagerAsync(world.Zone);
         var managerView = await manager.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
         Assert.Equal(history, managerView.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet());

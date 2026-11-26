@@ -29,9 +29,9 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
         var tag = NewCode();
         var job1 = await AddJobTypeAsync(factory);
         var job2 = await AddJobTypeAsync(factory);
-        var a = IdOf(await CreateAsync(owner, Profile($"{tag} A", NewPhone(), zone.Id, b => b["jobTypeIds"] = new[] { job1.Id })));
+        var a = IdOf(await CreateAsync(owner, SeasonalProfile($"{tag} A", NewPhone(), zone.Id, b => b["jobTypeIds"] = new[] { job1.Id })));
         var b = IdOf(await CreateAsync(owner, Profile($"{tag} B", NewPhone(), zone.Id, x => { x["employeeType"] = "Staff"; x["jobTypeIds"] = new[] { job2.Id }; })));
-        var c = IdOf(await CreateAsync(owner, Profile($"{tag} C", null, zone.Id)));
+        var c = IdOf(await CreateAsync(owner, SeasonalProfile($"{tag} C", null, zone.Id)));
         return (owner, tag, zone.Id, job1.Id, job2.Id, [a, b, c]);
     }
 
@@ -164,9 +164,9 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
         var other = await factory.AddZoneAsync(NewCode());
         var manager = await ManagerAsync(factory, zone);
         var tag = NewCode();
-        await CreateAsync(owner, Profile($"{tag} A in other zone", null, other.Id));
-        await CreateAsync(owner, Profile($"{tag} B in own zone", null, zone.Id));
-        await CreateAsync(owner, Profile($"{tag} C in both zones", null, zone.Id, b => b["workingZoneIds"] = new[] { zone.Id, other.Id }));
+        await CreateAsync(owner, StaffProfile($"{tag} A in other zone", null, other.Id));
+        await CreateAsync(owner, StaffProfile($"{tag} B in own zone", null, zone.Id));
+        await CreateAsync(owner, StaffProfile($"{tag} C in both zones", null, zone.Id, b => b["workingZoneIds"] = new[] { zone.Id, other.Id }));
 
         var byOwner = Names(await ListAsync(owner, $"search={tag}"));
         var byManager = Names(await ListAsync(manager, $"search={tag}"));
@@ -206,7 +206,7 @@ public class EmployeeListFilterAndSortTests(AuthApiFactory factory) : IClassFixt
         })
         {
             var account = await factory.AddAccountAsync($"{tag}{suffix}", Password, SubjectType.Staff);
-            var saved = await CreateAsync(owner, Profile($"Unrelated {NewCode()}", null, zone.Id,
+            var saved = await CreateAsync(owner, StaffProfile($"Unrelated {NewCode()}", null, zone.Id,
                 b => b["workingZoneIds"] = zones));
             var id = IdOf(saved);
             await factory.UpdateAsync<Employee>(id, e => e.AccountId = account.Id);

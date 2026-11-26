@@ -95,7 +95,7 @@ public sealed class HarvestLotRecordingService(
         }
 
         // A new lot needs 1 to 3 on-site photos; a lot recorded before the photos stays valid without.
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
         var (resolvedLines, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
         if (lineError is not null)
         {

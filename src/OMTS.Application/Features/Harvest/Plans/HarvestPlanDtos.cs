@@ -1,4 +1,5 @@
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest.Plans;
 
@@ -67,12 +68,15 @@ public sealed record HarvestPlanLineView(
 /// <summary>How far the plan is: lines done of all lines, and the lanes harvested, left out and still planned.</summary>
 public sealed record HarvestPlanProgressView(int Lines, int LinesDone, int Lanes, int LanesHarvested, int LanesSkipped);
 
+/// <param name="Executor">Who harvests the plan, chosen when it is assigned: <c>ZoneManager</c> (the default; also for a Draft) or <c>Owner</c> (no reception or hand-over; Zone Managers do not see it).</param>
+/// <param name="Staffing">The people confirmed against the people needed (<c>requiredPeople</c>, <c>confirmed</c>, <c>invited</c>, <c>declined</c>, <c>external</c>, <c>missing</c>, <c>ready</c>); <c>ready</c> false means the plan is short of people (a warning, never a block).</param>
 /// <param name="Zones">The zones of the lines the caller sees, by code. A Zone Manager gets only the lines (and so the zones and the progress) of its own zones.</param>
 public sealed record HarvestPlanView(
     Guid Id,
     string Code,
     int StatusId,
     string Status,
+    HarvestPlanExecutor Executor,
     IReadOnlyList<HarvestPlanZoneView> Zones,
     DateTimeOffset PlannedAt,
     string? Note,
@@ -88,7 +92,8 @@ public sealed record HarvestPlanView(
     HarvestPlanProgressView Progress,
     IReadOnlyList<HarvestPlanAction> AllowedActions,
     DateTimeOffset CreatedAt,
-    string RowVersion);
+    string RowVersion,
+    HarvestPlanStaffingSummary? Staffing = null);
 
 /// <summary>A row of the plan list.</summary>
 public sealed record HarvestPlanListItem(
@@ -96,6 +101,7 @@ public sealed record HarvestPlanListItem(
     string Code,
     int StatusId,
     string Status,
+    HarvestPlanExecutor Executor,
     IReadOnlyList<HarvestPlanZoneView> Zones,
     DateTimeOffset PlannedAt,
     string? Note,
@@ -104,7 +110,8 @@ public sealed record HarvestPlanListItem(
     HarvestPlanProgressView Progress,
     string? CreatedBy,
     string RowVersion,
-    decimal? ExpectedCageCount = null);
+    decimal? ExpectedCageCount = null,
+    HarvestPlanStaffingSummary? Staffing = null);
 
 public sealed record HarvestPlanPage(IReadOnlyList<HarvestPlanListItem> Items, int Page, int PageSize, int Total);
 
@@ -138,8 +145,9 @@ public sealed record SaveHarvestPlanLineRequest(Guid? Id, Guid? RaftId, IReadOnl
 public sealed record SaveHarvestPlanRequest(
     string? Code, DateTimeOffset? PlannedAt, string? Note, IReadOnlyList<Guid>? SalesOrderIds, IReadOnlyList<SaveHarvestPlanLineRequest>? Lines, string? RowVersion);
 
-/// <summary>Hand over (assign) or finish a plan; the row version is checked when sent.</summary>
-public sealed record HarvestPlanActionRequest(string? RowVersion);
+/// <summary>Assign, receive, hand over or finish a plan; the row version is checked when sent.</summary>
+/// <param name="Executor">Only for <c>assign</c>: who harvests the plan, <c>ZoneManager</c> (default) or <c>Owner</c>; any other value is 400 MSG-GEN-01 <c>Executor</c>. Ignored by the other actions.</param>
+public sealed record HarvestPlanActionRequest(string? RowVersion, HarvestPlanExecutor? Executor = null);
 
 public sealed record CancelHarvestPlanRequest(string? Reason, string? RowVersion);
 

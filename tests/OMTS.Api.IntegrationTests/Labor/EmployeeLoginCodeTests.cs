@@ -46,7 +46,7 @@ public class EmployeeLoginCodeTests(AuthApiFactory factory) : IClassFixture<Auth
     public async Task Others_get_no_code_not_even_a_manager_of_another_zone_or_an_accountant()
     {
         var world = await WorldAsync(factory);
-        var worker = await AddWorkerAsync(world);
+        var worker = await AddWorkerAsync(world, staff: true);
         var otherZone = await factory.AddZoneAsync(NewCode());
         var otherManager = (await StaffAsync(factory, (StaffRole.ZoneManager, otherZone))).Client;
         var accountant = (await StaffAsync(factory, (StaffRole.Accountant, null))).Client;

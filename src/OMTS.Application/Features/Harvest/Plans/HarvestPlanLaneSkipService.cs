@@ -26,7 +26,7 @@ public sealed class HarvestPlanLaneSkipService(
 {
     public async Task<Result<HarvestPlanView>> SkipAsync(Guid planId, Guid lineId, SkipHarvestPlanLanesRequest request, CancellationToken cancellationToken)
     {
-        var read = await ReadAsync(planId, lineId, HarvestPlanRules.AllowsHarvest, cancellationToken);
+        var read = await ReadAsync(planId, lineId, p => HarvestPlanRules.AllowsHarvest(p.StatusId, p.Executor), cancellationToken);
         if (!read.IsSuccess)
         {
             return read.Error!;
@@ -79,7 +79,7 @@ public sealed class HarvestPlanLaneSkipService(
     /// <summary>Puts lanes left out back to be harvested, while the line has no lot. Not told to anyone.</summary>
     public async Task<Result<HarvestPlanView>> UnskipAsync(Guid planId, Guid lineId, SkipHarvestPlanLanesRequest request, CancellationToken cancellationToken)
     {
-        var read = await ReadAsync(planId, lineId, HarvestPlanRules.AllowsUnskip, cancellationToken);
+        var read = await ReadAsync(planId, lineId, p => HarvestPlanRules.AllowsUnskip(p.StatusId, p.Executor), cancellationToken);
         if (!read.IsSuccess)
         {
             return read.Error!;
@@ -113,7 +113,7 @@ public sealed class HarvestPlanLaneSkipService(
     }
 
     /// <summary>The plan and the line, after the checks both commands share: the caller sees the line and may harvest in the zone of its raft, the plan has a status the command allows, and the line has no lot (MSG-PLAN-03).</summary>
-    private async Task<Result<(HarvestPlan Plan, HarvestPlanLine Line)>> ReadAsync(Guid planId, Guid lineId, Func<int, bool> allowsStatus, CancellationToken cancellationToken)
+    private async Task<Result<(HarvestPlan Plan, HarvestPlanLine Line)>> ReadAsync(Guid planId, Guid lineId, Func<HarvestPlan, bool> allowsStatus, CancellationToken cancellationToken)
     {
         var plan = await plans.GetForEditAsync(planId, cancellationToken);
         if (plan is null)
@@ -133,7 +133,7 @@ public sealed class HarvestPlanLaneSkipService(
             return AppError.Forbidden;
         }
 
-        if (!allowsStatus(plan.StatusId))
+        if (!allowsStatus(plan))
         {
             return AppError.Conflict(UserMessages.WrongStatus($"{HarvestPlanCodeService.ObjectName} {plan.Code}", statusCatalog.DisplayNameOf(plan.StatusId)));
         }

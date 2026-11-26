@@ -108,7 +108,7 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         var today = EmployeeRequests.Today();
         var name = $"Fields {NewCode()}";
 
-        var created = await CreateAsync(owner, Profile(name, null, zone.Id, b =>
+        var created = await CreateAsync(owner, StaffProfile(name, null, zone.Id, b =>
         {
             b["gender"] = "Female";
             b["idNumber"] = "079090001234";

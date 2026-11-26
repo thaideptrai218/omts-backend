@@ -20,7 +20,7 @@ public class EmployeeOwnerRightsSqlServerTests
         var zone = await AddZoneAsync(api, cooperative.Id);
         var username = new string('o', 101);
 
-        var onCreate = await owner.PostAsJsonAsync("/api/employees", Profile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
+        var onCreate = await owner.PostAsJsonAsync("/api/employees", StaffProfile($"NV {NewCode()}", NewPhone(), zone.Id, b => b["account"] = new
         {
             username,
             subjectType = "CooperativeOwner",

@@ -220,6 +220,10 @@ public sealed class PurchaseStaffingService(
     /// <summary>
     /// Phân công đầu ngày của LABOR-02 (OMTS-132) trên bè, loại việc và ngày của kế hoạch. Vùng của bè thêm vào vùng làm việc của nhân viên chưa có, như LABOR-02 bước 9.
     /// </summary>
+    /// <summary>A seasonal worker has no fixed working zone (decision of 25/11/2026), so the zone of the work does not join the profile.</summary>
+    private bool IsSeasonalWorker(Employee profile) =>
+        OMTS.Domain.Entities.Labor.EmployeeTypePeriod.TypeOn(profile.TypePeriods, DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime)) == OMTS.Domain.Enums.EmployeeType.SeasonalWorker;
+
     private async Task CreateAssignmentAsync(PurchaseRequest row, WorkDayPlan plan, Guid employeeId, Guid assignedBy, CancellationToken ct)
     {
         var assignment = new WorkAssignment
@@ -228,7 +232,7 @@ public sealed class PurchaseStaffingService(
         };
         assignments.Add(assignment);
         var profile = (await employeeProfiles.GetForEditAsync(employeeId, ct))!;
-        if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId))
+        if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId) && !IsSeasonalWorker(profile))
         {
             employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employeeId, ZoneId = plan.Raft.ZoneId });
             uow.MarkChanged(profile);

@@ -29,7 +29,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("MSG-GEN-08", await ErrorCodeAsync(otherZone));
     }
 
-    // §I.4.4 WATER-01…03: the Accountant role has no water rights, even in a zone of its pair.
+    // Owner decision of 26/11/2026: the Accountant role only views the water of the zone of its pair and never records it.
     [Fact]
     public async Task Function_not_held_by_the_role_is_denied_in_the_zone_of_the_pair()
     {
@@ -39,7 +39,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var view = await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements");
         var create = await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null);
 
-        Assert.Equal(HttpStatusCode.Forbidden, view.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, view.StatusCode);
         Assert.Equal("MSG-GEN-08", await ErrorCodeAsync(create));
     }
 

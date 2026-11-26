@@ -6,6 +6,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 using C = OMTS.Application.Features.Employees.EmployeeFileColumns;
 
 namespace OMTS.Application.Features.Employees;
@@ -23,6 +24,7 @@ public sealed class EmployeeImportService(
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
     EmployeeCodeAllocator codes,
+    SeasonalAccountProvisioner seasonalAccounts,
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
@@ -97,6 +99,13 @@ public sealed class EmployeeImportService(
                 After = EmployeeProfileChanges.Snapshot(employee, input.WorkingZoneIds, input.JobTypeIds),
                 Reason = ImportReason,
             });
+
+            // A seasonal worker with a phone number gets the login account of every seasonal worker; one whose phone number or username is
+            // taken by another account is left without (the next seed or the issue-account endpoint creates it), never a reason to refuse the row.
+            if (input.Type == EmployeeType.SeasonalWorker && employee.PhoneNumber is not null)
+            {
+                await seasonalAccounts.ProvisionAsync(employee, null, null, cancellationToken);
+            }
         }
 
         try

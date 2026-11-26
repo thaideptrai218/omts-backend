@@ -163,7 +163,7 @@ public class EmployeesV2QaInputSqlServerTests
         var email = new string('a', 256 - "@example.test".Length) + "@example.test";
         var longName = new string('N', 100);
         var username = new string('n', 49) + "a";
-        var account = await owner.PostAsJsonAsync("/api/employees", Profile(longName, NewPhone(), zone.Id).With("account", new { username, email }));
+        var account = await owner.PostAsJsonAsync("/api/employees", StaffProfile(longName, NewPhone(), zone.Id).With("account", new { username, email }));
         Assert.Equal(HttpStatusCode.Created, account.StatusCode);
         Assert.Equal(longName, await QueryAsync(api, db => db.Accounts.Where(a => a.Username == username).Select(a => a.DisplayName).SingleAsync()));
 
@@ -174,7 +174,7 @@ public class EmployeesV2QaInputSqlServerTests
             (new string('N', 101), new { username = $"nv{NewCode()}" }),
         })
         {
-            var refused = await owner.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id).With("account", block));
+            var refused = await owner.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id).With("account", block));
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         }
 
@@ -259,7 +259,7 @@ public class EmployeesV2QaInputSqlServerTests
         await ChangeAsync(api, db => db.Accounts.Where(a => a.Id == other.Id).ExecuteUpdate(s => s.SetProperty(a => a.Email, email).SetProperty(a => a.EmailVerifiedAt, DateTimeOffset.UtcNow)));
         var name = $"Email {NewCode()}";
 
-        var response = await owner.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id).With("account", new { username = $"nv{NewCode()}", email }));
+        var response = await owner.PostAsJsonAsync("/api/employees", StaffProfile(name, NewPhone(), zone.Id).With("account", new { username = $"nv{NewCode()}", email }));
 
         Assert.Equal("MSG-ACCOUNT-09", await response.ErrorCodeAsync());
         Assert.Equal(0, await QueryAsync(api, db => db.Employees.CountAsync(e => e.FullName == name)));
@@ -316,7 +316,7 @@ public class EmployeesV2QaInputSqlServerTests
         var zone = await AddZoneAsync(api, cooperative.Id);
         var username = $"nv{NewCode()}";
 
-        var saved = await CreateAsync(owner, Profile($"Secret {NewCode()}", NewPhone(), zone.Id).With("account", new { username }));
+        var saved = await CreateAsync(owner, StaffProfile($"Secret {NewCode()}", NewPhone(), zone.Id).With("account", new { username }));
         var temporary = saved.GetProperty("temporaryPassword").GetString()!;
         var stored = await QueryAsync(api, db => db.Accounts.Where(a => a.Username == username).Select(a => a.PasswordHash).SingleAsync());
         var rows = await QueryAsync(api, db => db.AuditEvents.Select(e => (e.Before ?? string.Empty) + (e.After ?? string.Empty) + (e.Reason ?? string.Empty)).ToListAsync());
