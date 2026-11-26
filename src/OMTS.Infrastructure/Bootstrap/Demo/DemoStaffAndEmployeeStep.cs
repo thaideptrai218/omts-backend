@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Features.AccessManagement;
@@ -50,7 +51,13 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
 
             if (plan.Username is not null)
             {
-                await SetDemoCredentialsAsync(context, plan, hash, cancellationToken);
+                await SetDemoCredentialsAsync(context, plan, plan.Username, hash, cancellationToken);
+            }
+            else if (employee.AccountId is { } seasonalAccountId && !context.Get<IHostEnvironment>().IsDevelopment())
+            {
+                // A seasonal worker's account has the fixed initial password; on a shared server every demo account has the demo secret instead.
+                var seasonalUsername = await context.Db.Accounts.Where(a => a.Id == seasonalAccountId).Select(a => a.Username).SingleAsync(cancellationToken);
+                await SetDemoCredentialsAsync(context, plan, seasonalUsername, hash, cancellationToken);
             }
 
             if (plan.LeftDaysAgo is { } daysAgo && employee.StatusId == StatusIds.Employee.Working)
@@ -111,9 +118,9 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
     /// earlier run's audit row means the demo login is set, and a later reset by the Owner or a changed password
     /// stays. Recorded in the audit log without any secret.
     /// </summary>
-    private static async Task SetDemoCredentialsAsync(DemoSeedContext context, DemoEmployeePlan plan, string hash, CancellationToken cancellationToken)
+    private static async Task SetDemoCredentialsAsync(DemoSeedContext context, DemoEmployeePlan plan, string username, string hash, CancellationToken cancellationToken)
     {
-        var account = await context.Db.Accounts.SingleAsync(a => a.Username == plan.Username, cancellationToken);
+        var account = await context.Db.Accounts.SingleAsync(a => a.Username == username, cancellationToken);
         if (!account.MustChangePassword || await context.DemoLoginAlreadySetAsync(account.Id, cancellationToken))
         {
             return;
@@ -127,7 +134,7 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         if (plan.Login == DemoLoginKind.EmployeeArea)
         {
             // A made-up id no Zalo user has: it only lets the employee without a pair log in, as after linking.
-            account.ZaloAccountId ??= $"demo-{plan.Username}";
+            account.ZaloAccountId ??= $"demo-{username}";
         }
 
         context.Get<AuditLogService>().Record(new AuditEntry(DemoSeedContext.DemoLoginSetAction, nameof(Account))

@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();
         services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<SeasonalAccountProvisioner>();
         services.AddScoped<EmployeeCodeAllocator>();
         services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeFileService>();
