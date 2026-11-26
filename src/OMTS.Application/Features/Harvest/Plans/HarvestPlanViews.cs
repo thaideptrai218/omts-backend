@@ -82,7 +82,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
             Ref(plan.CreatedByAccountId), plan.AssignedAt, Ref(plan.AssignedByAccountId), plan.CompletedAt, plan.CancelledAt, Ref(plan.CancelledByAccountId), plan.CancelReason,
             lineViews, OrderViews(plan), Progress(visible),
             HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow, mayHarvest.Values.Any(m => m), HarvestPlanProgress.AllDone(plan), plan.Executor),
-            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion));
+            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion), HarvestPlanRosterRules.Summary(plan));
     }
 
     public async Task<IReadOnlyList<HarvestPlanListItem>> ListItemsAsync(IReadOnlyList<HarvestPlan> plans, CancellationToken cancellationToken)
@@ -97,7 +97,8 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
                 p.Id, p.Code, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.Executor, ZonesOf(visible), p.PlannedAt, p.Note,
                 visible.OrderBy(l => l.LineNumber).Select(l => l.Raft.Code).Distinct().ToList(), OrderViews(p), Progress(visible),
                 names.GetValueOrDefault(p.CreatedByAccountId), RowVersionGuard.Encode(p.RowVersion),
-                visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null);
+                visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null,
+                HarvestPlanRosterRules.Summary(p));
         }).ToList();
     }
 

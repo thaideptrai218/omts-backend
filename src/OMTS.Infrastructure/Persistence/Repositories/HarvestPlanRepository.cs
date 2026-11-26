@@ -237,5 +237,6 @@ internal sealed class HarvestPlanRepository(OmtsDbContext db) : IHarvestPlanRepo
             .Include(p => p.Lines).ThenInclude(l => l.ExpectedProduct)
             .Include(p => p.Lines).ThenInclude(l => l.Lot).ThenInclude(l => l!.Lanes)
             .Include(p => p.Orders).ThenInclude(o => o.Order).ThenInclude(o => o.Customer)
+            .Include(p => p.Staff).ThenInclude(s => s.Employee).ThenInclude(e => e.TypePeriods)
             .AsSplitQuery();
 }

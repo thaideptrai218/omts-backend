@@ -17,7 +17,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestPlansController(
     HarvestPlanService plans, HarvestPlanReadService reads, HarvestPlanLaneSkipService skips, HarvestPlanStaffingService staffing,
-    HarvestPlanHandoverService handover) : ControllerBase
+    HarvestPlanHandoverService handover, HarvestPlanRosterService roster) : ControllerBase
 {
     /// <summary>The plans the caller may see, code descending, with filters and paging. A Zone Manager sees only the plans handed over with a line in its zones (and only those lines).</summary>
     [HttpGet]
@@ -127,7 +127,18 @@ public sealed class HarvestPlansController(
     [HttpGet("{id:guid}/staffing")]
     [RequirePermission(PermissionFunctions.HarvestPlans, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<HarvestPlanStaffing>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Staffing(Guid id, CancellationToken cancellationToken) => (await staffing.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Staffing(Guid id, CancellationToken cancellationToken)
+    {
+        var crew = await staffing.GetAsync(id, cancellationToken);
+        if (!crew.IsSuccess)
+        {
+            return crew.ToActionResult(Ok);
+        }
+
+        // The roster of the whole plan (the people chosen and their answers) comes with the crew of the lines.
+        var people = await roster.GetAsync(id, cancellationToken);
+        return Ok(people.IsSuccess ? crew.Value! with { Roster = people.Value } : crew.Value);
+    }
 
     /// <summary>
     /// Sets the whole crew of a line (<c>employeeIds</c>, <c>moveExisting</c>, <c>rowVersion</c> of the plan): employees not listed are taken off (409 MSG-LABOR-07 for one already checked in), new ones get a work assignment
@@ -139,6 +150,72 @@ public sealed class HarvestPlansController(
     [ProducesResponseType<HarvestPlanStaffingLine>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SaveStaffing(Guid id, Guid lineId, SaveHarvestPlanLineStaffingRequest request, CancellationToken cancellationToken) =>
         (await staffing.SaveLineAsync(id, lineId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// The people chosen to harvest the plan with their answers and the people needed (owner decisions of 26/11/2026): each row is <c>Invited</c> (waiting for the employee in the mobile app), <c>Confirmed</c> (the employee accepted),
+    /// <c>ConfirmedManually</c> (the Owner confirmed for them, with a reason), <c>Declined</c> or <c>External</c> (added outside the system, counted as confirmed). <c>summary</c> carries <c>requiredPeople</c>, <c>confirmed</c> (accepted and
+    /// confirmed manually), <c>invited</c>, <c>declined</c>, <c>external</c>, <c>missing</c> and <c>ready</c> (nobody missing; false is a warning, never a block). Light enough to poll every few seconds: the answer has an <c>ETag</c>
+    /// (<c>rosterVersion</c>) and a request with <c>If-None-Match</c> of it gets 304 while nothing changed. The Owner reads any plan; a Zone Manager the plans handed to Zone Managers with a line in its zones.
+    /// </summary>
+    [HttpGet("{id:guid}/staffing/roster")]
+    [RequirePermission(PermissionFunctions.HarvestPlans, PermissionAction.View, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
+    public async Task<IActionResult> Roster(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await roster.GetAsync(id, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            return result.ToActionResult(Ok);
+        }
+
+        var etag = "\"" + result.Value!.RosterVersion + "\"";
+        Response.Headers.ETag = etag;
+        Response.Headers.CacheControl = "private, no-cache";
+        return Request.Headers.IfNoneMatch.ToString() == etag ? StatusCode(StatusCodes.Status304NotModified) : Ok(result.Value);
+    }
+
+    /// <summary>The whole roster as the picker leaves it (<c>employeeIds</c>) with the people needed (<c>requiredPeople</c>, null clears it) and the <c>rowVersion</c> of the plan when sent: new employees are invited and told, unlisted people (not "external") are taken off. Answers the roster.</summary>
+    [HttpPut("{id:guid}/staffing/roster")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveRoster(Guid id, SaveHarvestRosterRequest request, CancellationToken cancellationToken) =>
+        (await roster.SaveAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Chooses employees (<c>employeeIds</c>, staff and seasonal workers): those not on the roster become <c>Invited</c> and each gets a notification HARVEST_SHIFT_INVITED; the others are skipped. Answers the roster. 409 MSG-GEN-09 once the plan is over.</summary>
+    [HttpPost("{id:guid}/staffing/invite")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> InviteStaff(Guid id, InviteHarvestStaffRequest request, CancellationToken cancellationToken) =>
+        (await roster.InviteAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Sets the people the plan needs (<c>requiredPeople</c> 1 to 500, null clears it; <c>rowVersion</c> of the plan when sent) at any time until the plan is Completed or Cancelled. Not enforced anywhere: the plan only reports <c>ready</c>. Answers the roster.</summary>
+    [HttpPut("{id:guid}/staffing/required")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetRequiredPeople(Guid id, SetRequiredPeopleRequest request, CancellationToken cancellationToken) =>
+        (await roster.SetRequiredAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>"Bổ sung nhân công": a person hired on the spot (<c>fullName</c>, <c>phoneNumber</c> required; <c>note</c>, <c>address</c> optional; a Zone Manager also sends <c>ownerApproved</c>). A seasonal worker record and its login are made (the answer carries <c>username</c>, the fixed first <c>temporaryPassword</c> once and <c>fixedPassword</c>) and the person joins the roster as <c>External</c>, counted as confirmed at once.</summary>
+    [HttpPost("{id:guid}/staffing/external")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanExternalAdded>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> AddExternalStaff(Guid id, AddExternalHarvestStaffRequest request, CancellationToken cancellationToken) =>
+        (await roster.AddExternalAsync(id, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+
+    /// <summary>Confirms on behalf of an employee (<c>reason</c> required, audited with who and when): the row becomes <c>ConfirmedManually</c>. 400 MSG-GEN-01 <c>Reason</c> without a reason. Answers the roster.</summary>
+    [HttpPost("{id:guid}/staffing/{rowId:guid}/confirm")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ConfirmStaff(Guid id, Guid rowId, ConfirmHarvestStaffRequest request, CancellationToken cancellationToken) =>
+        (await roster.ConfirmAsync(id, rowId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Takes a person off the roster (<c>reason</c> optional). Answers the roster.</summary>
+    [HttpPost("{id:guid}/staffing/{rowId:guid}/remove")]
+    [RequirePermission(PermissionFunctions.Harvests, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanRoster>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RemoveStaff(Guid id, Guid rowId, RemoveHarvestStaffRequest request, CancellationToken cancellationToken) =>
+        (await roster.RemoveAsync(id, rowId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>"Không thu": leaves lanes of a line out with a reason (<c>laneNumbers</c>, <c>reason</c>); the Owners are told (MSG-PLAN-06). While the plan is Received or Harvesting and the line has no lot (409 MSG-PLAN-03).</summary>
     [HttpPost("{id:guid}/lines/{lineId:guid}/skip-lanes")]

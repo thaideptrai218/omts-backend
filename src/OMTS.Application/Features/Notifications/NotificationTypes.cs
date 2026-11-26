@@ -134,6 +134,12 @@ public static class NotificationTypes
     /// <summary>A Zone Manager handed a harvest plan over ("Bàn giao"), to the Owners (not to an Owner who did it); not mandatory.</summary>
     public const string HarvestPlanHandedOver = "HARVEST_PLAN_HANDED_OVER";
 
+    /// <summary>An employee (staff or seasonal worker) was chosen to harvest a plan and is asked to answer in the mobile app; to the employee. Opens the harvest plan.</summary>
+    public const string HarvestShiftInvited = "HARVEST_SHIFT_INVITED";
+
+    /// <summary>An employee accepted or declined a harvest plan; to the Owners and, for a plan harvested by Zone Managers, the Zone Managers of its zones. Opens the harvest plan.</summary>
+    public const string HarvestShiftResponded = "HARVEST_SHIFT_RESPONDED";
+
     /// <summary>MSG-CLAIM-05, a new sales return, to the Cooperative Owner (BR-CLAIM-03); to the Accountant the same message goes as <see cref="CustomerMoneyOwedBack"/>, only when money is owed back.</summary>
     public const string SalesReturnRecorded = "SALES_RETURN_RECORDED";
 
@@ -228,6 +234,9 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         new(HarvestPlanHandedOver, "Harvest plan handed over", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
+        new(HarvestShiftInvited, "Harvest shift invited", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new(HarvestShiftResponded, "Harvest shift responded", Default, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
         new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
@@ -259,6 +268,8 @@ public static class NotificationTypes
         ["WORK_PLAN_REQUESTED"] = NotificationCategories.Work,
         ["WORK_PLAN_RESPONDED"] = NotificationCategories.Work,
         ["WORK_PLAN_STAFF_RESPONDED"] = NotificationCategories.Work,
+        [HarvestShiftInvited] = NotificationCategories.Work,
+        [HarvestShiftResponded] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_INVITED"] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_ASSIGNED"] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_RESPONDED"] = NotificationCategories.Work,

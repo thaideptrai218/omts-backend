@@ -68,6 +68,48 @@ public sealed class HarvestPlanNotifier(IZoneRecipientQuery recipients, OwnerAct
             plan.Id);
     }
 
+    /// <summary>The employees chosen for the plan are asked to answer in the mobile app; each account is told once (an employee without an account is not told: the Owner can confirm for them).</summary>
+    public async Task StaffInvitedAsync(HarvestPlan plan, IReadOnlyCollection<Guid> employeeAccountIds, CancellationToken cancellationToken)
+    {
+        var rafts = string.Join(", ", plan.Lines.OrderBy(l => l.LineNumber).Select(l => l.Raft.Code).Distinct());
+        await notifications.NotifyAsync(
+            employeeAccountIds,
+            NotificationTypes.HarvestShiftInvited,
+            "Lời mời thu hoạch",
+            $"Bạn được chọn tham gia thu hoạch theo kế hoạch {plan.Code}, {plan.PlannedAt.ToOffset(TimeSpan.FromHours(7)):HH:mm dd/MM/yyyy}, bè {rafts}. Hãy xác nhận hoặc từ chối trong ứng dụng.",
+            RelatedRecordTypes.HarvestPlan,
+            plan.Code,
+            false,
+            cancellationToken,
+            plan.Id);
+    }
+
+    /// <summary>An employee accepted or declined: the Owners (and the Zone Managers of a plan they harvest) see how many are confirmed against the people needed.</summary>
+    public async Task StaffRespondedAsync(HarvestPlan plan, string employeeName, bool accepted, string? reason, HarvestPlanStaffingSummary summary, CancellationToken cancellationToken)
+    {
+        var told = (await recipients.GetCooperativeOwnersAsync(cancellationToken)).ToHashSet();
+        if (plan.Executor == OMTS.Domain.Enums.HarvestPlanExecutor.ZoneManager)
+        {
+            foreach (var zoneId in plan.Lines.Select(l => l.Raft.ZoneId).Distinct())
+            {
+                told.UnionWith(await recipients.GetZoneManagersOrOwnersAsync(zoneId, cancellationToken));
+            }
+        }
+
+        var present = summary.Confirmed + summary.External;
+        var of = summary.RequiredPeople is { } required ? $"{present}/{required}" : present.ToString();
+        await notifications.NotifyAsync(
+            told.ToList(),
+            NotificationTypes.HarvestShiftResponded,
+            "Nhân viên phản hồi kế hoạch thu hoạch",
+            $"{employeeName} {(accepted ? "đã xác nhận" : "từ chối")} kế hoạch thu hoạch {plan.Code}. Đã xác nhận {of} người.{(reason is null ? string.Empty : " Lý do: " + reason + ".")}",
+            RelatedRecordTypes.HarvestPlan,
+            plan.Code,
+            false,
+            cancellationToken,
+            plan.Id);
+    }
+
     /// <summary>MSG-PLAN-06 to the Owners: lanes of a raft will not be harvested, with the reason.</summary>
     public async Task LanesSkippedAsync(HarvestPlan plan, HarvestPlanLine line, IReadOnlyList<int> laneNumbers, string reason, Guid actor, CancellationToken cancellationToken)
     {

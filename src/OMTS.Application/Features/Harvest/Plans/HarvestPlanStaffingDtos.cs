@@ -18,8 +18,8 @@ public sealed record HarvestPlanStaffingLine(
     IReadOnlyList<HarvestPlanStaffingEmployee> Employees,
     bool CanEdit);
 
-/// <summary>The crew of the lines of a plan the caller sees. <paramref name="CanEdit"/>: the caller may choose the crew of at least one of them. <paramref name="RowVersion"/> is the plan's.</summary>
-public sealed record HarvestPlanStaffing(Guid PlanId, string PlanCode, string RowVersion, IReadOnlyList<HarvestPlanStaffingLine> Lines, bool CanEdit);
+/// <summary>The crew of the lines of a plan the caller sees. <paramref name="CanEdit"/>: the caller may choose the crew of at least one of them. <paramref name="RowVersion"/> is the plan's. <paramref name="Roster"/> is the people chosen for the whole plan with their answers and the people needed (see <see cref="HarvestPlanRoster"/>).</summary>
+public sealed record HarvestPlanStaffing(Guid PlanId, string PlanCode, string RowVersion, IReadOnlyList<HarvestPlanStaffingLine> Lines, bool CanEdit, HarvestPlanRoster? Roster = null);
 
 /// <summary>
 /// The whole crew wanted on a line (PUT): employees not listed are taken off, new ones are assigned. <paramref name="MoveExisting"/> moves an employee already on another raft that day (the first answer is a

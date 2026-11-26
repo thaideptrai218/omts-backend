@@ -34,6 +34,11 @@ public class HarvestPlan : AuditableEntity, IHasStatus
     /// <summary>Who harvests the plan, set when it is assigned; <see cref="HarvestPlanExecutor.ZoneManager"/> until then and for every plan made before the choice existed.</summary>
     public HarvestPlanExecutor Executor { get; set; } = HarvestPlanExecutor.ZoneManager;
 
+    /// <summary>
+    /// How many people the Owner needs to harvest the plan (1 to 500, from experience); null until set. Editable until the plan is Completed or Cancelled. Not enforced: starting short is allowed, the plan view only says it is not ready.
+    /// </summary>
+    public int? RequiredPeople { get; set; }
+
     public DateTimeOffset? CompletedAt { get; set; }
     public Guid? CompletedByAccountId { get; set; }
 
@@ -48,6 +53,9 @@ public class HarvestPlan : AuditableEntity, IHasStatus
 
     /// <summary>The orders the plan serves.</summary>
     public ICollection<SalesOrderHarvestPlan> Orders { get; set; } = [];
+
+    /// <summary>The people chosen to harvest the plan and their answers.</summary>
+    public ICollection<HarvestPlanStaffMember> Staff { get; set; } = [];
 }
 
 /// <summary>
@@ -94,4 +102,37 @@ public class HarvestPlanLane
     public string? SkipReason { get; set; }
 
     public bool IsSkipped => SkippedAt is not null;
+}
+
+/// <summary>
+/// A person chosen to harvest a plan (the staffing roster of the plan): an internal employee (Staff) or a seasonal worker, invited and waiting for the answer in the mobile app, or added outside the system on the spot
+/// ("Bổ sung nhân công": a seasonal worker record is made for them and the row is <see cref="HarvestPlanStaffState.External"/>). One row per person per plan.
+/// </summary>
+public class HarvestPlanStaffMember : AuditableEntity
+{
+    public Guid PlanId { get; set; }
+    public HarvestPlan Plan { get; set; } = null!;
+
+    public Guid EmployeeId { get; set; }
+    public Identity.Employee Employee { get; set; } = null!;
+
+    public HarvestPlanStaffState State { get; set; } = HarvestPlanStaffState.Invited;
+
+    /// <summary>When the person was put on the roster.</summary>
+    public DateTimeOffset InvitedAt { get; set; }
+
+    /// <summary>When the employee answered, or the Owner confirmed for them; null while Invited.</summary>
+    public DateTimeOffset? RespondedAt { get; set; }
+
+    /// <summary>Required for ConfirmedManually (why the Owner confirmed instead of the employee); optional for Declined.</summary>
+    public string? Reason { get; set; }
+
+    /// <summary>The account that put the person on the roster.</summary>
+    public Guid? AddedByAccountId { get; set; }
+
+    /// <summary>For ConfirmedManually: the account that confirmed.</summary>
+    public Guid? ConfirmedByAccountId { get; set; }
+
+    /// <summary>The person counts towards the people needed.</summary>
+    public bool CountsAsPresent => State is HarvestPlanStaffState.Confirmed or HarvestPlanStaffState.ConfirmedManually or HarvestPlanStaffState.External;
 }
