@@ -31,6 +31,8 @@ public static partial class ZoneMapNormaliser
     private const int MaxNameLength = 100;
     private const int MaxLabelLength = 20;
     private const int MaxTextLength = 50;
+    private const int MaxLocationLength = 300;
+    private const double MaxTotalAreaHa = 100_000;
 
     public static ZoneMapReading Normalise(RawZoneMap raw)
     {
@@ -39,7 +41,9 @@ public static partial class ZoneMapNormaliser
             .Where(z => z.Corners.Count > 0)
             .Take(MaxZones)
             .ToList();
-        return new ZoneMapReading(ParseMeridian(raw.CentralMeridian), Clean(raw.CoordinateSystem, MaxNameLength), zones);
+        return new ZoneMapReading(
+            ParseMeridian(raw.CentralMeridian), Clean(raw.CoordinateSystem, MaxNameLength), zones,
+            Clean(raw.Location, MaxLocationLength), ParseTotalArea(raw.WrittenTotalArea));
     }
 
     private static ScannedMapZone NormaliseZone(RawMapZone raw)
@@ -97,6 +101,16 @@ public static partial class ZoneMapNormaliser
     {
         var match = string.IsNullOrWhiteSpace(text) ? Match.Empty : BeforeHectare().Match(text);
         return match.Success && VietnameseNumber.Parse(match.Groups["n"].Value.TrimEnd('.', ',')) is > 0 and var ha ? ha : null;
+    }
+
+    /// <summary>
+    /// The hectares of the info-table row "Diện tích đề nghị" ("28,50 ha"): like <see cref="ParseArea"/>, and also a bare number
+    /// ("28,50"), because the row holds nothing else. Null when it is no number, not above zero, or above 100 000 ha.
+    /// </summary>
+    public static double? ParseTotalArea(string? text)
+    {
+        var ha = ParseArea(text) ?? VietnameseNumber.Parse(text?.Trim().TrimEnd('.', ','));
+        return ha is > 0 and <= MaxTotalAreaHa ? ha : null;
     }
 
     /// <summary>

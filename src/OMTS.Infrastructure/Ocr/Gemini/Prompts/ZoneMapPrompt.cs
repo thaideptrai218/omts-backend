@@ -5,13 +5,13 @@ namespace OMTS.Infrastructure.Ocr.Gemini.Prompts;
 /// <summary>
 /// Prompt and schema for the sea-area licence map ("Sơ đồ khu vực biển đề nghị cấp phép nuôi trồng thủy sản"). The model only
 /// copies the text of the info table and of every corner table, as strings exactly as written; the server parses the numbers and
-/// checks the areas (ZoneMapNormaliser). The prompt states no rule the numbers obey and asks for no computing.
+/// checks the areas (ZoneMapNormaliser). Two info-table rows, "Địa điểm" and "Diện tích đề nghị", prefill the zone form. The prompt states no rule the numbers obey and asks for no computing.
 /// </summary>
 internal static class ZoneMapPrompt
 {
     public const string Text = """
         This photo is a Vietnamese sea-area licence map sheet. Read ONLY its tables of text. Ignore the drawing, the contours, the cross-sections, the stamps and the signatures.
-        1. The info table: coordinate_system (the coordinate system, e.g. VN-2000) and central_meridian (the "kinh tuyến trục" value, e.g. 107°45'). The projection zone is not needed.
+        1. The info table: coordinate_system (the coordinate system, e.g. VN-2000), central_meridian (the "kinh tuyến trục" value, e.g. 107°45'), location (the "Địa điểm" row, e.g. "Xã Đông Xá, xã Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh") and written_total_area (the "Diện tích đề nghị" row, e.g. "28,50 ha"). The projection zone is not needed.
         2. Every table titled "TỌA ĐỘ CÁC ĐIỂM GÓC KHU N" (one zone per table, in the order of the sheet):
            - name: the zone name as written (e.g. "Khu 1").
            - written_area: the area written in the table title (e.g. "(Diện tích: 12,50 ha)"), as written.
@@ -25,6 +25,8 @@ internal static class ZoneMapPrompt
           "properties": {
             "coordinate_system": { "type": "STRING", "nullable": true },
             "central_meridian": { "type": "STRING", "nullable": true },
+            "location": { "type": "STRING", "nullable": true },
+            "written_total_area": { "type": "STRING", "nullable": true },
             "zones": {
               "type": "ARRAY",
               "items": {
@@ -53,8 +55,8 @@ internal static class ZoneMapPrompt
               }
             }
           },
-          "required": ["coordinate_system", "central_meridian", "zones"],
-          "propertyOrdering": ["coordinate_system", "central_meridian", "zones"]
+          "required": ["coordinate_system", "central_meridian", "location", "written_total_area", "zones"],
+          "propertyOrdering": ["coordinate_system", "central_meridian", "location", "written_total_area", "zones"]
         }
         """);
 }

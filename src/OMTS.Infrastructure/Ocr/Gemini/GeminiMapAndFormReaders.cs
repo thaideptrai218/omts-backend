@@ -30,7 +30,7 @@ internal static class GeminiJsonShapes
     }
 }
 
-/// <summary>Licence map reader on Gemini (Flash by default, 90 s): copies the info table and the corner tables as text.</summary>
+/// <summary>Licence map reader on Gemini (Flash by default, 90 s): copies the info table (system, meridian, location, total area) and the corner tables as text.</summary>
 internal sealed class GeminiZoneMapReader(IGeminiVisionClient gemini) : IZoneMapReader
 {
     public async Task<ScanRead<RawZoneMap>> ReadAsync(ReadOnlyMemory<byte> photo, string mimeType, CancellationToken cancellationToken) =>
@@ -41,10 +41,12 @@ internal sealed class GeminiZoneMapReader(IGeminiVisionClient gemini) : IZoneMap
                     map.CoordinateSystem,
                     map.CentralMeridian,
                     (map.Zones ?? []).Select(z => new RawMapZone(
-                        z.Name, z.WrittenArea, (z.Corners ?? []).Select(c => new RawMapCorner(c.Label, c.X, c.Y, c.Lat, c.Lon)).ToList())).ToList())
+                        z.Name, z.WrittenArea, (z.Corners ?? []).Select(c => new RawMapCorner(c.Label, c.X, c.Y, c.Lat, c.Lon)).ToList())).ToList(),
+                    map.Location,
+                    map.WrittenTotalArea)
                 : null);
 
-    private sealed record MapAnswer(string? CoordinateSystem, string? CentralMeridian, List<ZoneAnswer>? Zones);
+    private sealed record MapAnswer(string? CoordinateSystem, string? CentralMeridian, string? Location, string? WrittenTotalArea, List<ZoneAnswer>? Zones);
 
     private sealed record ZoneAnswer(string? Name, string? WrittenArea, List<CornerAnswer>? Corners);
 

@@ -310,4 +310,94 @@ public class ZoneBoundaryScanTests
         Assert.Equal("Done", body.GetProperty("status").GetString());
         Assert.True(body.GetProperty("reading").GetProperty("zones")[0].GetProperty("areaMatches").GetBoolean());
     }
+
+    private const string ZoneLessStart = "/api/zones/boundary-scans";
+
+    private static string ZoneLessPoll(Guid scanId) => $"{ZoneLessStart}/{scanId}";
+
+    [Fact]
+    public async Task A_scan_without_a_zone_reads_the_info_rows_and_the_corners()
+    {
+        var reader = new ScriptedScanReader
+        {
+            Map = ScriptedScanReader.SquareHectare with { Location = " Xã Đông Xá, huyện Vân Đồn ", WrittenTotalArea = "28,50 ha" },
+        };
+        using var api = new PhotoScanFactory(reader);
+        var z = await api.ZoneAsync();
+
+        var scanId = await z.Owner.StartScanAsync(ZoneLessStart);
+        var body = await z.Owner.PollUntilDoneAsync(ZoneLessPoll(scanId));
+
+        Assert.Equal("Done", body.GetProperty("status").GetString());
+        var reading = body.GetProperty("reading");
+        Assert.Equal("Xã Đông Xá, huyện Vân Đồn", reading.GetProperty("location").GetString());
+        Assert.Equal(28.5, reading.GetProperty("writtenTotalAreaHa").GetDouble());
+        Assert.Equal("K1", reading.GetProperty("zones")[0].GetProperty("corners")[0].GetProperty("label").GetString());
+    }
+
+    [Fact]
+    public async Task Unread_info_rows_are_null_in_the_reading()
+    {
+        using var api = new PhotoScanFactory(new ScriptedScanReader());
+        var z = await api.ZoneAsync();
+
+        var body = await z.Owner.PollUntilDoneAsync(Poll(z, await z.Owner.StartScanAsync(Start(z))));
+
+        var reading = body.GetProperty("reading");
+        Assert.Equal(JsonValueKind.Null, reading.GetProperty("location").ValueKind);
+        Assert.Equal(JsonValueKind.Null, reading.GetProperty("writtenTotalAreaHa").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_scan_without_a_zone_is_404_on_the_zone_route_and_a_zone_scan_is_404_on_the_zone_less_route()
+    {
+        using var api = new PhotoScanFactory(new ScriptedScanReader());
+        var z = await api.ZoneAsync();
+        var zoneLess = await z.Owner.StartScanAsync(ZoneLessStart);
+        await z.Owner.PollUntilDoneAsync(ZoneLessPoll(zoneLess));
+        var zoneBound = await z.Owner.StartScanAsync(Start(z));
+        await z.Owner.PollUntilDoneAsync(Poll(z, zoneBound));
+
+        var zoneLessOnZoneRoute = await z.Owner.GetAsync(Poll(z, zoneLess));
+        var zoneBoundOnZoneLessRoute = await z.Owner.GetAsync(ZoneLessPoll(zoneBound));
+
+        Assert.Equal(HttpStatusCode.NotFound, zoneLessOnZoneRoute.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, zoneBoundOnZoneLessRoute.StatusCode);
+    }
+
+    [Fact]
+    public async Task Only_the_owner_who_started_a_scan_without_a_zone_reads_it_and_staff_cannot_start_one()
+    {
+        using var api = new PhotoScanFactory(new ScriptedScanReader());
+        var z = await api.ZoneAsync();
+        var scanId = await z.Owner.StartScanAsync(ZoneLessStart);
+        await z.Owner.PollUntilDoneAsync(ZoneLessPoll(scanId));
+        var other = await api.SecondOwnerAsync();
+        var (manager, _) = await WaterTestKit.StaffAsync(api, z.Zone);
+
+        var otherOwner = await other.GetAsync(ZoneLessPoll(scanId));
+        var start = await manager.PostPhotoAsync(ZoneLessStart);
+        var read = await manager.GetAsync(ZoneLessPoll(scanId));
+        var anonymous = await api.CreateClient().PostPhotoAsync(ZoneLessStart);
+
+        Assert.Equal(HttpStatusCode.NotFound, otherOwner.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, start.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+    }
+
+    [Fact]
+    public async Task The_hourly_limit_is_shared_between_the_zone_scan_and_the_scan_without_a_zone()
+    {
+        using var api = new PhotoScanFactory(new ScriptedScanReader(), zoneMapScansPerHour: 2);
+        var z = await api.ZoneAsync();
+        var first = await z.Owner.StartScanAsync(Start(z));
+        await z.Owner.PollUntilDoneAsync(Poll(z, first));
+        var second = await z.Owner.StartScanAsync(ZoneLessStart);
+        await z.Owner.PollUntilDoneAsync(ZoneLessPoll(second));
+
+        var third = await z.Owner.PostPhotoAsync(ZoneLessStart);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, third.StatusCode);
+    }
 }
