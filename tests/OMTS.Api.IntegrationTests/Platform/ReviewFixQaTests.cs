@@ -171,7 +171,7 @@ public class ReviewFixQaTests
         var verify = check.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Contains(outcome.Messages, m => m == "Default roles already exist.");
-        Assert.Equal(2, await verify.Roles.CountAsync());
+        Assert.Equal(FixedRoles.All.Count, await verify.Roles.CountAsync());
         Assert.Equal(1, await verify.Roles.CountAsync(r => r.Code == FixedRoles.ZoneManagerCode && r.Name == "Zone Lead"));
         Assert.Equal(1, await verify.Cooperatives.CountAsync());
         Assert.Equal(1, await verify.Accounts.CountAsync(a => a.SubjectType == SubjectType.CooperativeOwner));

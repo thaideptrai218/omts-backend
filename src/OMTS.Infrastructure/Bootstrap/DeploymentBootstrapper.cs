@@ -121,7 +121,10 @@ public sealed class DeploymentBootstrapper(
         }
 
         // Last, and never a reason to fail: it only needs the outside list of provinces and wards, which may be out of reach.
-        messages.Add(await seasonalAccounts.RunAsync(cancellationToken));
+        // On a shared demo server every account has the demo secret and no account may hold a fixed, well-known password, so the seasonal accounts are not backfilled there.
+        messages.Add(seedDemoData && !environment.IsDevelopment()
+            ? "Seasonal accounts: skipped (demo data on a shared server: no account holds the fixed initial password)."
+            : await seasonalAccounts.RunAsync(cancellationToken));
         messages.Add(await addressCodes.RunAsync(cancellationToken));
 
         return new BootstrapOutcome(Success, messages);
