@@ -6,7 +6,7 @@ the PaddleOCR sidecar and its deployment guide.
 | What | Endpoint | Style | Reader (default model, timeout) |
 |---|---|---|---|
 | Water meter display (WATER-01) | `POST api/zones/{zoneId}/water-measurements/recognize` | synchronous, response unchanged | `Meter`: `gemini-3.5-flash-lite`, 25 s |
-| Sea-area licence map, corner tables (FARM-02) | `POST api/zones/{zoneId}/boundary-scans`, `GET …/{scanId}` | asynchronous scan | `ZoneMap`: `gemini-3.5-flash`, 90 s |
+| Sea-area licence map, corner tables (FARM-02) | `POST api/zones/{zoneId}/boundary-scans`, `GET …/{scanId}`; without a zone (create-zone form): `POST api/zones/boundary-scans`, `GET api/zones/boundary-scans/{scanId}` | asynchronous scan | `ZoneMap`: `gemini-3.5-flash`, 90 s |
 | Raft form (FARM-04) | `POST api/rafts/form-scans`, `GET …/{scanId}` | asynchronous scan | `RaftForm`: `gemini-3.5-flash-lite`, 45 s |
 
 The API contract for the scans is in [api-behaviour-reference.md](api-behaviour-reference.md#farming-zones-and-licenses). The cage
@@ -66,6 +66,23 @@ A failed read is always a value, never a server error:
 
 Other 4xx answers (for example 413) are `BAD_RESPONSE` too. For the meter a failure is `ocr.status = Failed` with the photo key, as before.
 
+## Licence map reading
+
+The `ZoneMap` reader copies two things, both as text, never the drawing:
+
+- **The info table:** `coordinate_system`, `central_meridian`, and since 26/11/2026 `location` (the "Địa điểm" row, e.g. "Xã Đông Xá, xã
+  Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh") and `written_total_area` (the "Diện tích đề nghị" row, e.g. "28,50 ha"). The server turns
+  them into `reading.location` (trimmed, at most 300 characters, null when unread) and `reading.writtenTotalAreaHa` (a number above 0
+  and at most 100 000, null when unread or unreadable; "28,50 ha" and a bare "28,50" both read). Both only prefill the create-zone form,
+  which the Owner reviews: a misread total costs one edit.
+- **Every table "TỌA ĐỘ CÁC ĐIỂM GÓC KHU N":** the area name, the written area and each corner row (see the API contract).
+
+A scan can start with no zone (`POST api/zones/boundary-scans`, for the create-zone form, Owner only): it uses the same queue, limits
+(20 an hour per account, shared with the zone scans) and retention, and is found only on its own route.
+
+The `Fake` provider (Development) answers the sample map: location "Xã Đông Xá, xã Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh", total 28.5 ha,
+central meridian 107°45', four areas of 12.5, 6.2, 5.8 and 4.0 ha (rectangles whose grid areas match the written ones).
+
 ## Asynchronous scans (licence map, raft form)
 
 A scan takes 30 s to 2 min, longer than staging's nginx (`proxy_read_timeout 60s`) and CloudFront's 30 s origin timeout allow, so it is
@@ -78,7 +95,8 @@ start-then-poll: `POST` answers 202 `{ scanId }`, the client polls `GET` every 2
   counted from its completion; a scan still waiting or running never expires.
 - **The API must run as a single instance.** A second instance does not know the scans of the first, and a restart loses the scans in
   flight; the client simply scans again. The queue is generic (`IScanQueue`), so the cage ledger scan can reuse it.
-- Only the Owner who started a scan can read it; any other account, zone or route gets 404.
+- Only the Owner who started a scan can read it; any other account, zone or route gets 404 (a scan started with no zone is found only on
+  `GET api/zones/boundary-scans/{scanId}`).
 
 ## Rest contract used (checked against the google-genai SDK)
 
