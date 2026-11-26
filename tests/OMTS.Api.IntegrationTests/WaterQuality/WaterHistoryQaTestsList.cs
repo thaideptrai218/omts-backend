@@ -125,21 +125,6 @@ public class WaterHistoryQaTestsList(AuthApiFactory api) : IClassFixture<AuthApi
         Assert.Equal("None", row.Text("alertState"));
     }
 
-    [Fact]
-    public async Task A_correction_keeps_the_thresholds_of_the_measurement_and_marks_the_new_values()
-    {
-        var z = await api.ZoneAsync();
-        var measured = await z.RecordedAsync(7m, 20m, temperature: 25m);
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 1m, phMax = 2m })).StatusCode);
-
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(measured.Id(), 7m, 20m, temperature: 40m)).StatusCode);
-
-        var row = (await z.Owner.GetFromJsonAsync<JsonElement>(z.Base)).GetProperty("items")[0];
-        Assert.Equal(6.5m, row.GetProperty("thresholdsUsed").GetProperty("phMin").GetDecimal());
-        Assert.Equal("TEMPERATURE", row.GetProperty("valuesOutside")[0].Text("indicator"));
-        Assert.Equal(JsonValueKind.Null, row.GetProperty("voidReason").ValueKind);
-    }
-
     // Finding L-4: without the 366-day and 10-year limits one request reads every Active row of the zone, as far back as
     // 2000-01-01, with no cap and no paging. No number is agreed, so any limit passes: a refusal or at most 1000 points.
     [Fact(Skip = "Waiting for the PM: should the chart and export have a row cap, and what number? The SRS sets none; about 330 rows per zone in 27 years at monthly measuring.")]

@@ -64,10 +64,6 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var next = await z.RecordedAsync(7.8m, 12m, client: manager);
         Assert.Equal(10m, next.GetProperty("thresholdsUsed").GetProperty("salinityMin").GetDecimal());
         Assert.Empty(await api.AlertsOfAsync(next.Id()));
-
-        // The temperature is checked against the copy too: 36 is inside today's 5–40, outside the 10–35 of the measurement.
-        var corrected = await (await manager.CorrectAsync(body.Id(), 7.8m, 20m, temperature: 36m)).Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Temperature 36.00 > 35.00", corrected.Text("violatedValues"));
     }
 
     [Theory]
@@ -245,7 +241,6 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
             ("chart", false, c => c.GetAsync($"{z.Base}/chart")),
             ("export", false, c => c.GetAsync($"{z.Base}/export")),
             ("detail", false, c => c.GetAsync($"/api/water-measurements/{id}")),
-            ("correct", false, c => c.CorrectAsync(id, 7.1m, 20m)),
             ("zone thresholds", false, c => c.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds")),
             ("set zone thresholds", true, c => c.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", thresholds)),
             ("set all thresholds", true, c => c.PutAsJsonAsync("/api/water-thresholds", thresholds)),
@@ -386,22 +381,6 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var list = await z.Owner.GetAsync($"{z.Base}?from=2000-01-01&to=2000-01-01");
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Contains((await saved.Content.ReadFromJsonAsync<JsonElement>()).Id().ToString(), await list.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task A_correction_to_a_time_before_the_first_day_of_the_history_is_refused()
-    {
-        var z = await api.ZoneAsync();
-        var measuredAt = DateTimeOffset.UtcNow.AddHours(-1);
-        var id = (await z.RecordedAsync(7m, 20m, measuredAt)).Id();
-
-        var refused = await z.Owner.CorrectAsync(id, 7.1m, 20m, measuredAt: new DateTimeOffset(1999, 12, 31, 23, 59, 59, BusinessClock.UtcOffset));
-
-        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
-        Assert.Equal("Measured at", (await refused.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
-        var kept = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == id));
-        Assert.Equal((7m, measuredAt), (kept.Ph, kept.MeasuredAt));
     }
 
     // The client list says these are ignored; a client that has not been updated must not save a Draft or fail.

@@ -24,6 +24,16 @@ public interface IRaftRepository
     /// <summary>Rafts of a zone with their lanes, optional status, ordered by code.</summary>
     Task<IReadOnlyList<Raft>> ListByZoneAsync(Guid zoneId, int? statusId, CancellationToken cancellationToken);
 
+    /// <summary>Rafts of a zone as list rows (lane counts and the Open cycle in the same query), optional status, ordered by code.</summary>
+    Task<IReadOnlyList<RaftListRow>> ListRowsByZoneAsync(Guid zoneId, int? statusId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One page of the rafts of the permitted zones (of <paramref name="zoneId"/> when given) whose code contains <paramref name="search"/>,
+    /// by code, newest code first, with the total before paging.
+    /// </summary>
+    Task<(IReadOnlyList<RaftListRow> Items, int Total)> SearchRowsAsync(
+        PermittedZones permitted, Guid? zoneId, int? statusId, string? search, int page, int pageSize, CancellationToken cancellationToken);
+
     /// <summary>Id, code and zone code of the rafts of these zones, Discontinued ones included, by zone code and code.</summary>
     Task<IReadOnlyList<RaftLookupItem>> ListForLookupAsync(PermittedZones permitted, CancellationToken cancellationToken);
 

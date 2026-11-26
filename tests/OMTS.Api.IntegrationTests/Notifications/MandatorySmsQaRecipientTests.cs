@@ -94,35 +94,15 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task The_owner_who_records_or_corrects_is_left_out_and_the_others_are_told()
+    public async Task The_owner_who_records_is_left_out_and_the_others_are_told()
     {
         var z = await api.ZoneAsync();
         var secondOwner = await api.AddAccountAsync(NewCode(), NewPassword());
         var (_, manager) = await api.StaffAsync(z.Zone);
-        var recorded = await z.RecordedAsync(9.1m, 20m);
+        await z.RecordedAsync(9.1m, 20m);
 
         Assert.Empty(api.SmsTo(z.OwnerAccount));
         Assert.Single(api.SmsTo(secondOwner));
-        Assert.Single(api.SmsTo(manager));
-
-        var corrected = await z.Owner.CorrectAsync(recorded.Id(), 6.0m, 20m);
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
-
-        Assert.Empty(api.SmsTo(z.OwnerAccount));
-        Assert.Equal(2, api.SmsTo(secondOwner).Count);
-    }
-
-    // BR-WATER-05 tells the same people "only when the result changes", so a new reading on the same side is no second SMS.
-    [Fact]
-    public async Task A_correction_that_stays_on_the_same_side_sends_no_second_sms()
-    {
-        var z = await api.ZoneAsync();
-        var manager = await ManagerAsync(z.Zone);
-        var id = (await z.RecordedAsync(9.1m, 20m)).Id();
-
-        var corrected = await z.Owner.CorrectAsync(id, 9.5m, 20m);
-
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         Assert.Single(api.SmsTo(manager));
     }
 

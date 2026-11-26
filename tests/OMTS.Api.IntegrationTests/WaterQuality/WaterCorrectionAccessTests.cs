@@ -12,30 +12,27 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// WATER-02 PRE-2 and BR-WATER-06: a Zone Manager changes only what they recorded, in a zone they can still access, the
-/// Cooperative Owner any measurement, and nobody touches a Discontinued zone.
+/// WATER-02 PRE-2 and BR-WATER-06: a Zone Manager voids only what they recorded, in a zone they can still access, the
+/// Cooperative Owner any measurement, and nobody voids in a Discontinued zone.
 /// </summary>
 public class WaterCorrectionAccessTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task A_zone_manager_corrects_and_voids_their_own_measurement()
+    public async Task A_zone_manager_voids_their_own_measurement()
     {
         var z = await api.ZoneAsync();
         var (manager, account) = await api.StaffAsync(z.Zone);
-        var toCorrect = await z.RecordedAsync(7m, 20m, client: manager);
         var toVoid = await z.RecordedAsync(7m, 20m, client: manager);
 
-        var corrected = await manager.CorrectAsync(toCorrect.Id(), 7.1m, 20m);
         var voided = await manager.VoidAsync(toVoid.Id());
 
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
-        var body = await corrected.Content.ReadFromJsonAsync<JsonElement>();
+        var body = await voided.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(account.Id, body.GetProperty("measuredBy").GetProperty("id").GetGuid());
     }
 
     [Fact]
-    public async Task A_zone_manager_cannot_change_what_another_person_recorded_even_at_all_zones()
+    public async Task A_zone_manager_cannot_void_what_another_person_recorded_even_at_all_zones()
     {
         var z = await api.ZoneAsync();
         var (colleague, _) = await api.StaffAsync(z.Zone);
@@ -50,11 +47,9 @@ public class WaterCorrectionAccessTests(AuthApiFactory api) : IClassFixture<Auth
         {
             foreach (var id in new[] { byColleague.Id(), byOwner.Id() })
             {
-                foreach (var response in new[] { await client.CorrectAsync(id, 7.1m, 20m), await client.VoidAsync(id) })
-                {
-                    Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-                    Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-                }
+                var response = await client.VoidAsync(id);
+                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+                Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
             }
         }
 
@@ -64,23 +59,20 @@ public class WaterCorrectionAccessTests(AuthApiFactory api) : IClassFixture<Auth
     }
 
     [Fact]
-    public async Task The_owner_corrects_and_voids_a_measurement_of_a_zone_manager_who_stays_its_recorder()
+    public async Task The_owner_voids_a_measurement_of_a_zone_manager_who_stays_its_recorder()
     {
         var z = await api.ZoneAsync();
         var (manager, account) = await api.StaffAsync(z.Zone);
-        var toCorrect = await z.RecordedAsync(7m, 20m, client: manager);
         var toVoid = await z.RecordedAsync(7m, 20m, client: manager);
 
-        var corrected = await z.Owner.CorrectAsync(toCorrect.Id(), 7.1m, 20m);
         var voided = await z.Owner.VoidAsync(toVoid.Id());
 
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
-        Assert.Equal(account.Id, (await corrected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measuredBy").GetProperty("id").GetGuid());
+        Assert.Equal(account.Id, (await voided.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measuredBy").GetProperty("id").GetGuid());
     }
 
     [Fact]
-    public async Task A_recorder_who_lost_the_zone_and_other_roles_cannot_change_it()
+    public async Task A_recorder_who_lost_the_zone_and_other_roles_cannot_void_it()
     {
         var z = await api.ZoneAsync();
         var (former, account) = await api.StaffAsync(z.Zone);
@@ -93,11 +85,9 @@ public class WaterCorrectionAccessTests(AuthApiFactory api) : IClassFixture<Auth
 
         foreach (var client in new[] { former, accountant, outsider })
         {
-            foreach (var response in new[] { await client.CorrectAsync(saved.Id(), 7.1m, 20m, raftId: z.Raft.Id), await client.VoidAsync(saved.Id()) })
-            {
-                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-                Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-            }
+            var response = await client.VoidAsync(saved.Id());
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(StatusIds.WaterMeasurement.Active, await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == saved.Id()).Select(m => m.StatusId).SingleAsync()));
@@ -113,12 +103,10 @@ public class WaterCorrectionAccessTests(AuthApiFactory api) : IClassFixture<Auth
 
         foreach (var client in new[] { z.Owner, manager })
         {
-            foreach (var response in new[] { await client.CorrectAsync(saved.Id(), 7m, 20m), await client.VoidAsync(saved.Id()) })
-            {
-                Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-                Assert.Equal("MSG-GEN-09", await response.ErrorCodeAsync());
-                Assert.Equal("Farming zone is Discontinued and cannot be used for this action.", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
-            }
+            var response = await client.VoidAsync(saved.Id());
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("MSG-GEN-09", await response.ErrorCodeAsync());
+            Assert.Equal("Farming zone is Discontinued and cannot be used for this action.", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
 
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/water-measurements/{saved.Id()}")).StatusCode);
         }

@@ -193,12 +193,21 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
   edit answers MSG-GEN-09 until `POST /api/zones/{id}/reactivate`.
   The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
+- Zone save (`POST /api/zones`, `PUT /api/zones/{id}`, 26/11/2026): only `code` (up to 50) and `name` (up to 200) are required.
+  `location` (up to 500 characters, blank is null), `area` (hectares, above 0 when sent) and the pin `latitude` + `longitude` are
+  optional and still checked when sent: the pin is both numbers or none, (0, 0) and a swapped pair are refused, a pin outside
+  Vietnam only warns (`COORDINATES_OUTSIDE_VIETNAM`). Once a zone has a boundary its pin belongs to the server (see below): an edit
+  never moves or wipes it, whatever `latitude` and `longitude` it sends or omits. An edit of a zone without a boundary that omits
+  the pin keeps the stored pin (the apps have no pin field any more); sending both numbers moves it.
 - Zone boundary (PM decision 25/11/2026, warn, never block): `PUT /api/zones/{id}/boundary` (Owner, In Use zone, `rowVersion`
   as the edit) with `{ boundary, rowVersion }` saves the licensed sea area the app read from the photographed map, as RFC 7946
   GeoJSON in WGS84 (positions `[longitude, latitude]`): a `FeatureCollection` of 1 to 10 `Feature`s, each a `Polygon` of one
   ring (no holes) of 3 to 100 distinct corners, inside Vietnam; `properties` `{ name, corners }` is optional (name up to 100
   characters, one label of up to 20 per corner). The server rounds to 6 decimals, drops an altitude, closes an open ring and
-  keeps the ring order; `boundary: null` clears it. A refusal is MSG-GEN-01 naming `Boundary`, `Boundary coordinates`,
+  keeps the ring order; `boundary: null` clears it. A saved boundary also sets the zone `latitude` and `longitude` to its centroid
+  (the centroid of all areas, each weighted by its own area, rounded to 6 decimals): the map marker and `RAFT_FAR_FROM_ZONE` follow
+  it. Clearing the boundary keeps the last pin. A zone without a pin never makes a raft `RAFT_FAR_FROM_ZONE`.
+  A refusal is MSG-GEN-01 naming `Boundary`, `Boundary coordinates`,
   `Boundary name` or `Boundary corners`. The answer is `{ zone, message, messageCode, warnings }`; `zone.boundary`, also in
   `GET /api/zones/{id}` and `GET /api/zones/map`, is the saved GeoJSON or null. `RAFTS_OUTSIDE_ZONE_BOUNDARY`
   (`details: { count, raftCodes }`) names the In Use rafts pinned outside the new boundary. A raft create or edit pinned more
@@ -206,9 +215,14 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   edge), besides `RAFT_FAR_FROM_ZONE`.
 - Licence map scan (26/11/2026, [ocr-gemini.md](ocr-gemini.md)): `POST /api/zones/{id}/boundary-scans` (Owner, zone In Use else 409
   MSG-GEN-09; multipart `photo`, JPEG/PNG, 10 MB) answers 202 `{ scanId }`; `GET /api/zones/{id}/boundary-scans/{scanId}` answers
-  `{ status: Pending|Done|Failed, errorCode, reading }`. Only the corner-coordinate tables and the info table are read, never the
-  drawing. `reading` is `{ centralMeridian, coordinateSystem, zones: [{ name, writtenAreaHa, gridAreaHa, areaMatches, corners:
-  [{ label, x, y, lat, lon }] }] }`: `x` (northing) and `y` (easting) are VN-2000 grid metres, null when unreadable or outside
+  `{ status: Pending|Done|Failed, errorCode, reading }`. The same pair exists without a zone, for the create-zone form:
+  `POST /api/zones/boundary-scans` (Owner, same photo rules, no zone check) and `GET /api/zones/boundary-scans/{scanId}`; both
+  routes share the queue, the one-pending-scan-per-account rule, the 20 scans an hour, the 15-minute retention and the owner-only
+  read, and a scan is found only on the route that started it (a zone-less scan on a zone route, or the reverse, is 404). Only the
+  corner-coordinate tables and the info table are read, never the drawing. `reading` is `{ centralMeridian, coordinateSystem,
+  location, writtenTotalAreaHa, zones: [{ name, writtenAreaHa, gridAreaHa, areaMatches, corners: [{ label, x, y, lat, lon }] }] }`:
+  `location` is the "Địa điểm" row as written (trimmed, up to 300 characters) and `writtenTotalAreaHa` the "Diện tích đề nghị" row
+  in hectares (above 0, up to 100 000), both null when unread and both only a prefill for the zone form; `x` (northing) and `y` (easting) are VN-2000 grid metres, null when unreadable or outside
   2.0e6…2.7e6 / 3.0e5…7.0e5; `lat`/`lon` are copied as written when the table has them; `gridAreaHa` is the shoelace area (null
   under 3 corners); `areaMatches` is |grid − written| ≤ max(2 % of written, 0.05 ha), a warning for the review and never a save
   block. The server does not convert to WGS84: the app does, and saves with `PUT …/boundary`. A scan is kept 15 minutes and only
@@ -217,9 +231,24 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
 - Raft form scan (26/11/2026): `POST /api/rafts/form-scans` (Owner, like creating a raft) and `GET /api/rafts/form-scans/{scanId}`
   work the same way; `reading` is `{ code, size, laneCount, location, notes, latitude, longitude }`, each a string copied as
   written (trimmed, blank as null) or null, validated by the app as for a form typed by hand. 30 scans an hour per account.
+- Raft list (26/11/2026): `GET /api/rafts?zoneId&statusId&search&page&pageSize` answers `{ items, page, pageSize, total }`, rafts by
+  code, newest code first (code descending, then id), `search` a part of the code, `zoneId` optional (without it every zone the
+  caller may read; a zone the caller may not read is 403, an unknown one 404, a caller who reads no raft at all 403), `pageSize`
+  at most 100. An item is `{ id, zoneId, code, latitude, longitude, size, laneCount, statusId, status, lengthM, widthM, areaM2,
+  damagedLaneCount, outOfServiceLaneCount, currentCycle }`; `currentCycle` is `{ id, startDate }` of the raft's Open cultivation cycle
+  or null, read in the same SQL statement as the page (a left join on the Open cycles, at most one per raft
+  by `UX_CultivationCycles_RaftId_Open`; no query per raft). `GET /api/zones/{zoneId}/rafts?statusId` (a plain array by code) has the
+  same items.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
+
+### Water measurements: voided, never corrected (owner decision of 26/11/2026)
+
+A water measurement is never corrected: `POST /api/water-measurements/{id}/corrections` was removed (404) and only
+`POST /api/water-measurements/{id}/void` (`{ reason }`, WATER-02) remains: a wrong measurement is voided and recorded again. The
+corrections already made stay in the audit log as `WaterMeasurement.Corrected` rows and are shown in the record history as before;
+MSG-WATER-03 keeps its `corrected` parameter (false for every new alert) so earlier notifications still render.
 
 ### Notifications
 

@@ -220,4 +220,49 @@ public class ZoneMapNormaliserTests
         Assert.Null(reading.CentralMeridian);
         Assert.Null(reading.CoordinateSystem);
     }
+
+    [Fact]
+    public void The_info_table_location_and_written_total_area_are_read()
+    {
+        var reading = ZoneMapNormaliser.Normalise(new RawZoneMap(
+            "VN-2000", "107°45'", [], "  Xã Đông Xá, xã Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh ", "28,50 ha"));
+
+        Assert.Equal("Xã Đông Xá, xã Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh", reading.Location);
+        Assert.Equal(28.5, reading.WrittenTotalAreaHa);
+    }
+
+    [Fact]
+    public void Missing_info_rows_are_null()
+    {
+        var reading = ZoneMapNormaliser.Normalise(new RawZoneMap("VN-2000", "107°45'", [], "   ", null));
+
+        Assert.Null(reading.Location);
+        Assert.Null(reading.WrittenTotalAreaHa);
+    }
+
+    [Fact]
+    public void A_location_over_300_characters_is_cut()
+    {
+        var reading = ZoneMapNormaliser.Normalise(new RawZoneMap(null, null, [], new string('a', 400), null));
+
+        Assert.Equal(300, reading.Location!.Length);
+    }
+
+    [Theory]
+    [InlineData("28,50 ha", 28.5)]
+    [InlineData("28.5 ha", 28.5)]
+    [InlineData("Diện tích đề nghị: 1.250,00 ha", 1250.0)]
+    [InlineData("28,50", 28.5)] // the row holds nothing but the number
+    [InlineData(" 28,50. ", 28.5)]
+    [InlineData("100000 ha", 100000.0)]
+    [InlineData("0 ha", null)]
+    [InlineData("0,00", null)]
+    [InlineData("100001 ha", null)]
+    [InlineData("hai mươi tám ha", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void The_written_total_area_is_a_number_above_zero_up_to_100000_hectares(string? text, double? expected)
+    {
+        Assert.Equal(expected, ZoneMapNormaliser.ParseTotalArea(text));
+    }
 }

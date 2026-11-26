@@ -1,5 +1,6 @@
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Employees;
+using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Farming.Rafts;
 
@@ -58,9 +59,17 @@ public sealed record RaftPhotoView(Guid Id, int SortOrder, string Url);
 /// <param name="AreaM2">Length times width, worked out; null when a side is unknown.</param>
 /// <param name="DamagedLaneCount">Lanes In Use that are damaged now.</param>
 /// <param name="OutOfServiceLaneCount">Lanes In Use that were put out of service.</param>
+/// <param name="CurrentCycle">The Open cultivation cycle of the raft; null when it has none (a raft holds at most one).</param>
 public sealed record RaftListItem(
     Guid Id, Guid ZoneId, string Code, decimal? Latitude, decimal? Longitude, string? Size, int LaneCount, int StatusId, string Status,
-    decimal? LengthM = null, decimal? WidthM = null, decimal? AreaM2 = null, int DamagedLaneCount = 0, int OutOfServiceLaneCount = 0);
+    decimal? LengthM = null, decimal? WidthM = null, decimal? AreaM2 = null, int DamagedLaneCount = 0, int OutOfServiceLaneCount = 0,
+    RaftCurrentCycle? CurrentCycle = null);
+
+/// <summary>The Open cultivation cycle of a raft in a list.</summary>
+public sealed record RaftCurrentCycle(Guid Id, DateOnly StartDate);
+
+/// <summary>A raft of a list as the query reads it: the lane counts and the Open cycle are worked out by the database, in the same query.</summary>
+public sealed record RaftListRow(Raft Raft, int LaneCount, int DamagedLaneCount, int OutOfServiceLaneCount, RaftCurrentCycle? CurrentCycle);
 
 /// <summary>A raft in the filters of purchase receipts and material cost: names it, and nothing else of FARM-04.</summary>
 public sealed record RaftLookupItem(Guid Id, string Code, string ZoneCode, Guid ZoneId);

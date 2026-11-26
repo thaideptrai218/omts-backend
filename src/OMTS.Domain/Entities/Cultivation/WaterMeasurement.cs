@@ -8,7 +8,7 @@ namespace OMTS.Domain.Entities.Cultivation;
 /// <summary>
 /// One water measurement of a zone, made at a raft and confirmed by the person who recorded it against the meter photo
 /// (WATER-01): no row exists before that confirmation and the values the OCR Service suggested are not kept
-/// (BR-WATER-02). A correction changes this same row and a wrong measurement is voided, never deleted (BR-WATER-06).
+/// (BR-WATER-02). A wrong measurement is voided, never corrected or deleted (BR-WATER-06).
 /// </summary>
 public class WaterMeasurement : AuditableEntity, IHasStatus
 {

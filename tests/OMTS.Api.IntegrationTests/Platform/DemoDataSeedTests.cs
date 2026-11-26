@@ -257,7 +257,7 @@ public class DemoDataSeedTests
     }
 
     // WATER (OMTS-219): thresholds and 30 days of readings per In Use zone, at its rafts, each with a temperature and a photo:
-    // three outside the thresholds, a mistyped salinity corrected in place and one voided reading.
+    // three outside the thresholds and one voided reading.
     private static async Task AssertWaterDataAsync(OmtsDbContext db, DateOnly today)
     {
         var zones = await db.FarmingZones.Where(z => z.StatusId == StatusIds.Usage.InUse).ToListAsync();
@@ -268,8 +268,7 @@ public class DemoDataSeedTests
         Assert.Equal(60, water.Count);
         Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active));
         Assert.DoesNotContain(water, m => m.Salinity == 2.6m);
-        var correctedId = await db.AuditEvents.Where(e => e.Action == "WaterMeasurement.Corrected").Select(e => e.RecordId).SingleAsync();
-        Assert.Single(water, m => m.Id == correctedId && m.Salinity == 26.0m && m.StatusId == StatusIds.WaterMeasurement.Active && !m.ThresholdExceeded && m.AlertedAt is null);
+        Assert.False(await db.AuditEvents.AnyAsync(e => e.Action == "WaterMeasurement.Corrected"));
         Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided && m.VoidReason is { Length: > 0 });
         Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active && m.ThresholdExceeded));
         Assert.All(water, m => Assert.Equal((7.5m, 15m, 32m), (m.PhMinUsed!.Value, m.TemperatureMinUsed!.Value, m.TemperatureMaxUsed!.Value)));

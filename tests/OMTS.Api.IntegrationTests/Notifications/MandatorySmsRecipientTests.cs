@@ -55,22 +55,6 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
     }
 
     [Fact]
-    public async Task A_correction_that_still_alerts_says_so_in_the_sms()
-    {
-        var z = await api.ZoneAsync();
-        var (_, manager) = await api.StaffAsync(z.Zone);
-        var id = (await z.RecordedAsync(9.1m, 20m)).Id();
-
-        // To the other side of the range: BR-WATER-05 sends only when the result changes.
-        var corrected = await z.Owner.CorrectAsync(id, 6.0m, 20m);
-
-        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
-        var messages = api.SmsTo(manager);
-        Assert.Equal(2, messages.Count);
-        Assert.StartsWith("Water alert (corrected measurement): zone", messages[0].Text);
-    }
-
-    [Fact]
     public async Task A_measurement_within_the_thresholds_sends_nothing()
     {
         var z = await api.ZoneAsync();

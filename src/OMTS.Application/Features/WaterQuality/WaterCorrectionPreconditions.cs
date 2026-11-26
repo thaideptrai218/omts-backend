@@ -11,7 +11,7 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// What WATER-02 asks before anything changes (PRE-2, BR-WATER-06, GBR-01): a Zone Manager changes only what they recorded,
+/// What WATER-02 asks before a void (PRE-2, BR-WATER-06, GBR-01): a Zone Manager voids only what they recorded,
 /// in a zone they can still access, the Cooperative Owner any measurement, and only an Active measurement of an In Use zone.
 /// </summary>
 public sealed class WaterCorrectionPreconditions(
@@ -44,21 +44,5 @@ public sealed class WaterCorrectionPreconditions(
         return measurement.Zone.StatusId == StatusIds.Usage.InUse
             ? measurement
             : AppError.Conflict(UserMessages.WrongStatus(ZoneObjectName, statusCatalog.DisplayNameOf(measurement.Zone.StatusId)));
-    }
-
-    /// <summary>
-    /// The raft the corrected measurement names, or null when the request cannot name it: another raft must be In Use in
-    /// the same zone (BR-WATER-01); the raft it already has stays allowed after that raft was discontinued, as it only
-    /// records where the water was measured.
-    /// </summary>
-    public async Task<Raft?> RaftOfCorrectionAsync(WaterMeasurement measurement, Guid? raftId, CancellationToken cancellationToken)
-    {
-        if (raftId == measurement.RaftId)
-        {
-            return measurement.Raft;
-        }
-
-        var raft = raftId is { } id ? await measurements.GetRaftAsync(id, cancellationToken) : null;
-        return raft is not null && raft.ZoneId == measurement.ZoneId && raft.StatusId == StatusIds.Usage.InUse ? raft : null;
     }
 }

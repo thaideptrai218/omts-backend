@@ -25,11 +25,11 @@ public class WaterCorrectionRecipientsTests(AuthApiFactory api) : IClassFixture<
         var (_, accountant) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
         var (_, otherZoneManager) = await api.StaffAsync((await api.ZoneAsync()).Zone);
         var toWithdraw = await z.RecordedAsync(9m, 20m);
-        var toAlert = await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddMinutes(-1));
+        var toAlert = await z.RecordedAsync(9m, 20m, measuredAt: DateTimeOffset.UtcNow.AddMinutes(-1));
 
-        await z.Owner.CorrectAsync(toAlert.Id(), 9m, 20m, measuredAt: DateTimeOffset.UtcNow.AddMinutes(-1));
+        // The later one is voided first, so the earlier one becomes the latest and its alert is withdrawn in its turn.
         await z.Owner.VoidAsync(toAlert.Id());
-        await z.Owner.CorrectAsync(toWithdraw.Id(), 7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddMinutes(-2));
+        await z.Owner.VoidAsync(toWithdraw.Id());
 
         foreach (var notices in new[] { await api.AlertsOfAsync(toAlert.Id()), await api.WithdrawalsOfAsync(toAlert.Id()), await api.WithdrawalsOfAsync(toWithdraw.Id()) })
         {

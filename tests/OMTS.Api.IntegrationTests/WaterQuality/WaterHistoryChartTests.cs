@@ -15,8 +15,7 @@ public class WaterHistoryChartTests(AuthApiFactory api) : IClassFixture<AuthApiF
     {
         var z = await api.ZoneAsync();
         var now = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        var corrected = await z.RecordedAsync(9.0m, 20m, measuredAt: now.AddDays(-20), temperature: 21m);
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(corrected.Id(), 7.2m, 19m, measuredAt: now.AddDays(-19), temperature: 22m)).StatusCode);
+        var oldest = await z.RecordedAsync(7.2m, 19m, measuredAt: now.AddDays(-19), temperature: 22m);
         var voided = await z.RecordedAsync(5.0m, 22m, measuredAt: now.AddDays(-5));
         Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(voided.Id())).StatusCode);
         var untouched = await z.RecordedAsync(7.6m, 21m, measuredAt: now.AddDays(-10), temperature: 33.5m);
@@ -24,7 +23,7 @@ public class WaterHistoryChartTests(AuthApiFactory api) : IClassFixture<AuthApiF
         var chart = await z.Owner.GetFromJsonAsync<JsonElement>($"{z.Base}/chart");
 
         var points = chart.GetProperty("points").EnumerateArray().ToList();
-        Assert.Equal([corrected.Id(), untouched.Id()], points.Select(p => p.Id()));
+        Assert.Equal([oldest.Id(), untouched.Id()], points.Select(p => p.Id()));
         Assert.Equal(
             (7.2m, 19m, 22m, now.AddDays(-19)),
             (points[0].GetProperty("ph").GetDecimal(), points[0].GetProperty("salinity").GetDecimal(), points[0].GetProperty("temperature").GetDecimal(), points[0].GetProperty("measuredAt").GetDateTimeOffset()));

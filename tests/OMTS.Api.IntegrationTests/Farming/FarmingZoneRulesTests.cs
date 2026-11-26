@@ -29,8 +29,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(["Code", "Name", "Location", "Longitude", "Area"], fields);
         Assert.Equal(zonesBefore, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
 
-        // Coordinates are required on create and out-of-range values are refused.
-        Assert.Equal(["Latitude", "Longitude"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { Latitude = null, Longitude = null })).InvalidFieldsAsync());
+        // The pin is optional but both numbers or none, and out-of-range values are refused.
+        Assert.Equal(["Longitude"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { Longitude = null })).InvalidFieldsAsync());
         Assert.Equal(["Latitude", "Longitude"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { Latitude = -90.000001m, Longitude = 180.000001m })).InvalidFieldsAsync());
         Assert.Equal(["Code"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody(new string('C', 51)))).InvalidFieldsAsync());
         Assert.Equal(["Name"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { Name = new string('n', 201) })).InvalidFieldsAsync());
@@ -41,6 +41,20 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
             NewCode() + new string('C', 40), new string('n', 200), new string('l', 500), -90m, 180m, 0.0001m));
         Assert.Equal(50, longest.Text("code").Length);
         Assert.Equal(zonesBefore + 1, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
+    }
+
+    [Fact]
+    public async Task A_zone_needs_only_a_code_and_a_name()
+    {
+        var owner = await factory.OwnerAsync();
+        var code = NewCode();
+
+        var zone = await owner.Client.CreateZoneAsync(new ZoneBody(code, $"Zone {code}", "  ", null, null, null));
+
+        Assert.Equal(JsonValueKind.Null, zone.GetProperty("location").ValueKind);
+        Assert.Equal(JsonValueKind.Null, zone.GetProperty("latitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, zone.GetProperty("longitude").ValueKind);
+        Assert.Equal(JsonValueKind.Null, zone.GetProperty("area").ValueKind);
     }
 
     [Fact]

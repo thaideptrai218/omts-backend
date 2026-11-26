@@ -23,74 +23,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 public class WaterCorrectionConflictTests
 {
     [Fact]
-    public async Task A_correction_that_loses_to_another_one_is_applied_on_it_and_keeps_nothing_of_its_first_attempt()
-    {
-        var (api, saves) = NewApi();
-        await using var _ = api;
-        var z = await api.ZoneAsync();
-        var (_, manager) = await api.StaffAsync(z.Zone);
-        var id = (await z.RecordedAsync(7m, 20m)).Id();
-        saves.LoseNext(() => api.UpdateAsync<WaterMeasurement>(id, m => m.Salinity = 21m));
-
-        var response = await z.Owner.CorrectAsync(id, 9m, 22m, raftId: z.Raft.Id);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == id));
-        Assert.Equal((9m, 22m, "pH 9.00 > 8.50"), (stored.Ph, stored.Salinity, stored.ViolatedValues));
-        var audit = Assert.Single(await api.AuditOfAsync(id), e => e.Action == "WaterMeasurement.Corrected");
-        Assert.Contains("\"Salinity\":21", audit.Before);
-        Assert.Single(await api.AlertsOfAsync(id), n => n.RecipientAccountId == manager.Id);
-        Assert.Single(api.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Id.ToString()), m => m.Text.Contains("corrected measurement"));
-    }
-
-    [Fact]
-    public async Task The_notice_follows_the_record_as_the_winner_left_it()
-    {
-        var (api, saves) = NewApi();
-        await using var _ = api;
-        var z = await api.ZoneAsync();
-        var (_, manager) = await api.StaffAsync(z.Zone);
-        var id = (await z.RecordedAsync(9m, 20m)).Id();
-        // The winner already brought the value into range: this correction changes nothing about what is outside.
-        saves.LoseNext(() => api.UpdateAsync<WaterMeasurement>(id, m =>
-        {
-            m.Ph = 7.5m;
-            m.ThresholdExceeded = false;
-            m.ViolatedValues = null;
-        }));
-
-        var response = await z.Owner.CorrectAsync(id, 7m, 20m, raftId: z.Raft.Id);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Empty(await api.WithdrawalsOfAsync(id));
-        Assert.Contains(await api.AuditOfAsync(id), e => e.Action == "WaterMeasurement.Corrected" && e.Before!.Contains("\"Ph\":7.5"));
-        Assert.Single(await api.AlertsOfAsync(id), n => n.RecipientAccountId == manager.Id);
-    }
-
-    [Fact]
-    public async Task A_correction_that_loses_to_a_void_is_refused_and_does_not_bring_the_measurement_back()
-    {
-        var (api, saves) = NewApi();
-        await using var _ = api;
-        var z = await api.ZoneAsync();
-        var id = (await z.RecordedAsync(7m, 20m)).Id();
-        saves.LoseNext(() => api.UpdateAsync<WaterMeasurement>(id, m =>
-        {
-            m.StatusId = StatusIds.WaterMeasurement.Voided;
-            m.VoidReason = "Đo nhầm";
-        }));
-
-        var response = await z.Owner.CorrectAsync(id, 7.2m, 20m, raftId: z.Raft.Id);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("MSG-GEN-09", await response.ErrorCodeAsync());
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == id));
-        Assert.Equal((StatusIds.WaterMeasurement.Voided, 7m), (stored.StatusId, stored.Ph));
-        Assert.DoesNotContain(await api.AuditOfAsync(id), e => e.Action == "WaterMeasurement.Corrected");
-    }
-
-    [Fact]
-    public async Task A_void_that_loses_to_a_correction_voids_the_corrected_values_and_withdraws_once()
+    public async Task A_void_that_loses_to_another_change_voids_the_values_it_left_and_withdraws_once()
     {
         var (api, saves) = NewApi();
         await using var _ = api;
@@ -117,7 +50,7 @@ public class WaterCorrectionConflictTests
         var id = (await z.RecordedAsync(7m, 20m)).Id();
         saves.LoseAlways();
 
-        var response = await z.Owner.CorrectAsync(id, 7.2m, 20m, raftId: z.Raft.Id);
+        var response = await z.Owner.VoidAsync(id);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("MSG06", await response.ErrorCodeAsync());
@@ -135,7 +68,7 @@ public class WaterCorrectionConflictTests
         return (api, saves);
     }
 
-    /// <summary>The next correction or void's save happens after <c>elsewhere</c> and loses, as on a row version conflict.</summary>
+    /// <summary>The next void's save happens after <c>elsewhere</c> and loses, as on a row version conflict.</summary>
     private sealed class LostSaves
     {
         private Func<Task>? _elsewhere;

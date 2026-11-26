@@ -103,6 +103,29 @@ public sealed class FarmingZonesController(FarmingZoneService zones, ZoneBoundar
     [ProducesResponseType<ScanStatusView<ZoneMapReading>>(StatusCodes.Status200OK)]
     public IActionResult GetBoundaryScan(Guid zoneId, Guid scanId) => boundaryScans.Get(zoneId, scanId).ToActionResult(Ok);
 
+    /// <summary>
+    /// Like the zone scan, before the zone exists (the create-zone form): same photo, queue and limits (the 20 an hour per account
+    /// are shared with the zone scans). The scan belongs to no zone: it is found on <c>GET api/zones/boundary-scans/{scanId}</c> only.
+    /// </summary>
+    [HttpPost("boundary-scans")]
+    [RequireCooperativeOwner]
+    [EnableRateLimiting(RateLimitingExtensions.ZoneMapScans)]
+    [RequestSizeLimit(MaxScanUploadBytes)]
+    [UploadField(PhotoScanGateway.PhotoField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<ScanStarted>(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> StartZoneLessBoundaryScan(IFormFile? photo, CancellationToken cancellationToken)
+    {
+        var file = photo is null ? null : await photo.ToIncomingFileAsync(cancellationToken);
+        return boundaryScans.StartWithoutZone(file).ToActionResult(started => Accepted(started));
+    }
+
+    /// <summary>The zone-less scan, shaped like the zone scan; 404 for another account, a zone scan or after 15 minutes.</summary>
+    [HttpGet("boundary-scans/{scanId:guid}")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<ScanStatusView<ZoneMapReading>>(StatusCodes.Status200OK)]
+    public IActionResult GetZoneLessBoundaryScan(Guid scanId) => boundaryScans.GetWithoutZone(scanId).ToActionResult(Ok);
+
     /// <summary>Blocked with MSG-GEN-06 while In Use rafts remain in the zone.</summary>
     [HttpPost("{zoneId:guid}/discontinue")]
     [RequireCooperativeOwner]

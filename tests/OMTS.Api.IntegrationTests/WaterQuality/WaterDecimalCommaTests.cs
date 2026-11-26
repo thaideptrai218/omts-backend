@@ -91,21 +91,6 @@ public class WaterDecimalCommaTests(WaterDecimalCommaTests.VietnameseServerFacto
         await AssertNothingSavedAsync(z);
     }
 
-    [Theory]
-    [MemberData(nameof(CommaSalinities))]
-    public async Task Correction_with_a_comma_is_refused_and_the_value_stays(string salinity)
-    {
-        var z = await api.ZoneAsync();
-        var saved = await z.RecordedAsync(7.5m, 20m);
-        var id = saved.GetProperty("id").GetGuid();
-        var body = $$"""{"measuredAt":"{{DateTimeOffset.UtcNow.AddMinutes(-5):O}}","ph":7.5,"salinity":{{salinity}},"temperature":25,"reason":"typed the Vietnamese way"}""";
-
-        var response = await z.Owner.PostAsync($"/api/water-measurements/{id}/corrections", Json(body));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(20m, await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == id).Select(m => m.Salinity).SingleAsync()));
-    }
-
     [Fact]
     public async Task A_string_with_a_dot_is_read_as_the_decimal_it_shows()
     {

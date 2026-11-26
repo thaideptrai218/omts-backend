@@ -5,6 +5,7 @@ using OMTS.Api.Common;
 using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Rafts.FormScan;
 using OMTS.Application.Features.Scans;
@@ -24,6 +25,17 @@ public sealed class RaftsController(RaftReadService reads, RaftService rafts, Ra
     [ProducesResponseType<IReadOnlyList<RaftListItem>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(Guid zoneId, int? statusId, CancellationToken cancellationToken) =>
         (await reads.ListAsync(zoneId, statusId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// A page of rafts, newest code first, of one zone (<c>zoneId</c>) or of every zone the caller may read, filtered by status and by a
+    /// part of the code (<c>search</c>). Each item has its Open cultivation cycle as <c>currentCycle</c> (<c>{ id, startDate }</c>, or
+    /// null), read in the same query.
+    /// </summary>
+    [HttpGet("api/rafts")]
+    [ProducesResponseType<Paged<RaftListItem>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search(
+        Guid? zoneId, int? statusId, string? search, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
+        (await reads.SearchAsync(zoneId, statusId, search, page, pageSize, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The proposed code of a new raft of the zone ({zone code}-B01, -B02…; GBR-03); the Owner may type another one.</summary>
     [HttpGet("api/zones/{zoneId:guid}/rafts/next-code")]

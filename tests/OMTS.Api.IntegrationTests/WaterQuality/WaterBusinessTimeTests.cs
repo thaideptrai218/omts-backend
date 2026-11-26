@@ -51,30 +51,6 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
         }
     }
 
-    [Fact]
-    public async Task A_correction_reads_a_time_without_offset_as_vietnam_time()
-    {
-        var z = await api.ZoneAsync();
-        var saved = await z.RecordAtAsync(Wall);
-        Assert.True(saved.StatusCode == HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
-        var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).Id();
-
-        var corrected = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
-        {
-            raftId = z.Raft.Id,
-            measuredAt = $"{Yesterday:yyyy-MM-dd}T09:30:00",
-            ph = 7.3m,
-            salinity = 21m,
-            temperature = 25m,
-            reason = "Đọc nhầm giờ đo",
-        });
-
-        Assert.True(corrected.StatusCode == HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().Where(m => m.Id == id).Select(m => m.MeasuredAt).SingleAsync());
-        Assert.Equal(new DateTimeOffset(Yesterday.ToDateTime(new TimeOnly(9, 30)), Vietnam), stored);
-        Assert.Equal(Vietnam, stored.Offset);
-    }
-
     [Theory]
     [InlineData("\"20/10/2026 08:00\"")]
     [InlineData("\"2026-10-20T08:00:00 +07:00\"")]

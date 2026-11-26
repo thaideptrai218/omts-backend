@@ -70,6 +70,41 @@ public class ZoneBoundaryTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     [Fact]
+    public async Task Saving_a_boundary_moves_the_zone_pin_to_its_centroid_and_clearing_it_keeps_the_pin()
+    {
+        var owner = (await factory.OwnerAsync()).Client;
+        var code = NewCode();
+        var zone = await owner.CreateZoneAsync(new ZoneBody(code, $"Zone {code}", null, null, null, null));
+        Assert.Equal(JsonValueKind.Null, zone.GetProperty("latitude").ValueKind);
+
+        // Two equal areas side by side: the centroid is the middle between them.
+        double[][] east = [[107.38, 21.06], [107.40, 21.06], [107.40, 21.04], [107.38, 21.04]];
+        var saved = (await (await PutBoundaryAsync(owner, zone.Id(), Collection(Area(Square), Area(east, "Khu 2")), zone.Text("rowVersion"))).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
+        Assert.Equal((21.05m, 107.37m), (saved.GetProperty("latitude").GetDecimal(), saved.GetProperty("longitude").GetDecimal()));
+
+        var cleared = (await (await PutBoundaryAsync(owner, zone.Id(), null, saved.Text("rowVersion"))).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("boundary").ValueKind);
+        Assert.Equal((21.05m, 107.37m), (cleared.GetProperty("latitude").GetDecimal(), cleared.GetProperty("longitude").GetDecimal()));
+    }
+
+    [Fact]
+    public async Task An_edit_without_a_pin_keeps_the_pin_of_a_zone_with_a_boundary_and_wipes_it_without_one()
+    {
+        var owner = (await factory.OwnerAsync()).Client;
+        var withBoundary = await owner.CreateZoneAsync(new ZoneBody(NewCode(), "Có ranh giới", null, null, null, null));
+        var boundaryZone = (await (await PutBoundaryAsync(owner, withBoundary.Id(), Collection(Area(Square)), withBoundary.Text("rowVersion"))).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
+        var plain = await owner.CreateZoneAsync();
+
+        var kept = await owner.EditZoneAsync(
+            boundaryZone.Id(), new ZoneBody(boundaryZone.Text("code"), "Tên mới", "Vân Đồn", null, null, 3m, boundaryZone.Text("rowVersion")));
+        var wiped = await owner.EditZoneAsync(plain.Id(), new ZoneBody(plain.Text("code"), plain.Text("name"), null, null, null, null, plain.Text("rowVersion")));
+
+        Assert.Equal((21.05m, 107.35m), (kept.GetProperty("latitude").GetDecimal(), kept.GetProperty("longitude").GetDecimal()));
+        Assert.Equal("Tên mới", kept.Text("name"));
+        Assert.Equal(JsonValueKind.Null, wiped.GetProperty("latitude").ValueKind);
+    }
+
+    [Fact]
     public async Task An_invalid_boundary_is_refused_naming_the_part_and_nothing_is_saved()
     {
         var owner = (await factory.OwnerAsync()).Client;

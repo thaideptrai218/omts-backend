@@ -44,7 +44,7 @@ public class WaterZoneOverviewTests(AuthApiFactory api) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task A_latest_measurement_outside_is_an_alert_naming_the_values_and_a_void_or_correction_changes_it()
+    public async Task A_latest_measurement_outside_is_an_alert_naming_the_values_and_a_void_changes_it()
     {
         var z = await api.ZoneAsync();
         var measured = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds());
@@ -55,12 +55,6 @@ public class WaterZoneOverviewTests(AuthApiFactory api) : IClassFixture<AuthApiF
         Assert.True(outside.GetProperty("hasWaterAlert").GetBoolean());
         Assert.Equal(["PH", "SALINITY"], outside.GetProperty("valuesOutside").EnumerateArray().Select(v => v.Text("indicator")));
         Assert.Equal((8.5m, "High"), (outside.GetProperty("valuesOutside")[0].GetProperty("max").GetDecimal(), outside.GetProperty("valuesOutside")[0].Text("direction")));
-
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(latest.Id(), 7.1m, 20m, measuredAt: measured)).StatusCode);
-        Assert.False((await RowAsync(z)).GetProperty("hasWaterAlert").GetBoolean());
-
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(latest.Id(), 9.5m, 20m, measuredAt: measured)).StatusCode);
-        Assert.True((await RowAsync(z)).GetProperty("hasWaterAlert").GetBoolean());
 
         Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(latest.Id())).StatusCode);
         var afterVoid = await RowAsync(z);

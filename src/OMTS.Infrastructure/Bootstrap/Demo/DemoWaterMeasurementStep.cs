@@ -8,7 +8,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// WATER-01…WATER-04: the thresholds and the 30 days of water measurements of <see cref="DemoWaterPlans"/> for each In
-/// Use demo zone, through the threshold, recording and correction services, so photos, alerts, threshold copies and
+/// Use demo zone, through the threshold, recording and void services, so photos, alerts, threshold copies and
 /// audit rows come from the normal rules. A measurement is found by zone and client operation id (one per planned day);
 /// its date is relative to the first seed day, which a later run reads back from the stored measurements of any zone, so
 /// a rerun creates nothing and moves no date, and an interrupted run is completed on the same days.
@@ -26,7 +26,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             var zoneId = await context.Db.FarmingZones.Where(z => z.Code == zoneCode).Select(z => z.Id).SingleAsync(cancellationToken);
             await SetThresholdsOnceAsync(context, zoneId, zoneCode, cancellationToken);
             created += await RecordMissingDaysAsync(context, zoneId, zoneCode, firstSeedDay, cancellationToken);
-            await CorrectAndVoidAsync(context, zoneId, zoneCode, cancellationToken);
+            await VoidAsync(context, zoneId, zoneCode, cancellationToken);
         }
 
         return created;
@@ -95,25 +95,14 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
         return created;
     }
 
-    /// <summary>WATER-02: the planned correction and void, each only while its reading is still as it was recorded and Active.</summary>
-    private static async Task CorrectAndVoidAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
+    /// <summary>WATER-02: the planned void, only while its reading is still as it was recorded and Active.</summary>
+    private static async Task VoidAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
     {
-        var corrections = context.Get<WaterMeasurementCorrectionService>();
-        var correction = DemoWaterPlans.Correction;
-        if (correction.Zone == zoneCode
-            && await ActiveAsync(context, zoneId, zoneCode, correction.DaysAgo, cancellationToken) is { } typo
-            && typo.Salinity == correction.TypedSalinity)
-        {
-            DemoSeedContext.Ensure(
-                await corrections.CorrectAsync(typo.Id, new CorrectWaterMeasurementRequest(typo.RaftId, typo.MeasuredAt, typo.Ph, correction.Salinity, typo.Temperature, correction.Reason), cancellationToken),
-                $"correcting the water measurement of {zoneCode}");
-        }
-
         var voided = DemoWaterPlans.Void;
         if (voided.Zone == zoneCode && await ActiveAsync(context, zoneId, zoneCode, voided.DaysAgo, cancellationToken) is { } wrong)
         {
             DemoSeedContext.Ensure(
-                await corrections.VoidAsync(wrong.Id, new VoidWaterMeasurementRequest(voided.Reason), cancellationToken),
+                await context.Get<WaterMeasurementCorrectionService>().VoidAsync(wrong.Id, new VoidWaterMeasurementRequest(voided.Reason), cancellationToken),
                 $"voiding the water measurement of {zoneCode}");
         }
     }

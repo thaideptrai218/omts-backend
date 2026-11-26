@@ -3,7 +3,10 @@ namespace OMTS.Application.Features.Farming.Zones.BoundaryScan;
 /// <summary>The info table and the corner tables as the model copied them: every value is the text as written, nothing is parsed or checked.</summary>
 /// <param name="CoordinateSystem">e.g. "VN-2000".</param>
 /// <param name="CentralMeridian">e.g. "107°45'" (kinh tuyến trục).</param>
-public sealed record RawZoneMap(string? CoordinateSystem, string? CentralMeridian, IReadOnlyList<RawMapZone>? Zones);
+/// <param name="Location">The "Địa điểm" row, e.g. "Xã Đông Xá, xã Bản Sen, huyện Vân Đồn, tỉnh Quảng Ninh".</param>
+/// <param name="WrittenTotalArea">The "Diện tích đề nghị" row, e.g. "28,50 ha".</param>
+public sealed record RawZoneMap(
+    string? CoordinateSystem, string? CentralMeridian, IReadOnlyList<RawMapZone>? Zones, string? Location = null, string? WrittenTotalArea = null);
 
 /// <param name="Name">e.g. "Khu 1".</param>
 /// <param name="WrittenArea">e.g. "(Diện tích: 12,50 ha)".</param>
@@ -16,12 +19,15 @@ public sealed record RawMapZone(string? Name, string? WrittenArea, IReadOnlyList
 public sealed record RawMapCorner(string? Label, string? X, string? Y, string? Lat, string? Lon);
 
 /// <summary>
-/// <c>reading</c> of <c>GET api/zones/{zoneId}/boundary-scans/{scanId}</c>. x (northing) and y (easting) are VN-2000 grid metres;
+/// <c>reading</c> of <c>GET api/zones/boundary-scans/{scanId}</c> and <c>GET api/zones/{zoneId}/boundary-scans/{scanId}</c>. x (northing) and y (easting) are VN-2000 grid metres;
 /// the app converts them to WGS84 and the Owner reviews them before saving the boundary (<c>PUT …/boundary</c>).
 /// </summary>
 /// <param name="CentralMeridian">Degrees (107°45' is 107.75), or null when it could not be read.</param>
 /// <param name="CoordinateSystem">As written, or null.</param>
-public sealed record ZoneMapReading(double? CentralMeridian, string? CoordinateSystem, IReadOnlyList<ScannedMapZone> Zones);
+/// <param name="Location">The "Địa điểm" row as written, trimmed, at most 300 characters; null when unread. A suggestion for the zone location.</param>
+/// <param name="WrittenTotalAreaHa">The "Diện tích đề nghị" row in hectares (above 0); null when unread. A suggestion for the zone area.</param>
+public sealed record ZoneMapReading(
+    double? CentralMeridian, string? CoordinateSystem, IReadOnlyList<ScannedMapZone> Zones, string? Location = null, double? WrittenTotalAreaHa = null);
 
 /// <param name="Name">e.g. "Khu 1".</param>
 /// <param name="WrittenAreaHa">The area the table title states, in hectares, or null.</param>

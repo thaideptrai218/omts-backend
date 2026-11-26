@@ -65,18 +65,6 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task A_correction_shows_its_new_values_in_the_export()
-    {
-        var z = await api.ZoneAsync();
-        var original = await z.RecordedAsync(9.0m, 20m);
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(original.Id(), 7.2m, 20m)).StatusCode);
-
-        using var workbook = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export"));
-
-        Assert.Equal([7.2m], workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(PhColumn).GetValue<decimal>()));
-    }
-
-    [Fact]
     public async Task History_from_and_to_are_whole_local_days_in_Asia_Ho_Chi_Minh()
     {
         var z = await api.ZoneAsync();
