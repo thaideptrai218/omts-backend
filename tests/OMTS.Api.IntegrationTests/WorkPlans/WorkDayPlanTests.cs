@@ -96,7 +96,7 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task Purchase_plan_goes_through_the_manager_who_assigns_at_once_and_the_owner_accepts_without_waiting_for_the_staff()
+    public async Task Purchase_plan_goes_through_the_manager_who_invites_the_staff_and_the_owner_accepts_once_they_agreed()
     {
         var s = await SetupAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
@@ -113,22 +113,32 @@ public sealed class WorkDayPlanTests(AuthApiFactory factory) : IClassFixture<Aut
         await Success(await s.Manager.PostAsJsonAsync($"/api/work-plans/{plan.Id}/response", new RespondWorkDayPlan(true, null, plan.RowVersion)));
         plan = await GetAsync(s.Manager, plan.Id);
         await Success(await s.Manager.PostAsJsonAsync($"/api/work-plans/{plan.Id}/assignments", new AssignWorkDayPlan([s.Employee.Id], plan.RowVersion)));
-        // Owner decision of 24/11/2026: the shift is a work assignment at once, the employee only gets a notice, and the request does not wait for them.
-        Assert.True(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id && a.RaftId == s.Raft.Id && a.Date == Day)));
-        var invitation = Assert.Single((await s.Worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!);
-        Assert.False(invitation.CanRespond);
-        Assert.True(invitation.Approved);
+        // Owner decision of 25/11/2026: the employee is invited and agrees or refuses; no work assignment until the Owner accepts the request.
+        Assert.False(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id)));
         Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.Employee.AccountId &&
-            n.Type == "PURCHASE_SHIFT_ASSIGNED" && n.RelatedRecordCode == order.Code)));
+            n.Type == "PURCHASE_SHIFT_INVITED" && n.RelatedRecordCode == order.Code)));
         order = (await s.Owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{order.Id}"))!;
-        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, order.StatusId);
-        Assert.Equal("ASSIGNED", (await GetAsync(s.Manager, plan.Id)).Status);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, order.StatusId);
+        Assert.Equal("AWAITING_STAFF", (await GetAsync(s.Manager, plan.Id)).Status);
+        // Nobody agreed yet: the Owner cannot accept.
+        Assert.Equal(HttpStatusCode.BadRequest, (await s.Owner.PostAsJsonAsync($"/api/purchase-requests/{order.Id}/accept", new AcceptPurchaseRequest(20, Day, false, null, order.RowVersion))).StatusCode);
+
+        var invitation = Assert.Single((await s.Worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}"))!);
+        Assert.True(invitation.CanRespond);
+        await Success(await s.Worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invitation.Id}/response", new RespondPurchaseShift(true, null, invitation.RowVersion)));
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.ManagerAccount.Id &&
+            n.Type == "WORK_PLAN_STAFF_RESPONDED" && n.RelatedRecordCode == plan.Id.ToString())));
+        Assert.Equal(1, await factory.QueryAsync(db => db.Notifications.CountAsync(n => n.RecipientAccountId == s.OwnerAccount.Id &&
+            n.Type == "PURCHASE_SHIFT_RESPONDED" && n.RelatedRecordCode == order.Code)));
+        order = (await s.Owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{order.Id}"))!;
+        Assert.True(order.Staffing!.HasEnoughStaff);
         await factory.UseDbAsync(async db => (await db.Set<JobType>().SingleAsync(j => j.Id == s.Job.Id)).StatusId = StatusIds.Usage.Discontinued);
         Assert.Equal(HttpStatusCode.BadRequest, (await s.Owner.PostAsJsonAsync($"/api/purchase-requests/{order.Id}/accept", new AcceptPurchaseRequest(20, Day, false, null, order.RowVersion))).StatusCode);
+        Assert.False(await factory.QueryAsync(db => db.WorkAssignments.AnyAsync(a => a.EmployeeId == s.Employee.Id)));
         await factory.UseDbAsync(async db => (await db.Set<JobType>().SingleAsync(j => j.Id == s.Job.Id)).StatusId = StatusIds.Usage.InUse);
         await Success(await s.Owner.PostAsJsonAsync($"/api/purchase-requests/{order.Id}/accept", new AcceptPurchaseRequest(20, Day, false, null, order.RowVersion)));
         var assignment = await factory.QueryAsync(db => db.WorkAssignments.SingleAsync(a => a.EmployeeId == s.Employee.Id));
-        // The assignment made when the manager chose the staff stays the only one (LABOR-02, OMTS-132): the first period of the day, on the raft and job type of the plan.
+        // The acceptance assigns the staff who agreed through LABOR-02 (OMTS-132): the first period of the day, on the raft and job type of the plan.
         Assert.Equal((s.Raft.Id, s.Job.Id, Day), (assignment.RaftId, assignment.JobTypeId, assignment.Date));
         Assert.Null(assignment.StartsAt);
         Assert.Equal("ASSIGNED", (await GetAsync(s.Manager, plan.Id)).Status);

@@ -15,9 +15,9 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.PurchaseRequests;
 
 /// <summary>
-/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response (or the legacy Awaiting staff)
-/// (BR-SALE-02). Accepting needs only that a staffing plan exists: the chosen employees already have their work assignments and no agreement is counted (decision of 24/11/2026). The response is saved first; the
-/// trader is told afterwards, and a message that is not accepted undoes nothing (GFR-06).
+/// SALE-03 – only the Cooperative Owner responds (API filter), once, while the request is Awaiting response or Awaiting staff
+/// (BR-SALE-02). Accepting needs enough staff who agreed to their shift (decision of 25/11/2026, as on 31/10/2026); without enough the Owner
+/// declines with a reason. The response is saved first; the trader is told afterwards, and a message that is not accepted undoes nothing (GFR-06).
 /// </summary>
 public sealed class PurchaseRequestResponseService(
     IPurchaseRequestRepository requests,
@@ -37,7 +37,8 @@ public sealed class PurchaseRequestResponseService(
 {
     /// <summary>
     /// SALE-03.0: the accepted cages are the requested cages or fewer, and any date not before today, also an unchanged one. They are the
-    /// cages and the pickup date of the staffing plan; the shifts are already work assignments (a legacy shift that was agreed but not yet assigned becomes one now).
+    /// cages and the pickup date of the staffing plan; the shifts the staff agreed to become their work assignments. The staff who agreed are
+    /// told the request is accepted; those who had not answered yet are told their invitation is closed.
     /// </summary>
     public async Task<Result<PurchaseRequestView>> AcceptAsync(Guid requestId, AcceptPurchaseRequest entry, CancellationToken cancellationToken)
     {
@@ -83,10 +84,18 @@ public sealed class PurchaseRequestResponseService(
         request.AgreedPickupDate = entry.PickupDate;
         request.PayLaterAgreed = entry.PayLaterAgreed;
         await staffing.ActivateAssignmentsAsync(request, cancellationToken);
-        var staff = request.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
+        var staff = request.ShiftInvitations.Where(i => i.Approved == true).Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
         await dispatcher.NotifyAsync(staff, "PURCHASE_SHIFT_CONFIRMED", "HTX đã nhận đơn",
             $"{request.Code}: HTX đã nhận đơn. Xem trạng thái ca ngày {request.WorkDate:dd/MM/yyyy} trong Công việc của tôi.",
             nameof(PurchaseRequest), request.Code, false, cancellationToken, request.Id);
+        // Đã đủ người: lời mời chưa trả lời không còn trả lời được, báo để người đó khỏi giữ ngày.
+        var unanswered = request.ShiftInvitations.Where(i => i.Approved is null).Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
+        if (unanswered.Count > 0)
+        {
+            await dispatcher.NotifyAsync(unanswered, "PURCHASE_SHIFT_CLOSED", "Ca làm đã đóng",
+                $"{request.Code}: đơn đã đủ người, không cần trả lời lời mời ca ngày {request.WorkDate:dd/MM/yyyy} nữa.",
+                nameof(PurchaseRequest), request.Code, false, cancellationToken, request.Id);
+        }
         return await SaveResponseAsync(request, StatusIds.PurchaseRequest.Accepted, note, "PurchaseRequest.Accepted", cancellationToken);
     }
 
