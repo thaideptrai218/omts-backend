@@ -28,7 +28,7 @@ public sealed class OrphanFileCleanupService(
     [
         FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.WaterMeterPhotos, FileCategories.CultivationLogPhotos,
         FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos, FileCategories.LaneIncidentPhotos, FileCategories.NurseryStartPhotos, FileCategories.NurseryCompletionPhotos,
-        FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos,
+        FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos, FileCategories.LandingPhotos,
     ];
 
     /// <summary>
@@ -39,7 +39,7 @@ public sealed class OrphanFileCleanupService(
     private static readonly IReadOnlySet<string> MayAllBeUnreferenced = new HashSet<string>(StringComparer.Ordinal)
     {
         FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos, FileCategories.LaneIncidentPhotos,
-        FileCategories.NurseryStartPhotos, FileCategories.NurseryCompletionPhotos, FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos,
+        FileCategories.NurseryStartPhotos, FileCategories.NurseryCompletionPhotos, FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos, FileCategories.LandingPhotos,
     };
 
     /// <summary>The audit record type of the records that can all be removed, with their name in the warning: the audit rows outlive them.</summary>

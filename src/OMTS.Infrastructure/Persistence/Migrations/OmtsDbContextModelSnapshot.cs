@@ -2637,6 +2637,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("FeaturedInvoiceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2897,6 +2901,36 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ZoneId");
 
                     b.ToTable("EmployeeWorkingZones");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.LandingPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Section")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Section", "SortOrder");
+
+                    b.ToTable("LandingPhotos");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.LoginSession", b =>

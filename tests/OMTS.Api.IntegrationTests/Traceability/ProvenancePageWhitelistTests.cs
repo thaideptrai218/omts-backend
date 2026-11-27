@@ -27,7 +27,8 @@ public class ProvenancePageWhitelistTests
         "lots[].messageParams.cooperative_short_name", "lots[].messageParams.lot_code", "lots[].messageParams.withdrawal_date", "lots[].messageParams.cooperative_phone",
         "lots[].origin", "lots[].origin.harvestDate", "lots[].origin.raftCode", "lots[].origin.zoneName", "lots[].origin.map", "lots[].origin.map.latitude",
         "lots[].origin.map.longitude", "lots[].origin.map.source", "lots[].origin.seedings", "lots[].origin.seedings[].seedingDate", "lots[].origin.seedings[].seedItemName",
-        "lots[].origin.daysOfFarming", "lots[].origin.harvestPhotoUrls", "lots[].origin.raftPhotoUrls");
+        "lots[].origin.daysOfFarming", "lots[].origin.harvestPhotoUrls", "lots[].origin.raftPhotoUrls",
+        "productDetails", "productDetails[].name", "productDetails[].description", "productDetails[].sizeMinCm", "productDetails[].sizeMaxCm", "productDetails[].photoUrls");
 
     [Fact]
     public async Task The_page_data_holds_exactly_the_whitelisted_fields_and_no_hidden_value()

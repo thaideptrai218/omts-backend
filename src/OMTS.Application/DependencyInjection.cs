@@ -137,6 +137,7 @@ public static class DependencyInjection
         services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
         services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<OMTS.Application.Features.Cooperatives.Landing.LandingService>();
         services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();

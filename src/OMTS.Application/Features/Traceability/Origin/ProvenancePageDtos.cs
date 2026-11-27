@@ -48,7 +48,8 @@ public sealed record ProvenancePage(
     IReadOnlyDictionary<string, object?>? MessageParams,
     ProvenancePageInvoice? Invoice,
     ProvenanceCooperative Cooperative,
-    IReadOnlyList<ProvenanceLot> Lots);
+    IReadOnlyList<ProvenanceLot> Lots,
+    IReadOnlyList<ProvenanceProduct>? ProductDetails = null);
 
 public sealed record ProvenancePageInvoice(string Code, DateOnly Date);
 
