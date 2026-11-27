@@ -42,5 +42,7 @@ internal sealed class ZoneLicenseRepository(OmtsDbContext db) : IZoneLicenseRepo
             .ToListAsync(cancellationToken);
     }
 
+    public void Remove(ZoneComplianceDocument document) => db.ZoneComplianceDocuments.Remove(document);
+
     public void Add(ZoneComplianceDocument document) => db.ZoneComplianceDocuments.Add(document);
 }

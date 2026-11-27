@@ -16,8 +16,8 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Application.Features.Farming.Licenses;
 
 /// <summary>
-/// FARM-03 – zone licenses (Cooperative Owner only, checked by the API filter): create, view, edit and replace; never
-/// deleted. A license belongs to one zone, and is added, edited or replaced only while that zone is In Use (GBR-01,
+/// FARM-03 – zone licenses (Cooperative Owner only, checked by the API filter): create, view, edit, replace and delete (a license outside a
+/// renewal chain, <see cref="ZoneLicenseDeleteRules"/>). A license belongs to one zone, and is added, edited or replaced only while that zone is In Use (GBR-01,
 /// MSG-GEN-09); a Replaced license is kept as it is (MSG-GEN-09). The file is optional; when there is one it is uploaded first, so a storage failure saves
 /// nothing; an upload whose database save fails is removed again, and a file replaced by an edit is removed once the edit
 /// is saved (<see cref="UploadedFileSaver"/>).
@@ -215,6 +215,43 @@ public sealed class ZoneLicenseService(
         });
         await fileSaver.SaveAsync(uploaded, null, cancellationToken);
         return await ViewAsync(document, old.Zone, null, timeProvider.Today(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes a license and its stored file (the audit row keeps its values). Refused with MSG-GEN-09 while it is Replaced or is itself the renewal of another license
+    /// (<see cref="ZoneLicenseDeleteRules"/>), and while its zone is not In Use; MSG06 when <paramref name="rowVersion"/> is stale.
+    /// </summary>
+    public async Task<Result<bool>> DeleteAsync(Guid documentId, string? rowVersion, CancellationToken cancellationToken)
+    {
+        var document = await licenses.GetForEditAsync(documentId, cancellationToken);
+        if (document is null)
+        {
+            return AppError.NotFound;
+        }
+
+        var replacement = await licenses.FindReplacementAsync(document.Id, cancellationToken);
+        if (ZoneLicenseDeleteRules.Refusal(document, replacement) is { } refusal)
+        {
+            return AppError.Conflict(refusal, replacement is null ? null : new Dictionary<string, object?> { ["replacementId"] = replacement.Id });
+        }
+
+        if (NotInUse(document.Zone) is { } discontinued)
+        {
+            return discontinued;
+        }
+
+        if (await rowVersions.CheckAsync(document, rowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        licenses.Remove(document);
+        audit.Record(new AuditEntry("ZoneLicense.Deleted", RecordType)
+        {
+            RecordId = document.Id, RecordCode = document.DocumentNumber, ZoneId = document.ZoneId, Before = Snapshot(document),
+        });
+        await fileSaver.SaveAsync(null, document.EvidenceFileUrl, cancellationToken);
+        return true;
     }
 
     /// <summary>
