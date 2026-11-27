@@ -39,13 +39,14 @@ public sealed record FinalizePayrollRequest(string? ExpenseMonth, decimal? Expec
 public sealed record NotReadyItem(string Kind, Guid? EmployeeId, string? EmployeeName, IReadOnlyList<DateOnly> Dates, string? JobName);
 
 /// <param name="Method">Cash or BankTransfer.</param>
+/// <param name="PaidById">The Active Owner or staff account that handed the money over ("Nhân viên tạo"); the signed-in account when null. 400 "Paid by" for any other.</param>
 /// <param name="Lines">The payslips of the sheet to pay, each from 1 to what is still owed.</param>
 /// <param name="CashAccountId">With BankTransfer, the active Bank account (Sổ quỹ) the money is paid from; optional. 400 "Cash account" with Cash or an account that is not an active Bank one.</param>
-public sealed record PayPayrollRequest(DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, IReadOnlyList<PayPayrollLine>? Lines, Guid? CashAccountId = null);
+public sealed record PayPayrollRequest(DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, IReadOnlyList<PayPayrollLine>? Lines, Guid? CashAccountId = null, Guid? PaidById = null);
 
 public sealed record PayPayrollLine(Guid? SlipId, decimal? Amount);
 
-public sealed record StandalonePayrollPaymentRequest(Guid? EmployeeId, decimal? Amount, DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, Guid? CashAccountId = null);
+public sealed record StandalonePayrollPaymentRequest(Guid? EmployeeId, decimal? Amount, DateTimeOffset? PaidAt, PaymentMethod? Method, string? Note, Guid? CashAccountId = null, Guid? PaidById = null);
 
 /// <param name="Status">Repeated: <c>status=Creating&amp;status=Provisional</c>; none means every status.</param>
 /// <param name="SortBy">code (default), name, from, total, paid or status.</param>
@@ -113,7 +114,8 @@ public sealed record PayrollSlipRow(
 public sealed record PayrollSheetDetail(
     Guid Id, string Code, string Name, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, PayrollSheetStatus Status,
     string? ExpenseMonth, string? Note, string? CreatedBy, DateTimeOffset CreatedAt, decimal Total, decimal Paid, decimal Outstanding,
-    IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount, DateTimeOffset? CalculatedAt = null);
+    IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount, DateTimeOffset? CalculatedAt = null,
+    string? FinalizedBy = null, DateTimeOffset? FinalizedAt = null);
 
 public sealed record PayrollVoucherRef(Guid Id, string Code, Guid SlipId, string EmployeeName, decimal Amount);
 
@@ -126,6 +128,32 @@ public sealed record PayrollPaymentRow(
     PaymentMethod Method, decimal Amount, WagePaymentKind Kind, string Status, string? PayrollName = null);
 
 /// <summary><c>Amount</c> is the sum of the Recorded (not cancelled) payments of the whole filtered set, not of the page.</summary>
+/// <summary>
+/// What a payment voucher paid. A Wage payment pays one payslip: <c>SlipNet</c> is the net pay, <c>PaidBefore</c> what was paid on it before this voucher, <c>Amount</c> this voucher's part and <c>SlipStatus</c>
+/// (Unpaid, PartiallyPaid or Paid) the state of the payslip once this voucher counts (without it when the voucher is cancelled).
+/// </summary>
+public sealed record PayrollPaymentAllocation(
+    Guid SlipId, string SlipCode, Guid PayrollId, string PayrollCode, string PeriodName, DateOnly From, DateOnly To, DateTimeOffset? FinalizedAt,
+    decimal SlipNet, decimal PaidBefore, decimal Amount, string SlipStatus);
+
+/// <summary>
+/// A wage or advance payment voucher. <c>Id</c> is the id of the cash voucher; <c>RowVersion</c> goes back with an edit or a cancel. <c>CreatedBy</c> is the account that recorded it, <c>PaidBy</c> the Owner or staff
+/// account that handed the money over. A Wage voucher has one allocation; an Advance one has none and shows <c>AdvanceDeducted</c>, what later payslips have taken off. <c>Status</c> is Recorded or Cancelled.
+/// </summary>
+public sealed record PayrollPaymentDetail(
+    Guid Id, string Code, WagePaymentKind Kind, Guid EmployeeId, string? EmployeeCode, string EmployeeName, DateTimeOffset PaidAt, PaymentMethod Method,
+    Guid? CashAccountId, string? CashAccountName, string? Note, Guid? CreatedById, string? CreatedBy, DateTimeOffset CreatedAt, Guid? PaidById, string? PaidBy,
+    string Status, DateTimeOffset? CancelledAt, string? CancelReason, decimal Total, string RowVersion,
+    IReadOnlyList<PayrollPaymentAllocation> Allocations, decimal AdvanceAmount, decimal AdvanceDeducted);
+
+/// <summary>The fields a payment voucher may change; its amount, employee and payslip never change. <c>PaidAt</c> null keeps the time.</summary>
+public sealed record UpdatePayrollPaymentRequest(
+    DateTimeOffset? PaidAt, PaymentMethod? Method, Guid? CashAccountId, string? Note, Guid? PaidById, string? RowVersion);
+
+public sealed record CancelPayrollPaymentRequest(string? Reason, string? RowVersion);
+
+public sealed record PayrollPayer(Guid Id, string Name);
+
 public sealed record PayrollPaymentSummary(decimal Amount);
 
 public sealed record PayrollPaymentPage(IReadOnlyList<PayrollPaymentRow> Items, int Total, int Page, int PageSize, PayrollPaymentSummary Summary);
@@ -136,7 +164,7 @@ public sealed record PayableEmployees(IReadOnlyList<PayableEmployee> Items);
 
 public sealed record EmployeeSlipRow(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, string PayrollName, DateOnly From, DateOnly To,
-    decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status);
+    decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status, DateTimeOffset? FinalizedAt = null);
 
 public sealed record EmployeeSlipSummary(decimal Outstanding, decimal AdvanceBalance);
 

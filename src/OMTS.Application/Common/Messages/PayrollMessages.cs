@@ -60,6 +60,13 @@ public static class PayrollMessages
         Parameters = new Dictionary<string, object?> { ["voucher_code"] = voucherCode },
     };
 
+    /// <summary>MSG-GEN-09 style: an advance that a later payroll already took off cannot be cancelled.</summary>
+    public static UserMessage AdvanceAlreadyDeducted(string voucherCode, decimal deducted) => new(
+        MessageCodes.Gen09, $"Không thể hủy phiếu chi {voucherCode}: khoản tạm ứng đã được trừ {Vnd(deducted)} đ vào bảng lương sau đó.", MessageCodes.Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["voucher_code"] = voucherCode, ["deducted"] = deducted },
+    };
+
     public static string Date(DateOnly day) => day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
     public static string ShortDate(DateOnly day) => day.ToString("dd/MM", CultureInfo.InvariantCulture);

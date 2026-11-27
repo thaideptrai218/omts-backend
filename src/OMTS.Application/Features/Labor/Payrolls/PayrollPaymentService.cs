@@ -1,4 +1,5 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -30,6 +31,8 @@ public sealed class PayrollPaymentService(
     IEmployeeRepository employees,
     ICashVoucherRepository vouchers,
     ICashAccountRepository accounts,
+    IAccountRepository people,
+    RowVersionGuard rowVersions,
     ICashVoucherTypeRepository voucherTypes,
     CashVoucherCodeService codes,
     ICurrentUser currentUser,
@@ -49,6 +52,11 @@ public sealed class PayrollPaymentService(
         if (!await AccountAllowedAsync(request.Method, request.CashAccountId, cancellationToken))
         {
             invalid.Add("Cash account");
+        }
+
+        if (!await PaidByAllowedAsync(request.PaidById, null, cancellationToken))
+        {
+            invalid.Add("Paid by");
         }
 
         var asked = request.Lines ?? [];
@@ -105,7 +113,7 @@ public sealed class PayrollPaymentService(
             parts.Add(new Part(line, ask.Amount.Value));
         }
 
-        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, null, request.CashAccountId);
+        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, null, request.CashAccountId, request.PaidById);
         return AsResult(created);
     }
 
@@ -116,6 +124,11 @@ public sealed class PayrollPaymentService(
         if (!await AccountAllowedAsync(request.Method, request.CashAccountId, cancellationToken))
         {
             invalid.Add("Cash account");
+        }
+
+        if (!await PaidByAllowedAsync(request.PaidById, null, cancellationToken))
+        {
+            invalid.Add("Paid by");
         }
 
         if (request.EmployeeId is null)
@@ -180,13 +193,194 @@ public sealed class PayrollPaymentService(
             parts.Add(new Part(null, left));
         }
 
-        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, employee, request.CashAccountId);
+        var created = await SaveAsync(parts, request.PaidAt!.Value, request.Method!.Value, request.Note, requestKey, cancellationToken, employee, request.CashAccountId, request.PaidById);
         return new StandalonePaymentResult(created[0].CashVoucherId);
     }
 
+    /// <summary>The voucher of a wage or advance payment with what it paid. <paramref name="voucherId"/> is the id of its cash voucher.</summary>
+    public async Task<Result<PayrollPaymentDetail>> GetAsync(Guid voucherId, CancellationToken cancellationToken) =>
+        await payments.GetByVoucherForEditAsync(voucherId, cancellationToken) is { } payment ? await DetailAsync(payment, cancellationToken) : AppError.NotFound;
+
+    /// <summary>Who may be named as having handed the money over: the Active Owner and staff accounts.</summary>
+    public async Task<IReadOnlyList<PayrollPayer>> PayersAsync(CancellationToken cancellationToken) =>
+        (await people.ListActiveInternalAsync(cancellationToken)).Select(a => new PayrollPayer(a.Id, a.DisplayName)).OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    /// <summary>
+    /// Edits when it was paid, by whom, the method (with the bank account) and the note of a Recorded voucher, on the payment and its cash voucher together; the amount, employee and payslip never change.
+    /// A wage cannot be dated before its payroll was finalized. A newer version than the one sent answers MSG06.
+    /// </summary>
+    public async Task<Result<PayrollPaymentDetail>> UpdateAsync(Guid voucherId, UpdatePayrollPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var payment = await payments.GetByVoucherForEditAsync(voucherId, cancellationToken);
+        if (payment is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (payment.CashVoucher.CancelledAt is not null)
+        {
+            return CancelledError(payment);
+        }
+
+        if (await rowVersions.CheckAsync(payment, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        var voucher = payment.CashVoucher;
+        var paidAt = (request.PaidAt ?? payment.PaidAt).ToOffset(BusinessClock.UtcOffset);
+        var invalid = InvalidFields(request.PaidAt is null ? DateTimeOffset.UnixEpoch : paidAt, request.Method, request.Note, null);
+        if (!await AccountAllowedAsync(request.Method, request.CashAccountId, cancellationToken) && request.CashAccountId != voucher.CashAccountId)
+        {
+            invalid.Add("Cash account");
+        }
+
+        if (!await PaidByAllowedAsync(request.PaidById, voucher.CollectedByAccountId, cancellationToken))
+        {
+            invalid.Add("Paid by");
+        }
+
+        if (invalid.Count > 0)
+        {
+            return AppError.InvalidFields(invalid);
+        }
+
+        if (request.PaidAt is not null && payment.PayrollLine?.Payroll is { } sheet && PaidBeforeFinalized(sheet, paidAt) is { } early)
+        {
+            return early;
+        }
+
+        var before = Snapshot(payment);
+        var method = request.Method!.Value;
+        var fund = CashBookRules.FundOfPayment(method);
+        var accountId = fund == CashFund.Bank ? request.CashAccountId : null;
+        payment.PaidAt = paidAt;
+        payment.Method = method;
+        payment.Note = SupplierPaymentRules.Trimmed(request.Note);
+        voucher.OccurredAt = paidAt;
+        voucher.VoucherDate = BusinessClock.ToBusinessDate(paidAt);
+        voucher.Fund = fund;
+        voucher.CashAccountId = accountId;
+        voucher.CashAccount = accountId is { } id ? (await accounts.GetByIdsAsync([id], cancellationToken)).GetValueOrDefault(id) : null;
+        voucher.CollectedByAccountId = request.PaidById ?? voucher.CollectedByAccountId;
+        voucher.Note = VoucherNote(payment.PayrollLine, request.Note);
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(payment));
+        if (changedAfter is not null)
+        {
+            unitOfWork.MarkChanged(payment);
+            unitOfWork.MarkChanged(voucher);
+            audit.Record(new AuditEntry("WagePayment.Edited", RecordType)
+            {
+                RecordId = payment.Id, RecordCode = voucher.Code, Before = changedBefore, After = changedAfter,
+            });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return await DetailAsync(payment, cancellationToken);
+    }
+
+    /// <summary>
+    /// Cancels a Recorded voucher with its cash voucher: the payslip owes the money again, or the advance is no longer given. An advance that a later payroll already deducted cannot be cancelled (409).
+    /// </summary>
+    public async Task<Result<PayrollPaymentDetail>> CancelAsync(Guid voucherId, CancelPayrollPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var payment = await payments.GetByVoucherForEditAsync(voucherId, cancellationToken);
+        if (payment is null)
+        {
+            return AppError.NotFound;
+        }
+
+        var voucher = payment.CashVoucher;
+        if (voucher.CancelledAt is not null)
+        {
+            return CancelledError(payment);
+        }
+
+        var reason = SupplierPaymentRules.Trimmed(request.Reason);
+        if (reason?.Length > PayrollRules.MaxNoteLength)
+        {
+            return AppError.Invalid("Reason");
+        }
+
+        if (request.RowVersion is not null && await rowVersions.CheckAsync(payment, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        if (payment.Kind == WagePaymentKind.Advance && await payments.DeductedAsync(payment.Id, cancellationToken) is var deducted and > 0)
+        {
+            return new AppError(
+                ErrorKind.Conflict, PayrollMessages.AdvanceAlreadyDeducted(voucher.Code, deducted), new Dictionary<string, object?> { ["reasonCode"] = "ADVANCE_DEDUCTED" });
+        }
+
+        voucher.CancelledAt = timeProvider.GetUtcNow();
+        voucher.CancelReason = reason;
+        unitOfWork.MarkChanged(voucher);
+        unitOfWork.MarkChanged(payment);
+        if (payment.PayrollLine is { } line)
+        {
+            // The payslip is touched, so a payment made on it at the same time meets a new row version.
+            unitOfWork.MarkChanged(line);
+        }
+
+        audit.Record(new AuditEntry("WagePayment.Cancelled", RecordType)
+        {
+            RecordId = payment.Id,
+            RecordCode = voucher.Code,
+            Before = new { Status = CashEntryStatus.Recorded },
+            After = new { Status = CashEntryStatus.Cancelled },
+            Reason = reason,
+        });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await DetailAsync(payment, cancellationToken);
+    }
+
+    private static AppError CancelledError(WagePayment payment) =>
+        AppError.Conflict(UserMessages.WrongStatus($"Payroll payment {payment.CashVoucher.Code}", CashEntryStatus.Cancelled.ToString()));
+
+    private static object Snapshot(WagePayment p) => new
+    {
+        p.PaidAt, p.Method, p.Note, p.CashVoucher.CashAccountId, PaidBy = p.CashVoucher.CollectedByAccountId,
+    };
+
+    private async Task<PayrollPaymentDetail> DetailAsync(WagePayment payment, CancellationToken cancellationToken)
+    {
+        var voucher = payment.CashVoucher;
+        var cancelled = voucher.CancelledAt is not null;
+        var ids = new[] { payment.RecordedByAccountId, voucher.CollectedByAccountId ?? Guid.Empty }.Where(id => id != Guid.Empty).Distinct().ToList();
+        var names = await people.GetDisplayNamesAsync(ids, cancellationToken);
+        var account = voucher.CashAccount;
+        var allocations = new List<PayrollPaymentAllocation>();
+        var advanceDeducted = 0m;
+        if (payment.PayrollLine is { } line)
+        {
+            var before = await payments.PaidBeforeAsync(payment, cancellationToken);
+            var after = before + (cancelled ? 0 : payment.Amount);
+            var sheet = line.Payroll;
+            allocations.Add(new PayrollPaymentAllocation(
+                line.Id, line.Code, sheet.Id, sheet.Code, PayrollRules.NameOf(sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd), sheet.PeriodStart, sheet.PeriodEnd, sheet.FinalizedAt,
+                line.Net, before, payment.Amount, after >= line.Net ? "Paid" : after > 0 ? "PartiallyPaid" : "Unpaid"));
+        }
+        else
+        {
+            advanceDeducted = await payments.DeductedAsync(payment.Id, cancellationToken);
+        }
+
+        return new PayrollPaymentDetail(
+            voucher.Id, voucher.Code, payment.Kind, payment.EmployeeId, payment.Employee.Code, payment.Employee.FullName, payment.PaidAt, payment.Method,
+            voucher.CashAccountId, account is null ? null : $"{account.ProviderName} - {account.AccountNumber}", payment.Note, payment.RecordedByAccountId, names.GetValueOrDefault(payment.RecordedByAccountId),
+            payment.CreatedAt, voucher.CollectedByAccountId, voucher.CollectedByAccountId is { } paidBy ? names.GetValueOrDefault(paidBy) : null,
+            cancelled ? "Cancelled" : "Recorded", voucher.CancelledAt, voucher.CancelReason, payment.Amount, RowVersionGuard.Encode(payment.RowVersion), allocations,
+            payment.Kind == WagePaymentKind.Advance ? payment.Amount : 0, advanceDeducted);
+    }
+
+    /// <summary>Null means the signed-in account; otherwise an Active Owner or staff account (the one a voucher already names may stay).</summary>
+    private async Task<bool> PaidByAllowedAsync(Guid? accountId, Guid? stored, CancellationToken cancellationToken) =>
+        accountId is not { } id || id == stored || (await people.ListActiveInternalAsync(cancellationToken)).Any(a => a.Id == id);
+
     /// <summary>Makes the payments and their vouchers in one save; with a request key, a parallel save of the same key that won is answered with its payments.</summary>
     private async Task<IReadOnlyList<WagePayment>> SaveAsync(
-        IReadOnlyList<Part> parts, DateTimeOffset paidAt, PaymentMethod method, string? note, string? requestKey, CancellationToken cancellationToken, Employee? employee = null, Guid? cashAccountId = null)
+        IReadOnlyList<Part> parts, DateTimeOffset paidAt, PaymentMethod method, string? note, string? requestKey, CancellationToken cancellationToken, Employee? employee = null, Guid? cashAccountId = null, Guid? paidById = null)
     {
         var type = (await voucherTypes.GetByIdsAsync([CashVoucherTypeIds.PaymentPayroll], cancellationToken)).GetValueOrDefault(CashVoucherTypeIds.PaymentPayroll);
         var fund = CashBookRules.FundOfPayment(method);
@@ -206,7 +400,7 @@ public sealed class PayrollPaymentService(
                 OccurredAt = occurredAt,
                 VoucherDate = BusinessClock.ToBusinessDate(occurredAt),
                 Amount = part.Amount,
-                CollectedByAccountId = recorder,
+                CollectedByAccountId = paidById ?? recorder,
                 PartyKind = CashPartyKind.Employee,
                 PartyId = who.Id,
                 PartyName = who.FullName,

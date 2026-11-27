@@ -132,6 +132,33 @@ public sealed class PayrollsController(
         StandalonePayrollPaymentRequest request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken cancellationToken) =>
         (await paying.PayEmployeeAsync(request, Key(idempotencyKey), cancellationToken)).ToActionResult(result => StatusCode(StatusCodes.Status201Created, result));
 
+    /// <summary>The Active Owner and staff accounts that may be named as having handed the money over ("Nhân viên tạo").</summary>
+    [HttpGet("payroll-payments/payers")]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<IReadOnlyList<PayrollPayer>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Payers(CancellationToken cancellationToken) => Ok(await paying.PayersAsync(cancellationToken));
+
+    /// <summary>One wage or advance voucher (<c>id</c> is the id of its cash voucher) with the payslip it paid, who recorded it and who handed the money over. 404 for an unknown id.</summary>
+    [HttpGet("payroll-payments/{id:guid}")]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<PayrollPaymentDetail>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPayment(Guid id, CancellationToken cancellationToken) =>
+        (await paying.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Edits the time, the method (with the bank account), the note and who paid of a Recorded voucher; its amount never changes. 409 for a cancelled voucher or a newer version (MSG06).</summary>
+    [HttpPut("payroll-payments/{id:guid}")]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<PayrollPaymentDetail>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdatePayment(Guid id, UpdatePayrollPaymentRequest request, CancellationToken cancellationToken) =>
+        (await paying.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Cancels a Recorded voucher with its cash voucher: the payslip owes the money again. 409 for a cancelled voucher, a newer version, or an advance that a payroll already deducted.</summary>
+    [HttpPost("payroll-payments/{id:guid}/cancel")]
+    [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<PayrollPaymentDetail>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancelPayment(Guid id, CancelPayrollPaymentRequest request, CancellationToken cancellationToken) =>
+        (await paying.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>Employees with something owed on Finalized sheets, or, with <c>includeAll</c>, every Employed employee too (owed 0 for those).</summary>
     [HttpGet("payrolls/payable-employees")]
     [RequirePermission(PermissionFunctions.Payroll, PermissionAction.View, PermissionScope.NoZone)]

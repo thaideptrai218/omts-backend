@@ -59,7 +59,7 @@ internal sealed class PayrollReader(OmtsDbContext db) : IPayrollReader
     public async Task<PayrollDetailRaw?> GetDetailAsync(Guid id, CancellationToken cancellationToken)
     {
         var sheet = await db.Payrolls.AsNoTracking().Where(p => p.Id == id)
-            .Select(p => new { p.Id, p.Code, p.PeriodType, p.PeriodStart, p.PeriodEnd, p.Scope, p.StatusId, p.ExpenseMonth, p.Note, p.CreatedBy, p.CreatedAt, p.UpdatedAt })
+            .Select(p => new { p.Id, p.Code, p.PeriodType, p.PeriodStart, p.PeriodEnd, p.Scope, p.StatusId, p.ExpenseMonth, p.Note, p.CreatedBy, p.CreatedAt, p.UpdatedAt, p.FinalizedByAccountId, p.FinalizedAt })
             .FirstOrDefaultAsync(cancellationToken);
         if (sheet is null)
         {
@@ -68,7 +68,8 @@ internal sealed class PayrollReader(OmtsDbContext db) : IPayrollReader
 
         var slips = await SlipsAsync(db.PayrollLines.Where(l => l.PayrollId == id), cancellationToken);
         return new PayrollDetailRaw(
-            sheet.Id, sheet.Code, sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd, sheet.Scope, sheet.StatusId, sheet.ExpenseMonth, sheet.Note, sheet.CreatedBy, sheet.CreatedAt, slips, sheet.UpdatedAt);
+            sheet.Id, sheet.Code, sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd, sheet.Scope, sheet.StatusId, sheet.ExpenseMonth, sheet.Note, sheet.CreatedBy, sheet.CreatedAt, slips, sheet.UpdatedAt,
+            sheet.FinalizedByAccountId, sheet.FinalizedAt);
     }
 
     private async Task<IReadOnlyList<PayrollSlipRaw>> SlipsAsync(IQueryable<PayrollLine> lines, CancellationToken cancellationToken)
@@ -121,7 +122,8 @@ internal sealed class PayrollReader(OmtsDbContext db) : IPayrollReader
             .Select(l => new EmployeeSlipRaw(
                 l.Id, l.Code, l.PayrollId, l.Payroll.Code, l.Payroll.PeriodType, l.Payroll.PeriodStart, l.Payroll.PeriodEnd, l.Payroll.StatusId,
                 l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction, l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction,
-                db.WagePayments.Where(w => w.PayrollLineId == l.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0))
+                db.WagePayments.Where(w => w.PayrollLineId == l.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0,
+                l.Payroll.FinalizedAt))
             .ToListAsync(cancellationToken);
 
         var net = await db.PayrollLines

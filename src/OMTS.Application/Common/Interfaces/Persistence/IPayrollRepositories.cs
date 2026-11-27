@@ -74,6 +74,15 @@ public interface IWagePaymentRepository
     /// <summary>The advances of these employees not cancelled and not fully deducted, oldest first, tracked.</summary>
     Task<IReadOnlyList<OpenAdvance>> ListOpenAdvancesAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken);
 
+    /// <summary>The payment whose cash voucher has this id, with its voucher (and bank account), employee and payslip with its sheet, tracked.</summary>
+    Task<WagePayment?> GetByVoucherForEditAsync(Guid voucherId, CancellationToken cancellationToken);
+
+    /// <summary>What was paid on the payslip before this payment (its other payments that are not cancelled, by time paid then by creation).</summary>
+    Task<decimal> PaidBeforeAsync(WagePayment payment, CancellationToken cancellationToken);
+
+    /// <summary>How much of this advance later payslips have taken off.</summary>
+    Task<decimal> DeductedAsync(Guid advanceId, CancellationToken cancellationToken);
+
     /// <summary>The payments saved with this request key, in order, with their voucher.</summary>
     Task<IReadOnlyList<WagePayment>> ListByRequestKeyAsync(string key, CancellationToken cancellationToken);
 
@@ -97,7 +106,8 @@ public sealed record SlipAdjustmentRaw(PayrollAdjustmentKind Kind, decimal Amoun
 
 public sealed record PayrollDetailRaw(
     Guid Id, string Code, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, int StatusId, string? ExpenseMonth,
-    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null);
+    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null,
+    Guid? FinalizedBy = null, DateTimeOffset? FinalizedAt = null);
 
 public sealed record SlipJobRaw(
     string JobName, decimal Hours, decimal HourlyRate, decimal Amount, PayLineKind Kind = PayLineKind.Hourly, decimal ShiftRate = 0, decimal Shifts = 0);
@@ -110,7 +120,7 @@ public sealed record SlipDetailRaw(
 
 public sealed record EmployeeSlipRaw(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, int StatusId,
-    decimal Income, decimal Net, decimal Paid);
+    decimal Income, decimal Net, decimal Paid, DateTimeOffset? FinalizedAt = null);
 
 public sealed record EmployeeSlipPageRaw(IReadOnlyList<EmployeeSlipRaw> Items, int Total, decimal Outstanding, decimal AdvanceBalance);
 

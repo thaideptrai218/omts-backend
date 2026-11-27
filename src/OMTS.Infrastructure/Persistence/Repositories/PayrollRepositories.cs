@@ -154,6 +154,28 @@ internal sealed class WagePaymentRepository(OmtsDbContext db) : IWagePaymentRepo
         return advances.Select(a => new OpenAdvance(a, a.Amount - deducted.GetValueOrDefault(a.Id))).Where(a => a.Remaining > 0).ToList();
     }
 
+    public async Task<WagePayment?> GetByVoucherForEditAsync(Guid voucherId, CancellationToken cancellationToken) =>
+        await db.WagePayments.Include(w => w.CashVoucher).ThenInclude(v => v.CashAccount).Include(w => w.Employee)
+            .Include(w => w.PayrollLine).ThenInclude(l => l!.Payroll)
+            .FirstOrDefaultAsync(w => w.CashVoucherId == voucherId, cancellationToken);
+
+    public async Task<decimal> PaidBeforeAsync(WagePayment payment, CancellationToken cancellationToken)
+    {
+        if (payment.PayrollLineId is not { } lineId)
+        {
+            return 0;
+        }
+
+        var others = await db.WagePayments.AsNoTracking()
+            .Where(w => w.PayrollLineId == lineId && w.Id != payment.Id && w.CashVoucher.CancelledAt == null)
+            .Select(w => new { w.PaidAt, w.CreatedAt, w.Amount })
+            .ToListAsync(cancellationToken);
+        return others.Where(w => w.PaidAt < payment.PaidAt || (w.PaidAt == payment.PaidAt && w.CreatedAt <= payment.CreatedAt)).Sum(w => w.Amount);
+    }
+
+    public async Task<decimal> DeductedAsync(Guid advanceId, CancellationToken cancellationToken) =>
+        await db.PayrollAdvanceDeductions.Where(d => d.AdvanceId == advanceId).SumAsync(d => (decimal?)d.Amount, cancellationToken) ?? 0;
+
     public async Task<IReadOnlyList<WagePayment>> ListByRequestKeyAsync(string key, CancellationToken cancellationToken) =>
         await db.WagePayments.AsNoTracking().Include(w => w.CashVoucher).Include(w => w.Employee)
             .Where(w => w.RequestKey == key).OrderBy(w => w.RequestSequence).ToListAsync(cancellationToken);

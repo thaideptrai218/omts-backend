@@ -48,6 +48,12 @@ public sealed class PayrollSlipTests
         public Task<IReadOnlyList<OpenAdvance>> ListOpenAdvancesAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<OpenAdvance>>(advances.Where(a => employeeIds.Contains(a.Advance.EmployeeId)).ToList());
 
+        public Task<WagePayment?> GetByVoucherForEditAsync(Guid voucherId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<decimal> PaidBeforeAsync(WagePayment payment, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<decimal> DeductedAsync(Guid advanceId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<IReadOnlyList<WagePayment>> ListByRequestKeyAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public void Add(WagePayment payment) => throw new NotSupportedException();

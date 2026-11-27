@@ -104,13 +104,16 @@ public sealed class PayrollQueryService(
         var createdBy = raw.CreatedBy is { } accountId
             ? (await accounts.GetDisplayNamesAsync([accountId], cancellationToken)).GetValueOrDefault(accountId)
             : null;
+        var finalizedBy = raw.FinalizedBy is { } finalizerId
+            ? (await accounts.GetDisplayNamesAsync([finalizerId], cancellationToken)).GetValueOrDefault(finalizerId)
+            : null;
         var staff = await StaffOnAsync(raw.Slips.Select(s => s.EmployeeId).ToList(), raw.To, cancellationToken);
         var slips = raw.Slips.Select(s => Slip(s, staff.Contains(s.EmployeeId))).ToList();
         var total = slips.Sum(s => s.Net);
         var paid = slips.Sum(s => s.Paid);
         return new PayrollSheetDetail(
             raw.Id, raw.Code, PayrollRules.NameOf(raw.PeriodType, raw.From, raw.To), raw.PeriodType, raw.From, raw.To, raw.Scope, PayrollRules.StatusOf(raw.StatusId),
-            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count, raw.UpdatedAt ?? raw.CreatedAt);
+            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count, raw.UpdatedAt ?? raw.CreatedAt, finalizedBy, raw.FinalizedAt);
     }
 
     /// <summary>The employees among these who are Staff on <paramref name="day"/>: only they get adjustments.</summary>
@@ -197,7 +200,7 @@ public sealed class PayrollQueryService(
             employeeId, query.Status is { } status ? PayrollRules.StatusIdsOf([status]) : null, page, pageSize, cancellationToken);
         var items = raw.Items.Select(s => new EmployeeSlipRow(
             s.Id, s.Code, s.PayrollId, s.PayrollCode, PayrollRules.NameOf(s.PeriodType, s.From, s.To), s.From, s.To, s.Income, s.Net, s.Paid, s.Net - s.Paid,
-            PayrollRules.StatusOf(s.StatusId))).ToList();
+            PayrollRules.StatusOf(s.StatusId), s.FinalizedAt)).ToList();
         return new EmployeeSlipPage(items, raw.Total, page, pageSize, new EmployeeSlipSummary(raw.Outstanding, raw.AdvanceBalance));
     }
 
