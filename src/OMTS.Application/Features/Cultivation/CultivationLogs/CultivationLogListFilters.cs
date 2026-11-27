@@ -39,9 +39,54 @@ internal static class CultivationLogListFilters
             return AppError.Invalid("Search");
         }
 
+        if (ReadSort(query.SortBy, query.SortDir, out var sort, out var descending) is { } invalidSort)
+        {
+            return invalidSort;
+        }
+
         (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         filter = new CultivationLogFilter(
-            query.ZoneId, query.RaftId, allowed.AllZones ? null : allowed.ZoneIds.ToHashSet(), logType, query.From, query.To, string.IsNullOrEmpty(search) ? null : search);
+            query.ZoneId, query.RaftId, allowed.AllZones ? null : allowed.ZoneIds.ToHashSet(), logType, query.From, query.To, string.IsNullOrEmpty(search) ? null : search, sort, descending);
         return null;
+    }
+
+    /// <summary>Blank means the default (latest visit first). Anything but a column of the list or asc/desc is MSG-GEN-01 on <c>SortBy</c> or <c>SortDir</c>.</summary>
+    private static AppError? ReadSort(string? sortBy, string? sortDir, out CultivationLogSort sort, out bool descending)
+    {
+        (sort, descending) = (CultivationLogSort.VisitDate, true);
+        var by = sortBy?.Trim();
+        if (!string.IsNullOrEmpty(by))
+        {
+            CultivationLogSort? known = by.ToLowerInvariant() switch
+            {
+                "visitdate" => CultivationLogSort.VisitDate,
+                "zone" => CultivationLogSort.Zone,
+                "raft" => CultivationLogSort.Raft,
+                "logtype" => CultivationLogSort.LogType,
+                "recordedby" => CultivationLogSort.RecordedBy,
+                "recordedat" => CultivationLogSort.RecordedAt,
+                _ => null,
+            };
+            if (known is not { } column)
+            {
+                return AppError.Invalid("SortBy", "Use visitDate, zone, raft, logType, recordedBy or recordedAt.");
+            }
+
+            sort = column;
+        }
+
+        var dir = sortDir?.Trim();
+        if (string.IsNullOrEmpty(dir))
+        {
+            return null;
+        }
+
+        if (string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase))
+        {
+            descending = false;
+            return null;
+        }
+
+        return string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase) ? null : AppError.Invalid("SortDir", "Use asc or desc.");
     }
 }

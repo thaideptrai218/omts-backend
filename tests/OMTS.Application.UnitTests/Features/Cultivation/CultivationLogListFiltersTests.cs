@@ -128,6 +128,69 @@ public class CultivationLogListFiltersTests
         Assert.Null(Read(new CultivationLogListQuery(Search: new string('a', 100)), PermittedZones.Everywhere, out _, out _, out _));
     }
 
+    [Fact]
+    public void With_no_sort_the_latest_visit_comes_first()
+    {
+        Assert.Null(Read(new CultivationLogListQuery(), PermittedZones.Everywhere, out var filter, out _, out _));
+
+        Assert.Equal((CultivationLogSort.VisitDate, true), (filter.Sort, filter.Descending));
+        Assert.Null(Read(new CultivationLogListQuery(SortBy: " ", SortDir: " "), PermittedZones.Everywhere, out filter, out _, out _));
+        Assert.Equal((CultivationLogSort.VisitDate, true), (filter.Sort, filter.Descending));
+    }
+
+    [Theory]
+    [InlineData("visitDate", CultivationLogSort.VisitDate)]
+    [InlineData("ZONE", CultivationLogSort.Zone)]
+    [InlineData(" raft ", CultivationLogSort.Raft)]
+    [InlineData("logType", CultivationLogSort.LogType)]
+    [InlineData("RecordedBy", CultivationLogSort.RecordedBy)]
+    [InlineData("recordedat", CultivationLogSort.RecordedAt)]
+    public void Every_column_of_the_list_can_be_sorted_in_any_letter_case(string sortBy, CultivationLogSort expected)
+    {
+        Assert.Null(Read(new CultivationLogListQuery(SortBy: sortBy), PermittedZones.Everywhere, out var filter, out _, out _));
+
+        Assert.Equal(expected, filter.Sort);
+        Assert.True(filter.Descending);
+    }
+
+    [Theory]
+    [InlineData("asc", false)]
+    [InlineData(" ASC ", false)]
+    [InlineData("desc", true)]
+    [InlineData("Desc", true)]
+    public void The_direction_is_read_in_any_letter_case(string sortDir, bool descending)
+    {
+        Assert.Null(Read(new CultivationLogListQuery(SortBy: "raft", SortDir: sortDir), PermittedZones.Everywhere, out var filter, out _, out _));
+
+        Assert.Equal(descending, filter.Descending);
+    }
+
+    [Fact]
+    public void An_unknown_sort_column_is_msg_gen_01_on_sort_by()
+    {
+        var error = Read(new CultivationLogListQuery(SortBy: "notes"), PermittedZones.Everywhere, out _, out _, out _);
+
+        Assert.Equal(ErrorKind.Validation, error!.Kind);
+        Assert.Equal("SortBy", error.Details!["field"]);
+    }
+
+    [Fact]
+    public void An_unknown_direction_is_msg_gen_01_on_sort_dir()
+    {
+        var error = Read(new CultivationLogListQuery(SortBy: "zone", SortDir: "up"), PermittedZones.Everywhere, out _, out _, out _);
+
+        Assert.Equal(ErrorKind.Validation, error!.Kind);
+        Assert.Equal("SortDir", error.Details!["field"]);
+    }
+
+    [Fact]
+    public void A_refused_zone_comes_before_an_invalid_sort()
+    {
+        var error = Read(new CultivationLogListQuery(ZoneId: ZoneB, SortBy: "notes"), OnlyA, out _, out _, out _);
+
+        Assert.Equal(ErrorKind.Forbidden, error!.Kind);
+    }
+
     [Theory]
     [InlineData(1, 20, 1, 20)]
     [InlineData(0, 0, 1, 1)]
