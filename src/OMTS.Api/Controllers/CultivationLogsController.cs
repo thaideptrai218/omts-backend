@@ -45,6 +45,15 @@ public sealed class CultivationLogsController(
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
 
+    /// <summary>
+    /// The logs of every raft the caller may read (the "Nhật ký" screen), the latest visit first: query <c>zoneId</c>, <c>raftId</c>, <c>logType</c>, <c>from</c> and <c>to</c> (visit dates, <c>yyyy-MM-dd</c>, inclusive),
+    /// <c>search</c> (raft code or notes), <c>page</c> and <c>pageSize</c> (at most 100). A zone the caller cannot read answers 403.
+    /// </summary>
+    [HttpGet("api/cultivation-logs")]
+    [ProducesResponseType<CultivationLogPage>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] CultivationLogListQuery query, CancellationToken cancellationToken) =>
+        (await reads.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
     [HttpGet("api/cultivation-logs/{logId:guid}")]
     [ProducesResponseType<CultivationLogView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid logId, CancellationToken cancellationToken) =>

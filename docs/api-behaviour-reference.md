@@ -620,6 +620,15 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
 - Column `CultivationLogs.LogType` (`nvarchar(20)`, not null, default `OTHER`): logs saved before the column existed are `OTHER`. The audit snapshot (`CultivationLog.Created/Corrected/Removed`, TRACE-03) holds `LogType` beside `VisitDate`, `Notes` and `Photos`, so a change of type alone is a correction row.
   A log still carries no code of any cycle or raft.
 
+### Cross-raft cultivation log list (the "Nhật ký" screen, 27/11/2026)
+
+- `GET /api/cultivation-logs?zoneId&raftId&logType&from&to&search&page&pageSize` answers `{ items, page, pageSize, total }`; `items` are the same `CultivationLogView` as everywhere, ordered `visitDate` desc, then `recordedAt` desc.
+- Every log view now also has `zoneId`, `zoneCode`, `zoneName` (beside `cycleId`, `raftId`, `raftCode`).
+- `from` and `to` are visit dates (`yyyy-MM-dd`), inclusive, each optional; `to` before `from` = 400 MSG-GEN-01 on `To`. `logType`: same codes and rules as the cycle list (unknown = 400 on `LogType`). `search`: text in the raft code or the notes
+  (a `LIKE` with `%` and `_` escaped, so they match themselves), at most 100 characters (else 400 on `Search`). `page` from 1, `pageSize` clamped to 1-100 (default 20). `raftId` matches the raft in every cycle it had.
+- Access is the rule of reading a cycle's logs (`CultivationLogs` View, zone-scoped): with no `zoneId` the list holds the logs of every zone the caller may read (an Owner: all); a `zoneId` the caller cannot read, or a caller who reads no zone, = 403 MSG-GEN-08. The refusal comes before any filter error.
+- Reads: the count, the page (logs with their cycle, raft and zone in one query) and one read for the photos of the page; the recorders' names are read once for the page.
+
 ### Employees on nursery, seeding and harvest records (OMTS-227, 17/11/2026)
 
 - Nursery batch (`POST /api/zones/{zoneId}/nursery-batches`, `PUT /api/nursery-batches/{id}`), seeding session (`POST .../seeding-records`, its correction) and harvest lot take the form field `crew`: one field per employee id,

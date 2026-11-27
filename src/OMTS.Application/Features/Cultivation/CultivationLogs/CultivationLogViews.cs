@@ -33,6 +33,20 @@ public sealed class CultivationLogViews(
         return views;
     }
 
+    /// <summary>The logs of a page, each with its cycle, raft and zone: the names of the recorders are read once for the page.</summary>
+    public async Task<IReadOnlyList<CultivationLogView>> ListAsync(IReadOnlyList<CultivationLog> page, CancellationToken cancellationToken)
+    {
+        var names = await accounts.GetDisplayNamesAsync(page.Select(l => l.RecordedByAccountId).Distinct().ToList(), cancellationToken);
+        var access = await AccessAsync(cancellationToken);
+        var views = new List<CultivationLogView>(page.Count);
+        foreach (var log in page)
+        {
+            views.Add(await ViewAsync(log, log.Cycle, names.GetValueOrDefault(log.RecordedByAccountId), access, cancellationToken));
+        }
+
+        return views;
+    }
+
     /// <summary>One log, with its cycle, raft and zone.</summary>
     public async Task<CultivationLogView> ViewAsync(CultivationLog log, CancellationToken cancellationToken)
     {
@@ -68,6 +82,9 @@ public sealed class CultivationLogViews(
             cycle.Id,
             raft.Id,
             raft.Code,
+            raft.ZoneId,
+            raft.Zone.Code,
+            raft.Zone.Name,
             log.VisitDate,
             log.LogType,
             log.Notes,

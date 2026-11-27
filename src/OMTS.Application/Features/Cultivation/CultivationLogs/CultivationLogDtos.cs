@@ -29,6 +29,9 @@ public sealed record CultivationLogView(
     Guid CycleId,
     Guid RaftId,
     string RaftCode,
+    Guid ZoneId,
+    string ZoneCode,
+    string ZoneName,
     DateOnly VisitDate,
     string LogType,
     string? Notes,
@@ -38,6 +41,18 @@ public sealed record CultivationLogView(
     DateTimeOffset RecordedAt,
     bool CanCorrect,
     string RowVersion);
+
+/// <summary>The query of the cross-raft log list (the "Nhật ký" screen). <c>from</c> and <c>to</c> are visit dates, inclusive.</summary>
+/// <param name="ZoneId">Only the logs of rafts of this zone; none asks for every zone the caller may read.</param>
+/// <param name="RaftId">Only the logs of this raft, in every cycle it had.</param>
+/// <param name="LogType">One code of <see cref="OMTS.Domain.Constants.CultivationLogTypes"/>; blank is any.</param>
+/// <param name="Search">Text in the raft code or the notes.</param>
+/// <param name="PageSize">1 to 100.</param>
+public sealed record CultivationLogListQuery(
+    Guid? ZoneId = null, Guid? RaftId = null, string? LogType = null, DateOnly? From = null, DateOnly? To = null, string? Search = null, int Page = 1, int PageSize = 20);
+
+/// <summary>A page of the cross-raft log list, the latest visit first.</summary>
+public sealed record CultivationLogPage(IReadOnlyList<CultivationLogView> Items, int Page, int PageSize, int Total);
 
 /// <summary>Answer of a saved log.</summary>
 /// <param name="Message">MSG-GEN-05 "Cultivation log saved.".</param>
