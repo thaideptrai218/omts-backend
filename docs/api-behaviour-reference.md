@@ -610,6 +610,16 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
 
 
 
+### Cultivation (care) log type (27/11/2026)
+
+- A cultivation log has `logType`, one code of: `FEEDING` (Cho ăn), `CLEANING` (Vệ sinh bè/lồng), `INSPECTION` (Kiểm tra), `DISEASE` (Phòng/trị bệnh), `REPAIR` (Sửa chữa), `OTHER` (Khác). The labels belong to the clients; the API only sends and stores codes.
+- Record (`POST /api/cultivation-cycles/{cycleId}/cultivation-logs`), correction (`PUT /api/cultivation-logs/{logId}`) and the TRACE-03.1 log correction take the multipart field `logType`. Missing or blank = `OTHER` (a correction replaces the type, so a correction that sends none sets `OTHER`);
+  spacing and letter case are ignored; any other value = 400 MSG-GEN-01 naming `LogType` (listed with the other invalid fields).
+- Every log view (`GET /api/cultivation-cycles/{cycleId}/cultivation-logs`, `GET /api/cultivation-logs/{logId}`, the save answers, the logs of the cycle progress and of the TRACE-03 correction read) has `logType`.
+  The list takes the optional query `logType` (same codes, any letter case): only logs of that type, still latest visit first; absent or blank = all; unknown = 400 MSG-GEN-01 on `LogType` (after the access check).
+- Column `CultivationLogs.LogType` (`nvarchar(20)`, not null, default `OTHER`): logs saved before the column existed are `OTHER`. The audit snapshot (`CultivationLog.Created/Corrected/Removed`, TRACE-03) holds `LogType` beside `VisitDate`, `Notes` and `Photos`, so a change of type alone is a correction row.
+  A log still carries no code of any cycle or raft.
+
 ### Employees on nursery, seeding and harvest records (OMTS-227, 17/11/2026)
 
 - Nursery batch (`POST /api/zones/{zoneId}/nursery-batches`, `PUT /api/nursery-batches/{id}`), seeding session (`POST .../seeding-records`, its correction) and harvest lot take the form field `crew`: one field per employee id,

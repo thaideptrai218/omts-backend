@@ -5,6 +5,9 @@ public class CultivationLogForm
 {
     /// <summary><c>yyyy-MM-dd</c>.</summary>
     public string? VisitDate { get; set; }
+    /// <summary>FEEDING, CLEANING, INSPECTION, DISEASE, REPAIR or OTHER; missing is OTHER.</summary>
+    public string? LogType { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>One field per photo to keep; a photo left out is removed.</summary>

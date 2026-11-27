@@ -508,6 +508,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CycleId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("LogType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("OTHER");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");

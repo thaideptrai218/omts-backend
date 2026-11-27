@@ -1,13 +1,16 @@
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 
 /// <summary>CYCLE-04.0; the photos come beside it.</summary>
+/// <param name="LogType">One of <c>FEEDING</c>, <c>CLEANING</c>, <c>INSPECTION</c>, <c>DISEASE</c>, <c>REPAIR</c>, <c>OTHER</c>; missing or blank is <c>OTHER</c>, any other value is refused.</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
-public sealed record RecordCultivationLogRequest(DateOnly? VisitDate, string? Notes, bool OtherFilePart = false);
+public sealed record RecordCultivationLogRequest(DateOnly? VisitDate, string? Notes, bool OtherFilePart = false, string? LogType = null);
 
 /// <summary>CYCLE-04.1: the log as it should be, with the reason. A photo that is not kept and not sent again is removed. It carries no version (NFR-09).</summary>
 /// <param name="KeepPhotoKeys">The <c>key</c> of each current photo to keep, spelled as the log view gives it.</param>
 /// <param name="OtherFilePart">As on <see cref="RecordCultivationLogRequest"/>.</param>
-public sealed record CorrectCultivationLogRequest(DateOnly? VisitDate, string? Notes, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason, bool OtherFilePart = false);
+/// <param name="LogType">As on <see cref="RecordCultivationLogRequest"/>; a correction replaces the type, so a missing one makes it <c>OTHER</c>.</param>
+public sealed record CorrectCultivationLogRequest(
+    DateOnly? VisitDate, string? Notes, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason, bool OtherFilePart = false, string? LogType = null);
 
 /// <summary>CYCLE-04.1 remove. It carries no version (NFR-09).</summary>
 public sealed record RemoveCultivationLogRequest(string? Reason);
@@ -18,6 +21,7 @@ public sealed record RemoveCultivationLogRequest(string? Reason);
 public sealed record CultivationLogPhotoView(string Key, int SortOrder, string Url);
 
 /// <summary>A cultivation log (CYCLE-04, CYCLE-05).</summary>
+/// <param name="LogType">A code of <see cref="OMTS.Domain.Constants.CultivationLogTypes"/>.</param>
 /// <param name="Photos">In slot order.</param>
 /// <param name="CanCorrect">The caller may correct or remove it now: the cycle is Open on a raft In Use, and the caller recorded it or is the Owner (BR-CYCLE-05).</param>
 public sealed record CultivationLogView(
@@ -26,6 +30,7 @@ public sealed record CultivationLogView(
     Guid RaftId,
     string RaftCode,
     DateOnly VisitDate,
+    string LogType,
     string? Notes,
     IReadOnlyList<CultivationLogPhotoView> Photos,
     Guid RecordedByAccountId,

@@ -58,7 +58,7 @@ public sealed class CultivationLogService(
         }
 
         if (CultivationLogValues.Read(
-                request.VisitDate, request.Notes, photos, request.OtherFilePart, kept: 0, keysAreKnown: true, reason: null, reasonRequired: false,
+                request.VisitDate, request.LogType, request.Notes, photos, request.OtherFilePart, kept: 0, keysAreKnown: true, reason: null, reasonRequired: false,
                 seen.StartDate, timeProvider.Today(), out var values) is { } invalid)
         {
             return invalid;
@@ -104,6 +104,7 @@ public sealed class CultivationLogService(
             CycleId = cycle.Id,
             Cycle = cycle,
             VisitDate = values.VisitDate,
+            LogType = values.LogType,
             Notes = values.Notes,
             RecordedByAccountId = recorder,
             Photos = keys.Select((key, index) => new CultivationLogPhoto { SortOrder = index + 1, FileKey = key }).ToList(),

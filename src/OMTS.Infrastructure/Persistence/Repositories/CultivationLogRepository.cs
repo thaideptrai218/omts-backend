@@ -12,9 +12,9 @@ internal sealed class CultivationLogRepository(OmtsDbContext db) : ICultivationL
     public Task<CultivationLog?> GetAsync(Guid logId, CancellationToken cancellationToken) =>
         WithCycle(db.CultivationLogs.AsNoTracking()).FirstOrDefaultAsync(l => l.Id == logId, cancellationToken);
 
-    public async Task<IReadOnlyList<CultivationLog>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<CultivationLog>> ListByCycleAsync(Guid cycleId, string? logType, CancellationToken cancellationToken) =>
         await db.CultivationLogs.AsNoTracking().Include(l => l.Photos)
-            .Where(l => l.CycleId == cycleId)
+            .Where(l => l.CycleId == cycleId && (logType == null || l.LogType == logType))
             .OrderByDescending(l => l.VisitDate).ThenByDescending(l => l.CreatedAt)
             .ToListAsync(cancellationToken);
 

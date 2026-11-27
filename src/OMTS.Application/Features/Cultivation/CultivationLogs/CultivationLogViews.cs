@@ -18,10 +18,10 @@ public sealed class CultivationLogViews(
     PermissionService permissions,
     ICurrentUser currentUser)
 {
-    /// <summary>The logs of the cycle, the latest visit first. The cycle comes with its raft and zone.</summary>
-    public async Task<IReadOnlyList<CultivationLogView>> ListAsync(CultivationCycle cycle, CancellationToken cancellationToken)
+    /// <summary>The logs of the cycle, the latest visit first, only of <paramref name="logType"/> when given (a code already normalized). The cycle comes with its raft and zone.</summary>
+    public async Task<IReadOnlyList<CultivationLogView>> ListAsync(CultivationCycle cycle, string? logType, CancellationToken cancellationToken)
     {
-        var ofCycle = await logs.ListByCycleAsync(cycle.Id, cancellationToken);
+        var ofCycle = await logs.ListByCycleAsync(cycle.Id, logType, cancellationToken);
         var names = await accounts.GetDisplayNamesAsync(ofCycle.Select(l => l.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         var access = await AccessAsync(cancellationToken);
         var views = new List<CultivationLogView>(ofCycle.Count);
@@ -69,6 +69,7 @@ public sealed class CultivationLogViews(
             raft.Id,
             raft.Code,
             log.VisitDate,
+            log.LogType,
             log.Notes,
             photos,
             log.RecordedByAccountId,

@@ -52,7 +52,7 @@ public sealed class CultivationLogCorrectionService(
         var keep = (request.KeepPhotoKeys ?? []).Where(k => !string.IsNullOrEmpty(k)).ToHashSet(StringComparer.Ordinal);
         var keptCount = seen.Photos.Count(p => keep.Contains(p.FileKey));
         if (CultivationLogValues.Read(
-                request.VisitDate, request.Notes, newPhotos, request.OtherFilePart, keptCount, keysAreKnown: keptCount == keep.Count, request.Reason, reasonRequired: true,
+                request.VisitDate, request.LogType, request.Notes, newPhotos, request.OtherFilePart, keptCount, keysAreKnown: keptCount == keep.Count, request.Reason, reasonRequired: true,
                 seen.Cycle.StartDate, timeProvider.Today(), out var values) is { } invalid)
         {
             return invalid;
@@ -97,7 +97,7 @@ public sealed class CultivationLogCorrectionService(
         }
 
         var before = CultivationLogValues.Snapshot(log);
-        (log.VisitDate, log.Notes) = (values.VisitDate, values.Notes);
+        (log.VisitDate, log.LogType, log.Notes) = (values.VisitDate, values.LogType, values.Notes);
         var removedKeys = CultivationLogPhotoRows.Apply(logs, log, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationLogValues.Snapshot(log));
         if (changedAfter is not null)

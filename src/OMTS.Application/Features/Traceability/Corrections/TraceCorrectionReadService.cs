@@ -63,7 +63,7 @@ public sealed class TraceCorrectionReadService(
                 s.Session.Id, s.Session.SeedingDate, SeedingViews.LotRef(s.Session.SeedLotLine), s.Session.Quantity,
                 s.Session.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(), TraceCorrectionAnswers.Codes(s.Lots), RowVersionGuard.Encode(s.Session.RowVersion)))
             .ToList();
-        var logs = closed ? await logViews.ListAsync(cycle, cancellationToken) : [];
+        var logs = closed ? await logViews.ListAsync(cycle, null, cancellationToken) : [];
         var lotItems = closed ? lots.OrderBy(l => l.HarvestedAt).Select(LotItem).ToList() : [];
         var empty = sessions.Count == 0 && logs.Count == 0 && lotItems.Count == 0 ? UserMessages.NoDataForFilters("cycle") : null;
         return new TraceCorrectionRecords(

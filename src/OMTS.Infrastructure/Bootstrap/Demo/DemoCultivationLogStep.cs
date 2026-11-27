@@ -61,7 +61,9 @@ internal sealed class DemoCultivationLogStep : IDemoSeedStep
         for (var visit = cycle.StartDate.AddDays(DaysBetweenVisits); visit <= context.Today; visit = visit.AddDays(DaysBetweenVisits))
         {
             created++;
-            var request = new RecordCultivationLogRequest(visit, created == 1 ? "Hàu bám tốt, dây treo chắc, không có hàu chết." : "Hàu lớn đều, đã vệ sinh dây treo và phao.");
+            var request = created == 1
+                ? new RecordCultivationLogRequest(visit, "Hàu bám tốt, dây treo chắc, không có hàu chết.", LogType: CultivationLogTypes.Inspection)
+                : new RecordCultivationLogRequest(visit, "Hàu lớn đều, đã vệ sinh dây treo và phao.", LogType: CultivationLogTypes.Cleaning);
             DemoSeedContext.Ensure(await service.RecordAsync(cycle.Id, request, [DemoFiles.CultivationLogPhoto(number)], cancellationToken), $"log {created} of raft {raftCode}");
         }
 
