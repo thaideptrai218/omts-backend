@@ -3517,6 +3517,61 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSalarySetup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EnteredByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("MonthlyAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnteredByAccountId");
+
+                    b.HasIndex("EmployeeId", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeSalarySetups", t =>
+                        {
+                            t.HasCheckConstraint("CK_EmployeeSalarySetups_MonthlyAmount", "([Type] = 'FixedMonthly' AND [MonthlyAmount] > 0) OR ([Type] = 'Hourly' AND [MonthlyAmount] IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9551,6 +9606,23 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSalarySetup", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany("SalarySetups")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("EnteredByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSession", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Labor.EmployeeDevice", "EmployeeDevice")
@@ -11007,6 +11079,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Employee", b =>
                 {
                     b.Navigation("JobTypes");
+
+                    b.Navigation("SalarySetups");
 
                     b.Navigation("TypePeriods");
 

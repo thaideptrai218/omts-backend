@@ -184,6 +184,7 @@ public static class DependencyInjection
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
+        services.AddScoped<EmployeeSalaryService>();
         services.AddScoped<AttendanceSettingsService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts

@@ -112,6 +112,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 
     // Labor (LABOR-01, LABOR-02, LABOR-04, LABOR-05, LABOR-10, LABOR-11, LABOR-15)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
+    public DbSet<EmployeeSalarySetup> EmployeeSalarySetups => Set<EmployeeSalarySetup>();
     public DbSet<JobType> JobTypes => Set<JobType>();
     public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
     public DbSet<PayRate> PayRates => Set<PayRate>();

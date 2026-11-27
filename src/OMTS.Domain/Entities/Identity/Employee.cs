@@ -64,4 +64,7 @@ public class Employee : AuditableEntity, IHasStatus
     public ICollection<EmployeeTypePeriod> TypePeriods { get; set; } = [];
 
     public ICollection<EmployeeJobType> JobTypes { get; set; } = [];
+
+    /// <summary>The salary type and amount and every earlier one, each from its date.</summary>
+    public ICollection<EmployeeSalarySetup> SalarySetups { get; set; } = [];
 }

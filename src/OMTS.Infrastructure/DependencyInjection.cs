@@ -105,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IEmployeeEndingReader, EmployeeEndingReader>();
         services.AddScoped<IEmployeeAppRepository, EmployeeAppRepository>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
+        services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IPayrollSheetRepository, PayrollSheetRepository>();
