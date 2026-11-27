@@ -39,7 +39,7 @@ public sealed class ProvenancePageBuilderTests
         ProvenancePageBuilder.Build(
             Invoice(),
             lots ?? [LotRow(PublishedId, "KV01-B01-20261108", Published, null), LotRow(WithdrawnId, "KV01-B01-20261101", Published.AddDays(-7), Withdrawn), LotRow(NotPublishedId, "KV01-B01-20261108-2", null, null)],
-            seedings ?? [new(PublishedId, new DateOnly(2026, 6, 3), "Seed oyster"), new(PublishedId, new DateOnly(2026, 6, 1), "Seed oyster"), new(PublishedId, new DateOnly(2026, 6, 1), "Seed oyster")],
+            seedings ?? [new(PublishedId, new DateOnly(2026, 6, 3), "Seed oyster", "Seed farm"), new(PublishedId, new DateOnly(2026, 6, 1), "Seed oyster", "Seed farm"), new(PublishedId, new DateOnly(2026, 6, 1), "Seed oyster", "Seed farm")],
             Urls,
             Cooperative(),
             language);
@@ -64,7 +64,7 @@ public sealed class ProvenancePageBuilderTests
         var origin = lot.Origin!;
         Assert.Equal((HarvestDate, "KV01-B01", "Zone one"), (origin.HarvestDate, origin.RaftCode, origin.ZoneName));
         Assert.Equal(new ProvenanceMapPoint(21.05m, 107.4m, ProvenanceMapSource.Raft), origin.Map);
-        Assert.Equal([new ProvenanceSeeding(new DateOnly(2026, 6, 1), "Seed oyster"), new ProvenanceSeeding(new DateOnly(2026, 6, 3), "Seed oyster")], origin.Seedings);
+        Assert.Equal([new ProvenanceSeeding(new DateOnly(2026, 6, 1), "Seed oyster", "Seed farm"), new ProvenanceSeeding(new DateOnly(2026, 6, 3), "Seed oyster", "Seed farm")], origin.Seedings);
         Assert.Equal(160, origin.DaysOfFarming);
         Assert.Equal(["https://files/a"], origin.HarvestPhotoUrls);
         Assert.Equal(["https://files/b"], origin.RaftPhotoUrls);
