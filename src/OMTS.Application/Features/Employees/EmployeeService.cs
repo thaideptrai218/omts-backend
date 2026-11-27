@@ -9,6 +9,7 @@ using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.EmployeeApp;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -30,7 +31,6 @@ public sealed class EmployeeService(
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
     EmployeeCodeAllocator codes,
-    SeasonalAccountProvisioner seasonalAccounts,
     EmployeeQueryService queries,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -59,10 +59,6 @@ public sealed class EmployeeService(
         }
 
         var input = checkedInput.Value!;
-        // Every seasonal worker with a phone number (the login identifier) gets a login account in the same step; one without a phone gets it when a phone number is added.
-        // An account block that names grants is the Owner's own choice (the staff flow of LABOR-01.5, a random one-time password) and is left as it is.
-        var seasonal = input.Type == EmployeeType.SeasonalWorker && input.PhoneNumber is not null && request.Account?.Grants is not { Count: > 0 };
-
         // Step 5: a Zone Manager confirms that the Owner approved in person; nothing is saved otherwise (LABOR-01.0.E3).
         if (!caller.IsOwner && !request.OwnerApproved)
         {
@@ -75,22 +71,18 @@ public sealed class EmployeeService(
         // The number is taken once everything is valid, just before the save (see IDocumentNumberAllocator).
         employee.Code ??= await codes.NextAsync(null, cancellationToken);
 
+        // A login account is made only when the Owner asks for one in the same save (LABOR-01.5). A seasonal worker gets none: the
+        // shared fixed password of 25/11/2026 is gone, and seasonal workers sign in to the Mini App with the phone number of the profile.
         StaffAccountWithPassword? created = null;
-        string? accountNote = null;
-        if (seasonal || request.Account is not null)
+        if (request.Account is not null)
         {
-            // A seasonal worker's account is made in the same step, with the fixed initial password, whoever saves the profile.
-            var account = seasonal
-                ? await seasonalAccounts.ProvisionAsync(employee, request.Account?.Username, request.Account?.Email, cancellationToken)
-                : await AddAccountAsync(employee, request.Account!, cancellationToken);
-            // An account block the Owner sent is answered as in the staff flow; the automatic account of a seasonal worker never refuses the profile.
-            if (!account.IsSuccess && (!seasonal || request.Account is not null))
+            var account = await AddAccountAsync(employee, request.Account, cancellationToken);
+            if (!account.IsSuccess)
             {
                 return account.Error!;
             }
 
-            // A seasonal worker whose phone number or username another account holds is saved without a login, and the answer says why (a phone number may be shared with another kind of account, BR-LABOR-01).
-            (created, accountNote) = account.IsSuccess ? (account.Value, (string?)null) : ((StaffAccountWithPassword?)null, account.Error!.Message.Code);
+            created = account.Value;
         }
 
         audit.Record(new AuditEntry("Employee.Created", nameof(Employee))
@@ -104,7 +96,7 @@ public sealed class EmployeeService(
             return duplicate;
         }
 
-        return await SavedAsync(employee.Id, caller, created, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken), accountNote);
+        return await SavedAsync(employee.Id, caller, created, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken));
     }
 
     public async Task<Result<EmployeeSaved>> UpdateAsync(Guid id, SaveEmployeeRequest request, CancellationToken cancellationToken)
@@ -178,17 +170,6 @@ public sealed class EmployeeService(
             typeChanged = input is { Type: { } type, TypeFrom: { } from } && EmployeeProfileChanges.ChangeType(employees, employee, type, from);
         }
 
-        // A seasonal worker who has a phone number and no login yet (the type just changed, or the phone number was just added) gets the seasonal account (fixed initial password).
-        StaffAccountWithPassword? issued = null;
-        string? accountNote = null;
-        if (!left && employee.AccountId is null && employee.PhoneNumber is not null
-            && EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today()) == EmployeeType.SeasonalWorker)
-        {
-            // A phone number or username another account holds leaves the worker without a login: the edit is not refused for it (the issue-account endpoint or the next seed retries).
-            var account = await seasonalAccounts.ProvisionAsync(employee, null, null, cancellationToken);
-            (issued, accountNote) = account.IsSuccess ? (account.Value, (string?)null) : ((StaffAccountWithPassword?)null, account.Error!.Message.Code);
-        }
-
         // These are rows of their own: the profile itself must still get a new version and "last updated by".
         if (zonesChanged || jobTypesChanged || typeChanged)
         {
@@ -208,12 +189,12 @@ public sealed class EmployeeService(
             audit.Record(new AuditEntry("Employee.Updated", nameof(Employee)) { RecordId = employee.Id, Before = changedBefore, After = changedAfter });
         }
 
-        if (await SaveAsync(input, employee.Id, cancellationToken, issued) is { } duplicate)
+        if (await SaveAsync(input, employee.Id, cancellationToken) is { } duplicate)
         {
             return duplicate;
         }
 
-        return await SavedAsync(employee.Id, caller, issued, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken), accountNote);
+        return await SavedAsync(employee.Id, caller, null, cancellationToken, await DuplicateIdNumberAsync(employee, cancellationToken));
     }
 
     /// <summary>L16: the same ID number on another profile is a warning, not an error (a person may be re-hired as a new profile); the client shows it after the save.</summary>
@@ -309,12 +290,10 @@ public sealed class EmployeeService(
             return AppError.Invalid("Account");
         }
 
-        // A seasonal worker's account has the fixed initial password and the EMPLOYEE role, unless the Owner names the grants (the staff flow, a random one-time password).
+        // A seasonal worker's account gets the EMPLOYEE role unless the Owner names the grants; like every account, it has a random
+        // one-time password for 24 hours.
         var seasonal = EmployeeTypePeriod.TypeOn(employee.TypePeriods, timeProvider.Today()) == EmployeeType.SeasonalWorker && request.Grants is not { Count: > 0 };
-
-        var created = seasonal
-            ? await seasonalAccounts.ProvisionAsync(employee, request.Username, request.Email, cancellationToken)
-            : await AddAccountAsync(employee, request, cancellationToken);
+        var created = await AddAccountAsync(employee, seasonal ? request with { Grants = [new GrantDraft(null, Role: FixedRoles.EmployeeCode)] } : request, cancellationToken);
         if (!created.IsSuccess)
         {
             return created.Error!;
@@ -402,7 +381,7 @@ public sealed class EmployeeService(
     }
 
     private async Task<EmployeeSaved> SavedAsync(
-        Guid id, EmployeeCaller caller, StaffAccountWithPassword? created, CancellationToken cancellationToken, EmployeeIdNumberWarning? duplicate = null, string? accountNote = null)
+        Guid id, EmployeeCaller caller, StaffAccountWithPassword? created, CancellationToken cancellationToken, EmployeeIdNumberWarning? duplicate = null)
     {
         var saved = UserMessages.Saved("Employee profile");
         return new EmployeeSaved(
@@ -412,8 +391,6 @@ public sealed class EmployeeService(
             created?.TemporaryPassword,
             created?.TemporaryPasswordExpiresAt,
             created?.MessageCode,
-            duplicate,
-            created?.FixedPassword ?? false,
-            accountNote);
+            duplicate);
     }
 }

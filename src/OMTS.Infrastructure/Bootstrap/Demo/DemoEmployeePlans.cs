@@ -21,7 +21,7 @@ internal enum DemoLoginKind
     EmployeeArea,
 }
 
-/// <param name="Phone">Null for an employee who is checked in manually (BR-LABOR-01); matched by name on a rerun.</param>
+/// <param name="Phone">Every employee has one: it is how they sign in to the Mini App (owner decision of 27/11/2026).</param>
 /// <param name="Username">Null for an employee without a login account.</param>
 /// <param name="Role">Fixed role of the zone–role pair (BR-FARM-07); unused by <see cref="DemoLoginKind.EmployeeArea"/>, which has no pair.</param>
 /// <param name="GrantZone">Zone code of the zone–role pair; null = All zones.</param>
@@ -83,7 +83,7 @@ internal static class DemoEmployeePlans
         new("Bùi Văn Thắng", "0900000018", null, ZoneManagerRole, null, null,
             ZoneTwo, new(1985, 9, 9), "Xã Minh Châu", "Vietcombank", "999900000018", LeftDaysAgo: 20,
             JobTypes: [DemoLaborSettingsStep.Harvesting]),
-        new("Đinh Văn Nam", null, null, ZoneManagerRole, null, null,
+        new("Đinh Văn Nam", "0900000019", null, ZoneManagerRole, null, null,
             ZoneTwo, new(1998, 4, 3), "Xã Minh Châu", "Vietcombank", "999900000019",
             JobTypes: [DemoLaborSettingsStep.CleaningLines]),
         // The two employees of the browser build: they answer purchase shifts and see their own work.

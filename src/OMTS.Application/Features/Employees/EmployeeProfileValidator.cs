@@ -26,6 +26,13 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
             return AppError.InvalidFields(invalid);
         }
 
+        // The phone number is how the employee signs in to the Mini App (owner decision of 27/11/2026). A profile saved before it was
+        // required gets it at its next edit; a Left profile, edited only for wages, may keep none.
+        if (input.PhoneNumber is null && (employee is null || employee.StatusId == StatusIds.Employee.Working))
+        {
+            return AppError.Invalid("Phone number");
+        }
+
         var newZones = input.WorkingZoneIds.Where(z => employee is null || employee.WorkingZones.All(w => w.ZoneId != z)).ToList();
         if (newZones.Any(z => !caller.HasZone(z)))
         {

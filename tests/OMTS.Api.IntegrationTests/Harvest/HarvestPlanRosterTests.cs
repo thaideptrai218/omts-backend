@@ -124,7 +124,7 @@ public class HarvestPlanRosterTests(AuthApiFactory factory) : IClassFixture<Auth
     }
 
     [Fact]
-    public async Task Adding_a_person_hired_outside_the_system_makes_a_seasonal_worker_with_a_login_and_counts_at_once()
+    public async Task Adding_a_person_hired_outside_the_system_makes_a_seasonal_worker_without_a_login_and_counts_at_once()
     {
         var (raft, plan) = await AssignedPlanAsync();
         var owner = raft.Owner.Client;
@@ -136,14 +136,12 @@ public class HarvestPlanRosterTests(AuthApiFactory factory) : IClassFixture<Auth
 
         Assert.Equal("Phone number", await noPhone.PlanFieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var person = added.GetProperty("person");
-        Assert.Equal(("External", "SeasonalWorker", true), (person.Text("state"), person.Text("type"), person.GetProperty("hasAccount").GetBoolean()));
-        Assert.Equal("OMTS@1234", added.Text("temporaryPassword"));
-        Assert.True(added.GetProperty("fixedPassword").GetBoolean());
-        Assert.False(string.IsNullOrEmpty(added.Text("username")));
+        Assert.Equal(("External", "SeasonalWorker", false), (person.Text("state"), person.Text("type"), person.GetProperty("hasAccount").GetBoolean()));
+        Assert.False(added.TryGetProperty("temporaryPassword", out _));
         var summary = added.GetProperty("roster").GetProperty("summary");
         Assert.Equal((0, 1, true), (summary.GetProperty("confirmed").GetInt32(), summary.GetProperty("external").GetInt32(), summary.GetProperty("ready").GetBoolean()));
         var employee = await factory.QueryAsync(db => db.Employees.AsNoTracking().Include(e => e.TypePeriods).SingleAsync(e => e.Id == person.GetProperty("employeeId").GetGuid()));
-        Assert.Equal((phone, "Hàng xóm", "Ấp 3", true), (employee.PhoneNumber, employee.Notes, employee.Address, employee.AccountId is not null));
+        Assert.Equal((phone, "Hàng xóm", "Ấp 3", false), (employee.PhoneNumber, employee.Notes, employee.Address, employee.AccountId is not null));
         Assert.Equal(EmployeeType.SeasonalWorker, employee.TypePeriods.Single().Type);
         // A phone number another working employee has is refused (the answer names them: invite that employee instead).
         var again = await owner.PostAsJsonAsync($"{Roster(plan.Id())}/external", new { fullName = "Trùng số", phoneNumber = phone });

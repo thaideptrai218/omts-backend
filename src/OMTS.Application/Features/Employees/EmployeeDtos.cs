@@ -19,7 +19,7 @@ public sealed record NewEmployeeAccount(
 /// <summary>Links an existing staff account that has no employee yet.</summary>
 public sealed record LinkEmployeeAccountRequest(Guid? AccountId);
 
-/// <param name="PhoneNumber">Optional; empty is no phone number.</param>
+/// <param name="PhoneNumber">Required for an Employed profile: it is the number the employee signs in with. A Left profile may keep none.</param>
 /// <param name="EmployeeType">
 /// Required when adding. When editing, a type other than the one in force on <paramref name="EmployeeTypeFrom"/> starts a
 /// new period from that date; left out, the type stays.
@@ -116,6 +116,7 @@ public sealed record EmployeeView(
 /// <param name="Account">The linked account's basic identity and status, within the caller's employee scope. Managing accounts remains Owner-only.</param>
 /// <param name="MonthHours">Paid hours worked from the first of this month to today (break deducted, as the payroll counts them); only for a caller with PAYROLL View (Owner, Accountant), else null.</param>
 /// <param name="OutstandingWage">What the employee is still owed on Finalized payroll sheets, VND; same visibility as <paramref name="MonthHours"/>.</param>
+/// <param name="SalaryType">The salary type in force today, or the default of the employee type; null for a Staff employee without a setup ("Chưa thiết lập lương"), and always null for a caller who does not see <paramref name="MonthHours"/>.</param>
 public sealed record EmployeeListItem(
     Guid Id,
     string? Code,
@@ -130,18 +131,17 @@ public sealed record EmployeeListItem(
     LinkedAccountView? Account,
     string RowVersion,
     decimal? MonthHours = null,
-    decimal? OutstandingWage = null);
+    decimal? OutstandingWage = null,
+    SalaryType? SalaryType = null);
 
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="TemporaryPassword">Only when a login account was created in the same save; shown once.</param>
 /// <param name="AccountMessageCode">MSG-ACCOUNT-23 with <paramref name="TemporaryPassword"/>: the client fills it in, as for a staff account.</param>
-/// <param name="FixedPassword">True when <paramref name="TemporaryPassword"/> is the fixed initial password of a seasonal worker account (the same for all of them, never expires, still changed at the first login).</param>
-/// <param name="AccountNote">Why a seasonal worker was saved without the login account every one of them has: the message code of the refusal (MSG-ACCOUNT-09: the phone number or username is another account); null otherwise.</param>
 /// <param name="DuplicateIdNumber">Another employee holds the same ID number (CCCD): the profile is saved all the same and the client shows this warning (L16). Null when there is none.</param>
 public sealed record EmployeeSaved(
     EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null, string? AccountMessageCode = null,
-    EmployeeIdNumberWarning? DuplicateIdNumber = null, bool FixedPassword = false, string? AccountNote = null);
+    EmployeeIdNumberWarning? DuplicateIdNumber = null);
 
 /// <summary>The other employee with the same ID number; <c>Message</c> is the Vietnamese warning.</summary>
 public sealed record EmployeeIdNumberWarning(Guid EmployeeId, string? Code, string FullName, string Message);
