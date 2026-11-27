@@ -40,6 +40,9 @@ public sealed class NurseryBatchForm
     /// <summary>Send true to make the crew exactly the <c>crew</c> fields, none meaning an empty crew: a form cannot send an empty list, so this is how a crew is cleared.</summary>
     public bool ReplaceCrew { get; set; }
 
+    /// <summary>"Người phụ trách": an account id from `responsible-people`. Left out: unchanged when editing, nobody on a new record.</summary>
+    public Guid? ResponsibleAccountId { get; set; }
+
     /// <summary>One part per photo, 1 to 3 when starting or completing: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 
@@ -47,7 +50,7 @@ public sealed class NurseryBatchForm
     {
         FormNumbers.TryDecimal(Quantity, out var quantity);
         var crew = FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable);
-        return new StartNurseryRequest(Guid.TryParse(SeedLotId, out var lot) ? lot : null, quantity, Date(StartDate), Note, otherFilePart, crew, crewUnreadable);
+        return new StartNurseryRequest(Guid.TryParse(SeedLotId, out var lot) ? lot : null, quantity, Date(StartDate), Note, otherFilePart, crew, crewUnreadable, ResponsibleAccountId);
     }
 
     public EditNurseryRequest ToEdit(bool otherFilePart)
@@ -55,7 +58,7 @@ public sealed class NurseryBatchForm
         FormNumbers.TryDecimal(Quantity, out var quantity);
         var keep = KeepPhotoIds?.Select(k => Guid.TryParse(k, out var id) ? id : Guid.Empty).ToList();
         var crew = FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable);
-        return new EditNurseryRequest(quantity, Date(StartDate), Note, RowVersion, keep is not null || Photos is { Count: > 0 }, keep, otherFilePart, crew, crewUnreadable);
+        return new EditNurseryRequest(quantity, Date(StartDate), Note, RowVersion, keep is not null || Photos is { Count: > 0 }, keep, otherFilePart, crew, crewUnreadable, ResponsibleAccountId);
     }
 
     public CompleteNurseryRequest ToComplete(bool otherFilePart)

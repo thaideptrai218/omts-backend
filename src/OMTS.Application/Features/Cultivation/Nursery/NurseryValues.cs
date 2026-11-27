@@ -37,6 +37,7 @@ public static class NurseryValues
     /// <summary>The audit values of a batch: codes and numbers rather than ids, as a reader of the history knows them.</summary>
     public static object Snapshot(NurseryBatch batch) => new
     {
+        batch.ResponsibleAccountId,
         Status = StatusLabel(batch.StatusId),
         batch.StartDate,
         SeedLot = batch.SeedLotLine is { } lot ? Seeding.SeedingValues.LotCode(lot) : null,

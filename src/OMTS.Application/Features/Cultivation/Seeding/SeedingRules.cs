@@ -46,6 +46,7 @@ public static class SeedingValues
         record.Quantity,
         Photos = record.Photos.Count,
         record.OverPlanReason,
+        record.ResponsibleAccountId,
     };
 
     /// <summary>The record code is the code of the raft, as a session has none. The cycle comes with its raft.</summary>

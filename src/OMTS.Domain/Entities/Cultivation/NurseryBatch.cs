@@ -61,6 +61,9 @@ public class NurseryBatch : AuditableEntity, IHasStatus
     public Guid? ClosedByAccountId { get; set; }
     public string? CloseReason { get; set; }
 
+    /// <summary>"Người phụ trách": the account named as responsible, a label only. Null when nobody was named.</summary>
+    public Guid? ResponsibleAccountId { get; set; }
+
     public ICollection<NurseryBatchPhoto> Photos { get; set; } = [];
 
     /// <summary>The employees who worked on the batch (decision of 17/11/2026): optional, for the record only.</summary>

@@ -821,6 +821,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<Guid?>("ResponsibleAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -859,6 +862,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompletedByAccountId");
 
                     b.HasIndex("IssueId");
+
+                    b.HasIndex("ResponsibleAccountId");
 
                     b.HasIndex("SeedLotLineId");
 
@@ -972,6 +977,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ResponsibleAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -997,6 +1005,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("NurseryBatchId");
 
                     b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("ResponsibleAccountId");
 
                     b.HasIndex("SeedLotLineId");
 
@@ -8560,6 +8570,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("IssueId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ResponsibleAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "SeedLotLine")
                         .WithMany()
                         .HasForeignKey("SeedLotLineId")
@@ -8640,6 +8655,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ResponsibleAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "SeedLotLine")
                         .WithMany()

@@ -231,6 +231,7 @@ public static class DependencyInjection
         services.AddScoped<SeedingCompletionService>();
 
         // NURSERY – ươm giống: batches of one seed lot per zone, completed into a pool the cycles seed from (v2)
+        services.AddScoped<Features.Cultivation.ResponsiblePersonService>();
         services.AddScoped<NurseryBatchViews>();
         services.AddScoped<NurseryNotifier>();
         services.AddScoped<NurseryStockSync>();

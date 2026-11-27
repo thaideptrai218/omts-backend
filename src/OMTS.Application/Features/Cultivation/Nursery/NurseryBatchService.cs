@@ -36,6 +36,7 @@ public sealed class NurseryBatchService(
     UploadedFileSaver fileSaver,
     NurseryBatchViews views,
     NurseryNotifier notifier,
+    ResponsiblePersonService responsiblePeople,
     RecordCrewService crews,
     RecordCrewAssignmentService crewAssignments,
     ZoneAccessGuard zoneAccess,
@@ -81,6 +82,12 @@ public sealed class NurseryBatchService(
             return crewError;
         }
 
+        var (responsible, responsibleError) = await responsiblePeople.ReadAsync(zone.Id, request.ResponsibleAccountId ?? currentUser.AccountId, null, cancellationToken);
+        if (responsibleError is not null)
+        {
+            return responsibleError;
+        }
+
         var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart);
         if (!files.IsSuccess)
         {
@@ -100,7 +107,7 @@ public sealed class NurseryBatchService(
             return uploaded.Error!;
         }
 
-        var prepared = await photoStore.PrepareSaveAsync(uploaded.Value!, () => PrepareAsync(zone, lot!, quantity, start, note, crew, uploaded.Value!, actor, cancellationToken));
+        var prepared = await photoStore.PrepareSaveAsync(uploaded.Value!, () => PrepareAsync(zone, lot!, quantity, start, note, responsible, crew, uploaded.Value!, actor, cancellationToken));
         if (!prepared.IsSuccess)
         {
             return prepared.Error!;
@@ -117,14 +124,14 @@ public sealed class NurseryBatchService(
     }
 
     private async Task<Result<NurseryBatch>> PrepareAsync(
-        FarmingZone zone, PurchaseReceiptLine lot, decimal quantity, DateOnly start, string? note, IReadOnlyList<Employee>? crew, IReadOnlyList<string> keys, Guid actor,
+        FarmingZone zone, PurchaseReceiptLine lot, decimal quantity, DateOnly start, string? note, Guid? responsible, IReadOnlyList<Employee>? crew, IReadOnlyList<string> keys, Guid actor,
         CancellationToken cancellationToken)
     {
         var number = await numbers.NextAsync(DocumentSequenceKeys.NurseryBatch, cancellationToken);
         var batch = new NurseryBatch
         {
             Code = $"{DocumentSequenceKeys.NurseryBatch}{number.ToString("000000", CultureInfo.InvariantCulture)}",
-            ZoneId = zone.Id, Zone = zone, SeedLotLineId = lot.Id, SeedLotLine = lot, QuantityIn = quantity, StartDate = start, Note = note,
+            ZoneId = zone.Id, Zone = zone, SeedLotLineId = lot.Id, SeedLotLine = lot, QuantityIn = quantity, StartDate = start, Note = note, ResponsibleAccountId = responsible,
         };
         nurseries.Add(batch);
         if (crew is not null)

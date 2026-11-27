@@ -49,7 +49,8 @@ public sealed class NurseryBatchViews(
             await PhotosAsync(batch, NurseryPhotoPhase.Start, cancellationToken), await PhotosAsync(batch, NurseryPhotoPhase.Completion, cancellationToken),
             nursing && mayEdit, nursing && mayCreate, completed && mayEdit, RowVersionGuard.Encode(batch.RowVersion),
             seeded, remaining, batch.ClosedOn, batch.CloseLossPieces, batch.CloseReason, completed && mayEdit && remaining > 0, usage,
-            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name, await crewAttendance.ViewAsync(batch.Crew, batch.StartDate, cancellationToken));
+            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name, await crewAttendance.ViewAsync(batch.Crew, batch.StartDate, cancellationToken),
+            batch.ResponsibleAccountId, batch.ResponsibleAccountId is { } responsible ? (await accounts.GetDisplayNamesAsync([responsible], cancellationToken)).GetValueOrDefault(responsible) : null);
     }
 
     /// <summary>A row of the list: the batch comes with its zone and seed lot (item, receipt, supplier); <paramref name="seededByBatch"/> holds what every batch of the page had seeded.</summary>

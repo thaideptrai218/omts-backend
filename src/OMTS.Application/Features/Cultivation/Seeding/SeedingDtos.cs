@@ -15,7 +15,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 public sealed record RecordSeedingRequest(
     DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, bool ConfirmOverPlan = false, string? OverPlanReason = null,
     IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false,
-    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false, Guid? ResponsibleAccountId = null);
 
 /// <summary>
 /// CYCLE-02.2: the session as it should be, with the reason and the version read (NFR-09). <paramref name="ChangesPhotos"/> is true when the form sent <c>keepPhotoIds</c> or <c>photos</c>: the photos then become exactly the ones
@@ -24,7 +24,7 @@ public sealed record RecordSeedingRequest(
 public sealed record CorrectSeedingRequest(
     DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason, string? RowVersion, bool ConfirmOverPlan = false, string? OverPlanReason = null,
     IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false, bool ChangesPhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null,
-    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false, Guid? ResponsibleAccountId = null);
 
 /// <summary>A photo of a session: <paramref name="Url"/> is a signed link that expires.</summary>
 public sealed record SeedingPhotoView(Guid Id, int SortOrder, string Url);
@@ -84,7 +84,9 @@ public sealed record SeedingRecordView(
     string? OverPlanReason = null,
     IReadOnlyList<SeedingPhotoView>? Photos = null,
     IReadOnlyList<SeedingLanePercentView>? LanePercents = null,
-    IReadOnlyList<Workforce.CrewMemberView>? Crew = null);
+    IReadOnlyList<Workforce.CrewMemberView>? Crew = null,
+    Guid? ResponsibleAccountId = null,
+    string? ResponsibleName = null);
 
 /// <summary>Answer of a saved session.</summary>
 /// <param name="OfferMarkComplete">No lane In Use is left Not seeded and the seeding is not yet marked complete (CYCLE-02.0 step 7).</param>
