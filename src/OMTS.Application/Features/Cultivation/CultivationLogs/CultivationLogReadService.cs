@@ -9,7 +9,7 @@ namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 public sealed class CultivationLogReadService(
     ICultivationCycleRepository cycles, ICultivationLogRepository logs, CultivationLogViews views, ZoneAccessGuard zoneAccess)
 {
-    public async Task<Result<IReadOnlyList<CultivationLogView>>> ListAsync(Guid cycleId, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<CultivationLogView>>> ListAsync(Guid cycleId, string? logType, CancellationToken cancellationToken)
     {
         var cycle = await cycles.GetAsync(cycleId, cancellationToken);
         if (cycle is null)
@@ -22,7 +22,25 @@ public sealed class CultivationLogReadService(
             return AppError.Forbidden;
         }
 
-        return Result<IReadOnlyList<CultivationLogView>>.Success(await views.ListAsync(cycle, cancellationToken));
+        if (CultivationLogValues.ReadTypeFilter(logType, out var wanted) is { } invalid)
+        {
+            return invalid;
+        }
+
+        return Result<IReadOnlyList<CultivationLogView>>.Success(await views.ListAsync(cycle, wanted, cancellationToken));
+    }
+
+    /// <summary>The logs of every raft the caller may read, one page, the latest visit first. Zone-scoped staff see only their zones; a zone they cannot read is MSG-GEN-08.</summary>
+    public async Task<Result<CultivationLogPage>> SearchAsync(CultivationLogListQuery query, CancellationToken cancellationToken)
+    {
+        var allowed = await zoneAccess.PermittedZonesAsync(PermissionFunctions.CultivationLogs, PermissionAction.View, cancellationToken);
+        if (CultivationLogListFilters.Read(query, allowed, out var filter, out var page, out var pageSize) is { } refused)
+        {
+            return refused;
+        }
+
+        var (rows, total) = await logs.SearchAsync(filter, page, pageSize, cancellationToken);
+        return new CultivationLogPage(await views.ListAsync(rows, cancellationToken), page, pageSize, total);
     }
 
     public async Task<Result<CultivationLogView>> GetAsync(Guid logId, CancellationToken cancellationToken)

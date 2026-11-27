@@ -71,7 +71,7 @@ public sealed class TraceCorrectionsController(
     public async Task<IActionResult> CorrectLog(Guid logId, [FromForm] TraceCultivationLogForm form, CancellationToken cancellationToken)
     {
         var visitDate = DateOnly.TryParseExact(form.VisitDate?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : (DateOnly?)null;
-        var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, Request.Form.Files.HasPartOtherThan(nameof(CultivationLogForm.Photos)));
+        var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, Request.Form.Files.HasPartOtherThan(nameof(CultivationLogForm.Photos)), form.LogType);
         return (await logs.CorrectAsync(logId, request, form.OwnerApproved, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 

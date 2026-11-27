@@ -1,4 +1,5 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
 
 namespace OMTS.Domain.Entities.Cultivation;
 
@@ -16,6 +17,9 @@ public class CultivationLog : AuditableEntity
 
     /// <summary>From the start date of the cycle to today; the log may be recorded after the visit.</summary>
     public DateOnly VisitDate { get; set; }
+
+    /// <summary>The kind of visit, one of <see cref="CultivationLogTypes"/>; a log that names none is <c>OTHER</c>. A log still carries no code of any cycle.</summary>
+    public string LogType { get; set; } = CultivationLogTypes.Other;
 
     public string? Notes { get; set; }
 

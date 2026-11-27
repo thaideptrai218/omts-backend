@@ -83,7 +83,7 @@ public sealed class CultivationProgressService(
             lanes,
             lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded && !l.IsOutOfService).Select(l => l.LaneNumber).ToList(),
             cycle is null ? [] : await seeding.LaneSeedLotsAsync(cycle.Id, shown, cancellationToken),
-            cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken),
+            cycle is null ? [] : await logViews.ListAsync(cycle, null, cancellationToken),
             // The summary of a Closed cycle is read as of its close date: when that is the day shown, it takes the raft and the lane day read here.
             cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken, raft, cycle.CloseDate == shown ? day : null) : null);
     }
