@@ -8,7 +8,7 @@ public sealed record RecordCultivationLogRequest(DateOnly? VisitDate, string? No
 /// <summary>CYCLE-04.1: the log as it should be, with the reason. A photo that is not kept and not sent again is removed. It carries no version (NFR-09).</summary>
 /// <param name="KeepPhotoKeys">The <c>key</c> of each current photo to keep, spelled as the log view gives it.</param>
 /// <param name="OtherFilePart">As on <see cref="RecordCultivationLogRequest"/>.</param>
-/// <param name="LogType">As on <see cref="RecordCultivationLogRequest"/>; a correction replaces the type, so a missing one makes it <c>OTHER</c>.</param>
+/// <param name="LogType">As on <see cref="RecordCultivationLogRequest"/>; a correction that sends none keeps the current type.</param>
 public sealed record CorrectCultivationLogRequest(
     DateOnly? VisitDate, string? Notes, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason, bool OtherFilePart = false, string? LogType = null);
 

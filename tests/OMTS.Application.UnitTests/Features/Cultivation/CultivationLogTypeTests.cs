@@ -14,10 +14,10 @@ public class CultivationLogTypeTests
     private static readonly DateOnly Today = new(2026, 11, 27);
     private static readonly DateOnly Visit = new(2026, 11, 20);
 
-    private static (AppError? Error, CultivationLogValues Values) Read(string? logType)
+    private static (AppError? Error, CultivationLogValues Values) Read(string? logType, bool correction = false)
     {
         var error = CultivationLogValues.Read(
-            Visit, logType, "Kiểm tra dây treo", [], otherFilePart: false, kept: 0, keysAreKnown: true, reason: null, reasonRequired: false, Start, Today, out var values);
+            Visit, logType, "Kiểm tra dây treo", [], otherFilePart: false, kept: 0, keysAreKnown: true, reason: correction ? "Sửa" : null, reasonRequired: correction, Start, Today, out var values);
         return (error, values);
     }
 
@@ -46,6 +46,29 @@ public class CultivationLogTypeTests
 
         Assert.Null(error);
         Assert.Equal("OTHER", values.LogType);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void A_correction_with_no_type_keeps_the_current_one(string? logType)
+    {
+        var (error, values) = Read(logType, correction: true);
+
+        Assert.Null(error);
+        Assert.Null(values.LogType);
+    }
+
+    [Fact]
+    public void A_correction_with_a_type_replaces_it_and_an_unknown_one_is_refused()
+    {
+        var (error, values) = Read("repair", correction: true);
+        Assert.Null(error);
+        Assert.Equal("REPAIR", values.LogType);
+
+        var (refused, _) = Read("SWIMMING", correction: true);
+        Assert.Equal("LogType", refused!.Details!["field"]);
     }
 
     [Fact]

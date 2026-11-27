@@ -97,7 +97,7 @@ public sealed class CultivationLogCorrectionService(
         }
 
         var before = CultivationLogValues.Snapshot(log);
-        (log.VisitDate, log.LogType, log.Notes) = (values.VisitDate, values.LogType, values.Notes);
+        (log.VisitDate, log.LogType, log.Notes) = (values.VisitDate, values.LogType ?? log.LogType, values.Notes);
         var removedKeys = CultivationLogPhotoRows.Apply(logs, log, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationLogValues.Snapshot(log));
         if (changedAfter is not null)

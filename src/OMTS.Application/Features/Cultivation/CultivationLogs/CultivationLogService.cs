@@ -9,6 +9,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Notifications;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
@@ -104,7 +105,7 @@ public sealed class CultivationLogService(
             CycleId = cycle.Id,
             Cycle = cycle,
             VisitDate = values.VisitDate,
-            LogType = values.LogType,
+            LogType = values.LogType ?? CultivationLogTypes.Other,
             Notes = values.Notes,
             RecordedByAccountId = recorder,
             Photos = keys.Select((key, index) => new CultivationLogPhoto { SortOrder = index + 1, FileKey = key }).ToList(),

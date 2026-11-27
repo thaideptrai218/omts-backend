@@ -7,7 +7,8 @@ using OMTS.Domain.Entities.Cultivation;
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 
 /// <summary>The checked fields of a log (BR-CYCLE-05; MSG-GEN-01 names the others), and the values the audit log keeps.</summary>
-internal sealed record CultivationLogValues(DateOnly VisitDate, string LogType, string? Notes, IReadOnlyList<ValidatedFile> NewPhotos)
+/// <remarks><see cref="LogType"/> is null when a correction named none: the log keeps the type it has.</remarks>
+internal sealed record CultivationLogValues(DateOnly VisitDate, string? LogType, string? Notes, IReadOnlyList<ValidatedFile> NewPhotos)
 {
     private const string PhotosField = "Photos";
     private const string TypeField = "LogType";
@@ -17,7 +18,10 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string LogType, 
     private const string UnknownKeysHint = "Keep only photos of this log.";
 
     /// <summary>Checks the fields; a null answer means <paramref name="values"/> can be saved.</summary>
-    /// <param name="logType">Missing or blank is <c>OTHER</c>; a value that is no <see cref="CultivationLogTypes"/> code is invalid.</param>
+    /// <param name="logType">
+    /// A value that is no <see cref="CultivationLogTypes"/> code is invalid. Missing or blank is <c>OTHER</c> on a new log; on a correction (<paramref name="reasonRequired"/>)
+    /// it keeps the current type, as the apps that do not send it yet must not reset it.
+    /// </param>
     /// <param name="otherFilePart">A file came in a part not named <c>photos</c>.</param>
     /// <param name="kept">How many current photos stay on the log.</param>
     /// <param name="keysAreKnown">Every key the client asked to keep is a photo of this log.</param>
@@ -30,6 +34,7 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string LogType, 
         check.Check(visitDate is { } visit && visit >= cycleStart && visit <= today, "Visit date");
         var normalizedType = CultivationLogTypes.Normalize(logType);
         check.Check(normalizedType is not null, TypeField);
+        var keepsType = reasonRequired && string.IsNullOrWhiteSpace(logType);
         var checkedNotes = check.Optional(notes, "Notes", MaxNotesLength);
         var (files, photoHint) = otherFilePart ? ([], "Send each photo in a part named photos.") : CheckPhotos(newPhotos, kept, keysAreKnown);
         check.Check(photoHint is null, PhotosField);
@@ -38,7 +43,7 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string LogType, 
             CheckReason(check, reason);
         }
 
-        values = new CultivationLogValues(visitDate ?? default, normalizedType ?? CultivationLogTypes.Other, checkedNotes, files);
+        values = new CultivationLogValues(visitDate ?? default, keepsType ? null : normalizedType ?? CultivationLogTypes.Other, checkedNotes, files);
         return check.IsValid
             ? null
             : check.Invalid is [PhotosField] ? AppError.Invalid(PhotosField, photoHint) : AppError.InvalidFields(check.Invalid);
