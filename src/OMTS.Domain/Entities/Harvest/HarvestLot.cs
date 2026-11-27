@@ -111,11 +111,14 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The products the lot is split into; empty for a lot recorded before products. <see cref="CageCount"/> and <see cref="EstimatedKg"/> are the sums of the lines when there are any.</summary>
     public ICollection<HarvestLotProductLine> ProductLines { get; set; } = [];
 
-    /// <summary>The cages weighed at the port, one by one; the weighing of the lot is completed from them (owner decision of 24/11/2026).</summary>
-    public ICollection<HarvestLotCage> Cages { get; set; } = [];
+    /// <summary>Every cage weighed at the port, of both sides, one by one (owner decision of 24/11/2026). Add and remove cages here; read them through <see cref="Cages"/> and <see cref="TraderCages"/>.</summary>
+    public ICollection<HarvestLotCage> AllCages { get; set; } = [];
 
-    /// <summary>The cages as the trader of the lot weighed them beside the cooperative; compared with <see cref="Cages"/>, never counted.</summary>
-    public ICollection<HarvestLotTraderCage> TraderCages { get; set; } = [];
+    /// <summary>The cooperative's cages; the weighing of the lot is completed from them. Not stored: a view of <see cref="AllCages"/>.</summary>
+    public IReadOnlyList<HarvestLotCage> Cages => [.. AllCages.Where(c => c.Side == HarvestLotCageSide.Cooperative)];
+
+    /// <summary>The cages as the trader of the lot weighed them beside the cooperative; compared with <see cref="Cages"/>, never counted. Not stored: a view of <see cref="AllCages"/>.</summary>
+    public IReadOnlyList<HarvestLotCage> TraderCages => [.. AllCages.Where(c => c.Side == HarvestLotCageSide.Trader)];
 
     /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
     public ICollection<HarvestRecordEmployee> Crew { get; set; } = [];
