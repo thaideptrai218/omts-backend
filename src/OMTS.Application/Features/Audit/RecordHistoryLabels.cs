@@ -1,9 +1,7 @@
-using System.Text.RegularExpressions;
-
 namespace OMTS.Application.Features.Audit;
 
 /// <summary>The Vietnamese names and units of the fields kept in the audit snapshots of the farming records, and the names of the actions and roles shown in a history.</summary>
-internal static partial class RecordHistoryLabels
+internal static class RecordHistoryLabels
 {
     private const string Cage = "lồng";
 
@@ -33,6 +31,19 @@ internal static partial class RecordHistoryLabels
         ["WeighedLines"] = ("Kg cân từng sản phẩm", null),
         ["Lane"] = ("Làn", null),
         ["IsFinished"] = ("Đã thu xong", null),
+        ["ProductLines"] = ("Sản phẩm thu hoạch", null),
+        ["Crew"] = ("Nhân viên tham gia", null),
+        ["OriginState"] = ("Truy xuất nguồn gốc", null),
+        ["PublishedAt"] = ("Thời điểm công khai", null),
+        ["WithdrawnAt"] = ("Thời điểm rút công khai", null),
+        ["SalesInvoiceCode"] = ("Mã hóa đơn bán", null),
+        ["NotifiedTraders"] = ("Thương nhân đã được báo", null),
+        ["WalkInInvoiceCodes"] = ("Hóa đơn khách lẻ", null),
+        ["WeighingAgreedKg"] = ("Số kg thương nhân xác nhận", "kg"),
+        ["WeighingAgreedFor"] = ("Thời điểm cân được xác nhận", null),
+        ["TraderCages"] = ("Số lồng thương nhân cân", Cage),
+        ["TraderCagesKg"] = ("Số kg thương nhân cân", "kg"),
+        ["OwnerApprovalConfirmed"] = ("Chủ hợp tác xã đã đồng ý", null),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> Seeding = new()
@@ -44,6 +55,9 @@ internal static partial class RecordHistoryLabels
         ["Quantity"] = ("Số lượng giống", null),
         ["Photos"] = ("Ảnh", null),
         ["OverPlanReason"] = ("Lý do vượt kế hoạch", null),
+        ["ResponsibleAccountId"] = ("Người phụ trách", null),
+        ["Crew"] = ("Nhân viên tham gia", null),
+        ["OwnerApprovalConfirmed"] = ("Chủ hợp tác xã đã đồng ý", null),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> LaneProgress = new()
@@ -64,8 +78,10 @@ internal static partial class RecordHistoryLabels
     private static readonly Dictionary<string, (string Label, string? Unit)> Log = new()
     {
         ["VisitDate"] = ("Ngày ghi nhật ký", null),
+        ["LogType"] = ("Loại nhật ký", null),
         ["Notes"] = ("Nội dung nhật ký", null),
         ["Photos"] = ("Ảnh", null),
+        ["OwnerApprovalConfirmed"] = ("Chủ hợp tác xã đã đồng ý", null),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> Cycle = new()
@@ -83,6 +99,23 @@ internal static partial class RecordHistoryLabels
         ["Note"] = ("Ghi chú", null),
         ["NurseryBatch"] = ("Đợt ươm", null),
         ["Photos"] = ("Ảnh kế hoạch", null),
+        ["Product"] = ("Sản phẩm", null),
+        ["SeededCount"] = ("Số giống đã thả", null),
+        ["LaneCount"] = ("Số làn đã thả", null),
+        ["OwnerApprovalConfirmed"] = ("Chủ hợp tác xã đã đồng ý", null),
+    };
+
+    /// <summary>The figures of the close day kept in the close event of a cycle under <c>Summary</c>; each is shown as a field of its own.</summary>
+    internal static readonly Dictionary<string, (string Label, string? Unit)> CycleSummary = new()
+    {
+        ["SeedHung"] = ("Số giống đã thả", null),
+        ["KgHarvested"] = ("Sản lượng đã thu (ước tính)", "kg"),
+        ["LastHarvestDate"] = ("Ngày thu hoạch cuối", null),
+        ["DaysOfFarming"] = ("Số ngày nuôi", "ngày"),
+        ["ExpectedSeedQuantity"] = ("Số lượng giống dự kiến", null),
+        ["TargetYieldKg"] = ("Sản lượng mục tiêu", "kg"),
+        ["EarlyReason"] = ("Lý do chốt sớm", null),
+        ["NotHarvestedLanes"] = ("Làn chưa thu hoạch", null),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> Nursery = new()
@@ -98,7 +131,16 @@ internal static partial class RecordHistoryLabels
         ["CloseLossPieces"] = ("Hao hụt khi đóng đợt (ước tính)", "mảnh"),
         ["Allocations"] = ("Phân bổ cho bè", null),
         ["Photos"] = ("Ảnh", null),
+        ["ResponsibleAccountId"] = ("Người phụ trách", null),
+        ["Crew"] = ("Nhân viên tham gia", null),
     };
+
+
+    /// <summary>What is said of an action nobody named: never the English code.</summary>
+    public const string UnknownAction = "Thay đổi";
+
+    /// <summary>Said of a field nobody named; the fields of every record type are named (a test checks it), so this only shows for a field of a later version.</summary>
+    public const string UnknownField = "Thông tin khác";
 
     private static readonly Dictionary<string, string> Actions = new()
     {
@@ -106,22 +148,39 @@ internal static partial class RecordHistoryLabels
         ["AllocationsChanged"] = "Chuyển phần chia giữa các bè",
         ["Completed"] = "Ươm xong",
         ["Created"] = "Tạo mới",
+        ["Recorded"] = "Ghi nhận",
         ["Edited"] = "Chỉnh sửa",
         ["TraceCorrected"] = "Hiệu chỉnh truy xuất",
         ["Removed"] = "Xóa",
+        ["Deleted"] = "Xóa",
         ["ProgressChanged"] = "Chỉnh phần trăm tiến độ làn",
         ["LaneFinished"] = "Kết thúc thu hoạch làn",
+        ["LanesFinished"] = "Hoàn tất thu hoạch nhiều làn",
         ["HarvestLanesFinished"] = "Hoàn tất thu hoạch nhiều làn",
         ["Started"] = "Bắt đầu vụ",
         ["SeedingCompleted"] = "Hoàn tất thả giống",
         ["Closed"] = "Chốt",
         ["Cancelled"] = "Hủy",
+        ["Voided"] = "Hủy bỏ",
         ["Reopened"] = "Mở lại",
         ["Weighed"] = "Cân lô",
         ["Reweighed"] = "Cân lại lô",
-        ["Published"] = "Công bố truy xuất",
-        ["Republished"] = "Công bố lại truy xuất",
-        ["Withdrawn"] = "Rút công bố truy xuất",
+        ["WeighingAgreed"] = "Thương nhân xác nhận cân",
+        ["Published"] = "Công khai truy xuất",
+        ["Republished"] = "Công khai lại truy xuất",
+        ["Withdrawn"] = "Rút công khai truy xuất",
+    };
+
+    /// <summary>The same action named for a record type where the plain name reads wrong: a lot is "ended" (Kết thúc lô), a cycle is "closed" (Chốt vụ), a nursery batch "Đóng đợt ươm".</summary>
+    private static readonly Dictionary<(string RecordType, string Action), string> ActionsOfRecordType = new()
+    {
+        [("NurseryBatch", "Closed")] = "Đóng đợt ươm",
+        [("NurseryBatch", "Reopened")] = "Mở lại đợt ươm",
+        [("NurseryBatch", "Cancelled")] = "Hủy đợt ươm",
+        [("HarvestLot", "Closed")] = "Kết thúc lô",
+        [("HarvestLot", "Created")] = "Ghi nhận lô thu hoạch",
+        [("CultivationCycle", "Closed")] = "Chốt vụ",
+        [("CultivationCycle", "Cancelled")] = "Hủy vụ",
     };
 
     private static readonly Dictionary<string, string> Roles = new()
@@ -134,22 +193,99 @@ internal static partial class RecordHistoryLabels
         ["Trader"] = "Thương nhân",
     };
 
-    /// <summary>The label and unit of a field of a record type; an unknown field is shown by its name split into words.</summary>
+    private static readonly Dictionary<string, string> CloseReasons = new()
+    {
+        ["SoldWholeLot"] = "Bán hết lô",
+        ["Unsold"] = "Không bán hết",
+        ["Spoiled"] = "Hư hỏng",
+        ["TimeLimitReached"] = "Quá thời hạn bán",
+    };
+
+    private static readonly Dictionary<string, string> OriginStates = new()
+    {
+        ["NotPublished"] = "Chưa công khai",
+        ["Published"] = "Đã công khai",
+        ["Withdrawn"] = "Đã rút công khai",
+    };
+
+    private static readonly Dictionary<string, string> LogTypes = new()
+    {
+        ["FEEDING"] = "Cho ăn",
+        ["CLEANING"] = "Vệ sinh bè/lồng",
+        ["INSPECTION"] = "Kiểm tra",
+        ["DISEASE"] = "Phòng/trị bệnh",
+        ["REPAIR"] = "Sửa chữa",
+        ["OTHER"] = "Khác",
+    };
+
+    private static readonly Dictionary<string, string> HarvestLotStatuses = new()
+    {
+        ["AWAITING_WEIGHING"] = "Chờ cân",
+        ["OPEN"] = "Đang mở",
+        ["REOPENED"] = "Đã mở lại",
+        ["CLOSED"] = "Đã kết thúc",
+    };
+
+    private static readonly Dictionary<string, string> CycleStatuses = new()
+    {
+        ["OPEN"] = "Đang nuôi",
+        ["CLOSED"] = "Đã chốt",
+    };
+
+    private static readonly Dictionary<string, string> EarlyReasons = new()
+    {
+        ["NoSeedingSession"] = "Chưa có lần thả giống nào",
+        ["LanesNotHarvested"] = "Còn làn chưa thu hoạch",
+    };
+
+    /// <summary>Why a closed lot was opened again, as the system writes it in the reason of the event.</summary>
+    private static readonly Dictionary<string, string> Reasons = new()
+    {
+        ["SalesReturnBackForSale"] = "Hàng trả về được bán lại",
+        ["SalesInvoiceCancelled"] = "Hóa đơn chốt lô đã bị hủy",
+        ["SoldWholeTickRemoved"] = "Bỏ đánh dấu bán hết lô",
+        ["ReopenedByHand"] = "Mở lại thủ công",
+    };
+
+    /// <summary>The label and unit of a field of a record type; a field nobody named is <see cref="UnknownField"/>.</summary>
     public static (string Label, string? Unit) Field(string recordType, string field)
     {
-        var table = recordType switch
-        {
-            "HarvestLot" => HarvestLot,
-            "SeedingRecord" => Seeding,
-            "MaterialUsage" => Material,
-            "CultivationLog" => Log,
-            "CultivationCycle" => Cycle,
-            "NurseryBatch" => Nursery,
-            "Lane" => LaneProgress,
-            _ => null,
-        };
-        return table is not null && table.TryGetValue(field, out var known) ? known : (Words().Replace(field, " $1").Trim(), null);
+        var table = TableOf(recordType);
+        return table is not null && table.TryGetValue(field, out var known) ? known : (UnknownField, null);
     }
+
+    /// <summary>True when the field of the record type has a Vietnamese label.</summary>
+    public static bool HasField(string recordType, string field) => TableOf(recordType)?.ContainsKey(field) == true;
+
+    /// <summary>The label and unit of one of the figures kept under <c>Summary</c> in the close of a cycle; null for one that is not shown.</summary>
+    public static (string Label, string? Unit)? SummaryField(string field) => CycleSummary.TryGetValue(field, out var known) ? known : null;
+
+    private static Dictionary<string, (string Label, string? Unit)>? TableOf(string recordType) => recordType switch
+    {
+        "HarvestLot" => HarvestLot,
+        "SeedingRecord" => Seeding,
+        "MaterialUsage" => Material,
+        "CultivationLog" => Log,
+        "CultivationCycle" => Cycle,
+        "NurseryBatch" => Nursery,
+        "Lane" => LaneProgress,
+        _ => null,
+    };
+
+    /// <summary>The Vietnamese name of a coded value of a field (a status, a close reason, the state of the origin, a type of log); null when the value is not a code of that field.</summary>
+    public static string? Value(string recordType, string field, string code) => field switch
+    {
+        "Status" when recordType == "HarvestLot" => HarvestLotStatuses.GetValueOrDefault(code),
+        "Status" when recordType == "CultivationCycle" => CycleStatuses.GetValueOrDefault(code),
+        "CloseReason" => CloseReasons.GetValueOrDefault(code),
+        "OriginState" => OriginStates.GetValueOrDefault(code),
+        "LogType" => LogTypes.GetValueOrDefault(code),
+        "EarlyReason" => EarlyReasons.GetValueOrDefault(code),
+        _ => null,
+    };
+
+    /// <summary>The reason of an event: a code the system wrote as the reason is told in words, a reason somebody typed stays as it is.</summary>
+    public static string? ReasonLabel(string? reason) => reason is null ? null : Reasons.GetValueOrDefault(reason, reason);
 
     /// <summary>The action without its record type, with Corrected and Updated both called Edited.</summary>
     public static string ActionOf(string action)
@@ -158,14 +294,13 @@ internal static partial class RecordHistoryLabels
         return name is "Corrected" or "Updated" ? "Edited" : name;
     }
 
-    /// <summary>The Vietnamese label of an action; a nursery batch is "closed" (Đóng đợt ươm) where a cycle is "chốt".</summary>
+    /// <summary>The Vietnamese label of an action; one nobody named is <see cref="UnknownAction"/>, never the English code.</summary>
     public static string ActionLabel(string action, string? recordType = null) =>
-        recordType == "NurseryBatch" && action == "Closed" ? "Đóng đợt ươm"
-        : recordType == "NurseryBatch" && action == "Reopened" ? "Mở lại đợt ươm"
-        : Actions.GetValueOrDefault(action, action);
+        recordType is not null && ActionsOfRecordType.TryGetValue((recordType, action), out var ofRecordType) ? ofRecordType
+        : Actions.GetValueOrDefault(action, UnknownAction);
+
+    /// <summary>True when the action (without its record type) has a Vietnamese name.</summary>
+    internal static bool HasAction(string action) => Actions.ContainsKey(action);
 
     public static string? RoleLabel(string? roleCode) => roleCode is null ? null : Roles.GetValueOrDefault(roleCode, roleCode);
-
-    [GeneratedRegex("(?<=[a-z])([A-Z])")]
-    private static partial Regex Words();
 }

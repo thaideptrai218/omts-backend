@@ -55,6 +55,12 @@ public interface IAuditEventQuery
     /// <summary>Every event of one record (its type and id), oldest first, with the role of who acted.</summary>
     Task<IReadOnlyList<AuditHistoryRow>> HistoryOfRecordAsync(string recordType, Guid recordId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// What a reader calls the records the ids point to, for the history of a record: the code of a sales invoice, the name of a product, the display name of an account. An id that is none of
+    /// these is not in the answer.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, string>> ReferenceNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
     /// <summary>The actions, record types and people of the whole log.</summary>
     Task<AuditFacetRows> FacetsAsync(CancellationToken cancellationToken);
 }
