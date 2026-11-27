@@ -46,6 +46,7 @@ public sealed class FarmingInputItemService(
     private const decimal MaxQuantity = 1_000_000_000m;
     private const decimal MaxCost = 1_000_000_000_000m;
     private const int MaxMaturityDays = 3650;
+    private const int MaxVatBulkItems = 500;
     private const string PhotoCategory = "input-item-photos";
 
     /// <summary>The field MSG-GEN-01 names when a Seed item has no product, or one that is not In Use.</summary>
@@ -137,7 +138,7 @@ public sealed class FarmingInputItemService(
         }
 
         var item = new FarmingInputItem { Code = code! };
-        Apply(item, values);
+        Apply(item, values, isNew: true);
         var planned = await PlanUnitsAsync(request, item, existing: null, cancellationToken);
         if (planned.Error is not null)
         {
@@ -248,6 +249,43 @@ public sealed class FarmingInputItemService(
         }
 
         return await ViewAsync(item, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gives the items the input VAT rate (the Owner changes the rate of many supplies at once, for example when the tax rate changes). Only the catalogue changes: receipts and returns keep the rate they were made with.
+    /// MSG-GEN-01 on <c>itemIds</c> when the list is empty, longer than 500, names an item that is not there or a Seed item (always KCT), and on <c>purchaseVatRate</c> when the rate is missing or unknown. Every changed item is audited.
+    /// </summary>
+    public async Task<Result<SetItemVatRateResult>> SetPurchaseVatRateAsync(SetItemVatRateRequest request, CancellationToken cancellationToken)
+    {
+        if (request.PurchaseVatRate is not { } rate || !Enum.IsDefined(rate))
+        {
+            return AppError.Invalid("purchaseVatRate");
+        }
+
+        var ids = request.ItemIds?.Distinct().ToList() ?? [];
+        if (ids.Count is 0 or > MaxVatBulkItems)
+        {
+            return AppError.Invalid("itemIds");
+        }
+
+        var found = (await items.GetByIdsForUpdateAsync(ids, cancellationToken)).Where(i => !i.IsHidden).ToList();
+        if (found.Count != ids.Count || found.Any(i => i.Group == InputItemGroup.Seed))
+        {
+            return AppError.Invalid("itemIds");
+        }
+
+        foreach (var item in found.Where(i => i.PurchaseVatRate != rate))
+        {
+            audit.Record(new AuditEntry("FarmingInputItem.Updated", RecordType)
+            {
+                RecordId = item.Id, RecordCode = item.Code, Before = new { item.PurchaseVatRate }, After = new { PurchaseVatRate = rate },
+            });
+            item.PurchaseVatRate = rate;
+            unitOfWork.MarkChanged(item);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return new SetItemVatRateResult(found.Count);
     }
 
     public Task<Result<FarmingInputItemView>> DiscontinueAsync(Guid itemId, CancellationToken cancellationToken) =>
@@ -392,7 +430,8 @@ public sealed class FarmingInputItemService(
     }
 
     private sealed record Values(
-        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity, Product? Product, int? MaturityDays);
+        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity, Product? Product, int? MaturityDays,
+        VatRate? VatRate);
 
     private async Task<(Values Values, List<string> Invalid)> ValidateAsync(SaveFarmingInputItemRequest request, CancellationToken cancellationToken)
     {
@@ -472,13 +511,24 @@ public sealed class FarmingInputItemService(
 
         Amount(request.CostPrice, "Cost price", MaxCost, 4);
         Amount(request.OpeningQuantity, "Opening quantity", MaxQuantity, 2);
+        // A Seed item is always KCT, so a rate sent for it is not looked at; for the others it must be one of the rates.
+        if (request.Group != InputItemGroup.Seed && request.PurchaseVatRate is { } vatRate && !Enum.IsDefined(vatRate))
+        {
+            check.Add("Purchase VAT rate");
+        }
+
         return (new Values(
             name, request.Group ?? default, description.Length == 0 ? null : description, notes.Length == 0 ? null : notes, request.ItemGroupId,
-            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity, product, maturityDays), check);
+            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity, product, maturityDays, request.PurchaseVatRate), check);
     }
 
-    private static void Apply(FarmingInputItem item, Values values)
+    private static void Apply(FarmingInputItem item, Values values, bool isNew = false)
     {
+        // Seed is KCT for good. A supply item keeps its rate unless one is sent; a new item, or one that was a seed item, starts at the default (10%).
+        var wasSeed = !isNew && item.Group == InputItemGroup.Seed;
+        item.PurchaseVatRate = values.Group == InputItemGroup.Seed
+            ? VatRate.Kct
+            : values.VatRate ?? (isNew || wasSeed ? VatRates.DefaultFor(values.Group) : item.PurchaseVatRate);
         item.Name = values.Name;
         item.Group = values.Group;
         item.Description = values.Description;
@@ -669,7 +719,7 @@ public sealed class FarmingInputItemService(
 
     private static object Snapshot(FarmingInputItem i, IReadOnlyList<UnitPlan>? plans) => new
     {
-        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.ProductId, i.MaturityDays,
+        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.ProductId, i.MaturityDays, i.PurchaseVatRate,
         Units = plans is null
             ? i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new { Unit = u.Unit?.Name ?? string.Empty, u.Factor, u.Code, u.IsBase }).ToList()
             : plans.OrderByDescending(p => p.IsBase).ThenBy(p => p.Factor).Select(p => new { Unit = p.Catalogue.Name, p.Factor, p.Code, p.IsBase }).ToList(),
@@ -726,6 +776,17 @@ public sealed class FarmingInputItemService(
             return AppError.Invalid("Status");
         }
 
+        VatRate? purchaseVatRate = null;
+        if (!string.IsNullOrWhiteSpace(query.PurchaseVatRate))
+        {
+            if (!VatRates.TryParse(query.PurchaseVatRate, out var parsed))
+            {
+                return AppError.Invalid("Purchase VAT rate");
+            }
+
+            purchaseVatRate = parsed;
+        }
+
         int? statusId = query.Status switch
         {
             InputItemStatusFilter.InUse => StatusIds.Usage.InUse,
@@ -738,7 +799,7 @@ public sealed class FarmingInputItemService(
             text.Length == 0 ? null : text, query.Group, query.ItemGroupId, query.Stock, query.SupplierId,
             query.CreatedFrom is { } from ? BusinessClock.FromLocal(from.ToDateTime(TimeOnly.MinValue)) : null,
             query.CreatedTo is { } to ? BusinessClock.FromLocal(to.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
-            statusId, sort.Value, descending, query.Kind);
+            statusId, sort.Value, descending, query.Kind, purchaseVatRate);
     }
 
     /// <summary>The detail of an item: its list columns, its photos, and whether its base unit is fixed.</summary>
@@ -775,7 +836,8 @@ public sealed class FarmingInputItemService(
                 i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new ItemUnitView(u.Id, u.UnitId, u.Unit.Name, u.Factor, u.Code, u.IsBase, usedUnits.Contains(u.Id))).ToList(),
                 i.Description, i.Notes, photo, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, onHand, onHand * (i.CostPrice ?? 0m),
                 used.Contains(i.Id), i.StatusId, statusCatalog.DisplayNameOf(i.StatusId), i.CreatedAt, i.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
-                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name, i.Product is { } product ? new ItemProductRef(product.Id, product.Code, product.Name) : null, i.MaturityDays));
+                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name, i.Product is { } product ? new ItemProductRef(product.Id, product.Code, product.Name) : null, i.MaturityDays,
+                i.PurchaseVatRate));
         }
 
         return result;

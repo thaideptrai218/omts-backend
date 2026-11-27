@@ -136,11 +136,11 @@ public static class PurchaseReturnRules
             invalid.Add("Discount");
         }
 
-        invalid.AddRange(InvalidRefund(refund, value - purchaseReturn.Discount));
+        invalid.AddRange(InvalidRefund(refund, PurchaseMoney.ReturnNet(purchaseReturn)));
         return invalid;
     }
 
-    /// <summary>Whole VND above zero and at most the value of the return, by cash or transfer; a transfer names its bank reference.</summary>
+    /// <summary>Whole VND above zero and at most the net value of the return (with the VAT given back), by cash or transfer; a transfer names its bank reference.</summary>
     public static List<string> InvalidRefund(ReturnRefundInput? refund, decimal netValue)
     {
         var invalid = new List<string>();

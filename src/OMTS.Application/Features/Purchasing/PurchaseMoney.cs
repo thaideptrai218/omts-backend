@@ -1,16 +1,18 @@
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing;
 
 /// <summary>Money figures of one purchase receipt in VND (PURCHASE-01…03); what payments cover of it is the ledger's reading (BR-PURCHASE-04).</summary>
-/// <param name="Total">Σ rounded line amounts (BR-PURCHASE-02).</param>
-/// <param name="Returned">Σ of its Recorded purchase returns as recorded, each less its own discount.</param>
+/// <param name="Total">Σ rounded line amounts (BR-PURCHASE-02); the goods, without VAT.</param>
+/// <param name="Returned">Σ of its Recorded purchase returns as recorded, each less its own discount and with the VAT given back.</param>
 /// <param name="Discount">The discount of the receipt.</param>
-public sealed record ReceiptFigures(decimal Total, decimal Returned, decimal Discount = 0)
+/// <param name="Vat">Σ input VAT of its lines.</param>
+public sealed record ReceiptFigures(decimal Total, decimal Returned, decimal Discount = 0, decimal Vat = 0)
 {
-    /// <summary>What the receipt costs the cooperative before returns: its total less its discount.</summary>
-    public decimal Payable => Total - Discount;
+    /// <summary>What the receipt costs the cooperative before returns, the supplier's invoice: its total less its discount, plus its VAT.</summary>
+    public decimal Payable => Total - Discount + Vat;
 
     /// <summary>What the receipt adds to the supplier debt: its total, less its discount and its returns.</summary>
     public decimal DebtShare => Payable - Returned;
@@ -68,13 +70,51 @@ public static class PurchaseMoney
     /// <summary>The total of a receipt: the sum of its rounded line amounts, not the rounded sum of the products (BR-PURCHASE-02).</summary>
     public static decimal Total(IEnumerable<PurchaseReceiptLine> lines) => lines.Sum(l => l.LineAmount);
 
+    /// <summary>The input VAT of a receipt: the sum of the VAT of its lines.</summary>
+    public static decimal Vat(IEnumerable<PurchaseReceiptLine> lines) => lines.Sum(l => l.VatAmount);
+
+    /// <summary>
+    /// The input VAT of one line, half up to the dong: the amount of the line less its share of the receipt discount (prorated by line amount, like <see cref="ReturnUnitPrice"/>) times the rate.
+    /// 100,000 at 10% is 10,000; with 10,000 off the receipt it is 9,000. No rate, KCT and 0% give 0.
+    /// </summary>
+    public static decimal LineVat(decimal lineAmount, decimal receiptTotal, decimal receiptDiscount, VatRate? rate)
+    {
+        var percent = VatRates.Percent(rate);
+        if (percent == 0m || lineAmount <= 0m || receiptTotal <= 0m)
+        {
+            return 0m;
+        }
+
+        return RoundHalfUp(lineAmount * (receiptTotal - receiptDiscount) * percent / (receiptTotal * 100m));
+    }
+
+    /// <summary>Works out the VAT of every line of the receipt from its rate, its amount and the discount of the receipt; call it once the amounts of the lines and the discount are set.</summary>
+    public static void ApplyVat(PurchaseReceipt receipt)
+    {
+        var total = Total(receipt.Lines);
+        foreach (var line in receipt.Lines)
+        {
+            line.VatAmount = LineVat(line.LineAmount, total, receipt.Discount, line.VatRate);
+        }
+    }
+
+    /// <summary>The VAT given back with a return line: its recorded value times the rate of the receipt line, half up to the dong; 0 without a rate.</summary>
+    public static decimal ReturnLineVat(decimal returnValue, VatRate? rate) => RoundHalfUp(returnValue * VatRates.Percent(rate) / 100m);
+
+    /// <summary>The VAT given back with a return: the sum of the VAT of its lines.</summary>
+    public static decimal ReturnVat(PurchaseReturn purchaseReturn) => purchaseReturn.Lines.Sum(l => l.VatAmount);
+
+    /// <summary>What a return lowers the supplier debt by (and the most the supplier can pay back for it): its lines less its discount, plus the VAT given back.</summary>
+    public static decimal ReturnNet(PurchaseReturn purchaseReturn) => purchaseReturn.Lines.Sum(l => l.ReturnValue + l.VatAmount) - purchaseReturn.Discount;
+
     /// <summary>The returns of the receipt that count: a Draft or Cancelled return counts nowhere (BR-PURCHASE-07).</summary>
     public static IEnumerable<PurchaseReturn> RecordedReturns(PurchaseReceipt receipt) =>
         receipt.Returns.Where(r => r.StatusId == StatusIds.PurchaseReturn.Recorded);
 
     public static ReceiptFigures Of(PurchaseReceipt receipt) => new(
         Total(receipt.Lines),
-        RecordedReturns(receipt).SelectMany(r => r.Lines).Sum(l => l.ReturnValue) - RecordedReturns(receipt).Sum(r => r.Discount),
-        receipt.Discount);
+        RecordedReturns(receipt).SelectMany(r => r.Lines).Sum(l => l.ReturnValue + l.VatAmount) - RecordedReturns(receipt).Sum(r => r.Discount),
+        receipt.Discount,
+        Vat(receipt.Lines));
 }
 

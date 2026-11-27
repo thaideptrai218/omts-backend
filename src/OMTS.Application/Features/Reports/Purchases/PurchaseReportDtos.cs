@@ -18,18 +18,21 @@ public sealed record PurchaseReportQuery(
 public sealed record PurchaseReportChoices(IReadOnlyList<ReportChoice> Suppliers, string Kind);
 
 /// <summary>
-/// The figures of a group or of the total. A receipt is worth its lines less its discount; a return its lines less its discount. <c>NetValue</c> = <c>ReceivedValue − ReturnedValue</c>. The quantities
-/// (BASE units of the item) are filled when grouped by item only. Grouped by item, the discounts of whole documents are the group <c>receipt-discounts</c> (negative), so the groups add up to the total.
+/// The figures of a group or of the total. A receipt is worth its lines less its discount, a return its lines less its discount: the goods, without VAT (<c>ReceivedValue</c>, <c>ReturnedValue</c>).
+/// <c>ReceivedVat</c> and <c>ReturnedVat</c> are the input VAT of the receipts and the VAT given back with the returns, and <c>VatAmount</c> is received less returned. <c>GoodsValue</c> = <c>ReceivedValue − ReturnedValue</c>
+/// and <c>NetValue</c> = <c>GoodsValue + VatAmount</c>: what the supplier is owed for the period. The quantities (BASE units of the item) are filled when grouped by item only. Grouped by item, the discounts of whole documents are the group <c>receipt-discounts</c> (negative), so the groups add up to the total.
 /// </summary>
 public sealed record PurchaseReportFigures(
-    int ReceiptCount, int ReturnCount, decimal ReceivedValue, decimal ReturnedValue, decimal NetValue, decimal? ReceivedQuantity, decimal? ReturnedQuantity);
+    int ReceiptCount, int ReturnCount, decimal ReceivedValue, decimal ReturnedValue, decimal NetValue, decimal? ReceivedQuantity, decimal? ReturnedQuantity,
+    decimal VatAmount = 0, decimal ReceivedVat = 0, decimal ReturnedVat = 0, decimal GoodsValue = 0);
 
 /// <param name="Key">The supplier id, the item id, or <c>receipt-discounts</c>.</param>
 /// <param name="Code">The item code; null for a supplier and for the discounts group.</param>
 /// <param name="Unit">The base unit name of the item; null for a supplier.</param>
 public sealed record PurchaseReportGroup(
     string Key, string Label, string? Code, string? Unit,
-    int ReceiptCount, int ReturnCount, decimal ReceivedValue, decimal ReturnedValue, decimal NetValue, decimal? ReceivedQuantity, decimal? ReturnedQuantity);
+    int ReceiptCount, int ReturnCount, decimal ReceivedValue, decimal ReturnedValue, decimal NetValue, decimal? ReceivedQuantity, decimal? ReturnedQuantity,
+    decimal VatAmount = 0, decimal ReceivedVat = 0, decimal ReturnedVat = 0, decimal GoodsValue = 0);
 
 /// <summary>The report worked out when it is shown; <see cref="Message"/> is MSG-GEN-10 when nothing was bought or returned.</summary>
 public sealed record PurchaseReport(
@@ -38,8 +41,8 @@ public sealed record PurchaseReport(
 
 public sealed record PurchaseDocumentSupplier(Guid Id, string Name);
 
-/// <summary><c>Value</c> is positive; <c>IsReturn</c> says which way it counts. <c>ReceiptKind</c> is Seed or Supply for a receipt, null for a return.</summary>
-public sealed record PurchaseDocumentRow(Guid Id, string Code, DateOnly Date, bool IsReturn, string? ReceiptKind, PurchaseDocumentSupplier Supplier, decimal Value);
+/// <summary><c>Value</c> is positive, the goods without VAT, and <c>VatAmount</c> its VAT; <c>IsReturn</c> says which way it counts. <c>ReceiptKind</c> is Seed or Supply for a receipt, null for a return.</summary>
+public sealed record PurchaseDocumentRow(Guid Id, string Code, DateOnly Date, bool IsReturn, string? ReceiptKind, PurchaseDocumentSupplier Supplier, decimal Value, decimal VatAmount = 0);
 
 /// <summary>The receipts and returns of one group, newest first; <see cref="Message"/> is MSG-GEN-10 when the group has none.</summary>
 public sealed record PurchaseDocumentList(

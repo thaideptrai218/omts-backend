@@ -15,7 +15,8 @@ internal sealed partial class PurchaseReceiptRepository
         var matching = FilteredReturns(filter);
         var total = await matching.CountAsync(cancellationToken);
         var recorded = matching.Where(r => r.StatusId == StatusIds.PurchaseReturn.Recorded);
-        var value = await recorded.SelectMany(r => r.Lines).SumAsync(l => (decimal?)l.ReturnValue, cancellationToken) ?? 0m;
+        // What the Recorded returns lower the debt by: the lines and the VAT given back, less the discounts.
+        var value = await recorded.SelectMany(r => r.Lines).SumAsync(l => (decimal?)(l.ReturnValue + l.VatAmount), cancellationToken) ?? 0m;
         var discount = await recorded.SumAsync(r => (decimal?)r.Discount, cancellationToken) ?? 0m;
         var items = await ReturnFigures(SortedReturns(matching, filter).Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync(cancellationToken);
         return (items, total, value - discount);
@@ -73,8 +74,8 @@ internal sealed partial class PurchaseReceiptRepository
             PurchaseReturnSort.Code => descending ? query.OrderByDescending(r => r.Code) : query.OrderBy(r => r.Code),
             PurchaseReturnSort.Supplier => descending ? query.OrderByDescending(r => r.Supplier.Name) : query.OrderBy(r => r.Supplier.Name),
             PurchaseReturnSort.Total => descending
-                ? query.OrderByDescending(r => (r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m) - r.Discount)
-                : query.OrderBy(r => (r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m) - r.Discount),
+                ? query.OrderByDescending(r => (r.Lines.Sum(l => (decimal?)(l.ReturnValue + l.VatAmount)) ?? 0m) - r.Discount)
+                : query.OrderBy(r => (r.Lines.Sum(l => (decimal?)(l.ReturnValue + l.VatAmount)) ?? 0m) - r.Discount),
             PurchaseReturnSort.Status => descending ? query.OrderByDescending(r => r.StatusId) : query.OrderBy(r => r.StatusId),
             _ => descending ? query.OrderByDescending(r => r.ReturnedAt) : query.OrderBy(r => r.ReturnedAt),
         };
@@ -88,5 +89,6 @@ internal sealed partial class PurchaseReceiptRepository
             r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m, r.Discount, r.Lines.Count,
             r.Refunds.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack).Sum(p => (decimal?)p.Amount) ?? 0m,
             r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt, r.RowVersion, r.ReturnedAt,
-            r.Receipt != null ? r.Receipt.Kind : r.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply));
+            r.Receipt != null ? r.Receipt.Kind : r.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply,
+            r.Lines.Sum(l => (decimal?)l.VatAmount) ?? 0m));
 }

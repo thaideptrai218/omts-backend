@@ -6,8 +6,8 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 /// One supplier's sums as of a date (BR-PURCHASE-04), computed by SQL over Completed receipts, Recorded returns of the supplier and
 /// Recorded payments. Draft and Cancelled receipts, Draft and Cancelled returns and Cancelled payments never count, also in past periods.
 /// </summary>
-/// <param name="Receipts">Σ totals less discounts of the Completed receipts received by the date.</param>
-/// <param name="Returned">Σ amounts less discounts of the Recorded purchase returns dated by the date, with or without a receipt.</param>
+/// <param name="Receipts">Σ totals less discounts plus the input VAT of the Completed receipts received by the date: what the supplier invoiced.</param>
+/// <param name="Returned">Σ amounts less discounts plus the VAT given back of the Recorded purchase returns dated by the date, with or without a receipt.</param>
 /// <param name="Paid">Σ amounts and discounts of Recorded payments of kind Payment dated by the date.</param>
 /// <param name="PaidBack">Σ Recorded payments of kind PaidBack dated by the date.</param>
 /// <param name="StandaloneReturned">The part of <paramref name="Returned"/> made without a receipt, which no receipt absorbs.</param>
@@ -25,20 +25,23 @@ public sealed record SupplierDebtSums(decimal Receipts, decimal Returned, decima
 /// <summary>A supplier that may be listed on the debt list.</summary>
 public sealed record DebtSupplierRow(Guid Id, string Name, string PhoneNumber, int StatusId);
 
-/// <summary>A Completed receipt with its total, its discount and the amount of all its Recorded returns less their discounts.</summary>
+/// <summary>A Completed receipt with its total, its discount, its input VAT and the amount of all its Recorded returns less their discounts, with the VAT given back.</summary>
+/// <param name="Total">The goods, without VAT.</param>
+/// <param name="Returned">Σ of its Recorded returns: their lines less their discounts plus the VAT given back.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7; <paramref name="ReceiptDate"/> is its date.</param>
+/// <param name="Vat">Σ input VAT of its lines.</param>
 public sealed record DebtReceiptRow(
-    Guid SupplierId, Guid Id, string Code, DateOnly ReceiptDate, decimal Total, decimal Returned, decimal Discount = 0, DateTimeOffset ReceivedAt = default)
+    Guid SupplierId, Guid Id, string Code, DateOnly ReceiptDate, decimal Total, decimal Returned, decimal Discount = 0, DateTimeOffset ReceivedAt = default, decimal Vat = 0)
 {
-    /// <summary>What the receipt still adds to the debt before payments: its total, less its discount and its returns.</summary>
-    public decimal Net => Total - Discount - Returned;
+    /// <summary>What the receipt still adds to the debt before payments: its total, less its discount, plus its VAT, less its returns.</summary>
+    public decimal Net => Total - Discount + Vat - Returned;
 }
 
 /// <summary>Money that came back from the supplier: a Recorded payment of kind PaidBack.</summary>
 public sealed record DebtMoneyBackRow(Guid SupplierId, DateOnly Date, decimal Amount);
 
 /// <param name="ReceiptCode">Null on a return made without a receipt.</param>
-/// <param name="Value">Σ line amounts less the discount of the return.</param>
+/// <param name="Value">Σ line amounts less the discount of the return plus the VAT given back.</param>
 public sealed record StatementReturnRow(Guid Id, string Code, string? ReceiptCode, DateOnly ReturnDate, decimal Value);
 
 public sealed record StatementPaymentRow(

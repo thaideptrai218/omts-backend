@@ -55,9 +55,11 @@ public sealed record SavePurchaseReturnRequest(
 public sealed record CancelPurchaseReturnRequest(string? Reason, string? RowVersion = null);
 
 /// <param name="ReceiptLineId">Null on a return without a receipt.</param>
+/// <param name="VatRate">The VAT rate copied from the receipt line (the item's rate on a return without a receipt); null when the receipt line has none.</param>
+/// <param name="VatAmount">The VAT given back with the line: <paramref name="ReturnValue"/> times the rate, half up to the dong.</param>
 public sealed record PurchaseReturnLineView(
     Guid? ReceiptLineId, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal UnitPrice, decimal ReturnValue,
-    Guid? ItemUnitId = null, decimal UnitFactor = 1, decimal? BaseQuantity = null);
+    Guid? ItemUnitId = null, decimal UnitFactor = 1, decimal? BaseQuantity = null, VatRate? VatRate = null, decimal VatAmount = 0);
 
 /// <summary>A money-paid-back record made with the return; a Cancelled one stays listed with its status.</summary>
 public sealed record ReturnRefundView(
@@ -67,8 +69,9 @@ public sealed record ReturnReceiptRef(Guid Id, string Code);
 
 /// <param name="ReceiptId">Null on a return without a receipt, as are <paramref name="ReceiptCode"/> and <paramref name="Receipt"/>.</param>
 /// <param name="ReturnValue">Σ line amounts as recorded; a later correction of the unit price does not change it (PM 03/11).</param>
-/// <param name="NetValue"><paramref name="ReturnValue"/> less the discount: what it lowers the supplier debt by once Recorded.</param>
+/// <param name="NetValue"><paramref name="ReturnValue"/> less the discount plus <paramref name="VatRefund"/>: what it lowers the supplier debt by once Recorded.</param>
 /// <param name="ReturnedAt">When the goods went back, at UTC+7; <paramref name="ReturnDate"/> is its date.</param>
+/// <param name="VatRefund">Σ the VAT given back with its lines.</param>
 public sealed record PurchaseReturnView(
     Guid Id,
     string Code,
@@ -91,7 +94,8 @@ public sealed record PurchaseReturnView(
     IReadOnlyList<ReturnRefundView> Refunds,
     string RowVersion,
     DateTimeOffset ReturnedAt = default,
-    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply);
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply,
+    decimal VatRefund = 0);
 
 /// <summary>The answer of a cancellation: the receipt when the return has one, otherwise the return itself.</summary>
 public sealed record CancelledPurchaseReturn(PurchaseReceiptView? Receipt, PurchaseReturnView? Return);
@@ -108,14 +112,15 @@ public sealed record PurchaseReturnQuery(
     PurchaseReceiptKind? Kind = null);
 
 /// <param name="Value">Σ line amounts as recorded.</param>
-/// <param name="NetValue"><paramref name="Value"/> less the discount.</param>
+/// <param name="NetValue"><paramref name="Value"/> less the discount plus <paramref name="VatRefund"/>.</param>
 /// <param name="Refunded">Σ the Recorded money paid back for this return.</param>
 /// <param name="ReturnedAt">When the goods went back, at UTC+7.</param>
+/// <param name="VatRefund">Σ the VAT given back with its lines.</param>
 public sealed record PurchaseReturnRow(
     Guid Id, string Code, DateOnly ReturnDate, Guid? ReceiptId, string? ReceiptCode, SupplierRef Supplier, string SupplierCode, ZoneRef? Zone, string Reason,
     int StatusId, string Status, AccountRef RecordedBy, decimal Value, decimal Discount, decimal NetValue, int ItemCount, decimal Refunded,
     DateTimeOffset? CancelledAt, string? CancelReason, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion, DateTimeOffset ReturnedAt = default,
-    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply);
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply, decimal VatRefund = 0);
 
 /// <param name="TotalValue">Σ net value of the Recorded returns of every match, not only of the page.</param>
 /// <param name="Message">MSG-GEN-10 when no return matches.</param>

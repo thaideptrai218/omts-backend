@@ -62,12 +62,13 @@ public sealed class PurchaseReceiptViews(
                     seededQuantity, lineReturned, Returnable(l, seededQuantity, lineReturned), l.EnteredDiscount,
                     l.EnteredUnitPrice is null ? null : PurchaseMoney.ReturnPriceInLineUnit(r, l),
                     l.ItemUnitId, l.UnitFactor, l.Quantity, l.Item?.Unit,
-                    lots.TryGetValue(l.Id, out var lot) ? new ReceiptLineSeedLot(lot.State, lot.Remaining) : null);
+                    lots.TryGetValue(l.Id, out var lot) ? new ReceiptLineSeedLot(lot.State, lot.Remaining) : null,
+                    l.VatRate, l.VatAmount);
             }).ToList(),
             r.Returns.Where(rt => rt.StatusId != StatusIds.PurchaseReturn.Draft).OrderBy(rt => rt.ReturnedAt).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
                 rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.StatusId, statusCatalog.DisplayNameOf(rt.StatusId),
                 rt.CancelledAt, rt.CancelReason, new AccountRef(rt.RecordedByAccountId, names.GetValueOrDefault(rt.RecordedByAccountId) ?? string.Empty),
-                RowVersionGuard.Encode(rt.RowVersion), rt.Discount, rt.Lines.Sum(l => l.ReturnValue) - rt.Discount, rt.ReturnedAt)).ToList(),
+                RowVersionGuard.Encode(rt.RowVersion), rt.Discount, PurchaseMoney.ReturnNet(rt), rt.ReturnedAt, PurchaseMoney.ReturnVat(rt))).ToList(),
             RowVersionGuard.Encode(r.RowVersion),
             r.Discount,
             figures.Payable,
@@ -76,7 +77,8 @@ public sealed class PurchaseReceiptViews(
             r.ReceivedAt,
             r.ReceivedByAccountId is { } receivedBy ? new AccountRef(receivedBy, names.GetValueOrDefault(receivedBy) ?? string.Empty) : null,
             r.Kind,
-            lots.Count > 0 ? SeedLotStates.Combine(lots.Values.Select(f => f.State).ToList()) : null);
+            lots.Count > 0 ? SeedLotStates.Combine(lots.Values.Select(f => f.State).ToList()) : null,
+            figures.Vat);
     }
 
     /// <summary>GBR-04: only the Seed lines of a Completed receipt are seed lots.</summary>

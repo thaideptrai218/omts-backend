@@ -83,7 +83,7 @@ public sealed class PurchaseReturnService(
         var isOwner = await access.IsCooperativeOwnerAsync(cancellationToken);
         if (!isOwner && !request.OwnerApproved)
         {
-            return PurchaseReturnRules.OwnerApprovalConfirmation(lines.Sum(l => l.ReturnValue), receipt.Supplier.Name);
+            return PurchaseReturnRules.OwnerApprovalConfirmation(lines.Sum(l => l.ReturnValue + l.VatAmount), receipt.Supplier.Name);
         }
 
         // The typed code, or one taken once the return is valid and confirmed, so a refused request spends no number; never given twice.
@@ -305,7 +305,7 @@ public sealed class PurchaseReturnService(
 
         var refunded = (await receipts.RefundsOfReturnAsync(purchaseReturn.Id, cancellationToken))
             .Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded).Sum(p => p.Amount);
-        if (value - request.Discount < refunded)
+        if (value + PurchaseMoney.ReturnVat(purchaseReturn) - request.Discount < refunded)
         {
             return AppError.Invalid("Refund", $"The supplier has already paid back {refunded:0} VND for this return; its net value cannot be less.");
         }
@@ -445,15 +445,16 @@ public sealed class PurchaseReturnService(
 
     /// <summary>What the ledger rows of a return depend on: when it happened and, per line, the item, the base quantity and the price.</summary>
     private static string LedgerKey(PurchaseReturn r) => string.Join(
-        ";", r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId).Select(l => $"{l.ItemId}|{l.Quantity}|{l.EnteredUnitPrice}|{l.UnitFactor}")) + $"@{r.ReturnedAt:O}";
+        ";", r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId).Select(l => $"{l.ItemId}|{l.Quantity}|{l.EnteredUnitPrice}|{l.UnitFactor}|{l.VatRate}")) + $"@{r.ReturnedAt:O}";
 
     private static object EditSnapshot(PurchaseReturn r) => new
     {
         r.ReturnDate, r.ReturnedAt, r.ZoneId, r.Reason, r.Discount,
         Lines = r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId)
-            .Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
+            .Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
         ReturnValue = r.Lines.Sum(l => l.ReturnValue),
-        NetValue = r.Lines.Sum(l => l.ReturnValue) - r.Discount,
+        VatRefund = PurchaseMoney.ReturnVat(r),
+        NetValue = PurchaseMoney.ReturnNet(r),
     };
 
     /// <summary>Deletes a Draft and its lines; the removal stays in the audit log only.</summary>
@@ -631,7 +632,8 @@ public sealed class PurchaseReturnService(
     private static PurchaseReturnLine StandaloneLine(FarmingInputItem item, PurchaseReturnLineInput input)
     {
         var unit = ReceiptLineUnits.Resolve(item, input.ItemUnitId);
-        var line = new PurchaseReturnLine { ItemId = item.Id };
+        // Nothing names a receipt line, so the VAT given back is that of the item's own rate.
+        var line = new PurchaseReturnLine { ItemId = item.Id, VatRate = item.PurchaseVatRate };
         ReceiptLineUnits.FillReturn(line, unit?.Unit?.Name ?? item.Unit, unit?.Id, unit?.Factor ?? 1m, input.Quantity!.Value, input.UnitPrice!.Value);
         return line;
     }
@@ -643,7 +645,8 @@ public sealed class PurchaseReturnService(
     private static PurchaseReturnLine LineFromReceipt(PurchaseReceipt receipt, PurchaseReceiptLine line, decimal quantity, decimal? unitPrice)
     {
         var price = unitPrice ?? PurchaseMoney.ReturnPriceInLineUnit(receipt, line);
-        var returned = new PurchaseReturnLine { ReceiptLineId = line.Id, ItemId = line.ItemId!.Value };
+        // The VAT given back follows the rate of the receipt line, never an input.
+        var returned = new PurchaseReturnLine { ReceiptLineId = line.Id, ItemId = line.ItemId!.Value, VatRate = line.VatRate };
         ReceiptLineUnits.FillReturn(returned, line.Unit, line.ItemUnitId, line.UnitFactor, quantity, price);
         return returned;
     }
@@ -670,7 +673,7 @@ public sealed class PurchaseReturnService(
         }
 
         return !isOwner && !ownerApproved
-            ? PurchaseReturnRules.OwnerApprovalConfirmation(purchaseReturn.Lines.Sum(l => l.ReturnValue) - purchaseReturn.Discount, sources.Supplier.Name)
+            ? PurchaseReturnRules.OwnerApprovalConfirmation(PurchaseMoney.ReturnNet(purchaseReturn), sources.Supplier.Name)
             : null;
     }
 
@@ -743,7 +746,7 @@ public sealed class PurchaseReturnService(
             purchaseReturn.ReceiptId, purchaseReturn.SupplierId, purchaseReturn.ReturnDate, purchaseReturn.ReturnedAt, purchaseReturn.Discount,
             // The Zone Manager's answer to MSG-PURCHASE-02; the Owner is not asked.
             OwnerApprovalConfirmed = ownerApprovalConfirmed,
-            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
+            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
         },
         Reason = purchaseReturn.Reason,
     });
@@ -751,7 +754,7 @@ public sealed class PurchaseReturnService(
     private static object Snapshot(PurchaseReturn r) => new
     {
         r.ReceiptId, r.SupplierId, r.ZoneId, r.Reason, r.Discount,
-        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
+        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
     };
 
     private AppError WrongStatus(PurchaseReturn purchaseReturn) =>

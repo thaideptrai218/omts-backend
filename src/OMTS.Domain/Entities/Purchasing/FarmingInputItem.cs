@@ -46,6 +46,12 @@ public class FarmingInputItem : AuditableEntity, IHasStatus
     /// <summary>Seed items only: days from seeding until the oysters can be harvested ("Thời gian trưởng thành"); null when not set. A cycle's expected harvest date is its seeding date plus this, computed at read time.</summary>
     public int? MaturityDays { get; set; }
 
+    /// <summary>
+    /// The input VAT rate a receipt line of this item starts with ("VAT mua vào"). Seed is always <see cref="VatRate.Kct"/> (the farm sells oysters, which are not subject to VAT, so input VAT is never deducted and goes into the cost);
+    /// a supply item is created at 10%. A receipt line copies it and may differ; changing it here never touches a receipt.
+    /// </summary>
+    public VatRate PurchaseVatRate { get; set; } = VatRate.Kct;
+
     public ICollection<InputItemUnit> Units { get; set; } = [];
     public ICollection<InputItemPhoto> Photos { get; set; } = [];
     /// <summary>Optional note, outside the SRS attributes (kept, gap Q17).</summary>

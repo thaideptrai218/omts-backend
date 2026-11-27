@@ -12,9 +12,12 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <see cref="RaftId"/> is optional, only on a Seed or Material line, among the rafts In Use of the caller's zones (the Owner:
 /// any); <see cref="SupplierLotCode"/> only on a Seed line (ignored on the others). <see cref="LineId"/> names the line kept
 /// when a Completed receipt is edited (a line without it is new); a Draft save ignores it and replaces every line.
+/// <see cref="VatRate"/> is the input VAT rate of the line: left out, a new line takes the item's rate (<c>purchaseVatRate</c>) and a kept line of the same item keeps its own (none on a line made before input VAT existed);
+/// a Seed line is always KCT whatever is sent.
 /// </summary>
 public sealed record ReceiptLineInput(
-    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null);
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null,
+    VatRate? VatRate = null);
 
 /// <summary>
 /// PURCHASE-01 create, Draft edit and edit of a Completed receipt. <see cref="Complete"/> false saves a Draft (only an In Use
@@ -66,6 +69,8 @@ public sealed record LineRaftRef(Guid Id, string Code, Guid ZoneId, string ZoneC
 /// <param name="Returnable">Received − seeded − already returned (0 on a Draft line without quantity).</param>
 /// <param name="LineAmount">Quantity × (unit price − discount), half up to the dong; null while the line has no quantity or no unit price.</param>
 /// <param name="Discount">Whole VND off each unit.</param>
+/// <param name="VatRate">The input VAT rate of the line; null on a line made before input VAT existed.</param>
+/// <param name="VatAmount">Whole VND of VAT of the line: its amount less its share of the receipt discount, times the rate, half up; 0 without a rate.</param>
 /// <param name="NetUnitPrice">
 /// What one unit was paid, the price a return of the line defaults to: unit price less discount, less its share of the receipt
 /// discount prorated by line amount, half up to the dong; null while the line has no unit price.
@@ -93,13 +98,17 @@ public sealed record ReceiptLineView(
     decimal UnitFactor = 1,
     decimal? BaseQuantity = null,
     string? BaseUnit = null,
-    ReceiptLineSeedLot? SeedLot = null);
+    ReceiptLineSeedLot? SeedLot = null,
+    VatRate? VatRate = null,
+    decimal VatAmount = 0);
 
 /// <summary>Where a seed lot stands (derived from its quantities, never stored) and what is left of it in the base unit of the seed item.</summary>
 public sealed record ReceiptLineSeedLot(SeedLotState State, decimal RemainingQty);
 
 /// <summary>A purchase return of the receipt, Cancelled ones included (with their reason) and Drafts left out; <paramref name="ReturnValue"/> is the amount as recorded.</summary>
+/// <param name="NetValue">The goods less the discount plus the VAT given back: what it lowers the supplier debt by once Recorded.</param>
 /// <param name="ReturnedAt">When the goods went back, at UTC+7; <paramref name="ReturnDate"/> is its date.</param>
+/// <param name="VatRefund">The VAT given back with the return.</param>
 public sealed record ReceiptReturnView(
     Guid Id,
     string Code,
@@ -114,12 +123,14 @@ public sealed record ReceiptReturnView(
     string RowVersion,
     decimal Discount = 0,
     decimal NetValue = 0,
-    DateTimeOffset ReturnedAt = default);
+    DateTimeOffset ReturnedAt = default,
+    decimal VatRefund = 0);
 
 /// <summary>PURCHASE-03.1 / SCR-PURCHASE-02: the receipt with its lines and rafts, its returns and, when Cancelled, the reason.</summary>
-/// <param name="Total">Σ line amounts, each rounded half up to the dong (BR-PURCHASE-02).</param>
-/// <param name="Returned">Σ of its Recorded purchase returns as recorded, each less its own discount.</param>
-/// <param name="Payable">Total less discount.</param>
+/// <param name="Total">Σ line amounts, each rounded half up to the dong (BR-PURCHASE-02): the goods, without VAT.</param>
+/// <param name="Returned">Σ of its Recorded purchase returns as recorded, each less its own discount and with the VAT given back.</param>
+/// <param name="Payable">What the supplier is owed for it before returns: total less discount plus <paramref name="VatTotal"/>.</param>
+/// <param name="VatTotal">Σ input VAT of its lines.</param>
 /// <param name="Paid">What the payments of the supplier cover of this receipt: the parts set against it first, then the rest oldest receipts first.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7; <paramref name="ReceiptDate"/> is its date.</param>
 /// <param name="ReceivedBy">Who took the goods in; null only on a receipt that has no receiver.</param>
@@ -149,7 +160,8 @@ public sealed record PurchaseReceiptView(
     DateTimeOffset ReceivedAt = default,
     AccountRef? ReceivedBy = null,
     PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply,
-    SeedLotState? SeedState = null);
+    SeedLotState? SeedState = null,
+    decimal VatTotal = 0);
 
 /// <summary>
 /// PURCHASE-01.4: a new receipt filled from another one, line discounts included and the receiver left for the caller; nothing is saved until Save draft or Complete. A supplier, a zone, an

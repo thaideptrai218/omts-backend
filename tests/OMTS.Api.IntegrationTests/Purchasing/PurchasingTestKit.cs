@@ -16,8 +16,9 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
+/// <summary><paramref name="VatRate"/> is the text "KCT", "0", "5", "8" or "10"; left null the line takes the rate of its item.</summary>
 public sealed record LineBody(
-    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null);
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null, string? VatRate = null);
 
 /// <summary>PURCHASE-01 request body; every field can be left out (null) to check the validation.</summary>
 public sealed record ReceiptBody
@@ -181,12 +182,13 @@ public static class PurchasingTestKit
 
     /// <summary>
     /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). A Seed item sells as <paramref name="productId"/>, a new product of the host when it is not named.
+    /// A supply item is bought without input VAT (KCT) unless <paramref name="vatRate"/> says otherwise, so the money of a test that is not about VAT is the goods; pass null for the rate a new item gets (10%).
     /// </summary>
-    public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null, Guid? productId = null)
+    public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null, Guid? productId = null, string? vatRate = "KCT")
     {
         code ??= NewCode();
         Guid? product = group == "Seed" ? productId ?? await owner.SeedProductAsync() : null;
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit, productId = product });
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit, productId = product, purchaseVatRate = vatRate });
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -270,7 +272,9 @@ public static class PurchasingTestKit
                 l.GetProperty("raft").ValueKind == JsonValueKind.Object ? l.GetProperty("raft").Id() : null,
                 l.GetProperty("discount").GetDecimal(),
                 id,
-                l.GetProperty("itemUnitId").ValueKind == JsonValueKind.String ? l.GetProperty("itemUnitId").GetGuid() : null);
+                l.GetProperty("itemUnitId").ValueKind == JsonValueKind.String ? l.GetProperty("itemUnitId").GetGuid() : null,
+                // The edit sends the rate the line has (none on a line made before input VAT).
+                l.GetProperty("vatRate").GetString());
         }).ToList();
         var body = new ReceiptBody
         {

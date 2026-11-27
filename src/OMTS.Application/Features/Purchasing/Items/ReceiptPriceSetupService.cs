@@ -87,7 +87,7 @@ public sealed class ReceiptPriceSetupService(
             }
 
             lines.Add(new ReceiptPriceSetupLine(
-                item.Id, item.Code, item.Name, item.Unit, line.EnteredUnitPrice is null ? null : ReceiptLineUnits.NetPricePerBase(line), item.CostPrice, item.LastPurchasePrice));
+                item.Id, item.Code, item.Name, item.Unit, line.EnteredUnitPrice is null ? null : ReceiptLineUnits.CostPerBase(line), item.CostPrice, item.LastPurchasePrice));
         }
 
         return new ReceiptPriceSetupView(receipt.Id, receipt.Code, lines);

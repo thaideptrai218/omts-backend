@@ -21,6 +21,7 @@ public sealed record ItemUnitInput(Guid? Id, Guid? UnitId, string? UnitName, dec
 /// <param name="Unit">The base unit by name when <paramref name="Units"/> is omitted on a create.</param>
 /// <param name="ProductId">Seed items only (ignored for the other types): the product sold when this seed is grown ("Loại hàu bán ra"). Required for a Seed item (MSG-GEN-01 on <c>Product</c>), cleared on the other types.</param>
 /// <param name="MaturityDays">Seed items only: days from seeding until the oysters can be harvested ("Thời gian trưởng thành"), 1-3650, optional. MSG-GEN-01 on <c>Maturity days</c> when out of range.</param>
+/// <param name="PurchaseVatRate">The input VAT rate a receipt line of the item starts with ("VAT mua vào"): "KCT", "0", "5", "8" or "10". Left out, a new item gets 10% and an update keeps the rate; a Seed item is always KCT whatever is sent.</param>
 public sealed record SaveFarmingInputItemRequest(
     string? Code,
     string? Name,
@@ -36,7 +37,8 @@ public sealed record SaveFarmingInputItemRequest(
     decimal? OpeningQuantity = null,
     IReadOnlyList<ItemUnitInput>? Units = null,
     Guid? ProductId = null,
-    int? MaturityDays = null);
+    int? MaturityDays = null,
+    VatRate? PurchaseVatRate = null);
 
 /// <param name="IsUsed">On a receipt or return line (or planned by a cultivation cycle): the factor and unit of this item unit are fixed and it cannot be removed.</param>
 public sealed record ItemUnitView(Guid Id, Guid UnitId, string Name, decimal Factor, string Code, bool IsBase, bool IsUsed);
@@ -78,7 +80,8 @@ public sealed record FarmingInputItemListItem(
     Guid? ProductId = null,
     string? ProductName = null,
     ItemProductRef? Product = null,
-    int? MaturityDays = null);
+    int? MaturityDays = null,
+    VatRate PurchaseVatRate = VatRate.Kct);
 
 /// <summary>The detail of an item: every column of the list plus every photo.</summary>
 /// <param name="HasMovements">A receipt, return, material usage or movement names the item: the base unit is then fixed.</param>
@@ -115,12 +118,13 @@ public sealed record FarmingInputItemView(
     string? ProductName = null,
     ItemProductRef? Product = null,
     bool ProductLocked = false,
-    int? MaturityDays = null)
+    int? MaturityDays = null,
+    VatRate PurchaseVatRate = VatRate.Kct)
 {
     public static FarmingInputItemView Of(
         FarmingInputItemListItem i, IReadOnlyList<ItemPhotoView> photos, bool hasMovements, decimal? openingQuantity, bool productLocked = false) => new(
         i.Id, i.Code, i.Name, i.Group, i.ItemGroupId, i.ItemGroupName, i.Unit, i.Units, i.Description, i.Notes, photos.Count > 0 ? photos[0].Url : null, i.MinQuantity, i.MaxQuantity,
-        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity, i.ProductId, i.ProductName, i.Product, productLocked, i.MaturityDays);
+        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity, i.ProductId, i.ProductName, i.Product, productLocked, i.MaturityDays, i.PurchaseVatRate);
 }
 public enum InputItemStatusFilter
 {
@@ -138,6 +142,7 @@ public enum InputItemStatusFilter
 /// <param name="Status">InUse (the default), Discontinued or All.</param>
 /// <param name="SortBy">code (the default, newest first), name, group, onHand, costPrice, lastPurchasePrice, stockValue, createdAt or status.</param>
 /// <param name="SortDir">asc or desc; the default is desc for the code and asc for the others.</param>
+/// <param name="PurchaseVatRate">Only the items with this input VAT rate: "KCT", "0", "5", "8" or "10".</param>
 public sealed record FarmingInputItemListQuery(
     string? Search = null,
     InputItemGroup? Group = null,
@@ -151,7 +156,8 @@ public sealed record FarmingInputItemListQuery(
     string? SortDir = null,
     int Page = 1,
     int PageSize = 20,
-    PurchaseReceiptKind? Kind = null);
+    PurchaseReceiptKind? Kind = null,
+    string? PurchaseVatRate = null);
 
 /// <param name="StockValue">Σ on hand × cost price of every match.</param>
 public sealed record FarmingInputItemListSummary(decimal StockValue);
@@ -161,6 +167,12 @@ public sealed record FarmingInputItemPage(IReadOnlyList<FarmingInputItemListItem
 /// <summary>What the Add item form starts with.</summary>
 /// <param name="Code">The proposed code; not reserved, the Owner may replace it.</param>
 public sealed record NewFarmingInputItemProposal(string Code);
+
+/// <summary>Sets the input VAT rate of many items at once (1 to 500 of them, none a Seed item).</summary>
+public sealed record SetItemVatRateRequest(IReadOnlyList<Guid>? ItemIds, VatRate? PurchaseVatRate);
+
+/// <param name="Updated">How many items now have the rate (the ones that already had it count too).</param>
+public sealed record SetItemVatRateResult(int Updated);
 
 public sealed record InputItemImportError(int Row, IReadOnlyList<string> Fields, string Message);
 

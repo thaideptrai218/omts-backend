@@ -74,6 +74,16 @@ public sealed class FarmingInputItemsController(FarmingInputItemService items, F
     public async Task<IActionResult> Update(Guid id, SaveFarmingInputItemRequest request, CancellationToken cancellationToken) =>
         (await items.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>
+    /// Sets the input VAT rate ("VAT mua vào") of 1 to 500 items at once; Owner only. Receipts keep the rate they were made with. 400 MSG-GEN-01 (field <c>itemIds</c>) when a Seed item is named. <c>/api/input-items/purchase-vat-rate</c> is the same route.
+    /// </summary>
+    [HttpPost("purchase-vat-rate")]
+    [HttpPost("~/api/input-items/purchase-vat-rate")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<SetItemVatRateResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetPurchaseVatRate(SetItemVatRateRequest request, CancellationToken cancellationToken) =>
+        (await items.SetPurchaseVatRateAsync(request, cancellationToken)).ToActionResult(Ok);
+
     [HttpPost("{id:guid}/discontinue")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingInputItemView>(StatusCodes.Status200OK)]

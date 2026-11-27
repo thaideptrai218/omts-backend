@@ -97,6 +97,12 @@ public class PurchaseReceiptLine : Entity
     /// <summary>Entered quantity × (entered price − entered discount) rounded half up to the dong, never to thousands (BR-PURCHASE-02); 0 while incomplete.</summary>
     public decimal LineAmount { get; set; }
 
+    /// <summary>The input VAT rate of this line, taken from the item and changeable on the receipt; null on a line made before input VAT existed (no VAT).</summary>
+    public VatRate? VatRate { get; set; }
+
+    /// <summary>Whole VND of input VAT of the line: (<see cref="LineAmount"/> less its share of the receipt discount, prorated by line amount) × the rate, half up; 0 without a rate. It is part of the cost and of what the supplier is owed.</summary>
+    public decimal VatAmount { get; set; }
+
     /// <summary>The supplier's lot code, on Seed lines only.</summary>
     public string? SupplierLotCode { get; set; }
 

@@ -36,8 +36,9 @@ public sealed class FarmingInputItemFileService(
     private const string MaxQuantity = "Max quantity";
     private const string CostPrice = "Cost price";
     private const string OpeningQuantity = "Opening quantity";
+    private const string PurchaseVat = "VAT mua vào (%)";
 
-    private static readonly string[] ImportColumns = [Code, Name, Type, Group, Unit, Description, Notes, MinQuantity, MaxQuantity, CostPrice, OpeningQuantity];
+    private static readonly string[] ImportColumns = [Code, Name, Type, Group, Unit, Description, Notes, MinQuantity, MaxQuantity, CostPrice, OpeningQuantity, PurchaseVat];
 
     private static readonly Dictionary<string, InputItemGroup> Types = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -56,14 +57,14 @@ public sealed class FarmingInputItemFileService(
 
         var headers = new List<string>
         {
-            Code, Name, Type, Group, Unit, "Other units", Description, Notes, MinQuantity, MaxQuantity, CostPrice, "Last purchase price", "On hand", "Stock value", "Status", "Created by", "Created at",
+            Code, Name, Type, Group, Unit, "Other units", Description, Notes, MinQuantity, MaxQuantity, CostPrice, "Last purchase price", "On hand", "Stock value", "Status", "Created by", "Created at", PurchaseVat,
         };
         var rows = found.Value!.Select(i => (IReadOnlyList<object?>)new List<object?>
         {
             i.Code, i.Name, i.Group.ToString(), i.ItemGroupName, i.Unit,
             string.Join("; ", i.Units.Where(u => !u.IsBase).Select(u => $"{u.Name} = {u.Factor.ToString("0.###", CultureInfo.InvariantCulture)} {i.Unit} ({u.Code})")),
             i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.Status, i.CreatedBy,
-            i.CreatedAt.ToOffset(BusinessClock.UtcOffset).DateTime,
+            i.CreatedAt.ToOffset(BusinessClock.UtcOffset).DateTime, VatRates.Text(i.PurchaseVatRate),
         }).ToList();
         return Write(new SpreadsheetSheet("Items", headers, rows), $"input-items-{timeProvider.Today():yyyyMMdd}.xlsx");
     }
@@ -160,6 +161,20 @@ public sealed class FarmingInputItemFileService(
             }
 
             var (min, max, cost, opening) = (Number(MinQuantity), Number(MaxQuantity), Number(CostPrice), Number(OpeningQuantity));
+            // The rate of the item: KCT, 0, 5, 8 or 10; left empty, a new item starts at 10%.
+            VatRate? vatRate = null;
+            if (Cell(PurchaseVat) is { } vatText)
+            {
+                if (VatRates.TryParse(vatText, out var parsedRate))
+                {
+                    vatRate = parsedRate;
+                }
+                else
+                {
+                    invalid.Add(PurchaseVat);
+                }
+            }
+
             var code = DocumentCodes.Typed(Cell(Code));
             if (code is not null && !codesInFile.Add(code))
             {
@@ -178,7 +193,7 @@ public sealed class FarmingInputItemFileService(
             }
 
             requests.Add((row.Number, new SaveFarmingInputItemRequest(
-                code, Cell(Name), type, Cell(Unit), Cell(Description), null, groupId, Cell(Notes), min, max, cost, opening)));
+                code, Cell(Name), type, Cell(Unit), Cell(Description), null, groupId, Cell(Notes), min, max, cost, opening, PurchaseVatRate: vatRate)));
         }
 
         // Nothing is saved while a row cannot be read; the other rows are checked against the catalogue once these are fixed.

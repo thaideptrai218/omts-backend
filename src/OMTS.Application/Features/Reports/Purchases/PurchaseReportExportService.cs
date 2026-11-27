@@ -29,13 +29,14 @@ public sealed class PurchaseReportExportService(PurchaseReportService report, IS
             headers.AddRange(["Code", "Unit"]);
         }
 
-        headers.AddRange(["Receipts", "Returns", "Received value", "Returned value", "Net value"]);
+        headers.AddRange(["Receipts", "Returns", "Received value", "Returned value", "Net value", "VAT", "Goods value"]);
         if (byItem)
         {
             headers.AddRange(["Received quantity", "Returned quantity"]);
         }
 
-        IReadOnlyList<object?> Row(string label, string? code, string? unit, int receipts, int returns, decimal received, decimal returned, decimal net, decimal? receivedQty, decimal? returnedQty)
+        IReadOnlyList<object?> Row(
+            string label, string? code, string? unit, int receipts, int returns, decimal received, decimal returned, decimal net, decimal vat, decimal goods, decimal? receivedQty, decimal? returnedQty)
         {
             var cells = new List<object?> { label };
             if (byItem)
@@ -43,7 +44,7 @@ public sealed class PurchaseReportExportService(PurchaseReportService report, IS
                 cells.AddRange([code, unit]);
             }
 
-            cells.AddRange([receipts, returns, received, returned, net]);
+            cells.AddRange([receipts, returns, received, returned, net, vat, goods]);
             if (byItem)
             {
                 cells.AddRange([receivedQty, returnedQty]);
@@ -52,9 +53,9 @@ public sealed class PurchaseReportExportService(PurchaseReportService report, IS
             return cells;
         }
 
-        var rows = shown.Groups.Select(g => Row(g.Label, g.Code, g.Unit, g.ReceiptCount, g.ReturnCount, g.ReceivedValue, g.ReturnedValue, g.NetValue, g.ReceivedQuantity, g.ReturnedQuantity)).ToList();
+        var rows = shown.Groups.Select(g => Row(g.Label, g.Code, g.Unit, g.ReceiptCount, g.ReturnCount, g.ReceivedValue, g.ReturnedValue, g.NetValue, g.VatAmount, g.GoodsValue, g.ReceivedQuantity, g.ReturnedQuantity)).ToList();
         var t = shown.Totals;
-        rows.Add(Row("Total", null, null, t.ReceiptCount, t.ReturnCount, t.ReceivedValue, t.ReturnedValue, t.NetValue, t.ReceivedQuantity, t.ReturnedQuantity));
+        rows.Add(Row("Total", null, null, t.ReceiptCount, t.ReturnCount, t.ReceivedValue, t.ReturnedValue, t.NetValue, t.VatAmount, t.GoodsValue, t.ReceivedQuantity, t.ReturnedQuantity));
         var suppliers = shown.Filters.Suppliers.Count == 0 ? ReportExportFile.NoneChosen : string.Join(", ", shown.Filters.Suppliers.Select(s => s.Name));
         var choices = ReportExportFile.ChoicesSheet(
             shown.From, shown.To, [], [], [], [("Grouping", shown.GroupBy), ("Kind", shown.Filters.Kind), ("Suppliers", suppliers)]);

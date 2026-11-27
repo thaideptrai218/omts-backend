@@ -42,8 +42,8 @@ internal sealed class SupplierRepository(OmtsDbContext db) : ISupplierRepository
         var total = await receipts.CountAsync(cancellationToken) + await returns.CountAsync(cancellationToken);
         // Anonymous shapes: EF translates a set operation over them, not over a constructor call.
         var rows = await receipts
-            .Select(r => new { r.Id, ReceiptId = (Guid?)r.Id, IsReturn = false, r.Code, Date = r.ReceiptDate, r.CreatedAt, r.RecordedByAccountId, Total = (r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m) - r.Discount, r.StatusId })
-            .Concat(returns.Select(r => new { r.Id, r.ReceiptId, IsReturn = true, r.Code, Date = r.ReturnDate, r.CreatedAt, r.RecordedByAccountId, Total = (r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m) - r.Discount, r.StatusId }))
+            .Select(r => new { r.Id, ReceiptId = (Guid?)r.Id, IsReturn = false, r.Code, Date = r.ReceiptDate, r.CreatedAt, r.RecordedByAccountId, Total = (r.Lines.Sum(l => (decimal?)(l.LineAmount + l.VatAmount)) ?? 0m) - r.Discount, r.StatusId })
+            .Concat(returns.Select(r => new { r.Id, r.ReceiptId, IsReturn = true, r.Code, Date = r.ReturnDate, r.CreatedAt, r.RecordedByAccountId, Total = (r.Lines.Sum(l => (decimal?)(l.ReturnValue + l.VatAmount)) ?? 0m) - r.Discount, r.StatusId }))
             .OrderByDescending(r => r.Date).ThenByDescending(r => r.CreatedAt).ThenByDescending(r => r.Code)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -225,11 +225,13 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
 
         var rows = await db.PurchaseReceiptLines.AsNoTracking()
             .Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value) && l.EnteredUnitPrice != null && l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed && l.ReceiptId != exceptReceiptId)
-            .Select(l => new { ItemId = l.ItemId!.Value, l.Receipt.ReceivedAt, l.LineNumber, Price = l.EnteredUnitPrice!.Value, l.EnteredDiscount, l.UnitFactor })
+            .Select(l => new { ItemId = l.ItemId!.Value, l.Receipt.ReceivedAt, l.LineNumber, Price = l.EnteredUnitPrice!.Value, l.EnteredDiscount, l.UnitFactor, l.VatRate })
             .ToListAsync(cancellationToken);
+        // The same price a receipt posts to the ledger: the net price of a base unit with the VAT of the line in it.
         return rows.GroupBy(r => r.ItemId).ToDictionary(
             g => g.Key,
-            g => g.OrderByDescending(r => r.ReceivedAt).ThenByDescending(r => r.LineNumber).Select(r => decimal.Round((r.Price - r.EnteredDiscount) / r.UnitFactor, 4)).First());
+            g => g.OrderByDescending(r => r.ReceivedAt).ThenByDescending(r => r.LineNumber)
+                .Select(r => ReceiptLineUnits.WithVat(decimal.Round((r.Price - r.EnteredDiscount) / r.UnitFactor, 4), r.VatRate)).First());
     }
 
     public async Task<bool> HasMovementsAsync(Guid itemId, CancellationToken cancellationToken) =>
@@ -308,7 +310,7 @@ internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPay
             .Where(a => a.PaymentId == paymentId)
             .OrderBy(a => a.Receipt.ReceivedAt).ThenBy(a => a.Receipt.Code)
             .Select(a => new PaymentAllocationRow(
-                a.ReceiptId, a.Receipt.Code, a.Receipt.ReceivedAt, (a.Receipt.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m) - a.Receipt.Discount, a.Amount))
+                a.ReceiptId, a.Receipt.Code, a.Receipt.ReceivedAt, (a.Receipt.Lines.Sum(l => (decimal?)(l.LineAmount + l.VatAmount)) ?? 0m) - a.Receipt.Discount, a.Amount))
             .ToListAsync(cancellationToken);
 
     public Task<SupplierPayment?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>

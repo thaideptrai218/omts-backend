@@ -128,6 +128,11 @@ public sealed class PurchaseReceiptValidator(
                 invalid.Add($"Line {i + 1} item");
             }
 
+            if (lines[i].VatRate is { } vatRate && !Enum.IsDefined(vatRate))
+            {
+                invalid.Add($"Line {i + 1} VAT rate");
+            }
+
             if (lines[i].SupplierLotCode?.Trim().Length > MaxSupplierLotCodeLength)
             {
                 invalid.Add($"Line {i + 1} supplier lot code");

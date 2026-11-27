@@ -70,7 +70,7 @@ public interface IInputItemCategoryRepository
 /// <summary>Filters of the item list; null means "any". The period is on the business date of the creation.</summary>
 public sealed record InputItemFilter(
     string? Search, InputItemGroup? Group, Guid? ItemGroupId, InputStockState Stock, Guid? SupplierId, DateTimeOffset? CreatedFrom, DateTimeOffset? CreatedBefore,
-    int? StatusId, InputItemSort Sort, bool Descending, PurchaseReceiptKind? Kind = null);
+    int? StatusId, InputItemSort Sort, bool Descending, PurchaseReceiptKind? Kind = null, VatRate? PurchaseVatRate = null);
 
 public enum InputStockState
 {

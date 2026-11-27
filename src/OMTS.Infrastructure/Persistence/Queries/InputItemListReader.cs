@@ -81,6 +81,11 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
             items = kind == PurchaseReceiptKind.Seed ? items.Where(i => i.Group == InputItemGroup.Seed) : items.Where(i => i.Group != InputItemGroup.Seed);
         }
 
+        if (filter.PurchaseVatRate is { } vatRate)
+        {
+            items = items.Where(i => i.PurchaseVatRate == vatRate);
+        }
+
         if (filter.ItemGroupId is { } itemGroupId)
         {
             // A parent group also lists the items of its child groups.

@@ -259,12 +259,39 @@ public sealed class PurchaseReceiptService(
                 ItemId = item?.Id,
                 SupplierLotCode = item?.Group == InputItemGroup.Seed ? Trimmed(input.SupplierLotCode) : null,
                 RaftId = input.RaftId,
+                VatRate = LineVatRate(input.VatRate, item, kept: null),
             };
             ReceiptLineUnits.SetUnit(line, item, item is null ? null : ReceiptLineUnits.Resolve(item, input.ItemUnitId));
             ReceiptLineUnits.Fill(line, input.Quantity, input.UnitPrice, input.Discount ?? 0);
             receipt.Lines.Add(line);
             receipts.AddLine(line);
         }
+
+        PurchaseMoney.ApplyVat(receipt);
+    }
+
+    /// <summary>
+    /// The input VAT rate of a line: always KCT for a seed item; else the rate sent; else, for a kept line of the same item, the rate it has (none stays none, so an old receipt is not taxed by an edit);
+    /// else the rate of the item.
+    /// </summary>
+    internal static VatRate? LineVatRate(VatRate? requested, FarmingInputItem? item, PurchaseReceiptLine? kept)
+    {
+        if (item is null)
+        {
+            return requested ?? kept?.VatRate;
+        }
+
+        if (item.Group == InputItemGroup.Seed)
+        {
+            return VatRate.Kct;
+        }
+
+        if (requested is { } rate)
+        {
+            return rate;
+        }
+
+        return kept is not null && kept.ItemId == item.Id ? kept.VatRate : item.PurchaseVatRate;
     }
 
     internal static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -302,7 +329,7 @@ public sealed class PurchaseReceiptService(
     {
         r.Code, r.Kind, r.SupplierId, r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
         Lines = r.Lines.OrderBy(l => l.LineNumber)
-            .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+            .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.VatRate, l.VatAmount, l.SupplierLotCode, l.RaftId }).ToList(),
     };
 }
 

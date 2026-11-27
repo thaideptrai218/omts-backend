@@ -5247,6 +5247,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PurchaseVatRate")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -5925,6 +5930,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("VatRate")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
@@ -6069,6 +6082,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("VatRate")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
