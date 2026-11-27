@@ -7,33 +7,71 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Labor.Payrolls;
 
-/// <summary>One job type at one hourly rate in a payslip: its minutes and the pay they give.</summary>
-public sealed record SlipJobFigure(Guid JobTypeId, string JobName, decimal HourlyRate, int Minutes, decimal Amount)
+/// <summary>One job type on one day as it was paid: its minutes, the shifts counted (0 for hourly pay), the rate in force and the amount to the VND.</summary>
+public sealed record SlipDay(DateOnly Date, Guid JobTypeId, string JobName, PayLineKind Kind, int Minutes, decimal Shifts, decimal Rate, decimal Amount);
+
+/// <summary>A day and job type whose work has no rate in force on that day: an hourly rate for <see cref="PayLineKind.Hourly"/>, a shift rate for the shift kinds.</summary>
+public sealed record UnratedDay(DateOnly Day, string JobName, PayLineKind Kind);
+
+/// <summary>One job type at one rate in a payslip: its minutes and shifts and the pay they give.</summary>
+public sealed record SlipJobFigure(Guid JobTypeId, string JobName, PayLineKind Kind, decimal Rate, int Minutes, decimal Shifts, decimal Amount)
 {
     public decimal Hours => PayrollCalculator.HoursOf(Minutes);
+    public decimal HourlyRate => Kind == PayLineKind.Hourly ? Rate : 0;
+    public decimal ShiftRate => Kind == PayLineKind.Hourly ? 0 : Rate;
 }
 
 /// <summary>What the records give for one employee in a period (BR-LABOR-10).</summary>
-/// <param name="IncompleteDays">Days of a seasonal worker with only a check-in or only a check-out: they count no hours (BR-LABOR-06).</param>
-/// <param name="UnratedDays">Days and job types whose hours have no rate in force on that day (BR-LABOR-12).</param>
+/// <param name="IncompleteDays">Days with only a check-in or only a check-out of an employee paid by the hour or the shift: they count no hours (BR-LABOR-06).</param>
+/// <param name="UnratedDays">Days and job types whose work has no rate in force on that day (BR-LABOR-12).</param>
 public sealed record SlipFigures(
-    Employee Employee, IReadOnlyList<SlipJobFigure> Jobs, IReadOnlyList<DateOnly> IncompleteDays, IReadOnlyList<(DateOnly Day, string JobName)> UnratedDays)
+    Employee Employee, IReadOnlyList<SlipJobFigure> Jobs, IReadOnlyList<DateOnly> IncompleteDays, IReadOnlyList<UnratedDay> UnratedDays)
 {
+    /// <summary>The day by day pay behind <see cref="Jobs"/>.</summary>
+    public IReadOnlyList<SlipDay> Days { get; init; } = [];
+
+    /// <summary>The fixed monthly amount of a Monthly sheet; 0 on a Custom sheet and for the other salary types.</summary>
+    public decimal FixedPay { get; init; }
+
+    /// <summary>The salary type in force on the last day of the period; null for a Staff employee with no setup.</summary>
+    public SalaryType? SalaryType { get; init; }
+
+    /// <summary>A Staff employee with no setup in the period: nothing is worked out and the sheet cannot be finalized.</summary>
+    public bool MissingSetup { get; init; }
+
     public int Minutes => Jobs.Sum(j => j.Minutes);
     public decimal Hours => PayrollCalculator.HoursOf(Minutes);
-    public decimal MainPay => Jobs.Sum(j => j.Amount);
+    public decimal Shifts => Jobs.Sum(j => j.Shifts);
 
-    /// <summary>The rates in force in the period as the screen writes them, e.g. "30.000 / 32.000"; null with no hours.</summary>
+    /// <summary>The fixed salary, the hourly pay and the per-shift pay.</summary>
+    public decimal MainPay => FixedPay + Jobs.Where(j => j.Kind != PayLineKind.FieldShift).Sum(j => j.Amount);
+
+    /// <summary>The shifts of field work of a fixed-salary employee.</summary>
+    public decimal ShiftPay => Jobs.Where(j => j.Kind == PayLineKind.FieldShift).Sum(j => j.Amount);
+
+    /// <summary>The employee has a payslip on a sheet: something is paid, or the missing setup must be shown.</summary>
+    public bool OnSheet => Jobs.Count > 0 || FixedPay > 0 || MissingSetup;
+
+    /// <summary>The rates in force as the screen writes them, e.g. "30.000 / 300.000 đ/ca"; null with nothing paid by a rate.</summary>
     public string? RateNote => Jobs.Count == 0
         ? null
-        : string.Join(" / ", Jobs.Select(j => j.HourlyRate).Distinct().Order().Select(PayrollCalculator.FormatRate));
+        : string.Join(
+            " / ",
+            Jobs.Where(j => j.Kind == PayLineKind.Hourly).Select(j => j.Rate).Distinct().Order().Select(PayrollCalculator.FormatRate)
+                .Concat(Jobs.Where(j => j.Kind != PayLineKind.Hourly).Select(j => j.Rate).Distinct().Order().Select(r => $"{PayrollCalculator.FormatRate(r)} đ/ca")));
 }
 
 /// <summary>
-/// The pay of the level of payroll the Owner chose: for each day of a seasonal worker with a complete attendance record, the hours of each
-/// job type (BR-LABOR-05, by <see cref="WorkHoursCalculator"/>) times the hourly rate in force on that day (BR-LABOR-12), summed by job
-/// type and rate and rounded to the VND; no overtime, commission, insurance or tax. The days an employee is Staff count nothing: Staff
-/// employees are not paid through OMTS (BR-LABOR-09).
+/// The pay of the level of payroll the Owner chose, for each employee and each day with a complete attendance record, by the salary setup in force on that day
+/// (<see cref="SalaryPlan.TypeOn"/>, the default of the employee type when there is none):
+/// <list type="bullet">
+/// <item><b>PerShift</b>: the shifts of each job type (<see cref="ShiftCounter"/>) times the shift rate in force on that day; the pay is the main pay.</item>
+/// <item><b>Hourly</b>: the hours of each job type (BR-LABOR-05, <see cref="WorkHoursCalculator"/>) times the hourly rate in force on that day (BR-LABOR-12).</item>
+/// <item><b>FixedMonthly</b>: the monthly amount once on a Monthly sheet (the whole month, no pro rata, from the setup in force on its last day); a Custom sheet carries none.
+/// With <see cref="EmployeeSalarySetup.PayFieldShifts"/> the shifts of the days that have a work assignment are paid at the shift rate as the shift pay; ordinary attendance with no assignment earns nothing.</item>
+/// <item>No setup (Staff): nothing is worked out and <see cref="SlipFigures.MissingSetup"/> says so.</item>
+/// </list>
+/// The pay is summed by job type and rate and rounded to the VND; no overtime, commission, insurance or tax.
 /// </summary>
 public static class PayrollCalculator
 {
@@ -41,48 +79,96 @@ public static class PayrollCalculator
 
     public static string FormatRate(decimal rate) => ((long)rate).ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.');
 
-    public static SlipFigures Calculate(Employee employee, DateOnly from, DateOnly to, PayrollWorkData data)
+    public static SlipFigures Calculate(Employee employee, DateOnly from, DateOnly to, PayrollPeriodType periodType, PayrollWorkData data)
     {
         var periodsOf = data.Assignments.Where(a => a.EmployeeId == employee.Id).ToLookup(a => a.Date);
-        var minutes = new Dictionary<(Guid JobTypeId, decimal Rate), int>();
+        var days = new List<SlipDay>();
         var incomplete = new List<DateOnly>();
-        var unrated = new List<(DateOnly, string)>();
+        var unrated = new List<UnratedDay>();
         foreach (var record in data.Attendances.Where(a => a.EmployeeId == employee.Id && a.Date >= from && a.Date <= to).OrderBy(a => a.Date))
         {
-            if (WorkRules.TypeOn(employee, record.Date) != EmployeeType.SeasonalWorker)
+            var setup = EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, record.Date);
+            var kind = (setup?.Type ?? EmployeeSalarySetup.DefaultFor(WorkRules.TypeOn(employee, record.Date))) switch
+            {
+                SalaryType.PerShift => PayLineKind.Shift,
+                SalaryType.Hourly => PayLineKind.Hourly,
+                SalaryType.FixedMonthly when setup is { PayFieldShifts: true } => PayLineKind.FieldShift,
+                _ => (PayLineKind?)null,
+            };
+            if (kind is null)
             {
                 continue;
             }
 
+            var assignedPeriods = periodsOf[record.Date].ToList();
             if (!record.IsComplete)
             {
-                incomplete.Add(record.Date);
+                // Ordinary attendance of a fixed-salary employee pays nothing, so it is only a problem on a day that has a work assignment.
+                if (kind != PayLineKind.FieldShift || assignedPeriods.Count > 0)
+                {
+                    incomplete.Add(record.Date);
+                }
+
                 continue;
             }
 
-            var day = WorkHoursCalculator.Calculate(
-                record.CheckInAt, record.CheckOutAt, periodsOf[record.Date], AttendanceSettingsVersion.EffectiveOn(data.Settings, record.Date));
+            var settings = AttendanceSettingsVersion.EffectiveOn(data.Settings, record.Date);
+            var day = WorkHoursCalculator.Calculate(record.CheckInAt, record.CheckOutAt, assignedPeriods, settings);
             foreach (var job in day.Jobs.Where(j => j.Minutes > 0))
             {
                 var jobType = data.JobTypes.GetValueOrDefault(job.JobTypeId);
-                var rate = jobType is null ? null : PayRate.EffectiveOn(jobType.Rates, record.Date);
-                if (rate is null)
+                var jobName = jobType?.Name ?? string.Empty;
+                if (kind == PayLineKind.Hourly)
                 {
-                    unrated.Add((record.Date, jobType?.Name ?? string.Empty));
+                    var rate = jobType is null ? null : PayRate.EffectiveOn(jobType.Rates, record.Date);
+                    if (rate is null)
+                    {
+                        unrated.Add(new UnratedDay(record.Date, jobName, kind.Value));
+                        continue;
+                    }
+
+                    days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, 0, rate.HourlyRate, Math.Round(job.Minutes * rate.HourlyRate / 60m, 0, MidpointRounding.AwayFromZero)));
                     continue;
                 }
 
-                var key = (job.JobTypeId, rate.HourlyRate);
-                minutes[key] = minutes.GetValueOrDefault(key) + job.Minutes;
+                var shifts = ShiftCounter.ShiftsOf(job.Minutes, settings);
+                if (shifts <= 0)
+                {
+                    continue;
+                }
+
+                var shiftRate = jobType is null ? null : ShiftRate.EffectiveOn(jobType.ShiftRates, record.Date);
+                if (shiftRate is null)
+                {
+                    unrated.Add(new UnratedDay(record.Date, jobName, kind.Value));
+                    continue;
+                }
+
+                days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, shifts, shiftRate.Amount, Math.Round(shifts * shiftRate.Amount, 0, MidpointRounding.AwayFromZero)));
             }
         }
 
-        var jobs = minutes
-            .Select(m => new SlipJobFigure(
-                m.Key.JobTypeId, data.JobTypes[m.Key.JobTypeId].Name, m.Key.Rate, m.Value,
-                Math.Round(m.Value * m.Key.Rate / 60m, 0, MidpointRounding.AwayFromZero)))
-            .OrderBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ThenBy(j => j.HourlyRate)
+        // Rounded once per job type, kind and rate over the whole period, so a sum of per-day roundings does not drift from the sheet.
+        var jobs = days
+            .GroupBy(d => (d.JobTypeId, d.Kind, d.Rate))
+            .Select(g =>
+            {
+                var minutes = g.Sum(d => d.Minutes);
+                var shifts = g.Sum(d => d.Shifts);
+                var amount = g.Key.Kind == PayLineKind.Hourly
+                    ? Math.Round(minutes * g.Key.Rate / 60m, 0, MidpointRounding.AwayFromZero)
+                    : Math.Round(shifts * g.Key.Rate, 0, MidpointRounding.AwayFromZero);
+                return new SlipJobFigure(g.Key.JobTypeId, g.First().JobName, g.Key.Kind, g.Key.Rate, minutes, shifts, amount);
+            })
+            .OrderBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ThenBy(j => j.Kind).ThenBy(j => j.Rate)
             .ToList();
-        return new SlipFigures(employee, jobs, incomplete, unrated);
+        var fixedSetup = periodType == PayrollPeriodType.Monthly ? EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, to) : null;
+        return new SlipFigures(employee, jobs, incomplete, unrated)
+        {
+            Days = days,
+            FixedPay = fixedSetup is { Type: SalaryType.FixedMonthly, MonthlyAmount: { } amount } ? amount : 0,
+            SalaryType = SalaryPlan.TypeOn(employee, to),
+            MissingSetup = SalaryPlan.IsMissingSetup(employee, from, to),
+        };
     }
 }

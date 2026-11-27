@@ -21,7 +21,7 @@ public sealed class PayrollExportService(
 
     private static readonly string[] SlipHeaders =
     [
-        "Mã phiếu lương", "Mã nhân viên", "Tên nhân viên", "Số giờ", "Lương chính", "Thưởng", "Giảm trừ", "Tổng thu nhập", "Lương thực nhận", "Đã trả", "Còn cần trả",
+        "Mã phiếu lương", "Mã nhân viên", "Tên nhân viên", "Loại lương", "Số giờ", "Số ca", "Lương chính", "Tiền ca", "Thưởng", "Khấu trừ", "Trừ tạm ứng", "Tổng thu nhập", "Lương thực nhận", "Đã trả", "Còn cần trả",
     ];
 
     private static readonly string[] SheetHeaders =
@@ -52,10 +52,11 @@ public sealed class PayrollExportService(
 
         var rows = sheet.Slips.Select(s => (IReadOnlyList<object?>)
         [
-            s.Code, s.EmployeeCode, s.EmployeeName, s.Hours, s.MainPay, s.Bonus, s.Deduction, s.Income, s.Net, s.Paid, s.Outstanding,
+            s.Code, s.EmployeeCode, s.EmployeeName, PayrollSheetDocumentBuilder.SalaryTypeText(s.SalaryType), s.Hours, s.Shifts, s.MainPay, s.ShiftPay, s.Bonus, s.ManualDeduction,
+            s.AdvanceDeduction, s.Income, s.Net, s.Paid, s.Outstanding,
         ]).ToList();
-        rows.Add(["Tổng", null, null, sheet.Slips.Sum(s => s.Hours), sheet.Slips.Sum(s => s.MainPay), sheet.Slips.Sum(s => s.Bonus), sheet.Slips.Sum(s => s.Deduction),
-            sheet.Slips.Sum(s => s.Income), sheet.Total, sheet.Paid, sheet.Outstanding]);
+        rows.Add(["Tổng", null, null, null, sheet.Slips.Sum(s => s.Hours), sheet.Slips.Sum(s => s.Shifts), sheet.Slips.Sum(s => s.MainPay), sheet.Slips.Sum(s => s.ShiftPay),
+            sheet.Slips.Sum(s => s.Bonus), sheet.Slips.Sum(s => s.ManualDeduction), sheet.Slips.Sum(s => s.AdvanceDeduction), sheet.Slips.Sum(s => s.Income), sheet.Total, sheet.Paid, sheet.Outstanding]);
         return Write(new SpreadsheetSheet(sheet.Code, SlipHeaders, rows), $"payroll-{PayrollRules.SafeFileName(sheet.Code)}.xlsx");
     }
 

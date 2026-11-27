@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Constants;
@@ -9,8 +10,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// LABOR-04, LABOR-12 to LABOR-14: attendance of the demo seasonal workers over the last three months (so the payroll screens have hours to
-/// show), then, through the services the API uses: last month's before sheet Finalized with one payslip partly paid in cash and one paid in
+/// LABOR-04, LABOR-12 to LABOR-14: the salary setups of the demo Staff employees (a fixed monthly salary that also pays field shifts; one seasonal worker is paid by the hour, the others per
+/// shift by default), attendance of the demo seasonal workers over the last three months (so the payroll screens have hours to show), then, through the services the API uses: last month's before sheet Finalized with one payslip partly paid in cash and one paid in
 /// full by transfer (each with its cash voucher in the cash book), one advance to the worker paid in full, and last month's sheet Provisional,
 /// whose payslip previews that advance. Demo data only, run by <c>seed --bootstrap --demo</c>, never by the production seed. Idempotent: when
 /// any payroll sheet has payslips the step leaves everything alone, so a sheet a person made, or a rerun, is never doubled. The two empty
@@ -30,7 +31,8 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
         }
 
         var thisMonth = new DateOnly(context.Today.Year, context.Today.Month, 1);
-        var created = await AddAttendanceAsync(context, thisMonth, cancellationToken);
+        var created = await AddSalarySetupsAsync(context, thisMonth, cancellationToken);
+        created += await AddAttendanceAsync(context, thisMonth, cancellationToken);
         created += await RemoveEmptyHeadersAsync(context, cancellationToken);
 
         var payrolls = context.Get<PayrollService>();
@@ -73,6 +75,35 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
             await payrolls.CreateAsync(new CreatePayrollRequest(PayrollPeriodType.Monthly, lastMonth, thisMonth.AddDays(-1), PayrollScope.All, null), cancellationToken),
             "the payroll of last month");
         return created + 1;
+    }
+
+    /// <summary>
+    /// A payroll of everyone lists a Staff employee with no salary setup and cannot be finalized, so each demo Staff employee gets a fixed salary from six months back (field shifts included),
+    /// and the seasonal worker who cleans the lines is paid by the hour. The other seasonal workers keep the default, per shift. An employee that already has a setup is left alone.
+    /// </summary>
+    private static async Task<int> AddSalarySetupsAsync(DemoSeedContext context, DateOnly thisMonth, CancellationToken cancellationToken)
+    {
+        var salaries = context.Get<EmployeeSalaryService>();
+        var from = thisMonth.AddMonths(-6);
+        var created = 0;
+        foreach (var plan in DemoEmployeePlans.All.Where(p => p.Type == EmployeeType.Staff || p.JobTypes?.Contains(DemoLaborSettingsStep.CleaningLines) == true))
+        {
+            var employee = await context.Db.Employees.AsNoTracking().Include(e => e.SalarySetups)
+                .FirstOrDefaultAsync(e => plan.Phone == null ? e.FullName == plan.FullName && e.PhoneNumber == null : e.PhoneNumber == plan.Phone, cancellationToken);
+            if (employee is null || employee.SalarySetups.Count > 0)
+            {
+                continue;
+            }
+
+            var view = DemoSeedContext.Ensure(await salaries.GetAsync(employee.Id, cancellationToken), $"salary of {plan.FullName}");
+            var request = plan.Type == EmployeeType.Staff
+                ? new ChangeSalaryRequest(SalaryType.FixedMonthly, plan.Role == StaffRole.Accountant ? 9_000_000 : 8_000_000, from, view.RowVersion, true)
+                : new ChangeSalaryRequest(SalaryType.Hourly, null, from, view.RowVersion);
+            DemoSeedContext.Ensure(await salaries.ChangeAsync(employee.Id, request, cancellationToken), $"salary setup of {plan.FullName}");
+            created++;
+        }
+
+        return created;
     }
 
     /// <summary>Removes the headers without payslips that earlier demo seeds made; no endpoint can make a Finalized sheet without payslips.</summary>

@@ -4,7 +4,7 @@ using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Domain.Entities.Labor;
 
-/// <summary>A kind of work, for example harvesting or hanging seed, paid at its own hourly rate (LABOR-11, BR-LABOR-12).</summary>
+/// <summary>A kind of work, for example harvesting or hanging seed, paid at its own hourly rate and its own shift rate (LABOR-11, BR-LABOR-12).</summary>
 public class JobType : AuditableEntity, IHasStatus
 {
     public string Name { get; set; } = string.Empty;
@@ -14,4 +14,6 @@ public class JobType : AuditableEntity, IHasStatus
     public Status Status { get; set; } = null!;
 
     public ICollection<PayRate> Rates { get; set; } = [];
+
+    public ICollection<ShiftRate> ShiftRates { get; set; } = [];
 }

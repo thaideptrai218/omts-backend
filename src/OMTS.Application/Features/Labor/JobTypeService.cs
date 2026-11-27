@@ -35,6 +35,7 @@ public sealed class JobTypeService(
         var name = JobTypeFields.Name(check, request.Name);
         var rate = JobTypeFields.HourlyRate(check, request.HourlyRate);
         var from = JobTypeFields.EffectiveDate(check, request.EffectiveFrom);
+        var shiftRate = request.ShiftRate is null ? (decimal?)null : JobTypeFields.ShiftRate(check, request.ShiftRate);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -53,12 +54,17 @@ public sealed class JobTypeService(
         var enteredBy = currentUser.AccountId ?? throw new InvalidOperationException("Rates are entered by a logged-in user.");
         var jobType = new JobType { Name = name };
         jobType.Rates.Add(new PayRate { HourlyRate = rate, EffectiveFrom = from, EnteredByAccountId = enteredBy });
+        if (shiftRate is { } firstShiftRate)
+        {
+            jobType.ShiftRates.Add(new ShiftRate { Amount = firstShiftRate, EffectiveFrom = from, EnteredByAccountId = enteredBy });
+        }
+
         jobTypes.Add(jobType);
         audit.Record(new AuditEntry(CreatedAction, nameof(JobType))
         {
             RecordId = jobType.Id,
             RecordCode = jobType.Name,
-            After = new { jobType.Name, HourlyRate = rate, EffectiveFrom = from },
+            After = new { jobType.Name, HourlyRate = rate, ShiftRate = shiftRate, EffectiveFrom = from },
         });
         return await SaveNamedAsync(jobType, cancellationToken);
     }

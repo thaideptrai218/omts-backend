@@ -58,7 +58,9 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
 
     public JobTypeView View(JobType jobType)
     {
-        var current = PayRate.EffectiveOn(jobType.Rates, timeProvider.Today());
+        var today = timeProvider.Today();
+        var current = PayRate.EffectiveOn(jobType.Rates, today);
+        var currentShift = ShiftRate.EffectiveOn(jobType.ShiftRates, today);
         return new JobTypeView(
             jobType.Id,
             jobType.Name,
@@ -66,7 +68,9 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
             statusCatalog.DisplayNameOf(jobType.StatusId),
             current is null ? null : RateView(current),
             jobType.Rates.Where(r => r != current).OrderByDescending(r => r.EffectiveFrom).Select(RateView).ToList(),
-            RowVersionGuard.Encode(jobType.RowVersion));
+            RowVersionGuard.Encode(jobType.RowVersion),
+            currentShift is null ? null : ShiftRateOf(currentShift),
+            jobType.ShiftRates.Where(r => r != currentShift).OrderByDescending(r => r.EffectiveFrom).Select(ShiftRateOf).ToList());
     }
 
     /// <summary>The answer to a save: the view with MSG-GEN-05.</summary>
@@ -81,4 +85,6 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
         AppError.Conflict(UserMessages.WrongStatus($"Job type {jobType.Name}", statusCatalog.DisplayNameOf(jobType.StatusId)));
 
     private static PayRateView RateView(PayRate rate) => new(rate.HourlyRate, rate.EffectiveFrom);
+
+    private static ShiftRateView ShiftRateOf(ShiftRate rate) => new(rate.Amount, rate.EffectiveFrom);
 }

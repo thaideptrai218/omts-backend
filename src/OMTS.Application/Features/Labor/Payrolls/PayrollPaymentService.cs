@@ -168,8 +168,8 @@ public sealed class PayrollPaymentService(
 
         if (left > 0)
         {
-            // An advance is for a seasonal worker who still works: a Left employee is paid on the payslips only (BR-LABOR-01, BR-LABOR-11), and a Staff employee is not paid through OMTS (BR-LABOR-09).
-            if (employee.StatusId != StatusIds.Employee.Working || WorkRules.TypeOn(employee, timeProvider.Today()) == EmployeeType.Staff)
+            // An advance is for an employee who still works (seasonal or Staff): a Left employee is paid on the payslips only (BR-LABOR-01, BR-LABOR-11).
+            if (employee.StatusId != StatusIds.Employee.Working)
             {
                 var owed = open.Sum(l => l.Net - paid.GetValueOrDefault(l.Id));
                 return new AppError(

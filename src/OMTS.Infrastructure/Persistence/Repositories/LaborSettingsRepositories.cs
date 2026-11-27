@@ -10,7 +10,7 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
 {
     public Task<JobType?> GetForEditAsync(Guid id, CancellationToken cancellationToken) =>
-        db.JobTypes.Include(j => j.Rates).FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
+        db.JobTypes.Include(j => j.Rates).Include(j => j.ShiftRates).AsSplitQuery().FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
 
     // The plain comparison answers for what the column's collation calls equal, which is what the unique index refuses.
     public Task<JobType?> FindByNameAsync(string name, Guid? exceptId, CancellationToken cancellationToken)
@@ -37,6 +37,7 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
         var items = await Ordered(query, sort, descending, today).ThenBy(j => j.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Include(j => j.Rates)
+            .Include(j => j.ShiftRates)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
         return (items, total);
@@ -61,6 +62,8 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
     public void Add(JobType jobType) => db.JobTypes.Add(jobType);
 
     public void AddRate(PayRate rate) => db.PayRates.Add(rate);
+
+    public void AddShiftRate(ShiftRate rate) => db.ShiftRates.Add(rate);
 }
 
 internal sealed class EmployeeSalaryRepository(OmtsDbContext db) : IEmployeeSalaryRepository

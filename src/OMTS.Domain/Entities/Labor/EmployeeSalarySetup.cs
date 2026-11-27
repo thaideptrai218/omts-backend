@@ -15,8 +15,14 @@ public class EmployeeSalarySetup : AuditableEntity
 
     public SalaryType Type { get; set; }
 
-    /// <summary>Whole VND for each month when <see cref="Type"/> is <see cref="SalaryType.FixedMonthly"/>; null for hourly pay.</summary>
+    /// <summary>Whole VND for each month when <see cref="Type"/> is <see cref="SalaryType.FixedMonthly"/>; null for the other types.</summary>
     public decimal? MonthlyAmount { get; set; }
+
+    /// <summary>
+    /// Only for <see cref="SalaryType.FixedMonthly"/>: the shifts of the days the employee has a work assignment (harvest, nursery, seeding) are paid at the shift rate on top of the
+    /// fixed amount. Always false for the other types.
+    /// </summary>
+    public bool PayFieldShifts { get; set; }
 
     public DateOnly EffectiveFrom { get; set; }
     public Guid EnteredByAccountId { get; set; }
@@ -26,8 +32,8 @@ public class EmployeeSalarySetup : AuditableEntity
         setups.Where(s => s.EffectiveFrom <= day).MaxBy(s => s.EffectiveFrom);
 
     /// <summary>
-    /// The salary type when no setup is in force: a seasonal worker is paid by the hour; a Staff employee has none until the Owner enters
+    /// The salary type when no setup is in force: a seasonal worker is paid per shift; a Staff employee has none until the Owner enters
     /// the monthly amount ("Chưa thiết lập lương").
     /// </summary>
-    public static SalaryType? DefaultFor(EmployeeType? employeeType) => employeeType == EmployeeType.SeasonalWorker ? SalaryType.Hourly : null;
+    public static SalaryType? DefaultFor(EmployeeType? employeeType) => employeeType == EmployeeType.SeasonalWorker ? SalaryType.PerShift : null;
 }

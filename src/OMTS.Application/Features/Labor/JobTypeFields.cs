@@ -29,6 +29,14 @@ internal static class JobTypeFields
         return whole ? decimal.Truncate(rate!.Value) : 0;
     }
 
+    /// <summary>Whole VND, greater than 0, as the hourly rate.</summary>
+    public static decimal ShiftRate(FieldCheck check, decimal? rate)
+    {
+        var whole = rate is { } value && value == decimal.Truncate(value) && value is > 0 and <= MaxHourlyRate;
+        check.Check(whole, "Shift rate");
+        return whole ? decimal.Truncate(rate!.Value) : 0;
+    }
+
     public static DateOnly EffectiveDate(FieldCheck check, DateOnly? date)
     {
         check.Check(date is not null, "Effective date");

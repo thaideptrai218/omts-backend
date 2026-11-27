@@ -68,14 +68,14 @@ internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQ
         }
 
         // Wages count in the expense month chosen when the sheet was finalized: whole months, from the month of the first day to that of the last. The cost is the gross income of the payslips
-        // (main pay + bonus): an advance already paid is a receivable settled against the payslip, not a cost that disappears (decision of 19/11/2026, REP-01).
+        // (main pay + shift pay + bonus - manual deduction): an advance already paid is a receivable settled against the payslip, not a cost that disappears (decision of 19/11/2026, REP-01).
         var (firstMonth, lastMonth) = ($"{from:yyyy-MM}", $"{to:yyyy-MM}");
         // The expense month is always yyyy-MM (PayrollRules), so the text order is the calendar order in any collation.
         var payrolls = await db.Payrolls.AsNoTracking()
             .Where(p => p.StatusId == StatusIds.Payroll.Finalized && p.ExpenseMonth != null && p.ExpenseMonth.CompareTo(firstMonth) >= 0 && p.ExpenseMonth.CompareTo(lastMonth) <= 0)
-            .SelectMany(p => p.Lines, (p, l) => new { p.ExpenseMonth, l.MainPay, l.Bonus })
+            .SelectMany(p => p.Lines, (p, l) => new { p.ExpenseMonth, Income = l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction })
             .GroupBy(x => x.ExpenseMonth!)
-            .Select(g => new { Month = g.Key, Net = g.Sum(x => x.MainPay + x.Bonus) })
+            .Select(g => new { Month = g.Key, Net = g.Sum(x => x.Income) })
             .ToListAsync(cancellationToken);
         entries.AddRange(payrolls.Select(p => new FinancialEntry(FinancialEntryCodes.LaborCost, DateOnly.ParseExact($"{p.Month}-01", "yyyy-MM-dd"), p.Net)));
 

@@ -12,6 +12,13 @@ public static partial class PayrollRules
     public const int MaxCustomDays = 366;
     public const int MaxNoteLength = 500;
 
+    /// <summary>The most + and − lines on one payslip.</summary>
+    public const int MaxAdjustments = 50;
+
+    /// <summary>A whole amount in VND from 1 up to what a monthly salary may be (a typing error above it).</summary>
+    public static bool IsWholeAmount(decimal? amount) =>
+        amount is { } value && value >= 1 && value <= EmployeeSalaryService.MaxMonthlyAmount && value == decimal.Truncate(value);
+
     [GeneratedRegex("^\\d{4}-(0[1-9]|1[0-2])$")]
     private static partial Regex ExpenseMonthPattern();
 

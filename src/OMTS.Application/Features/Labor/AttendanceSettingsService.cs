@@ -19,11 +19,16 @@ namespace OMTS.Application.Features.Labor;
 /// <param name="BreakEnd"><c>HH:mm</c>, after the start.</param>
 /// <param name="EffectiveFrom">After the last day of every pay period whose payroll is Finalized.</param>
 /// <param name="RowVersion">The version the screen was read from.</param>
+/// <param name="ShiftMinutes">Minutes of actual work in one shift, 30 to 720. Left out keeps the value in force on <paramref name="EffectiveFrom"/> (180 before any version).</param>
+/// <param name="ShiftToleranceMinutes">Minutes added to the worked minutes before they are divided into shifts, 0 up to half of the shift length. Left out keeps the value in force (15 before any version).</param>
 public sealed record SaveAttendanceSettingsRequest(
-    string? BreakStart, string? BreakEnd, AttendanceRoundingUnit? RoundingUnit, DateOnly? EffectiveFrom, string? RowVersion);
+    string? BreakStart, string? BreakEnd, AttendanceRoundingUnit? RoundingUnit, DateOnly? EffectiveFrom, string? RowVersion,
+    int? ShiftMinutes = null, int? ShiftToleranceMinutes = null);
 
-/// <param name="EffectiveFrom">Null only for the settings when OMTS is set up: no break and no rounding.</param>
-public sealed record AttendanceSettingsView(TimeOnly? BreakStart, TimeOnly? BreakEnd, AttendanceRoundingUnit RoundingUnit, DateOnly? EffectiveFrom);
+/// <param name="EffectiveFrom">Null only for the settings when OMTS is set up: no break and no rounding, and the default shift of 180 minutes with a tolerance of 15.</param>
+public sealed record AttendanceSettingsView(
+    TimeOnly? BreakStart, TimeOnly? BreakEnd, AttendanceRoundingUnit RoundingUnit, DateOnly? EffectiveFrom,
+    int ShiftMinutes = AttendanceSettingsVersion.DefaultShiftMinutes, int ShiftToleranceMinutes = AttendanceSettingsVersion.DefaultShiftToleranceMinutes);
 
 /// <param name="Current">The settings in force today.</param>
 /// <param name="Versions">Every saved version, the latest date first, also one still to come.</param>
@@ -34,7 +39,7 @@ public sealed record AttendanceSettingsOverview(AttendanceSettingsView Current, 
 public sealed record AttendanceSettingsSaved(AttendanceSettingsOverview Settings, string Message, string MessageCode);
 
 /// <summary>
-/// LABOR-15: the Cooperative Owner sets the break and the rounding unit from a date; the earlier settings stay. The history has
+/// LABOR-15: the Cooperative Owner sets the break, the rounding unit and the length of a shift with its tolerance from a date; the earlier settings stay. The history has
 /// no one row to version, so the settings go by the row of the cooperative they belong to (§I.3.2): each save moves it, and
 /// parallel saves answer MSG06. The client asks MSG-LABOR-35 before it sends.
 /// </summary>
@@ -77,6 +82,11 @@ public sealed class AttendanceSettingsService(
 
         check.Check(request.RoundingUnit is { } unit && Enum.IsDefined(unit), "Rounding unit");
         var from = JobTypeFields.EffectiveDate(check, request.EffectiveFrom);
+        var inForce = request.EffectiveFrom is { } day ? AttendanceSettingsVersion.EffectiveOn(all, day) : null;
+        var shiftMinutes = request.ShiftMinutes ?? inForce?.ShiftMinutes ?? AttendanceSettingsVersion.DefaultShiftMinutes;
+        var tolerance = request.ShiftToleranceMinutes ?? inForce?.ShiftToleranceMinutes ?? AttendanceSettingsVersion.DefaultShiftToleranceMinutes;
+        check.Check(shiftMinutes is >= AttendanceSettingsVersion.MinShiftMinutes and <= AttendanceSettingsVersion.MaxShiftMinutes, "Shift minutes");
+        check.Check(tolerance >= 0 && tolerance * 2 <= shiftMinutes, "Shift tolerance");
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -93,7 +103,8 @@ public sealed class AttendanceSettingsService(
         }
 
         var sameDate = all.FirstOrDefault(v => v.EffectiveFrom == from);
-        if (sameDate is not null && sameDate.BreakStart == breakStart && sameDate.BreakEnd == breakEnd && sameDate.RoundingUnit == request.RoundingUnit)
+        if (sameDate is not null && sameDate.BreakStart == breakStart && sameDate.BreakEnd == breakEnd && sameDate.RoundingUnit == request.RoundingUnit
+            && sameDate.ShiftMinutes == shiftMinutes && sameDate.ShiftToleranceMinutes == tolerance)
         {
             return Saved(all, cooperative);
         }
@@ -103,6 +114,8 @@ public sealed class AttendanceSettingsService(
         version.BreakStart = breakStart;
         version.BreakEnd = breakEnd;
         version.RoundingUnit = request.RoundingUnit!.Value;
+        version.ShiftMinutes = shiftMinutes;
+        version.ShiftToleranceMinutes = tolerance;
         version.EnteredByAccountId = currentUser.AccountId ?? throw new InvalidOperationException("Attendance settings are saved by a logged-in Owner.");
         if (sameDate is null)
         {
@@ -149,7 +162,7 @@ public sealed class AttendanceSettingsService(
         return readable ? time : null;
     }
 
-    private static AttendanceSettingsView View(AttendanceSettingsVersion v) => new(v.BreakStart, v.BreakEnd, v.RoundingUnit, v.EffectiveFrom);
+    private static AttendanceSettingsView View(AttendanceSettingsVersion v) => new(v.BreakStart, v.BreakEnd, v.RoundingUnit, v.EffectiveFrom, v.ShiftMinutes, v.ShiftToleranceMinutes);
 
-    private static object Snapshot(AttendanceSettingsVersion v) => new { v.BreakStart, v.BreakEnd, v.RoundingUnit, v.EffectiveFrom };
+    private static object Snapshot(AttendanceSettingsVersion v) => new { v.BreakStart, v.BreakEnd, v.RoundingUnit, v.EffectiveFrom, v.ShiftMinutes, v.ShiftToleranceMinutes };
 }

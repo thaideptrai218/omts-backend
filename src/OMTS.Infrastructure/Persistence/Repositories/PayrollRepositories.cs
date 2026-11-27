@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
@@ -12,10 +13,20 @@ internal sealed class PayrollSheetRepository(OmtsDbContext db) : IPayrollSheetRe
     public Task<Payroll?> GetForEditAsync(Guid id, CancellationToken cancellationToken) =>
         db.Payrolls
             .Include(p => p.Lines).ThenInclude(l => l.Jobs)
+            .Include(p => p.Lines).ThenInclude(l => l.Adjustments)
             .Include(p => p.Lines).ThenInclude(l => l.Employee)
             .Include(p => p.SelectedEmployees)
             .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+    public Task<Payroll?> GetForEditByLineAsync(Guid lineId, CancellationToken cancellationToken) =>
+        db.Payrolls
+            .Include(p => p.Lines).ThenInclude(l => l.Jobs)
+            .Include(p => p.Lines).ThenInclude(l => l.Adjustments)
+            .Include(p => p.Lines).ThenInclude(l => l.Employee)
+            .Include(p => p.SelectedEmployees)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(p => p.Lines.Any(l => l.Id == lineId), cancellationToken);
 
     public async Task<IReadOnlyList<Payroll>> ListActiveOverlappingAsync(DateOnly from, DateOnly to, Guid? exceptId, CancellationToken cancellationToken) =>
         await db.Payrolls.AsNoTracking()
@@ -30,9 +41,13 @@ internal sealed class PayrollSheetRepository(OmtsDbContext db) : IPayrollSheetRe
 
     public void Add(PayrollLineJob job) => db.PayrollLineJobs.Add(job);
 
+    public void Add(PayrollLineAdjustment adjustment) => db.PayrollLineAdjustments.Add(adjustment);
+
     public void Remove(PayrollLine line) => db.PayrollLines.Remove(line);
 
     public void Remove(PayrollLineJob job) => db.PayrollLineJobs.Remove(job);
+
+    public void Remove(PayrollLineAdjustment adjustment) => db.PayrollLineAdjustments.Remove(adjustment);
 }
 
 internal sealed class PayrollWorkReader(OmtsDbContext db) : IPayrollWorkReader
@@ -53,11 +68,30 @@ internal sealed class PayrollWorkReader(OmtsDbContext db) : IPayrollWorkReader
         }
 
         // Tracked, so a payroll that pays them can touch them (PayrollService); the records of the period are read as they are.
-        var employees = await db.Employees.Include(e => e.TypePeriods).Where(e => ids.Contains(e.Id)).ToListAsync(cancellationToken);
+        List<Employee> employees;
+        if (employeeIds is null)
+        {
+            // A sheet of everyone also holds the employees employed in the period who are paid with no attendance: a fixed salary, or no setup yet.
+            var attended = ids;
+            var candidates = await db.Employees.Include(e => e.TypePeriods).Include(e => e.SalarySetups).AsSplitQuery()
+                .Where(e => attended.Contains(e.Id) || ((e.LastWorkingDay != null ? e.LastWorkingDay >= from : e.StatusId == StatusIds.Employee.Working) && (e.StartDate == null || e.StartDate <= to)))
+                .ToListAsync(cancellationToken);
+            employees = candidates.Where(e => attended.Contains(e.Id) || SalaryPlan.IsPaidWithoutAttendance(e, from, to)).ToList();
+            ids = employees.Select(e => e.Id).ToList();
+            if (ids.Count == 0)
+            {
+                return new PayrollWorkData([], [], [], [], new Dictionary<Guid, JobType>());
+            }
+        }
+        else
+        {
+            employees = await db.Employees.Include(e => e.TypePeriods).Include(e => e.SalarySetups).AsSplitQuery().Where(e => ids.Contains(e.Id)).ToListAsync(cancellationToken);
+        }
+
         var assignments = await db.WorkAssignments.AsNoTracking()
             .Where(w => w.Date >= from && w.Date <= to && ids.Contains(w.EmployeeId)).ToListAsync(cancellationToken);
         var jobIds = assignments.Select(w => w.JobTypeId).Distinct().ToList();
-        var jobTypes = await db.JobTypes.AsNoTracking().Include(j => j.Rates).Where(j => jobIds.Contains(j.Id)).ToDictionaryAsync(j => j.Id, cancellationToken);
+        var jobTypes = await db.JobTypes.AsNoTracking().Include(j => j.Rates).Include(j => j.ShiftRates).AsSplitQuery().Where(j => jobIds.Contains(j.Id)).ToDictionaryAsync(j => j.Id, cancellationToken);
         var settings = await db.AttendanceSettingsVersions.AsNoTracking().ToListAsync(cancellationToken);
         return new PayrollWorkData(employees, attendances, assignments, settings, jobTypes);
     }

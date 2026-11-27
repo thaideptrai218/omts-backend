@@ -83,7 +83,7 @@ public sealed class EmployeeQueryService(
         var today = timeProvider.Today();
         var from = new DateOnly(today.Year, today.Month, 1);
         var data = await workReader.LoadAsync(from, today, ids, cancellationToken);
-        var hours = data.Employees.ToDictionary(e => e.Id, e => PayrollCalculator.Calculate(e, from, today, data).Hours);
+        var hours = data.Employees.ToDictionary(e => e.Id, e => PayrollCalculator.Calculate(e, from, today, PayrollPeriodType.Custom, data).Hours);
         var owed = await payrollReader.OwedByEmployeeAsync(ids, cancellationToken);
         var salaryTypes = await salaries.TypesOnAsync(ids, today, cancellationToken);
         return rows.Select(r => r with

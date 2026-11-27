@@ -19,6 +19,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class PayrollsController(
     PayrollService payrolls,
+    PayrollAdjustmentService adjustments,
     PayrollQueryService queries,
     PayrollPaymentService paying,
     PayrollExportService exports) : ControllerBase
@@ -77,6 +78,16 @@ public sealed class PayrollsController(
     [ProducesResponseType<PayrollSheetDetail>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Reload(Guid id, ReloadPayrollRequest request, CancellationToken cancellationToken) =>
         (await payrolls.ReloadAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Replaces the + and − lines of one payslip of a Provisional sheet (an empty <c>items</c> removes them all); Cooperative Owner only, internal (Staff) employees only. Answers the sheet.
+    /// 400 for a line without a kind, a whole amount above 0 or a reason of 1 to 200 characters, for deductions above the income of the payslip and for an employee who is not Staff; 409 when the sheet is not Provisional.
+    /// </summary>
+    [HttpPut("payroll-slips/{slipId:guid}/adjustments")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<PayrollSheetDetail>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveAdjustments(Guid slipId, SaveSlipAdjustmentsRequest request, CancellationToken cancellationToken) =>
+        (await adjustments.SaveAsync(slipId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>Provisional to Finalized with the month of the cost (yyyy-MM); locks the records of the period. 409 when not Provisional or requests await review, 400 MSG-LABOR-28 when not ready.</summary>
     [HttpPost("payrolls/{id:guid}/finalize")]

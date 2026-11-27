@@ -8,10 +8,10 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
-/// The read side of the payroll screens. The net pay of a payslip is its main pay and bonus less its deduction; what is paid on it is the sum
+/// The read side of the payroll screens. The net pay of a payslip is its main pay, shift pay and bonus less its manual deduction and its advance deduction; what is paid on it is the sum
 /// of its wage payments whose cash voucher is not cancelled, so a voucher cancelled in the cash book gives the money back to "still owed".
 /// </summary>
-internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider) : IPayrollReader
+internal sealed class PayrollReader(OmtsDbContext db) : IPayrollReader
 {
     public async Task<IReadOnlyList<PayrollHeaderRow>> ListHeadersAsync(
         IReadOnlyCollection<int>? statusIds, PayrollPeriodType? type, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
@@ -39,7 +39,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
 
         return await sheets.Select(p => new PayrollHeaderRow(
             p.Id, p.Code, p.PeriodType, p.PeriodStart, p.PeriodEnd, p.StatusId, p.CreatedAt,
-            db.PayrollLines.Where(l => l.PayrollId == p.Id).Sum(l => (decimal?)(l.MainPay + l.Bonus - l.Deduction)) ?? 0,
+            db.PayrollLines.Where(l => l.PayrollId == p.Id).Sum(l => (decimal?)(l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction)) ?? 0,
             db.WagePayments.Where(w => w.PayrollLine!.PayrollId == p.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0))
             .ToListAsync(cancellationToken);
     }
@@ -47,7 +47,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
     public async Task<IReadOnlyDictionary<Guid, decimal>> OwedByEmployeeAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken)
     {
         var net = (await db.PayrollLines.Where(l => l.Payroll.StatusId == StatusIds.Payroll.Finalized && employeeIds.Contains(l.EmployeeId))
-                .GroupBy(l => l.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(l => l.MainPay + l.Bonus - l.Deduction) }).ToListAsync(cancellationToken))
+                .GroupBy(l => l.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(l => l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction) }).ToListAsync(cancellationToken))
             .ToDictionary(r => r.Employee, r => r.Amount);
         var paid = (await db.WagePayments
                 .Where(w => employeeIds.Contains(w.EmployeeId) && w.Kind == WagePaymentKind.Wage && w.PayrollLine!.Payroll.StatusId == StatusIds.Payroll.Finalized && w.CashVoucher.CancelledAt == null)
@@ -75,15 +75,21 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
     {
         var rows = await lines.AsNoTracking().Select(l => new PayrollSlipRaw(
             l.Id, l.Code, l.EmployeeId, l.Employee.Code, l.Employee.FullName, l.Hours, l.HourlyRateNote, l.MainPay, l.Bonus, l.Deduction,
-            db.WagePayments.Where(w => w.PayrollLineId == l.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0))
+            db.WagePayments.Where(w => w.PayrollLineId == l.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0,
+            l.SalaryType, l.Shifts, l.ShiftPay, l.ManualDeduction))
             .ToListAsync(cancellationToken);
-        return rows.OrderBy(r => r.EmployeeName, StringComparer.CurrentCultureIgnoreCase).ThenBy(r => r.Code, StringComparer.Ordinal).ToList();
+        var ids = rows.Select(r => r.Id).ToList();
+        var adjustments = (await db.PayrollLineAdjustments.AsNoTracking().Where(a => ids.Contains(a.PayrollLineId)).OrderBy(a => a.Position)
+                .Select(a => new { a.PayrollLineId, a.Position, Raw = new SlipAdjustmentRaw(a.Kind, a.Amount, a.Reason) }).ToListAsync(cancellationToken))
+            .ToLookup(a => a.PayrollLineId, a => a.Raw);
+        return rows.Select(r => r with { Adjustments = adjustments[r.Id].ToList() })
+            .OrderBy(r => r.EmployeeName, StringComparer.CurrentCultureIgnoreCase).ThenBy(r => r.Code, StringComparer.Ordinal).ToList();
     }
 
     public async Task<SlipDetailRaw?> GetSlipAsync(Guid slipId, CancellationToken cancellationToken)
     {
         var header = await db.PayrollLines.AsNoTracking().Where(l => l.Id == slipId)
-            .Select(l => new { l.PayrollId, PayrollCode = l.Payroll.Code, From = l.Payroll.PeriodStart, To = l.Payroll.PeriodEnd, l.Payroll.StatusId })
+            .Select(l => new { l.PayrollId, PayrollCode = l.Payroll.Code, From = l.Payroll.PeriodStart, To = l.Payroll.PeriodEnd, l.Payroll.StatusId, l.Payroll.PeriodType })
             .FirstOrDefaultAsync(cancellationToken);
         if (header is null)
         {
@@ -92,13 +98,13 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
 
         var slip = (await SlipsAsync(db.PayrollLines.Where(l => l.Id == slipId), cancellationToken))[0];
         var jobs = (await db.PayrollLineJobs.AsNoTracking().Where(j => j.PayrollLineId == slipId)
-                .Select(j => new SlipJobRaw(j.JobName, j.Hours, j.HourlyRate, j.Amount)).ToListAsync(cancellationToken))
-            .OrderBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ThenBy(j => j.HourlyRate).ToList();
+                .Select(j => new SlipJobRaw(j.JobName, j.Hours, j.HourlyRate, j.Amount, j.Kind, j.ShiftRate, j.Shifts)).ToListAsync(cancellationToken))
+            .OrderBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ThenBy(j => j.Kind).ThenBy(j => j.HourlyRate).ThenBy(j => j.ShiftRate).ToList();
         var payments = (await db.WagePayments.AsNoTracking().Where(w => w.PayrollLineId == slipId)
                 .Select(w => new SlipPaymentRaw(w.CashVoucherId, w.CashVoucher.Code, w.PaidAt, w.Method, w.Amount, w.Kind, w.CashVoucher.CancelledAt != null))
                 .ToListAsync(cancellationToken))
             .OrderBy(p => p.PaidAt).ThenBy(p => p.VoucherCode, StringComparer.Ordinal).ToList();
-        return new SlipDetailRaw(slip, header.PayrollId, header.PayrollCode, header.From, header.To, header.StatusId, jobs, payments);
+        return new SlipDetailRaw(slip, header.PayrollId, header.PayrollCode, header.From, header.To, header.StatusId, jobs, payments, header.PeriodType);
     }
 
     public async Task<EmployeeSlipPageRaw> ListEmployeeSlipsAsync(
@@ -114,13 +120,13 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(l => new EmployeeSlipRaw(
                 l.Id, l.Code, l.PayrollId, l.Payroll.Code, l.Payroll.PeriodType, l.Payroll.PeriodStart, l.Payroll.PeriodEnd, l.Payroll.StatusId,
-                l.MainPay + l.Bonus, l.MainPay + l.Bonus - l.Deduction,
+                l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction, l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction,
                 db.WagePayments.Where(w => w.PayrollLineId == l.Id && w.CashVoucher.CancelledAt == null).Sum(w => (decimal?)w.Amount) ?? 0))
             .ToListAsync(cancellationToken);
 
         var net = await db.PayrollLines
             .Where(l => l.EmployeeId == employeeId && l.Payroll.StatusId == StatusIds.Payroll.Finalized)
-            .SumAsync(l => (decimal?)(l.MainPay + l.Bonus - l.Deduction), cancellationToken) ?? 0;
+            .SumAsync(l => (decimal?)(l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction), cancellationToken) ?? 0;
         var paid = await db.WagePayments
             .Where(w => w.EmployeeId == employeeId && w.Kind == WagePaymentKind.Wage && w.PayrollLine!.Payroll.StatusId == StatusIds.Payroll.Finalized && w.CashVoucher.CancelledAt == null)
             .SumAsync(w => (decimal?)w.Amount, cancellationToken) ?? 0;
@@ -198,7 +204,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
     public async Task<IReadOnlyList<PayableEmployeeRaw>> ListPayableEmployeesAsync(string? search, bool includeAll, int take, CancellationToken cancellationToken)
     {
         var net = (await db.PayrollLines.Where(l => l.Payroll.StatusId == StatusIds.Payroll.Finalized)
-                .GroupBy(l => l.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(l => l.MainPay + l.Bonus - l.Deduction) }).ToListAsync(cancellationToken))
+                .GroupBy(l => l.EmployeeId).Select(g => new { Employee = g.Key, Amount = g.Sum(l => l.MainPay + l.ShiftPay + l.Bonus - l.ManualDeduction - l.Deduction) }).ToListAsync(cancellationToken))
             .ToDictionary(r => r.Employee, r => r.Amount);
         var paid = (await db.WagePayments
                 .Where(w => w.Kind == WagePaymentKind.Wage && w.PayrollLine!.Payroll.StatusId == StatusIds.Payroll.Finalized && w.CashVoucher.CancelledAt == null)
@@ -206,7 +212,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
             .ToDictionary(r => r.Employee, r => r.Amount);
         var owed = net.Select(n => (Id: n.Key, Amount: n.Value - paid.GetValueOrDefault(n.Key))).Where(o => o.Amount > 0).ToDictionary(o => o.Id, o => o.Amount);
 
-        var people = db.Employees.AsNoTracking().Include(e => e.TypePeriods).AsQueryable();
+        var people = db.Employees.AsNoTracking().AsQueryable();
         var ids = owed.Keys.ToList();
         people = includeAll ? people.Where(e => e.StatusId == StatusIds.Employee.Working || ids.Contains(e.Id)) : people.Where(e => ids.Contains(e.Id));
         if (!string.IsNullOrEmpty(search))
@@ -214,13 +220,7 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
             people = people.Where(e => e.FullName.Contains(search) || (e.Code != null && e.Code.Contains(search)));
         }
 
-        var today = timeProvider.Today();
-        var found = await people.OrderBy(e => e.FullName).ThenBy(e => e.Id).ToListAsync(cancellationToken);
-        // Staff employees are not paid through OMTS (BR-LABOR-09): they are listed only for what they are still owed from the days they were seasonal workers.
-        return found
-            .Where(e => owed.ContainsKey(e.Id) || EmployeeTypePeriod.TypeOn(e.TypePeriods, today) != EmployeeType.Staff)
-            .Take(take)
-            .Select(e => new PayableEmployeeRaw(e.Id, e.Code, e.FullName, owed.GetValueOrDefault(e.Id)))
-            .ToList();
+        var found = await people.OrderBy(e => e.FullName).ThenBy(e => e.Id).Take(take).ToListAsync(cancellationToken);
+        return found.Select(e => new PayableEmployeeRaw(e.Id, e.Code, e.FullName, owed.GetValueOrDefault(e.Id))).ToList();
     }
 }

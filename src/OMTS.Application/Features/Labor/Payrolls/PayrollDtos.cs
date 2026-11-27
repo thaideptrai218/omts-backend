@@ -21,7 +21,7 @@ public enum PayrollReloadMode
 /// <param name="PeriodType">Monthly (a whole calendar month) or Custom.</param>
 /// <param name="From">First day of the period.</param>
 /// <param name="To">Last day of the period.</param>
-/// <param name="Scope">All employees with hours in the period, or the Selected ones named in <paramref name="EmployeeIds"/> (1 to 500).</param>
+/// <param name="Scope">All employees with pay in the period (attendance paid by the hour or the shift, a fixed salary, or a Staff employee with no salary setup), or the Selected ones named in <paramref name="EmployeeIds"/> (1 to 500).</param>
 public sealed record CreatePayrollRequest(
     PayrollPeriodType? PeriodType, DateOnly? From, DateOnly? To, PayrollScope? Scope, IReadOnlyList<Guid>? EmployeeIds);
 
@@ -32,7 +32,10 @@ public sealed record ReloadPayrollRequest(PayrollReloadMode? Mode);
 /// <param name="ExpectedSlips">The number of payslips as last seen; checked with <paramref name="ExpectedTotal"/>. Optional.</param>
 public sealed record FinalizePayrollRequest(string? ExpenseMonth, decimal? ExpectedTotal = null, int? ExpectedSlips = null);
 
-/// <summary>One reason a sheet cannot be finalized, as data. <c>Kind</c> is PeriodNotEnded, IncompleteAttendance, NoRate or NoHours; <c>Dates</c> are the days concerned.</summary>
+/// <summary>
+/// One reason a sheet cannot be finalized, as data. <c>Kind</c> is PeriodNotEnded, IncompleteAttendance, NoRate (hours without an hourly rate), NoShiftRate (shifts without a shift rate), NoSalarySetup
+/// (a Staff employee with no salary setup: "Chưa thiết lập lương"), NegativePay (deductions above the income of a payslip) or NoHours; <c>Dates</c> are the days concerned.
+/// </summary>
 public sealed record NotReadyItem(string Kind, Guid? EmployeeId, string? EmployeeName, IReadOnlyList<DateOnly> Dates, string? JobName);
 
 /// <param name="Method">Cash or BankTransfer.</param>
@@ -81,9 +84,31 @@ public sealed record PayrollTotals(decimal Total, decimal Paid, decimal Outstand
 
 public sealed record PayrollSheetPage(IReadOnlyList<PayrollSheetRow> Items, int Total, int Page, int PageSize, PayrollTotals Summary);
 
+/// <summary>One + or − line of a payslip.</summary>
+public sealed record SlipAdjustmentView(PayrollAdjustmentKind Kind, decimal Amount, string Reason);
+
+/// <summary>One line the Owner sends: <c>Kind</c> Bonus (+) or Deduction (−), a whole amount above 0 and the reason (1 to 200 characters).</summary>
+public sealed record SlipAdjustmentInput(PayrollAdjustmentKind? Kind, decimal? Amount, string? Reason);
+
+/// <summary>The whole list of adjustments of a payslip (an empty list removes them all).</summary>
+public sealed record SaveSlipAdjustmentsRequest(IReadOnlyList<SlipAdjustmentInput>? Items);
+
+/// <summary>
+/// A payslip as the sheet lists it. Net = MainPay + ShiftPay + Bonus - ManualDeduction - AdvanceDeduction; Income is the part before the advances.
+/// </summary>
+/// <param name="SalaryType">The salary type in force on the last day of the period; null for a Staff employee with no setup ("Chưa thiết lập lương").</param>
+/// <param name="Hours">Hours worked that were paid by the hour or the shift.</param>
+/// <param name="Shifts">Shifts counted (per-shift pay and field shifts).</param>
+/// <param name="MainPay">The fixed monthly salary, the hourly pay and the per-shift pay.</param>
+/// <param name="ShiftPay">The shifts of field work paid to a fixed-salary employee on top of the salary.</param>
+/// <param name="Bonus">The sum of the + adjustments.</param>
+/// <param name="ManualDeduction">The sum of the − adjustments.</param>
+/// <param name="AdvanceDeduction">The advances taken off (a preview until the sheet is finalized).</param>
+/// <param name="AllowsAdjustments">True for an internal (Staff) employee: only then may the Owner enter adjustments.</param>
 public sealed record PayrollSlipRow(
-    Guid Id, string Code, Guid EmployeeId, string EmployeeCode, string EmployeeName, decimal Hours, string? HourlyRateNote,
-    decimal MainPay, decimal Bonus, decimal Deduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding);
+    Guid Id, string Code, Guid EmployeeId, string EmployeeCode, string EmployeeName, SalaryType? SalaryType, decimal Hours, decimal Shifts, string? HourlyRateNote,
+    decimal MainPay, decimal ShiftPay, decimal Bonus, decimal ManualDeduction, decimal AdvanceDeduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding,
+    IReadOnlyList<SlipAdjustmentView> Adjustments, bool AllowsAdjustments);
 
 public sealed record PayrollSheetDetail(
     Guid Id, string Code, string Name, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, PayrollSheetStatus Status,
@@ -117,15 +142,24 @@ public sealed record EmployeeSlipSummary(decimal Outstanding, decimal AdvanceBal
 
 public sealed record EmployeeSlipPage(IReadOnlyList<EmployeeSlipRow> Items, int Total, int Page, int PageSize, EmployeeSlipSummary Summary);
 
-public sealed record PayrollSlipJobLine(string JobName, decimal Hours, decimal HourlyRate, decimal Amount);
+/// <summary>One job type at one rate. <c>Kind</c> Hourly (hours x HourlyRate), Shift (Shifts x ShiftRate, the main pay of a per-shift employee) or FieldShift (Shifts x ShiftRate, the shift pay of a fixed-salary employee).</summary>
+public sealed record PayrollSlipJobLine(
+    string JobName, decimal Hours, decimal HourlyRate, decimal Amount, PayLineKind Kind = PayLineKind.Hourly, decimal Shifts = 0, decimal ShiftRate = 0);
 
 public sealed record PayrollSlipPayment(Guid Id, string VoucherCode, DateTimeOffset PaidAt, PaymentMethod Method, decimal Amount, WagePaymentKind Kind, string Status);
 
-/// <summary>One job type on one day: the rafts worked, the check-in and check-out, the hours, the rate in force and the amount (hours x rate, to the VND) so the payslip can be explained day by day.</summary>
+/// <summary>
+/// One job type on one day: the rafts worked, the check-in and check-out, the hours, the shifts counted, the rate in force (hourly for <c>Kind</c> Hourly, the shift rate otherwise) and the amount
+/// (hours x rate or shifts x rate, to the VND) so the payslip can be explained day by day.
+/// </summary>
 public sealed record PayrollSlipAttendanceDay(
-    DateOnly Date, string JobName, decimal Hours, string? RaftCodes = null, DateTimeOffset? CheckInAt = null, DateTimeOffset? CheckOutAt = null, decimal HourlyRate = 0, decimal Amount = 0);
+    DateOnly Date, string JobName, decimal Hours, string? RaftCodes = null, DateTimeOffset? CheckInAt = null, DateTimeOffset? CheckOutAt = null, decimal HourlyRate = 0, decimal Amount = 0,
+    PayLineKind Kind = PayLineKind.Hourly, decimal Shifts = 0, decimal ShiftRate = 0);
 
+/// <param name="FixedPay">The fixed monthly salary inside <c>MainPay</c> (0 on a Custom sheet and for the other types); the rest of <c>MainPay</c> is the sum of the Hourly and Shift lines.</param>
 public sealed record PayrollSlipDetail(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, Guid EmployeeId, string EmployeeName, DateOnly From, DateOnly To, decimal Hours,
-    decimal MainPay, decimal Bonus, decimal Deduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status,
-    IReadOnlyList<PayrollSlipJobLine> Lines, IReadOnlyList<PayrollSlipPayment> Payments, IReadOnlyList<PayrollSlipAttendanceDay> Attendance, string? EmployeeCode = null);
+    decimal MainPay, decimal Bonus, decimal AdvanceDeduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status,
+    IReadOnlyList<PayrollSlipJobLine> Lines, IReadOnlyList<PayrollSlipPayment> Payments, IReadOnlyList<PayrollSlipAttendanceDay> Attendance, string? EmployeeCode = null,
+    SalaryType? SalaryType = null, decimal Shifts = 0, decimal ShiftPay = 0, decimal ManualDeduction = 0, decimal FixedPay = 0,
+    IReadOnlyList<SlipAdjustmentView>? Adjustments = null, bool AllowsAdjustments = false);
