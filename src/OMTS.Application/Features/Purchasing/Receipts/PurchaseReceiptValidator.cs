@@ -10,8 +10,8 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
-/// <summary>The input items and rafts named on the lines of a receipt.</summary>
-public sealed record ReceiptLineRefs(IReadOnlyDictionary<Guid, FarmingInputItem> Items, IReadOnlyDictionary<Guid, Raft> Rafts);
+/// <summary>The input items and rafts named on the lines of a receipt, and the VAT rates the lines may take.</summary>
+public sealed record ReceiptLineRefs(IReadOnlyDictionary<Guid, FarmingInputItem> Items, IReadOnlyDictionary<Guid, Raft> Rafts, IReadOnlyDictionary<Guid, VatRate> VatRates);
 
 /// <summary>
 /// PURCHASE-01 checks (BR-PURCHASE-01/03). A Draft needs only a supplier In Use; what it holds must still be valid (no
@@ -23,6 +23,7 @@ public sealed class PurchaseReceiptValidator(
     ISupplierRepository suppliers,
     IRaftRepository rafts,
     IFarmingInputItemRepository items,
+    IVatRateRepository vatRates,
     IFarmingZoneRepository zones,
     IAccountRepository accounts,
     PurchaseReceiptAccess access,
@@ -128,7 +129,7 @@ public sealed class PurchaseReceiptValidator(
                 invalid.Add($"Line {i + 1} item");
             }
 
-            if (lines[i].VatRate is { } vatRate && !Enum.IsDefined(vatRate))
+            if (VatRateRejected(lines[i].VatRateId, item, null, refs.VatRates))
             {
                 invalid.Add($"Line {i + 1} VAT rate");
             }
@@ -241,12 +242,18 @@ public sealed class PurchaseReceiptValidator(
         return incomplete is null ? null : InvalidLine(incomplete.LineNumber);
     }
 
+    /// <summary>
+    /// True when the VAT rate sent on a line is not acceptable: it is not in the list, or it is inactive and not the rate the stored line already has. A Seed line is always KCT, so what is sent is not looked at.
+    /// </summary>
+    public static bool VatRateRejected(Guid? vatRateId, FarmingInputItem? item, Guid? storedRateId, IReadOnlyDictionary<Guid, VatRate> catalogue) =>
+        vatRateId is { } id && item?.Group != InputItemGroup.Seed && (!catalogue.TryGetValue(id, out var rate) || !(rate.IsActive || id == storedRateId));
+
     /// <summary>The items and rafts named by lines (unknown ids are simply missing).</summary>
     public async Task<ReceiptLineRefs> LoadAsync(IEnumerable<Guid?> itemIds, IEnumerable<Guid?> raftIds, CancellationToken cancellationToken)
     {
         var foundItems = await items.GetByIdsAsync(itemIds.OfType<Guid>().Distinct().ToList(), cancellationToken);
         var foundRafts = await rafts.GetByIdsAsync(raftIds.OfType<Guid>().Distinct().ToList(), cancellationToken);
-        return new ReceiptLineRefs(foundItems.ToDictionary(i => i.Id), foundRafts.ToDictionary(r => r.Id));
+        return new ReceiptLineRefs(foundItems.ToDictionary(i => i.Id), foundRafts.ToDictionary(r => r.Id), await vatRates.CatalogueAsync(cancellationToken));
     }
 
     /// <summary>

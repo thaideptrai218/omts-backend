@@ -322,6 +322,7 @@ public static class DependencyInjection
         services.AddScoped<InputStockLedger>();
         services.AddScoped<InputUnitService>();
         services.AddScoped<InputItemGroupService>();
+        services.AddScoped<VatRateService>();
         services.AddScoped<InputInventorySettingsService>();
         services.AddScoped<ReceiptPriceSetupService>();
         services.AddScoped<InputIssueAccess>();

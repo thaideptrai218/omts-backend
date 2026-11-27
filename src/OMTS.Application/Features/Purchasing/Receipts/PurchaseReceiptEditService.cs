@@ -216,7 +216,7 @@ public sealed class PurchaseReceiptEditService(
                 invalid.Add($"Line {i + 1} unit");
             }
 
-            if (input.VatRate is { } vatRate && !Enum.IsDefined(vatRate))
+            if (PurchaseReceiptValidator.VatRateRejected(input.VatRateId, item, stored?.VatRateId, refs.VatRates))
             {
                 invalid.Add($"Line {i + 1} VAT rate");
             }
@@ -338,15 +338,15 @@ public sealed class PurchaseReceiptEditService(
                 receipts.AddLine(line);
             }
 
-            Fill(line, input, item);
+            Fill(line, input, item, refs);
         }
     }
 
-    private static void Fill(PurchaseReceiptLine line, ReceiptLineInput input, FarmingInputItem item)
+    private static void Fill(PurchaseReceiptLine line, ReceiptLineInput input, FarmingInputItem item, ReceiptLineRefs refs)
     {
         // A kept line of the same item that names no unit keeps its own unit; a new line or another item takes the unit asked for (the base unit by default).
         var keepsUnit = line.ItemId == item.Id && input.ItemUnitId is null && line.ItemUnitId is not null;
-        line.VatRate = PurchaseReceiptService.LineVatRate(input.VatRate, item, line);
+        VatSnapshot.ForReceiptLine(input.VatRateId, item, line, refs.VatRates).ApplyTo(line);
         if (line.ItemId != item.Id)
         {
             line.ItemId = item.Id;
@@ -375,7 +375,7 @@ public sealed class PurchaseReceiptEditService(
         {
             r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
             Lines = r.Lines.OrderBy(l => l.LineNumber)
-                .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.VatRate, l.VatAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+                .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.VatRateName, l.VatPercent, l.VatAmount, l.SupplierLotCode, l.RaftId }).ToList(),
             Totals = new { figures.Total, figures.Vat, figures.Payable, figures.Returned },
         };
     }

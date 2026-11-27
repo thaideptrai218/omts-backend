@@ -12,12 +12,12 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <see cref="RaftId"/> is optional, only on a Seed or Material line, among the rafts In Use of the caller's zones (the Owner:
 /// any); <see cref="SupplierLotCode"/> only on a Seed line (ignored on the others). <see cref="LineId"/> names the line kept
 /// when a Completed receipt is edited (a line without it is new); a Draft save ignores it and replaces every line.
-/// <see cref="VatRate"/> is the input VAT rate of the line: left out, a new line takes the item's rate (<c>purchaseVatRate</c>) and a kept line of the same item keeps its own (none on a line made before input VAT existed);
-/// a Seed line is always KCT whatever is sent.
+/// <see cref="VatRateId"/> is the input VAT rate of the line, an active rate of the list: left out, a new line takes the current rate of the item (<c>purchaseVatRateId</c>) and a kept line of the same item
+/// keeps the rate and the percent it took (none on a line made before input VAT existed); a Seed line is always KCT whatever is sent.
 /// </summary>
 public sealed record ReceiptLineInput(
     Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null,
-    VatRate? VatRate = null);
+    Guid? VatRateId = null);
 
 /// <summary>
 /// PURCHASE-01 create, Draft edit and edit of a Completed receipt. <see cref="Complete"/> false saves a Draft (only an In Use
@@ -69,8 +69,10 @@ public sealed record LineRaftRef(Guid Id, string Code, Guid ZoneId, string ZoneC
 /// <param name="Returnable">Received − seeded − already returned (0 on a Draft line without quantity).</param>
 /// <param name="LineAmount">Quantity × (unit price − discount), half up to the dong; null while the line has no quantity or no unit price.</param>
 /// <param name="Discount">Whole VND off each unit.</param>
-/// <param name="VatRate">The input VAT rate of the line; null on a line made before input VAT existed.</param>
-/// <param name="VatAmount">Whole VND of VAT of the line: its amount less its share of the receipt discount, times the rate, half up; 0 without a rate.</param>
+/// <param name="VatRateId">The input VAT rate of the line; null on a line made before input VAT existed.</param>
+/// <param name="VatRateName">The name of the rate when the line took it: editing the rate later does not change it.</param>
+/// <param name="VatPercent">The percent of the rate when the line took it; null on KCT and on a line made before input VAT existed.</param>
+/// <param name="VatAmount">Whole VND of VAT of the line: its amount less its share of the receipt discount, times the percent, half up; 0 without a percent.</param>
 /// <param name="NetUnitPrice">
 /// What one unit was paid, the price a return of the line defaults to: unit price less discount, less its share of the receipt
 /// discount prorated by line amount, half up to the dong; null while the line has no unit price.
@@ -99,7 +101,9 @@ public sealed record ReceiptLineView(
     decimal? BaseQuantity = null,
     string? BaseUnit = null,
     ReceiptLineSeedLot? SeedLot = null,
-    VatRate? VatRate = null,
+    Guid? VatRateId = null,
+    string? VatRateName = null,
+    decimal? VatPercent = null,
     decimal VatAmount = 0);
 
 /// <summary>Where a seed lot stands (derived from its quantities, never stored) and what is left of it in the base unit of the seed item.</summary>

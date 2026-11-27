@@ -5247,10 +5247,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("PurchaseVatRate")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<Guid>("PurchaseVatRateId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -5285,6 +5283,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("PurchaseVatRateId");
 
                     b.HasIndex("StatusId");
 
@@ -5934,7 +5934,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
-                    b.Property<string>("VatRate")
+                    b.Property<decimal?>("VatPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("VatRateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VatRateName")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -5945,6 +5952,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ItemUnitId");
 
                     b.HasIndex("RaftId");
+
+                    b.HasIndex("VatRateId");
 
                     b.HasIndex("ReceiptId", "LineNumber")
                         .IsUnique();
@@ -6087,7 +6096,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
-                    b.Property<string>("VatRate")
+                    b.Property<decimal?>("VatPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("VatRateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VatRateName")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -6100,6 +6116,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ReceiptLineId");
 
                     b.HasIndex("ReturnId");
+
+                    b.HasIndex("VatRateId");
 
                     b.ToTable("PurchaseReturnLines");
                 });
@@ -6376,6 +6394,128 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("SupplierPaymentAllocations");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.VatRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsExempt")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("VatRates");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("7a1c4e20-0000-4b7a-8c10-000000000001"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 28, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsDefault = false,
+                            IsExempt = true,
+                            IsSystem = true,
+                            Name = "KCT",
+                            RowVersion = new byte[0],
+                            SortOrder = 0
+                        },
+                        new
+                        {
+                            Id = new Guid("7a1c4e20-0000-4b7a-8c10-000000000002"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 28, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsDefault = false,
+                            IsExempt = false,
+                            IsSystem = false,
+                            Name = "0%",
+                            Percent = 0m,
+                            RowVersion = new byte[0],
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("7a1c4e20-0000-4b7a-8c10-000000000003"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 28, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsDefault = false,
+                            IsExempt = false,
+                            IsSystem = false,
+                            Name = "5%",
+                            Percent = 5m,
+                            RowVersion = new byte[0],
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = new Guid("7a1c4e20-0000-4b7a-8c10-000000000004"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 28, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsDefault = false,
+                            IsExempt = false,
+                            IsSystem = false,
+                            Name = "8%",
+                            Percent = 8m,
+                            RowVersion = new byte[0],
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = new Guid("7a1c4e20-0000-4b7a-8c10-000000000005"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 28, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsDefault = true,
+                            IsExempt = false,
+                            IsSystem = false,
+                            Name = "10%",
+                            Percent = 10m,
+                            RowVersion = new byte[0],
+                            SortOrder = 4
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
@@ -9930,6 +10070,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.VatRate", "PurchaseVatRate")
+                        .WithMany()
+                        .HasForeignKey("PurchaseVatRateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
@@ -9939,6 +10085,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ItemGroup");
 
                     b.Navigation("Product");
+
+                    b.Navigation("PurchaseVatRate");
 
                     b.Navigation("Status");
                 });
@@ -10131,6 +10279,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.VatRate", "VatRate")
+                        .WithMany()
+                        .HasForeignKey("VatRateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Item");
 
                     b.Navigation("ItemUnit");
@@ -10138,6 +10291,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
 
                     b.Navigation("Receipt");
+
+                    b.Navigation("VatRate");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReturn", b =>
@@ -10203,6 +10358,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.VatRate", "VatRate")
+                        .WithMany()
+                        .HasForeignKey("VatRateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Item");
 
                     b.Navigation("ItemUnit");
@@ -10210,6 +10370,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ReceiptLine");
 
                     b.Navigation("Return");
+
+                    b.Navigation("VatRate");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.Supplier", b =>

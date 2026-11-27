@@ -63,7 +63,7 @@ public sealed class PurchaseReceiptViews(
                     l.EnteredUnitPrice is null ? null : PurchaseMoney.ReturnPriceInLineUnit(r, l),
                     l.ItemUnitId, l.UnitFactor, l.Quantity, l.Item?.Unit,
                     lots.TryGetValue(l.Id, out var lot) ? new ReceiptLineSeedLot(lot.State, lot.Remaining) : null,
-                    l.VatRate, l.VatAmount);
+                    l.VatRateId, l.VatRateName, l.VatPercent, l.VatAmount);
             }).ToList(),
             r.Returns.Where(rt => rt.StatusId != StatusIds.PurchaseReturn.Draft).OrderBy(rt => rt.ReturnedAt).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
                 rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.StatusId, statusCatalog.DisplayNameOf(rt.StatusId),

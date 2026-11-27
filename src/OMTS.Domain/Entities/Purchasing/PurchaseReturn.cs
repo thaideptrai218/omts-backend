@@ -2,7 +2,6 @@ using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Purchasing;
 
@@ -95,8 +94,11 @@ public class PurchaseReturnLine : Entity
     /// </summary>
     public decimal ReturnValue { get; set; }
 
-    /// <summary>The VAT rate of the receipt line the return came from (the item's rate on a return with no receipt); null when that line has none.</summary>
+    /// <summary>The VAT rate of the receipt line the return came from, as that line holds it (the item's current rate on a return with no receipt); all null when the receipt line has none.</summary>
+    public Guid? VatRateId { get; set; }
     public VatRate? VatRate { get; set; }
+    public string? VatRateName { get; set; }
+    public decimal? VatPercent { get; set; }
 
     /// <summary>Whole VND of VAT given back with the line: <see cref="ReturnValue"/> × the rate, half up; recorded with the line like it.</summary>
     public decimal VatAmount { get; set; }

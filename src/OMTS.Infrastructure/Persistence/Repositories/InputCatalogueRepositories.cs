@@ -126,3 +126,33 @@ internal sealed class InputItemCategoryRepository(OmtsDbContext db) : IInputItem
     public void Remove(InputItemCategory group) => db.InputItemGroups.Remove(group);
 }
 
+
+internal sealed class VatRateRepository(OmtsDbContext db) : IVatRateRepository
+{
+    public async Task<IReadOnlyList<VatRate>> ListAsync(CancellationToken cancellationToken) =>
+        await db.VatRates.AsNoTracking().OrderByDescending(r => r.IsActive).ThenBy(r => r.SortOrder).ThenBy(r => r.Name).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, VatRate>> CatalogueAsync(CancellationToken cancellationToken) =>
+        await db.VatRates.AsNoTracking().ToDictionaryAsync(r => r.Id, cancellationToken);
+
+    public Task<VatRate?> GetForEditAsync(Guid rateId, CancellationToken cancellationToken) =>
+        db.VatRates.FirstOrDefaultAsync(r => r.Id == rateId, cancellationToken);
+
+    public async Task<IReadOnlyList<VatRate>> GetAllForEditAsync(CancellationToken cancellationToken) =>
+        await db.VatRates.OrderBy(r => r.SortOrder).ToListAsync(cancellationToken);
+
+    public Task<VatRate?> FindByNameAsync(string name, Guid? exceptRateId, CancellationToken cancellationToken)
+    {
+        var lower = name.ToLower();
+        return db.VatRates.AsNoTracking().FirstOrDefaultAsync(r => r.Name.ToLower() == lower && r.Id != exceptRateId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> ItemCountsAsync(CancellationToken cancellationToken) =>
+        await db.FarmingInputItems.AsNoTracking().Where(i => !i.IsHidden)
+            .GroupBy(i => i.PurchaseVatRateId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, cancellationToken);
+
+    public async Task<IReadOnlyList<FarmingInputItem>> ItemsOfAsync(Guid rateId, CancellationToken cancellationToken) =>
+        await db.FarmingInputItems.Where(i => i.PurchaseVatRateId == rateId).ToListAsync(cancellationToken);
+
+    public void Add(VatRate rate) => db.VatRates.Add(rate);
+}

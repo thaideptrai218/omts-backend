@@ -16,9 +16,23 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-/// <summary><paramref name="VatRate"/> is the text "KCT", "0", "5", "8" or "10"; left null the line takes the rate of its item.</summary>
+/// <summary><paramref name="VatRateId"/> is a rate of the VAT rate list (see <see cref="VatTestRates"/>); left null a new line takes the rate of its item and a kept line keeps its own.</summary>
 public sealed record LineBody(
-    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null, string? VatRate = null);
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null, Guid? VatRateId = null);
+
+/// <summary>The rates the host starts with, by the name the settings screen shows ("KCT", "0%", "5%", "8%", "10%"); the short forms "0", "5", "8" and "10" are accepted too.</summary>
+public static class VatTestRates
+{
+    public static Guid Id(string name) => name.TrimEnd('%') switch
+    {
+        "KCT" => VatRateIds.Kct,
+        "0" => VatRateIds.Zero,
+        "5" => VatRateIds.Five,
+        "8" => VatRateIds.Eight,
+        "10" => VatRateIds.Ten,
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "Not a seeded VAT rate."),
+    };
+}
 
 /// <summary>PURCHASE-01 request body; every field can be left out (null) to check the validation.</summary>
 public sealed record ReceiptBody
@@ -182,13 +196,13 @@ public static class PurchasingTestKit
 
     /// <summary>
     /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). A Seed item sells as <paramref name="productId"/>, a new product of the host when it is not named.
-    /// A supply item is bought without input VAT (KCT) unless <paramref name="vatRate"/> says otherwise, so the money of a test that is not about VAT is the goods; pass null for the rate a new item gets (10%).
+    /// A supply item is bought without input VAT (KCT) unless <paramref name="vatRate"/> (a name of <see cref="VatTestRates"/>) says otherwise, so the money of a test that is not about VAT is the goods; pass null for the rate a new item gets (10%).
     /// </summary>
     public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null, Guid? productId = null, string? vatRate = "KCT")
     {
         code ??= NewCode();
         Guid? product = group == "Seed" ? productId ?? await owner.SeedProductAsync() : null;
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit, productId = product, purchaseVatRate = vatRate });
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit, productId = product, purchaseVatRateId = vatRate is null ? (Guid?)null : VatTestRates.Id(vatRate) });
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -274,7 +288,7 @@ public static class PurchasingTestKit
                 id,
                 l.GetProperty("itemUnitId").ValueKind == JsonValueKind.String ? l.GetProperty("itemUnitId").GetGuid() : null,
                 // The edit sends the rate the line has (none on a line made before input VAT).
-                l.GetProperty("vatRate").GetString());
+                l.GetProperty("vatRateId").ValueKind == JsonValueKind.String ? l.GetProperty("vatRateId").GetGuid() : null);
         }).ToList();
         var body = new ReceiptBody
         {

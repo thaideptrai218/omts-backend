@@ -225,13 +225,13 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
 
         var rows = await db.PurchaseReceiptLines.AsNoTracking()
             .Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value) && l.EnteredUnitPrice != null && l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed && l.ReceiptId != exceptReceiptId)
-            .Select(l => new { ItemId = l.ItemId!.Value, l.Receipt.ReceivedAt, l.LineNumber, Price = l.EnteredUnitPrice!.Value, l.EnteredDiscount, l.UnitFactor, l.VatRate })
+            .Select(l => new { ItemId = l.ItemId!.Value, l.Receipt.ReceivedAt, l.LineNumber, Price = l.EnteredUnitPrice!.Value, l.EnteredDiscount, l.UnitFactor, l.VatPercent })
             .ToListAsync(cancellationToken);
         // The same price a receipt posts to the ledger: the net price of a base unit with the VAT of the line in it.
         return rows.GroupBy(r => r.ItemId).ToDictionary(
             g => g.Key,
             g => g.OrderByDescending(r => r.ReceivedAt).ThenByDescending(r => r.LineNumber)
-                .Select(r => ReceiptLineUnits.WithVat(decimal.Round((r.Price - r.EnteredDiscount) / r.UnitFactor, 4), r.VatRate)).First());
+                .Select(r => ReceiptLineUnits.WithVat(decimal.Round((r.Price - r.EnteredDiscount) / r.UnitFactor, 4), r.VatPercent)).First());
     }
 
     public async Task<bool> HasMovementsAsync(Guid itemId, CancellationToken cancellationToken) =>

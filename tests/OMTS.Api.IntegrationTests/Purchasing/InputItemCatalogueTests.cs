@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
@@ -231,7 +232,7 @@ public sealed class InputItemCatalogueTests
         var owner = world.Owner;
         var item = await (await owner.PostAsJsonAsync(Items, new
         {
-            name = "Nước mắm", group = "Other", purchaseVatRate = "KCT",
+            name = "Nước mắm", group = "Other", purchaseVatRateId = VatRateIds.Kct,
             units = new object[] { new { unitName = "chai", factor = 1, isBase = true }, new { unitName = "thùng", factor = 12, isBase = false } },
         })).ReadAsync(HttpStatusCode.Created);
         var box = item.GetProperty("units").EnumerateArray().Single(u => u.GetProperty("name").GetString() == "thùng");

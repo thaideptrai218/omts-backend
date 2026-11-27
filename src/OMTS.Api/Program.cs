@@ -44,12 +44,7 @@ builder.Services.AddControllers(options =>
         options.Filters.Add<OversizedUploadFilter>();
     })
     // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
-    // A VAT rate is the text "KCT", "0", "5", "8" or "10": its converter comes first, as the first converter that fits is used.
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new VatRateJsonConverter());
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    })
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     // Unreadable values answer 400 MSG-GEN-01 like every other invalid field.
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = InvalidModelStateResponse.Create);
 // A time sent without a UTC offset is Vietnam time (UTC+7), in JSON bodies and in Swagger.

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Purchasing;
@@ -25,7 +26,45 @@ internal sealed class FarmingInputItemConfiguration : IEntityTypeConfiguration<F
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.ProductId);
         builder.HasIndex(x => x.IsHidden);
+        builder.HasOne(x => x.PurchaseVatRate).WithMany().HasForeignKey(x => x.PurchaseVatRateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.PurchaseVatRateId);
     }
+}
+
+internal sealed class VatRateConfiguration : IEntityTypeConfiguration<VatRate>
+{
+    /// <summary>The seeded rates carry this creation time; they are made by the system, not by a person.</summary>
+    private static readonly DateTimeOffset SeededAt = new(2026, 11, 28, 0, 0, 0, TimeSpan.FromHours(7));
+
+    public void Configure(EntityTypeBuilder<VatRate> builder)
+    {
+        builder.Property(x => x.Name).HasMaxLength(50);
+        builder.Property(x => x.Percent).HasPrecision(5, 2);
+        // SQL Server compares case-insensitively: "kct" and "KCT" are one rate.
+        builder.HasIndex(x => x.Name).IsUnique();
+        builder.HasData(
+            Seed(VatRateIds.Kct, "KCT", null, isSystem: true, isDefault: false, sortOrder: 0),
+            Seed(VatRateIds.Zero, "0%", 0m, isSystem: false, isDefault: false, sortOrder: 1),
+            Seed(VatRateIds.Five, "5%", 5m, isSystem: false, isDefault: false, sortOrder: 2),
+            Seed(VatRateIds.Eight, "8%", 8m, isSystem: false, isDefault: false, sortOrder: 3),
+            Seed(VatRateIds.Ten, "10%", 10m, isSystem: false, isDefault: true, sortOrder: 4));
+    }
+
+    // Anonymous objects: the key has no public setter.
+    private static object Seed(Guid id, string name, decimal? percent, bool isSystem, bool isDefault, int sortOrder) => new
+    {
+        Id = id,
+        Name = name,
+        Percent = percent,
+        IsExempt = percent is null,
+        IsSystem = isSystem,
+        IsDefault = isDefault,
+        IsActive = true,
+        SortOrder = sortOrder,
+        CreatedAt = SeededAt,
+        // The in-memory test provider needs a value for the row version; SQL Server generates its own and takes none.
+        RowVersion = Array.Empty<byte>(),
+    };
 }
 
 internal sealed class InputUnitConfiguration : IEntityTypeConfiguration<InputUnit>

@@ -29,6 +29,7 @@ public sealed class PurchaseReturnService(
     ISupplierRepository suppliers,
     ISupplierPaymentRepository payments,
     IFarmingInputItemRepository items,
+    IVatRateRepository vatRates,
     IFarmingZoneRepository zones,
     ISeedLotUsageQuery seedUsage,
     PurchaseReceiptViews views,
@@ -46,7 +47,8 @@ public sealed class PurchaseReturnService(
     private const string RecordType = nameof(PurchaseReturn);
 
     /// <summary>What a save of a return refers to: its receipt when it has one, its supplier, its zone and the items of its lines.</summary>
-    private sealed record ReturnSources(PurchaseReceipt? Receipt, Supplier Supplier, FarmingZone? Zone, IReadOnlyDictionary<Guid, FarmingInputItem> Items);
+    private sealed record ReturnSources(
+        PurchaseReceipt? Receipt, Supplier Supplier, FarmingZone? Zone, IReadOnlyDictionary<Guid, FarmingInputItem> Items, IReadOnlyDictionary<Guid, VatRate> VatRates);
 
     public async Task<Result<PurchaseReceiptView>> CreateAsync(Guid receiptId, CreatePurchaseReturnRequest request, CancellationToken cancellationToken)
     {
@@ -401,6 +403,7 @@ public sealed class PurchaseReturnService(
     {
         var keptItems = purchaseReturn.Lines.Select(l => l.ItemId).ToHashSet();
         var found = (await items.GetByIdsAsync(inputs.Select(l => l.ItemId).OfType<Guid>().Distinct().ToList(), cancellationToken)).ToDictionary(i => i.Id);
+        var vatCatalogue = await vatRates.CatalogueAsync(cancellationToken);
         var invalid = new List<string>();
         for (var i = 0; i < inputs.Count; i++)
         {
@@ -434,7 +437,7 @@ public sealed class PurchaseReturnService(
         foreach (var input in inputs)
         {
             var item = found[input.ItemId!.Value];
-            var line = StandaloneLine(item, input);
+            var line = StandaloneLine(item, input, vatCatalogue);
             line.ReturnId = purchaseReturn.Id;
             purchaseReturn.Lines.Add(line);
             receipts.AddReturnLine(line);
@@ -445,13 +448,13 @@ public sealed class PurchaseReturnService(
 
     /// <summary>What the ledger rows of a return depend on: when it happened and, per line, the item, the base quantity and the price.</summary>
     private static string LedgerKey(PurchaseReturn r) => string.Join(
-        ";", r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId).Select(l => $"{l.ItemId}|{l.Quantity}|{l.EnteredUnitPrice}|{l.UnitFactor}|{l.VatRate}")) + $"@{r.ReturnedAt:O}";
+        ";", r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId).Select(l => $"{l.ItemId}|{l.Quantity}|{l.EnteredUnitPrice}|{l.UnitFactor}|{l.VatPercent}")) + $"@{r.ReturnedAt:O}";
 
     private static object EditSnapshot(PurchaseReturn r) => new
     {
         r.ReturnDate, r.ReturnedAt, r.ZoneId, r.Reason, r.Discount,
         Lines = r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId)
-            .Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
+            .Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRateName, l.VatPercent, l.VatAmount }).ToList(),
         ReturnValue = r.Lines.Sum(l => l.ReturnValue),
         VatRefund = PurchaseMoney.ReturnVat(r),
         NetValue = PurchaseMoney.ReturnNet(r),
@@ -604,7 +607,7 @@ public sealed class PurchaseReturnService(
 
         return invalid.Count > 0
             ? (null, AppError.InvalidFields(invalid.Distinct().ToList()))
-            : (new ReturnSources(receipt, supplier!, zone, found), null);
+            : (new ReturnSources(receipt, supplier!, zone, found, receipt is null ? await vatRates.CatalogueAsync(cancellationToken) : new Dictionary<Guid, VatRate>()), null);
     }
 
     private void Apply(PurchaseReturn purchaseReturn, SavePurchaseReturnRequest request, ReturnSources sources)
@@ -625,15 +628,16 @@ public sealed class PurchaseReturnService(
                 return LineFromReceipt(receipt, receipt.Lines.First(l => l.Id == input.ReceiptLineId), input.Quantity!.Value, input.UnitPrice);
             }
 
-            return StandaloneLine(sources.Items[input.ItemId!.Value], input);
+            return StandaloneLine(sources.Items[input.ItemId!.Value], input, sources.VatRates);
         }).ToList();
 
     /// <summary>A line of a return with no receipt, in the unit of the item that was chosen (the base unit by default).</summary>
-    private static PurchaseReturnLine StandaloneLine(FarmingInputItem item, PurchaseReturnLineInput input)
+    private static PurchaseReturnLine StandaloneLine(FarmingInputItem item, PurchaseReturnLineInput input, IReadOnlyDictionary<Guid, VatRate> vatRates)
     {
         var unit = ReceiptLineUnits.Resolve(item, input.ItemUnitId);
         // Nothing names a receipt line, so the VAT given back is that of the item's own rate.
-        var line = new PurchaseReturnLine { ItemId = item.Id, VatRate = item.PurchaseVatRate };
+        var line = new PurchaseReturnLine { ItemId = item.Id };
+        VatSnapshot.ItemRate(item, vatRates).ApplyTo(line);
         ReceiptLineUnits.FillReturn(line, unit?.Unit?.Name ?? item.Unit, unit?.Id, unit?.Factor ?? 1m, input.Quantity!.Value, input.UnitPrice!.Value);
         return line;
     }
@@ -646,7 +650,8 @@ public sealed class PurchaseReturnService(
     {
         var price = unitPrice ?? PurchaseMoney.ReturnPriceInLineUnit(receipt, line);
         // The VAT given back follows the rate of the receipt line, never an input.
-        var returned = new PurchaseReturnLine { ReceiptLineId = line.Id, ItemId = line.ItemId!.Value, VatRate = line.VatRate };
+        var returned = new PurchaseReturnLine { ReceiptLineId = line.Id, ItemId = line.ItemId!.Value };
+        VatSnapshot.Of(line).ApplyTo(returned);
         ReceiptLineUnits.FillReturn(returned, line.Unit, line.ItemUnitId, line.UnitFactor, quantity, price);
         return returned;
     }
@@ -746,7 +751,7 @@ public sealed class PurchaseReturnService(
             purchaseReturn.ReceiptId, purchaseReturn.SupplierId, purchaseReturn.ReturnDate, purchaseReturn.ReturnedAt, purchaseReturn.Discount,
             // The Zone Manager's answer to MSG-PURCHASE-02; the Owner is not asked.
             OwnerApprovalConfirmed = ownerApprovalConfirmed,
-            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
+            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRateName, l.VatPercent, l.VatAmount }).ToList(),
         },
         Reason = purchaseReturn.Reason,
     });
@@ -754,7 +759,7 @@ public sealed class PurchaseReturnService(
     private static object Snapshot(PurchaseReturn r) => new
     {
         r.ReceiptId, r.SupplierId, r.ZoneId, r.Reason, r.Discount,
-        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRate, l.VatAmount }).ToList(),
+        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue, l.VatRateName, l.VatPercent, l.VatAmount }).ToList(),
     };
 
     private AppError WrongStatus(PurchaseReturn purchaseReturn) =>
