@@ -93,6 +93,19 @@ internal sealed class AuditEventQuery(OmtsDbContext db) : IAuditEventQuery
         }).ToList();
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> ReferenceNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        var invoices = await db.SalesInvoices.AsNoTracking().Where(i => ids.Contains(i.Id)).Select(i => new { i.Id, Name = i.Code }).ToListAsync(cancellationToken);
+        var products = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new { p.Id, p.Name }).ToListAsync(cancellationToken);
+        var accounts = await db.Accounts.AsNoTracking().Where(a => ids.Contains(a.Id)).Select(a => new { a.Id, Name = a.DisplayName }).ToListAsync(cancellationToken);
+        return invoices.Concat(products).Concat(accounts).GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.First().Name);
+    }
+
     public async Task<AuditFacetRows> FacetsAsync(CancellationToken cancellationToken)
     {
         // The actions and the record types are free text written by every module, so the lists are read from the log. Both come in one command, each from the index that leads with it (an

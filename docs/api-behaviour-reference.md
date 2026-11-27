@@ -677,6 +677,20 @@ Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other 
 - `GET /api/audit-events/{id}/record`: the record of the event as it is now, or 404 MSG-ACCOUNT-22 when it no longer
   exists (its events stay in the log).
 
+### Record history ("Lịch sử" of a record, 27/11/2026)
+
+`GET /api/{harvest-lots|seeding-records|material-usages|cultivation-logs|nursery-batches|cultivation-cycles}/{id}/history` answers `{ recordType, recordId, recordCode, entries[] }`, the oldest event
+first, built from the audit snapshots; the shape did not change. Every text in it is Vietnamese (`RecordHistoryLabels`, `RecordHistoryValues`):
+- `actionLabel`: every action of the six record types has a name ("Công khai truy xuất", "Kết thúc lô", "Cân lại lô", ...); an action nobody named is "Thay đổi", never the English code. `reason` is told
+  in words when the system wrote a code (a lot reopened by a cancelled invoice), a reason someone typed stays as typed.
+- `changes[].label` and `unit`: every field written by a record type has a label (a unit test lists the fields of the snapshots and of the publish, withdraw, weigh, close and trace correction events and fails
+  on a field with none); a field of a later version shows as "Thông tin khác". The figures kept under `Summary` in the close of a cycle are fields of their own.
+- `changes[].from` and `to` are texts as a reader writes them: dates `dd/MM/yyyy`, times `dd/MM/yyyy HH:mm` in Vietnam, numbers with a decimal comma and a point between thousands (the unit is in `unit`,
+  not in the text), Có/Không, coded values in Vietnamese (`OPEN` "Đang mở", `CLOSED` "Đã kết thúc", `NotPublished` "Chưa công khai", `SoldWholeLot` "Bán hết lô", the log types), photos as "n ảnh".
+- A reference to another record is named by its code or name (the closing invoice by its code, a product, the person in charge); an id that cannot be named is left out, never printed.
+- An event with no values before (a creation) lists only the fields that have a value, with `from` null; an event with no values after (a removal) lists the values the record held. A field that is
+  empty before and after never appears, so there is no "— → —".
+
 ### VietQR sale and bank notifications (SALE-05 steps 7-8, GFR-08, API-13)
 
 - `POST /api/sales-invoices` with `payment.rest = "VietQr"` (all of the total, or the rest after `cashAmount`; a walk-in customer
