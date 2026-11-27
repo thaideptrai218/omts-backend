@@ -43,6 +43,7 @@ internal sealed class PurchaseReceiptLineConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.EnteredDiscount).HasPrecision(18, 0);
         // Rounded half up to the dong, not to thousands (BR-PURCHASE-02): PurchaseMoney.RoundHalfUp.
         builder.Property(x => x.LineAmount).HasPrecision(18, 0);
+        builder.Property(x => x.VatAmount).HasPrecision(18, 0);
         builder.Property(x => x.SupplierLotCode).HasMaxLength(Lengths.ShortText);
     }
 }
@@ -81,6 +82,7 @@ internal sealed class PurchaseReturnLineConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.EnteredUnitPrice).HasPrecision(18, 0);
         // Rounded half up to the dong when recorded (BR-PURCHASE-02), and kept: PM 03/11.
         builder.Property(x => x.ReturnValue).HasPrecision(18, 0);
+        builder.Property(x => x.VatAmount).HasPrecision(18, 0);
     }
 }
 

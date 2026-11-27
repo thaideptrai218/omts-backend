@@ -19,11 +19,12 @@ public sealed record SupplierStatementEntry(
     PaymentMethod? Method, string? BankReference, string? Note, decimal Amount, decimal DebtAfter);
 
 /// <param name="Covered">What the payments cover of this receipt: the parts set against it first, then the rest oldest receipts first.</param>
-/// <param name="Remaining">Total − discount − returned − covered, above zero.</param>
+/// <param name="Remaining">Total − discount + VAT − returned − covered, above zero.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7.</param>
+/// <param name="Vat">The input VAT of the receipt, part of what is owed.</param>
 public sealed record UnpaidReceipt(
     Guid Id, string Code, DateOnly ReceiptDate, decimal Total, decimal Returned, decimal Covered, decimal Remaining, int AgeDays, decimal Discount = 0,
-    DateTimeOffset ReceivedAt = default);
+    DateTimeOffset ReceivedAt = default, decimal Vat = 0);
 
 /// <summary>The part of a payment read as covering one receipt.</summary>
 public sealed record PaymentAllocation(Guid ReceiptId, Guid PaymentId, decimal Amount);
@@ -70,7 +71,7 @@ public static class SupplierDebtLedger
             {
                 unpaid.Add(new UnpaidReceipt(
                     receipt.Id, receipt.Code, receipt.ReceiptDate, receipt.Total, receipt.Returned, total, net - total,
-                    today.DayNumber - receipt.ReceiptDate.DayNumber, receipt.Discount, receipt.ReceivedAt));
+                    today.DayNumber - receipt.ReceiptDate.DayNumber, receipt.Discount, receipt.ReceivedAt, receipt.Vat));
             }
         }
 
@@ -194,7 +195,7 @@ public static class SupplierDebtLedger
         decimal openingDebt, IEnumerable<DebtReceiptRow> receipts, IEnumerable<StatementReturnRow> returns, IEnumerable<StatementPaymentRow> payments)
     {
         var rows = receipts
-            .Select(r => Entry(r.ReceiptDate, SupplierStatementEntryKind.Receipt, r.Id, r.Code, r.Total - r.Discount, null))
+            .Select(r => Entry(r.ReceiptDate, SupplierStatementEntryKind.Receipt, r.Id, r.Code, r.Total - r.Discount + r.Vat, null))
             .Concat(returns.Select(r => Entry(r.ReturnDate, SupplierStatementEntryKind.Return, r.Id, r.Code, -r.Value, r.ReceiptCode)))
             .Concat(payments.Select(p => new SupplierStatementEntry(
                 p.PaymentDate,

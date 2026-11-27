@@ -31,8 +31,9 @@ public sealed record PurchaseReceiptQuery(
 
 /// <param name="LinesTotal">Σ of the lines that match the item group, item and raft filters; the total when none is chosen.</param>
 /// <param name="ItemCount">Number of lines on the receipt.</param>
-/// <param name="Returned">Σ of its Recorded returns, each less its own discount.</param>
-/// <param name="Payable">Total less discount.</param>
+/// <param name="Returned">Σ of its Recorded returns, each less its own discount and with the VAT given back.</param>
+/// <param name="Payable">Total less discount plus <paramref name="VatTotal"/>: what the supplier is owed for it before returns.</param>
+/// <param name="VatTotal">Σ input VAT of its lines.</param>
 /// <param name="Paid">What the payments of the supplier cover of this receipt, oldest receipts first; 0 unless Completed.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7.</param>
 /// <param name="ReceivedByName">Who took the goods in; null when the receipt has no receiver.</param>
@@ -44,15 +45,17 @@ public sealed record PurchaseReceiptRow(
     string? Notes, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, DateTimeOffset ReceivedAt, string? ReceivedByName,
     IReadOnlyList<string> ReturnCodes,
     PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply,
-    SeedLotState? SeedState = null);
+    SeedLotState? SeedState = null,
+    decimal VatTotal = 0);
 
 /// <summary>
 /// PURCHASE-03 step 3: the Completed receipts (matching lines only), the returns dated in the period and the net.
-/// <see cref="Count"/> counts every match. <see cref="RaftMaterialCost"/> is always null: a raft's material cost comes from
+/// <see cref="Count"/> counts every match. <see cref="ReceiptsTotal"/> and <see cref="ReturnsTotal"/> are the goods; <see cref="ReceiptsVat"/> and <see cref="ReturnsVat"/> their VAT, and <see cref="NetTotal"/>
+/// what the receipts leave owed after the returns, VAT included. <see cref="RaftMaterialCost"/> is always null: a raft's material cost comes from
 /// the material used on it (<c>GET api/purchase-receipts/raft-material-costs</c>), not from the receipts.
 /// </summary>
 public sealed record PurchaseReceiptTotals(
-    int Count, int CompletedCount, decimal ReceiptsTotal, decimal ReturnsTotal, decimal NetTotal, decimal? RaftMaterialCost);
+    int Count, int CompletedCount, decimal ReceiptsTotal, decimal ReturnsTotal, decimal NetTotal, decimal? RaftMaterialCost, decimal ReceiptsVat = 0, decimal ReturnsVat = 0);
 
 /// <param name="Message">MSG-GEN-10 when no receipt matches.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
@@ -183,16 +186,16 @@ public sealed class PurchaseReceiptQueryService(
         var totals = Totals(await receipts.TotalsAsync(filter.Value!, cancellationToken));
         var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
         [
-            r.Code, r.ReceiptDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.Status, r.Total, r.LinesTotal,
+            r.Code, r.ReceiptDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.Status, r.Total, r.LinesTotal, r.VatTotal,
         ]).ToList();
-        sheetRows.Add(["Completed receipts", null, null, $"{totals.CompletedCount} / {totals.Count}", null, totals.ReceiptsTotal]);
-        sheetRows.Add(["Purchase returns in the period", null, null, null, null, totals.ReturnsTotal]);
-        sheetRows.Add(["Net total", null, null, null, null, totals.NetTotal]);
+        sheetRows.Add(["Completed receipts", null, null, $"{totals.CompletedCount} / {totals.Count}", null, totals.ReceiptsTotal, totals.ReceiptsVat]);
+        sheetRows.Add(["Purchase returns in the period", null, null, null, null, totals.ReturnsTotal, totals.ReturnsVat]);
+        sheetRows.Add(["Net total", null, null, null, null, totals.NetTotal, null]);
 
         try
         {
             var content = spreadsheets.Write([new SpreadsheetSheet(
-                "Purchase receipts", ["Code", "Date received", "Supplier", "Status", "Total", "Lines matching the filters"], sheetRows)]);
+                "Purchase receipts", ["Code", "Date received", "Supplier", "Status", "Total", "Lines matching the filters", "VAT"], sheetRows)]);
             var (from, to) = (filter.Value!.From!.Value, filter.Value.To!.Value);
             return new ExportedFile($"purchase-receipts-{from:yyyyMMdd}-{to:yyyyMMdd}.xlsx", ISpreadsheetWriter.ContentType, content);
         }
@@ -268,9 +271,9 @@ public sealed class PurchaseReceiptQueryService(
             r.ZoneId is { } zoneId ? new ZoneRef(zoneId, r.ZoneCode!, r.ZoneName!) : null,
             r.Notes, r.CompletedAt, r.CreatedAt, r.UpdatedAt,
             r.ReceivedAt, r.ReceivedByAccountId is { } receiverId ? names.GetValueOrDefault(receiverId) : null, r.ReturnCodes,
-            r.Kind, lotFigures[r.Id].ToList() is { Count: > 0 } figures ? SeedLotStates.Combine(figures.Select(f => f.State).ToList()) : null)).ToList();
+            r.Kind, lotFigures[r.Id].ToList() is { Count: > 0 } figures ? SeedLotStates.Combine(figures.Select(f => f.State).ToList()) : null, r.Vat)).ToList();
     }
 
     private static PurchaseReceiptTotals Totals(ReceiptListTotals t) =>
-        new(t.Count, t.CompletedCount, t.ReceiptsTotal, t.ReturnsTotal, t.NetTotal, RaftMaterialCost: null);
+        new(t.Count, t.CompletedCount, t.ReceiptsTotal, t.ReturnsTotal, t.NetTotal, RaftMaterialCost: null, t.ReceiptsVat, t.ReturnsVat);
 }

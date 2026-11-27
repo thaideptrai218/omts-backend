@@ -6,8 +6,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
-/// The purchases report on the receipts (Completed, by receipt date) and the returns (Recorded, by return date) of the period. A receipt has no total column, so the caller sums its lines and
-/// takes the discount off. The kind keeps seed receipts (returns: seed items) or the others. Read only.
+/// The purchases report on the receipts (Completed, by receipt date) and the returns (Recorded, by return date) of the period. A receipt has no total column, so the caller sums its lines and their
+/// VAT and takes the discount off. The kind keeps seed receipts (returns: seed items) or the others. Read only.
 /// </summary>
 internal sealed class PurchaseReportQuery(OmtsDbContext db) : IPurchaseReportQuery
 {
@@ -46,9 +46,10 @@ internal sealed class PurchaseReportQuery(OmtsDbContext db) : IPurchaseReportQue
                     Unit = l.Item == null ? string.Empty : l.Item.Unit,
                     Quantity = l.Quantity ?? 0m,
                     l.LineAmount,
+                    l.VatAmount,
                 })
                 .ToListAsync(cancellationToken))
-            .ToLookup(l => l.ReceiptId, l => new PurchaseReportLine(l.ItemId, l.Code, l.Name, l.Unit, l.Quantity, l.LineAmount));
+            .ToLookup(l => l.ReceiptId, l => new PurchaseReportLine(l.ItemId, l.Code, l.Name, l.Unit, l.Quantity, l.LineAmount, l.VatAmount));
 
         var returnRows = await returns
             .Select(r => new { r.Id, r.Code, r.ReturnDate, r.SupplierId, SupplierName = r.Supplier.Name, r.Discount })
@@ -62,9 +63,9 @@ internal sealed class PurchaseReportQuery(OmtsDbContext db) : IPurchaseReportQue
         }
 
         var returnLines = (await returnLinesQuery
-                .Select(l => new { l.ReturnId, l.ItemId, l.Item.Code, l.Item.Name, l.Item.Unit, l.Quantity, l.ReturnValue })
+                .Select(l => new { l.ReturnId, l.ItemId, l.Item.Code, l.Item.Name, l.Item.Unit, l.Quantity, l.ReturnValue, l.VatAmount })
                 .ToListAsync(cancellationToken))
-            .ToLookup(l => l.ReturnId, l => new PurchaseReportLine(l.ItemId, l.Code, l.Name, l.Unit, l.Quantity, l.ReturnValue));
+            .ToLookup(l => l.ReturnId, l => new PurchaseReportLine(l.ItemId, l.Code, l.Name, l.Unit, l.Quantity, l.ReturnValue, l.VatAmount));
 
         return receiptRows
             .Select(r => new PurchaseReportDocument(r.Id, r.Code, r.ReceiptDate, false, r.SupplierId, r.SupplierName, r.Kind, r.Discount, receiptLines[r.Id].ToList()))

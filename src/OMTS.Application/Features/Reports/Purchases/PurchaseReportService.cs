@@ -8,7 +8,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Reports.Purchases;
 
 /// <summary>
-/// The purchases report (KiotViet "Nhà cung cấp – Hàng nhập theo NCC"; no VAT), worked out each time and never stored. The API checks the right (SUPPLIER_PAYMENTS View, or Export for the file: the
+/// The purchases report (KiotViet "Nhà cung cấp – Hàng nhập theo NCC", with the input VAT of the receipts), worked out each time and never stored. The API checks the right (SUPPLIER_PAYMENTS View, or Export for the file: the
 /// Cooperative Owner and the Accountant, decision D5 of 19/11/2026); purchases have no zone. The period is checked as every report does (MSG-GEN-01 names every field to fix); nothing found is MSG-GEN-10.
 /// </summary>
 public sealed class PurchaseReportService(ReportFilterResolver filters, IPurchaseReportQuery query, TimeProvider timeProvider)

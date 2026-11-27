@@ -37,12 +37,13 @@ public sealed class PurchaseReturnQueryService(
             found.Zone is { } zone ? new ZoneRef(zone.Id, zone.Code, zone.Name) : null,
             found.ReturnDate, found.Reason, found.Discount, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
             found.CancelledAt, found.CancelReason, new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty),
-            value, value - found.Discount,
-            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity)).ToList(),
+            value, PurchaseMoney.ReturnNet(found),
+            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity, l.VatRate, l.VatAmount)).ToList(),
             refunds.Select(p => new ReturnRefundView(p.Id, p.Code, p.PaymentDate, p.Amount, p.Method, p.BankReference, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt)).ToList(),
             RowVersionGuard.Encode(found.RowVersion),
             found.ReturnedAt,
-            found.Receipt?.Kind ?? (found.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply));
+            found.Receipt?.Kind ?? (found.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply),
+            PurchaseMoney.ReturnVat(found));
     }
 
     public async Task<Result<PurchaseReturnSearchResult>> SearchAsync(PurchaseReturnQuery query, CancellationToken cancellationToken)
@@ -72,14 +73,14 @@ public sealed class PurchaseReturnQueryService(
         var rows = await RowsAsync(await receipts.ListReturnsAsync(filter.Value!, cancellationToken), cancellationToken);
         var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
         [
-            r.Code, r.ReturnDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.ReceiptCode, r.Zone?.Name, r.Status, r.Value, r.Discount, r.NetValue, r.Refunded,
+            r.Code, r.ReturnDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.ReceiptCode, r.Zone?.Name, r.Status, r.Value, r.Discount, r.VatRefund, r.NetValue, r.Refunded,
         ]).ToList();
-        sheetRows.Add(["Recorded returns", null, null, null, null, null, null, null,
+        sheetRows.Add(["Recorded returns", null, null, null, null, null, null, null, null,
             rows.Where(r => r.StatusId == StatusIds.PurchaseReturn.Recorded).Sum(r => r.NetValue), null]);
         try
         {
             var content = spreadsheets.Write([new SpreadsheetSheet(
-                "Purchase returns", ["Code", "Return date", "Supplier", "Receipt", "Zone", "Status", "Value", "Discount", "Net value", "Paid back"], sheetRows)]);
+                "Purchase returns", ["Code", "Return date", "Supplier", "Receipt", "Zone", "Status", "Value", "Discount", "VAT refund", "Net value", "Paid back"], sheetRows)]);
             return new ExportedFile($"purchase-returns-{filter.Value!.From:yyyyMMdd}-{filter.Value.To:yyyyMMdd}.xlsx", ISpreadsheetWriter.ContentType, content);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -143,8 +144,8 @@ public sealed class PurchaseReturnQueryService(
             r.ZoneId is { } zoneId ? new ZoneRef(zoneId, r.ZoneCode!, r.ZoneName!) : null,
             r.Reason, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId),
             new AccountRef(r.RecordedByAccountId, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty),
-            r.Value, r.Discount, r.Value - r.Discount, r.LineCount, r.Refunded, r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt,
-            RowVersionGuard.Encode(r.RowVersion), r.ReturnedAt, r.Kind)).ToList();
+            r.Value, r.Discount, r.NetValue, r.LineCount, r.Refunded, r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt,
+            RowVersionGuard.Encode(r.RowVersion), r.ReturnedAt, r.Kind, r.Vat)).ToList();
     }
 }
 

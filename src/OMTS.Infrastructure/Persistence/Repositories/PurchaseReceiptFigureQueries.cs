@@ -39,32 +39,34 @@ internal sealed partial class PurchaseReceiptRepository
         var matching = Filtered(filter, db.PurchaseReceipts.AsNoTracking());
         var count = await matching.CountAsync(cancellationToken);
         var completedCount = await matching.CountAsync(r => r.StatusId == StatusIds.PurchaseReceipt.Completed, cancellationToken);
-        var (receipts, returns) = await SumsAsync(filter, cancellationToken);
-        return new ReceiptListTotals(count, completedCount, receipts, returns);
+        var (receipts, returns, receiptsVat, returnsVat) = await SumsAsync(filter, cancellationToken);
+        return new ReceiptListTotals(count, completedCount, receipts, returns, receiptsVat, returnsVat);
     }
 
     /// <summary>
     /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the Recorded returns of those
-    /// lines, dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
+    /// lines, dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05), each with the VAT of those lines.
     /// </summary>
-    private async Task<(decimal Receipts, decimal Returns)> SumsAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken)
+    private async Task<(decimal Receipts, decimal Returns, decimal ReceiptsVat, decimal ReturnsVat)> SumsAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken)
     {
         if ((filter.StatusId is { } statusId && statusId != StatusIds.PurchaseReceipt.Completed)
             || (filter.StatusIds is { } statusIds && !statusIds.Contains(StatusIds.PurchaseReceipt.Completed)))
         {
             // Totals count Completed receipts only (BR-PURCHASE-03), and only Completed receipts have returns.
-            return (0, 0);
+            return (0, 0, 0, 0);
         }
 
         var (from, to) = (filter.From ?? DateOnly.MinValue, filter.To ?? DateOnly.MaxValue);
         var lines = OfCompletedReceipts(filter, MatchingLines(filter, db.PurchaseReceiptLines.AsNoTracking()));
-        var receipts = await lines.Where(l => l.Receipt.ReceiptDate >= from && l.Receipt.ReceiptDate <= to)
-            .SumAsync(l => (decimal?)l.LineAmount, cancellationToken) ?? 0m;
+        var inPeriod = lines.Where(l => l.Receipt.ReceiptDate >= from && l.Receipt.ReceiptDate <= to);
+        var receipts = await inPeriod.SumAsync(l => (decimal?)l.LineAmount, cancellationToken) ?? 0m;
+        var receiptsVat = await inPeriod.SumAsync(l => (decimal?)l.VatAmount, cancellationToken) ?? 0m;
         var lineIds = lines.Select(l => l.Id);
-        var returns = await db.RecordedReturnLines()
-            .Where(rl => rl.ReceiptLineId != null && lineIds.Contains(rl.ReceiptLineId.Value) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
-            .SumAsync(rl => (decimal?)rl.ReturnValue, cancellationToken) ?? 0m;
-        return (receipts, returns);
+        var returnLines = db.RecordedReturnLines()
+            .Where(rl => rl.ReceiptLineId != null && lineIds.Contains(rl.ReceiptLineId.Value) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to);
+        var returns = await returnLines.SumAsync(rl => (decimal?)rl.ReturnValue, cancellationToken) ?? 0m;
+        var returnsVat = await returnLines.SumAsync(rl => (decimal?)rl.VatAmount, cancellationToken) ?? 0m;
+        return (receipts, returns, receiptsVat, returnsVat);
     }
 
     private static IQueryable<PurchaseReceipt> Sorted(IQueryable<PurchaseReceipt> rows, PurchaseReceiptFilter filter)
@@ -95,12 +97,13 @@ internal sealed partial class PurchaseReceiptRepository
                 .Sum(l => (decimal?)l.LineAmount) ?? 0m,
             r.Supplier.Code,
             r.Lines.Count,
-            (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).SelectMany(x => x.Lines).Sum(l => (decimal?)l.ReturnValue) ?? 0m)
+            (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).SelectMany(x => x.Lines).Sum(l => (decimal?)(l.ReturnValue + l.VatAmount)) ?? 0m)
                 - (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).Sum(x => (decimal?)x.Discount) ?? 0m),
             r.Discount, r.ZoneId, r.Zone!.Code, r.Zone!.Name, r.Notes, r.CompletedAt, r.CreatedAt, r.UpdatedAt, r.ReceivedAt, r.ReceivedByAccountId,
             // Codes of its Recorded returns, oldest first, for the list's "Mã trả hàng nhập" column.
             r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).OrderBy(x => x.ReturnedAt).Select(x => x.Code).ToList(),
-            r.Kind));
+            r.Kind,
+            r.Lines.Sum(l => (decimal?)l.VatAmount) ?? 0m));
     }
 
     private static IQueryable<PurchaseReceiptLine> MatchingLines(PurchaseReceiptFilter filter, IQueryable<PurchaseReceiptLine> lines)

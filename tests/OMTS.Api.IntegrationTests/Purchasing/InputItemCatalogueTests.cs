@@ -231,7 +231,7 @@ public sealed class InputItemCatalogueTests
         var owner = world.Owner;
         var item = await (await owner.PostAsJsonAsync(Items, new
         {
-            name = "Nước mắm", group = "Other",
+            name = "Nước mắm", group = "Other", purchaseVatRate = "KCT",
             units = new object[] { new { unitName = "chai", factor = 1, isBase = true }, new { unitName = "thùng", factor = 12, isBase = false } },
         })).ReadAsync(HttpStatusCode.Created);
         var box = item.GetProperty("units").EnumerateArray().Single(u => u.GetProperty("name").GetString() == "thùng");

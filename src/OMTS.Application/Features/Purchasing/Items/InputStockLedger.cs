@@ -48,25 +48,25 @@ public sealed class InputStockLedger(
         allowNegative = null;
     }
 
-    /// <summary>Writes the rows of a Completed receipt: every line with an item and a quantity; a Seed line names its seed lot.</summary>
+    /// <summary>Writes the rows of a Completed receipt: every line with an item and a quantity; a Seed line names its seed lot. The price of a row is the cost of a base unit with the input VAT of the line in it.</summary>
     public async Task PostReceiptAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
         var refs = await ItemsAsync(receipt.Lines.Select(l => l.ItemId), cancellationToken);
         var postings = receipt.Lines.OrderBy(l => l.LineNumber)
             .Where(l => l.ItemId is { } id && refs.ContainsKey(id) && l.Quantity is > 0)
             .Select(l => new StockPosting(
-                l.ItemId!.Value, refs[l.ItemId!.Value].Group == InputItemGroup.Seed ? l.Id : null, l.Quantity!.Value, ReceiptLineUnits.NetPricePerBase(l)))
+                l.ItemId!.Value, refs[l.ItemId!.Value].Group == InputItemGroup.Seed ? l.Id : null, l.Quantity!.Value, ReceiptLineUnits.CostPerBase(l)))
             .ToList();
         await PostAsync(InputStockMovementKind.Receipt, receipt.Id, receipt.Code, receipt.ReceivedAt, await SupplierNameAsync(receipt.SupplierId, cancellationToken), postings, refs, cancellationToken);
     }
 
-    /// <summary>Writes the rows of a Recorded return: the quantities leave the stock at the price they were returned at; a line of a receipt names the seed lot it came from.</summary>
+    /// <summary>Writes the rows of a Recorded return: the quantities leave the stock at the price they were returned at, with the VAT given back in it; a line of a receipt names the seed lot it came from.</summary>
     public async Task PostReturnAsync(PurchaseReturn purchaseReturn, CancellationToken cancellationToken)
     {
         var refs = await ItemsAsync(purchaseReturn.Lines.Select(l => (Guid?)l.ItemId), cancellationToken);
         var postings = purchaseReturn.Lines.Where(l => l.Quantity > 0 && refs.ContainsKey(l.ItemId))
             .Select(l => new StockPosting(
-                l.ItemId, refs[l.ItemId].Group == InputItemGroup.Seed ? l.ReceiptLineId : null, -l.Quantity, ReceiptLineUnits.PricePerBase(l.EnteredUnitPrice, l.UnitFactor)))
+                l.ItemId, refs[l.ItemId].Group == InputItemGroup.Seed ? l.ReceiptLineId : null, -l.Quantity, ReceiptLineUnits.WithVat(ReceiptLineUnits.PricePerBase(l.EnteredUnitPrice, l.UnitFactor), l.VatRate)))
             .ToList();
         await PostAsync(
             InputStockMovementKind.PurchaseReturn, purchaseReturn.Id, purchaseReturn.Code, purchaseReturn.ReturnedAt,

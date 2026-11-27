@@ -110,6 +110,7 @@ public sealed class PurchaseReceiptEditService(
         receipt.Discount = request.Discount;
         receipt.ZoneId = request.ZoneId ?? receipt.ZoneId;
         ApplyLines(receipt, inputs, existing, refs);
+        PurchaseMoney.ApplyVat(receipt);
         // The quantities of the receipt on the ledger follow the new lines: the old rows are undone, the new ones written.
         if (LedgerKey(receipt) != ledgerBefore)
         {
@@ -213,6 +214,11 @@ public sealed class PurchaseReceiptEditService(
             if (input.ItemUnitId is not null && (item is null || ReceiptLineUnits.Resolve(item, input.ItemUnitId) is null))
             {
                 invalid.Add($"Line {i + 1} unit");
+            }
+
+            if (input.VatRate is { } vatRate && !Enum.IsDefined(vatRate))
+            {
+                invalid.Add($"Line {i + 1} VAT rate");
             }
 
             if (input.RaftId is { } raftId && raftId != stored?.RaftId && !PurchaseReceiptValidator.RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones))
@@ -340,6 +346,7 @@ public sealed class PurchaseReceiptEditService(
     {
         // A kept line of the same item that names no unit keeps its own unit; a new line or another item takes the unit asked for (the base unit by default).
         var keepsUnit = line.ItemId == item.Id && input.ItemUnitId is null && line.ItemUnitId is not null;
+        line.VatRate = PurchaseReceiptService.LineVatRate(input.VatRate, item, line);
         if (line.ItemId != item.Id)
         {
             line.ItemId = item.Id;
@@ -356,9 +363,9 @@ public sealed class PurchaseReceiptEditService(
         line.RaftId = input.RaftId ?? line.RaftId;
     }
 
-    /// <summary>What the ledger rows of a receipt depend on: when it was received and, per line, the item, the base quantity and the net price per base unit.</summary>
+    /// <summary>What the ledger rows of a receipt depend on: when it was received and, per line, the item, the base quantity and the cost per base unit (net price with VAT).</summary>
     private static string LedgerKey(PurchaseReceipt r) => string.Join(
-        ";", r.Lines.OrderBy(l => l.LineNumber).Select(l => $"{l.Id}|{l.ItemId}|{l.Quantity}|{ReceiptLineUnits.NetPricePerBase(l)}")) + $"@{r.ReceivedAt:O}";
+        ";", r.Lines.OrderBy(l => l.LineNumber).Select(l => $"{l.Id}|{l.ItemId}|{l.Quantity}|{ReceiptLineUnits.CostPerBase(l)}")) + $"@{r.ReceivedAt:O}";
 
     /// <summary>The receipt as the audit log keeps it: the header, every line and the totals.</summary>
     private static object Snapshot(PurchaseReceipt r)
@@ -368,8 +375,8 @@ public sealed class PurchaseReceiptEditService(
         {
             r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
             Lines = r.Lines.OrderBy(l => l.LineNumber)
-                .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
-            Totals = new { figures.Total, figures.Payable, figures.Returned },
+                .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.VatRate, l.VatAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+            Totals = new { figures.Total, figures.Vat, figures.Payable, figures.Returned },
         };
     }
 }
