@@ -2,6 +2,8 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Farming;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
@@ -106,7 +108,7 @@ public class CultivationLogRecordTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task A_closed_cycle_or_a_discontinued_raft_refuses_a_new_log_with_msg_gen_09_and_an_unknown_cycle_is_404()
+    public async Task A_closed_cycle_or_a_discontinued_zone_refuses_a_new_log_with_msg_gen_09_and_an_unknown_cycle_is_404()
     {
         var closed = await factory.CycleAsync();
         await factory.CloseCycleAsync(closed.CycleId);
@@ -115,9 +117,9 @@ public class CultivationLogRecordTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Contains("is Closed and cannot be used for this action.", refused.Text("detail"));
 
         var discontinued = await factory.CycleAsync();
-        await factory.DiscontinueRaftAsync(discontinued.RaftId);
-        var raftRefused = await (await discontinued.Owner.Client.PostLogAsync(discontinued.CycleId)).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG-GEN-09", raftRefused.Text("code"));
+        await factory.UpdateAsync<FarmingZone>(discontinued.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
+        var zoneRefused = await (await discontinued.Owner.Client.PostLogAsync(discontinued.CycleId)).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal("MSG-GEN-09", zoneRefused.Text("code"));
 
         Assert.Equal(0, await factory.LogCountAsync(closed.CycleId) + await factory.LogCountAsync(discontinued.CycleId));
         Assert.Equal(HttpStatusCode.NotFound, (await closed.Owner.Client.PostLogAsync(Guid.NewGuid())).StatusCode);

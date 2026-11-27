@@ -67,7 +67,7 @@ public sealed class TraceCultivationLogCorrectionService(
         var keptCount = seen.Photos.Count(p => keep.Contains(p.FileKey));
         if (CultivationLogValues.Read(
                 request.VisitDate, request.LogType, request.Notes, newPhotos, request.OtherFilePart, keptCount, keysAreKnown: keptCount == keep.Count, request.Reason, reasonRequired: true,
-                seen.Cycle.StartDate, LastDay(seen.Cycle), out var values) is { } invalid)
+                seen.Cycle!.StartDate, LastDay(seen.Cycle), out var values) is { } invalid)
         {
             return invalid;
         }
@@ -111,7 +111,7 @@ public sealed class TraceCultivationLogCorrectionService(
         }
 
         var kept = log.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
-        if ((await RefusalAsync(log, cancellationToken) ?? CultivationLogValues.ReadAgain(values.VisitDate, log.Cycle.StartDate, kept.Count == keep.Count)) is { } refused)
+        if ((await RefusalAsync(log, cancellationToken) ?? CultivationLogValues.ReadAgain(values.VisitDate, log.Cycle!.StartDate, kept.Count == keep.Count)) is { } refused)
         {
             return refused;
         }
@@ -124,7 +124,7 @@ public sealed class TraceCultivationLogCorrectionService(
         {
             // Photos are rows of their own: a change of photos only must still give the log a new row version.
             unitOfWork.MarkChanged(log);
-            unitOfWork.MarkChanged(log.Cycle);
+            unitOfWork.MarkChanged(log.Cycle!);
             audit.Record(CultivationLogAudit.Entry(TraceCorrectionAudit.CultivationLogCorrected, log) with
             {
                 Before = changedBefore, After = TraceCorrectionAudit.After(changedAfter, [], ownerApprovalConfirmed), Reason = reason,
@@ -134,9 +134,14 @@ public sealed class TraceCultivationLogCorrectionService(
         return new Applied(log, removedKeys, changedAfter is not null);
     }
 
-    /// <summary>MSG-GEN-08 without PROVENANCE in the zone; MSG-GEN-09 while the cycle is Open (CYCLE-04.1 corrects it then) or when the raft is read-only.</summary>
+    /// <summary>
+    /// MSG-GEN-08 without PROVENANCE in the zone; MSG-GEN-09 while the cycle is Open (CYCLE-04.1 corrects it then), when the log is in no cycle (CYCLE-04.1 corrects it) or when the raft is
+    /// read-only. A log that passes has a Closed cycle, which the code below relies on.
+    /// </summary>
     private async Task<AppError?> RefusalAsync(CultivationLog log, CancellationToken cancellationToken) =>
-        await guard.MayCorrectAsync(log.Cycle.Raft.ZoneId, cancellationToken) ? guard.ClosedCycleRefusal(log.Cycle, log.Cycle.Raft) : AppError.Forbidden;
+        !await guard.MayCorrectAsync(log.Raft.ZoneId, cancellationToken) ? AppError.Forbidden
+        : log.Cycle is null ? AppError.Conflict(UserMessages.WrongStatus($"The cultivation log of raft {log.Raft.Code}", "not in a cultivation cycle"))
+        : guard.ClosedCycleRefusal(log.Cycle, log.Raft);
 
     /// <summary>A visit belongs to its cycle: not after its close date, nor after today.</summary>
     private DateOnly LastDay(CultivationCycle cycle)

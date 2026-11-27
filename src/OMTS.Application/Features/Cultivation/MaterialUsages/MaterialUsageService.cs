@@ -14,7 +14,7 @@ using OMTS.Domain.Entities.Purchasing;
 namespace OMTS.Application.Features.Cultivation.MaterialUsages;
 
 /// <summary>
-/// CYCLE-03.0 record material usage, for a Zone Manager of the raft's zone and the Cooperative Owner, while the raft is In Use: one repair makes one record per item. It notifies
+/// CYCLE-03.0 record material usage, for a Zone Manager of the raft's zone and the Cooperative Owner, while the raft is In Use or Discontinued (a repair of a Discontinued raft is kept before it is turned back on): one repair makes one record per item. It notifies
 /// nobody. The date may fall in an Open cycle or in no cycle, never in a closed cycle (BR-CYCLE-03).
 /// </summary>
 public sealed class MaterialUsageService(
@@ -45,7 +45,7 @@ public sealed class MaterialUsageService(
             return AppError.Forbidden;
         }
 
-        if (raftViews.EditRefusal(raft) is { } refused)
+        if (raftViews.CareRecordRefusal(raft) is { } refused)
         {
             return refused;
         }

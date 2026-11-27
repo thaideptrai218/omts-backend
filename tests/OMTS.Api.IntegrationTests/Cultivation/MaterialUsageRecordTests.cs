@@ -161,9 +161,9 @@ public class MaterialUsageRecordTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("MSG-GEN-09", refused.Text("code"));
     }
 
-    // GBR-01: read-only, also for the Owner, while the usage can still be viewed.
+    // GBR-01: a Discontinued raft still takes a repair, so the work on it is kept before it is turned back on; a Discontinued zone is read-only, also for the Owner, while the usage can still be viewed.
     [Fact]
-    public async Task A_discontinued_raft_or_zone_refuses_a_record_with_msg_gen_09_and_keeps_its_usage_visible()
+    public async Task A_discontinued_raft_takes_a_record_and_a_discontinued_zone_refuses_it_with_msg_gen_09_and_keeps_its_usage_visible()
     {
         var setup = await factory.RaftAsync();
         var owner = setup.Owner.Client;
@@ -172,7 +172,11 @@ public class MaterialUsageRecordTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.True((await owner.UsageListAsync(setup.RaftId)).Flag("canRecord"));
 
         await factory.DiscontinueRaftAsync(setup.RaftId);
-        await AssertReadOnlyAsync("Raft ");
+        var repair = await (await owner.PostUsageAsync(setup.RaftId, Repair(new UsageLine(item)))).ReadAsync(HttpStatusCode.Created);
+        Assert.True(repair.GetProperty("records")[0].Flag("canEdit"));
+        var list = await owner.UsageListAsync(setup.RaftId);
+        Assert.True(list.Flag("canRecord"));
+        Assert.True((await owner.GetUsageAsync(record.Id())).Flag("canEdit"));
 
         await factory.UpdateAsync<Raft>(setup.RaftId, r => r.StatusId = StatusIds.Usage.InUse);
         await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);

@@ -155,9 +155,9 @@ public class MaterialUsageEditTests(AuthApiFactory factory) : IClassFixture<Auth
         await (await allZones.Client.PutUsageAsync(record.Id(), record.AsEdit() with { RaftId = otherRaft })).ReadAsync(HttpStatusCode.OK);
     }
 
-    // GBR-01: neither end of an edit may be a read-only raft.
+    // GBR-01: a Discontinued raft takes the repair that is kept before it is turned back on, at either end of an edit; a Discontinued zone does not.
     [Fact]
-    public async Task A_discontinued_raft_or_zone_at_either_end_answers_msg_gen_09()
+    public async Task A_discontinued_raft_at_either_end_is_allowed_and_a_discontinued_zone_answers_msg_gen_09()
     {
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
@@ -165,12 +165,12 @@ public class MaterialUsageEditTests(AuthApiFactory factory) : IClassFixture<Auth
         var other = (await owner.CreateRaftAsync(setup.ZoneId)).Id();
 
         await factory.DiscontinueRaftAsync(other);
-        var toDiscontinued = await (await owner.PutUsageAsync(record.Id(), record.AsEdit() with { RaftId = other })).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG-GEN-09", toDiscontinued.Text("code"));
+        var toDiscontinued = await (await owner.PutUsageAsync(record.Id(), record.AsEdit() with { RaftId = other })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(other, toDiscontinued.GetProperty("record").GetProperty("raftId").GetGuid());
 
         await factory.DiscontinueRaftAsync(setup.RaftId);
-        var fromDiscontinued = await (await owner.PutUsageAsync(record.Id(), record.AsEdit())).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG-GEN-09", fromDiscontinued.Text("code"));
+        var fromDiscontinued = await (await owner.PutUsageAsync(record.Id(), toDiscontinued.GetProperty("record").AsEdit() with { RaftId = setup.RaftId })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(setup.RaftId, fromDiscontinued.GetProperty("record").GetProperty("raftId").GetGuid());
 
         await factory.UpdateAsync<Raft>(setup.RaftId, r => r.StatusId = StatusIds.Usage.InUse);
         await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);

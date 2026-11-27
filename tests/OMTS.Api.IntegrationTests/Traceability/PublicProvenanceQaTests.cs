@@ -142,6 +142,7 @@ public class PublicProvenanceQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var cycleId = await api.QueryAsync(db => db.HarvestLots.Where(l => l.Id == sale.LotId).Select(l => l.CycleId).SingleAsync());
+        var raftId = await api.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycleId).Select(c => c.RaftId).SingleAsync());
         var logPhoto = $"{FileCategories.CultivationLogPhotos}/2026/11/{Guid.NewGuid():N}.jpg";
         var withdrawnPhoto = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg";
         var publishedPhoto = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg";
@@ -149,7 +150,7 @@ public class PublicProvenanceQaTests
         {
             db.CultivationLogs.Add(new CultivationLog
             {
-                CycleId = cycleId, VisitDate = Today, Notes = "DEMO internal log note", RecordedByAccountId = sale.Owner.Account.Id,
+                RaftId = raftId, CycleId = cycleId, VisitDate = Today, Notes = "DEMO internal log note", RecordedByAccountId = sale.Owner.Account.Id,
                 Photos = [new CultivationLogPhoto { SortOrder = 1, FileKey = logPhoto }],
             });
             db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = sale.OtherLotId, SortOrder = 1, FileKey = withdrawnPhoto });

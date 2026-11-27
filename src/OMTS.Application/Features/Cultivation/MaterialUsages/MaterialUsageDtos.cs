@@ -17,7 +17,7 @@ public sealed record RemoveMaterialUsageRequest(string? Reason, string? RowVersi
 
 /// <summary>A usage record (BR-CYCLE-03). It has no price (BR-FARM-05).</summary>
 /// <param name="CycleId">The cycle of the raft open on the date, worked out on read; null when there was none.</param>
-/// <param name="CanEdit">The caller may edit it now: the raft and its zone are In Use and no closed cycle locks it (CYCLE-03.1).</param>
+/// <param name="CanEdit">The caller may edit it now: the raft is In Use or Discontinued, its zone is In Use, and no closed cycle locks it (CYCLE-03.1).</param>
 public sealed record MaterialUsageView(
     Guid Id,
     Guid RaftId,
@@ -48,7 +48,7 @@ public sealed record MaterialUsageRepair(DateOnly UsageDate, string RepairReason
 public sealed record MaterialUsageGroup(CycleListItem? Cycle, bool Locked, IReadOnlyList<MaterialUsageRepair> Repairs);
 
 /// <summary>The Material usage screen of a raft (SCR-CYCLE-03).</summary>
-/// <param name="CanRecord">Record usage is shown: the raft and its zone are In Use and the caller may record (CYCLE-03.0 step 2).</param>
+/// <param name="CanRecord">Record usage is shown: the raft is In Use or Discontinued, its zone is In Use, and the caller may record (CYCLE-03.0 step 2).</param>
 /// <param name="Groups">The latest cycle first, the group with no cycle last. A cycle with no usage has no group.</param>
 public sealed record MaterialUsageList(Guid RaftId, string RaftCode, bool CanRecord, IReadOnlyList<MaterialUsageGroup> Groups);
 

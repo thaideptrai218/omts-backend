@@ -10,7 +10,7 @@ using OMTS.Application.Features.Farming.Rafts;
 namespace OMTS.Application.Features.Cultivation.MaterialUsages;
 
 /// <summary>
-/// CYCLE-03.2 remove a usage record with a reason: same people and locks as an edit (a Zone Manager of the raft's zone or the Cooperative Owner; the raft In Use; no closed cycle on the date,
+/// CYCLE-03.2 remove a usage record with a reason: same people and locks as an edit (a Zone Manager of the raft's zone or the Cooperative Owner; the raft In Use or Discontinued; no closed cycle on the date,
 /// BR-CYCLE-04). Its quantity returns to the stock: the linked issue (Xuat dung) is Cancelled in the same save and the audit log keeps the record with the reason. 409 MSG-GEN-09 when a closed
 /// cycle locks it.
 /// </summary>
@@ -37,7 +37,7 @@ public sealed class MaterialUsageRemoveService(
             return AppError.Forbidden;
         }
 
-        if ((raftViews.EditRefusal(usage.Raft) ?? await cycleGuard.RefusalAsync(usage.Raft, usage.UsageDate, cancellationToken)) is { } refused)
+        if ((raftViews.CareRecordRefusal(usage.Raft) ?? await cycleGuard.RefusalAsync(usage.Raft, usage.UsageDate, cancellationToken)) is { } refused)
         {
             return refused;
         }

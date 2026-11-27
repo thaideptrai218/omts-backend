@@ -46,7 +46,7 @@ public sealed class MaterialUsageCycleGuard(ICultivationCycleQuery cycleQuery, I
         return null;
     }
 
-    private static AppError Closed(Raft raft, CycleSpan cycle) => AppError.Conflict(
+    internal static AppError Closed(Raft raft, CycleSpan cycle) => AppError.Conflict(
         UserMessages.WrongStatus($"The cultivation cycle of raft {raft.Code} from {cycle.StartDate:dd/MM/yyyy} to {cycle.CloseDate:dd/MM/yyyy}", "Closed"),
         new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
 }

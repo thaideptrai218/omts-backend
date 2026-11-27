@@ -23,14 +23,17 @@ public sealed record CultivationLogFilter(
 
 public interface ICultivationLogRepository
 {
-    /// <summary>The log with its photos, cycle, raft and zone, tracked for editing.</summary>
+    /// <summary>The log with its photos, raft, zone and cycle (null when it has none), tracked for editing.</summary>
     Task<CultivationLog?> GetForEditAsync(Guid logId, CancellationToken cancellationToken);
 
-    /// <summary>The log with its photos, cycle, raft and zone, read only.</summary>
+    /// <summary>The log with its photos, raft, zone and cycle (null when it has none), read only.</summary>
     Task<CultivationLog?> GetAsync(Guid logId, CancellationToken cancellationToken);
 
     /// <summary>The logs of a cycle with their photos, the latest visit first; only those of <paramref name="logType"/> when it is not null.</summary>
     Task<IReadOnlyList<CultivationLog>> ListByCycleAsync(Guid cycleId, string? logType, CancellationToken cancellationToken);
+
+    /// <summary>The logs of a raft, in every cycle it had and in none, with their photos and cycle, the latest visit first; only those of <paramref name="logType"/> when it is not null.</summary>
+    Task<IReadOnlyList<CultivationLog>> ListByRaftAsync(Guid raftId, string? logType, CancellationToken cancellationToken);
 
     /// <summary>One page of the logs that match, ordered by <see cref="CultivationLogFilter.Sort"/> (the latest visit first by default), with photos, cycle, raft and zone, and how many match: the count, the page, and one read for the photos of the page.</summary>
     Task<(IReadOnlyList<CultivationLog> Rows, int Total)> SearchAsync(CultivationLogFilter filter, int page, int pageSize, CancellationToken cancellationToken);

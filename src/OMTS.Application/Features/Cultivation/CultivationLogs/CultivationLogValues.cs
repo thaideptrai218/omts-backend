@@ -25,13 +25,15 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string? LogType,
     /// <param name="otherFilePart">A file came in a part not named <c>photos</c>.</param>
     /// <param name="kept">How many current photos stay on the log.</param>
     /// <param name="keysAreKnown">Every key the client asked to keep is a photo of this log.</param>
+    /// <param name="earliest">The first day the visit may have: the start date of the cycle a log is recorded in; null when the log is worked out from the date and has no lower bound.</param>
+    /// <param name="latest">The last day the visit may have: today.</param>
     /// <param name="reason">The reason of a correction or removal; not read when <paramref name="reasonRequired"/> is false.</param>
     public static AppError? Read(
         DateOnly? visitDate, string? logType, string? notes, IReadOnlyList<IncomingFile> newPhotos, bool otherFilePart, int kept, bool keysAreKnown, string? reason, bool reasonRequired,
-        DateOnly cycleStart, DateOnly today, out CultivationLogValues values)
+        DateOnly? earliest, DateOnly latest, out CultivationLogValues values)
     {
         var check = new FieldCheck();
-        check.Check(visitDate is { } visit && visit >= cycleStart && visit <= today, "Visit date");
+        check.Check(visitDate is { } visit && (earliest is null || visit >= earliest) && visit <= latest, "Visit date");
         var normalizedType = CultivationLogTypes.Normalize(logType);
         check.Check(normalizedType is not null, TypeField);
         var keepsType = reasonRequired && string.IsNullOrWhiteSpace(logType);
@@ -53,9 +55,9 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string? LogType,
     /// After the uploads, against the row as it now is: what another save can have changed since <see cref="Read"/>. The start date may have moved past the
     /// visit, and a photo to keep may be gone with its file, so that request cannot be honoured. The cap still holds, as the kept photos can only be the same ones.
     /// </summary>
-    public static AppError? ReadAgain(DateOnly visitDate, DateOnly cycleStart, bool keysAreKnown = true)
+    public static AppError? ReadAgain(DateOnly visitDate, DateOnly? earliest, bool keysAreKnown = true)
     {
-        if (visitDate < cycleStart)
+        if (visitDate < earliest)
         {
             return AppError.InvalidFields(["Visit date"]);
         }

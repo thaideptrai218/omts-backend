@@ -505,7 +505,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CycleId")
+                    b.Property<Guid?>("CycleId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("LogType")
@@ -518,6 +518,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
@@ -542,6 +545,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecordedByAccountId");
 
                     b.HasIndex("CycleId", "VisitDate");
+
+                    b.HasIndex("RaftId", "VisitDate");
 
                     b.ToTable("CultivationLogs");
                 });
@@ -8507,6 +8512,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany()
                         .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -8517,6 +8527,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Cycle");
+
+                    b.Navigation("Raft");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLogPhoto", b =>

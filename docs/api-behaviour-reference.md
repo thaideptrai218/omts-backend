@@ -620,6 +620,18 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
 - Column `CultivationLogs.LogType` (`nvarchar(20)`, not null, default `OTHER`): logs saved before the column existed are `OTHER`. The audit snapshot (`CultivationLog.Created/Corrected/Removed`, TRACE-03) holds `LogType` beside `VisitDate`, `Notes` and `Photos`, so a change of type alone is a correction row.
   A log still carries no code of any cycle or raft.
 
+### Care logs and material usage on a raft with no open cycle or a Discontinued raft (27/11/2026)
+
+- A cultivation log belongs to a raft: `CultivationLogs.RaftId` (not null, backfilled from the cycle of every log saved before) and `CycleId` (now nullable). Index `(RaftId, VisitDate)`.
+- The cycle of a log is worked out from `visitDate` as material usage does (BR-CYCLE-03): not after today; a date inside the raft's Open cycle = that cycle; a date inside a Closed cycle (the close day included) = 409 MSG-GEN-09 naming the cycle with the details `cycleId`
+  (the same answer as a material usage on that date); a date in no cycle = `cycleId` null. A correction (`PUT /api/cultivation-logs/{logId}`) applies the rule again to the new date, so a log can enter or leave the Open cycle; a log whose cycle is Closed stays locked (409 MSG-GEN-09
+  on correct and remove, `canCorrect` false; after the close only TRACE-03 changes it). The cycle route (`POST /api/cultivation-cycles/{cycleId}/cultivation-logs`) is unchanged: the cycle must be Open and the date from its start date to today.
+- `GET /api/rafts/{raftId}/cultivation-logs[?logType]` answers every log of the raft, in every cycle and in none, latest `visitDate` first, then latest recorded first, as the cycle list does (same `CultivationLogView`).
+  `POST /api/rafts/{raftId}/cultivation-logs` takes the multipart body of the cycle route and answers 201 `{ log, message, messageCode }`. Both use the `CultivationLogs` function of the zone of the raft (403 MSG-GEN-08 otherwise, 404 for an unknown raft).
+- Every log view has `raftId`, `cycleId` (null when the log has no cycle) and `cycleStartDate` (`yyyy-MM-dd`, null with `cycleId`). TRACE-03 corrects only logs of a Closed cycle: a log with no cycle answers 409 MSG-GEN-09 there (correct it with `PUT /api/cultivation-logs/{logId}`).
+- Raft status for care logs and material usage (record, correct, move, remove, and the flags `canCorrect`, `canRecord`, `canEdit`): the raft In Use or Discontinued, and its zone In Use. A Discontinued raft keeps its repair records and can be turned back on afterwards; a Discontinued zone is still read-only (MSG-GEN-09).
+  Cycles, seeding, harvest and the other writes keep the old rule (raft In Use).
+
 ### Cross-raft cultivation log list (the "Nhật ký" screen, 27/11/2026)
 
 - `GET /api/cultivation-logs?zoneId&raftId&logType&from&to&search&sortBy&sortDir&page&pageSize` answers `{ items, page, pageSize, total }`; `items` are the same `CultivationLogView` as everywhere, ordered `visitDate` desc, then `recordedAt` desc, unless sorted.

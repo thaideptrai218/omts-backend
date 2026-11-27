@@ -87,4 +87,16 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
         raft.StatusId != StatusIds.Usage.InUse ? statusChanges.WrongStatus($"Raft {raft.Code}", raft)
         : raft.Zone.StatusId != StatusIds.Usage.InUse ? statusChanges.WrongStatus($"Farming zone {raft.Zone.Code}", raft.Zone)
         : null;
+
+    /// <summary>
+    /// Care logs and material usage may be recorded on a raft In Use or Discontinued, so the repair of a Discontinued raft is kept before it is turned back on; the zone must still be In Use.
+    /// </summary>
+    public static bool AcceptsCareRecords(Raft raft) =>
+        raft.StatusId is (StatusIds.Usage.InUse or StatusIds.Usage.Discontinued) && raft.Zone.StatusId == StatusIds.Usage.InUse;
+
+    /// <summary>MSG-GEN-09 when the raft cannot take care logs and material usage (<see cref="AcceptsCareRecords"/>), null when it can. The raft comes with its zone.</summary>
+    public AppError? CareRecordRefusal(Raft raft) =>
+        AcceptsCareRecords(raft) ? null
+        : raft.Zone.StatusId != StatusIds.Usage.InUse ? statusChanges.WrongStatus($"Farming zone {raft.Zone.Code}", raft.Zone)
+        : statusChanges.WrongStatus($"Raft {raft.Code}", raft);
 }

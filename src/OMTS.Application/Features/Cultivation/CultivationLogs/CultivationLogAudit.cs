@@ -11,9 +11,9 @@ public static class CultivationLogAudit
     public const string Removed = "CultivationLog.Removed";
     public const string RecordType = nameof(CultivationLog);
 
-    /// <summary>The log with its cycle and raft.</summary>
+    /// <summary>The log with its raft.</summary>
     internal static AuditEntry Entry(string action, CultivationLog log) => new(action, RecordType)
     {
-        RecordId = log.Id, RecordCode = log.Cycle.Raft.Code, ZoneId = log.Cycle.Raft.ZoneId,
+        RecordId = log.Id, RecordCode = log.Raft.Code, ZoneId = log.Raft.ZoneId,
     };
 }

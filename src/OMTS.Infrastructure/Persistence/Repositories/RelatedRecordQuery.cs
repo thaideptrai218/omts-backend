@@ -100,7 +100,7 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
     private async Task<RelatedRecordLocation?> FindCultivationLogAsync(Guid id, CancellationToken cancellationToken)
     {
         var zones = await db.CultivationLogs.AsNoTracking().Where(l => l.Id == id)
-            .Select(l => l.Cycle.Raft.ZoneId).ToListAsync(cancellationToken);
+            .Select(l => l.Raft.ZoneId).ToListAsync(cancellationToken);
         return zones.Count == 0 ? null : new RelatedRecordLocation(zones[0]);
     }
 

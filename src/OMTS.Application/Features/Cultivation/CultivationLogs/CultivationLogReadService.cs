@@ -5,10 +5,32 @@ using OMTS.Application.Features.Authorization.Models;
 
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 
-/// <summary>CYCLE-04 and CYCLE-05 log reads, for a Zone Manager of the raft's zone and the Cooperative Owner; a closed cycle keeps its logs.</summary>
+/// <summary>CYCLE-04 and CYCLE-05 log reads, for a Zone Manager of the raft's zone and the Cooperative Owner; a closed cycle keeps its logs, and a raft keeps those of every cycle and of none.</summary>
 public sealed class CultivationLogReadService(
-    ICultivationCycleRepository cycles, ICultivationLogRepository logs, CultivationLogViews views, ZoneAccessGuard zoneAccess)
+    ICultivationCycleRepository cycles, IRaftRepository rafts, ICultivationLogRepository logs, CultivationLogViews views, ZoneAccessGuard zoneAccess)
 {
+    /// <summary>The logs of the raft in every cycle it had and in none, the latest visit first. Optional <paramref name="logType"/> keeps one type; an unknown one is MSG-GEN-01 on <c>LogType</c>.</summary>
+    public async Task<Result<IReadOnlyList<CultivationLogView>>> ListByRaftAsync(Guid raftId, string? logType, CancellationToken cancellationToken)
+    {
+        var raft = await rafts.GetForReadAsync(raftId, cancellationToken);
+        if (raft is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (!await CanViewAsync(raft.ZoneId, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
+        if (CultivationLogValues.ReadTypeFilter(logType, out var wanted) is { } invalid)
+        {
+            return invalid;
+        }
+
+        return Result<IReadOnlyList<CultivationLogView>>.Success(await views.ListAsync(raft, wanted, cancellationToken));
+    }
+
     public async Task<Result<IReadOnlyList<CultivationLogView>>> ListAsync(Guid cycleId, string? logType, CancellationToken cancellationToken)
     {
         var cycle = await cycles.GetAsync(cycleId, cancellationToken);
@@ -51,7 +73,7 @@ public sealed class CultivationLogReadService(
             return AppError.NotFound;
         }
 
-        return await CanViewAsync(log.Cycle.Raft.ZoneId, cancellationToken) ? await views.ViewAsync(log, cancellationToken) : AppError.Forbidden;
+        return await CanViewAsync(log.Raft.ZoneId, cancellationToken) ? await views.ViewAsync(log, cancellationToken) : AppError.Forbidden;
     }
 
     private Task<bool> CanViewAsync(Guid zoneId, CancellationToken cancellationToken) =>

@@ -112,24 +112,16 @@ public class CycleLogsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync(path)).StatusCode);
     }
 
-    // GBR-01: read-only for everybody, Owner included, with every photo and field left as it was; the history can still be viewed.
-    [Theory]
-    [InlineData("raft", "Raft ")]
-    [InlineData("zone", "Farming zone ")]
-    public async Task A_discontinued_raft_or_zone_refuses_every_write_and_keeps_the_reads(string what, string named)
+    // GBR-01: a Discontinued zone is read-only for everybody, Owner included, with every photo and field left as it was; the history can still be viewed.
+    [Fact]
+    public async Task A_discontinued_zone_refuses_every_write_and_keeps_the_reads()
     {
+        const string named = "Farming zone ";
         var setup = await factory.CycleAsync();
         var manager = await factory.ManagerAsync(setup.ZoneId);
         var log = await manager.Client.RecordLogAsync(setup.CycleId, new LogFields { Notes = "kept" });
         var edit = await EditOfAsync(log);
-        if (what == "raft")
-        {
-            await factory.DiscontinueRaftAsync(setup.RaftId);
-        }
-        else
-        {
-            await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
-        }
+        await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
 
         foreach (var client in new[] { manager.Client, setup.Owner.Client })
         {

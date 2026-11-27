@@ -218,6 +218,8 @@ public static class DependencyInjection
         services.AddScoped<CultivationCycleViews>();
         services.AddScoped<CycleSeedLabels>();
         services.AddScoped<CycleWriteGuard>();
+        services.AddScoped<CultivationLogWriteGuard>();
+        services.AddScoped<CultivationLogCycleResolver>();
         services.AddScoped<CultivationLogViews>();
         services.AddScoped<RecordPhotoStore>();
         services.AddScoped<StepPhotoService>();

@@ -61,6 +61,16 @@ public static class CultivationLogTestKit
     public static async Task<JsonElement> RecordLogAsync(this HttpClient client, Guid cycleId, LogFields? fields = null) =>
         (await (await client.PostLogAsync(cycleId, fields)).ReadAsync(HttpStatusCode.Created)).GetProperty("log");
 
+    public static Task<HttpResponseMessage> PostRaftLogAsync(this HttpClient client, Guid raftId, LogFields? fields = null) =>
+        client.PostAsync($"/api/rafts/{raftId}/cultivation-logs", (fields ?? new LogFields()).ToForm());
+
+    /// <summary>Records a log on the raft, whatever its cycles, and returns the saved log, the <c>log</c> of the answer.</summary>
+    public static async Task<JsonElement> RecordRaftLogAsync(this HttpClient client, Guid raftId, LogFields? fields = null) =>
+        (await (await client.PostRaftLogAsync(raftId, fields)).ReadAsync(HttpStatusCode.Created)).GetProperty("log");
+
+    public static async Task<List<JsonElement>> ListRaftLogsAsync(this HttpClient client, Guid raftId) =>
+        (await client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/cultivation-logs")).EnumerateArray().ToList();
+
     public static Task<HttpResponseMessage> PutLogAsync(this HttpClient client, Guid logId, LogFields fields) =>
         client.PutAsync($"/api/cultivation-logs/{logId}", fields.ToForm());
 
