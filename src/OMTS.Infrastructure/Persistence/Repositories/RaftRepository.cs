@@ -25,6 +25,9 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
     public async Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken) =>
         raftIds.Count == 0 ? [] : await db.Rafts.AsNoTracking().Include(r => r.Zone).Where(r => raftIds.Contains(r.Id)).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Raft>> GetWithLanesByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken) =>
+        raftIds.Count == 0 ? [] : await db.Rafts.AsNoTracking().Include(r => r.Lanes).Where(r => raftIds.Contains(r.Id)).ToListAsync(cancellationToken);
+
     public Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken)
     {
         return db.Rafts.AsNoTracking().FirstOrDefaultAsync(r => r.ZoneId == zoneId && r.Code == code && r.Id != exceptRaftId, cancellationToken);

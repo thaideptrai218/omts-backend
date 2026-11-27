@@ -26,4 +26,6 @@ public interface IZoneLicenseRepository
     Task<IReadOnlyList<Guid>> ListReminderCandidateIdsAsync(DateOnly today, int expiringSoonDays, CancellationToken cancellationToken);
 
     void Add(ZoneComplianceDocument document);
+
+    void Remove(ZoneComplianceDocument document);
 }

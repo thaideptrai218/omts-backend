@@ -15,6 +15,9 @@ public interface IRaftRepository
     /// <summary>The rafts with these ids and their zones, untracked (rafts named on purchase receipt lines).</summary>
     Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken);
 
+    /// <summary>The rafts with these ids and their lanes, untracked: for a read of the state of the lanes of many rafts in one query.</summary>
+    Task<IReadOnlyList<Raft>> GetWithLanesByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken);
+
     /// <summary>Another raft of the zone with this code (ignoring case).</summary>
     Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken);
 

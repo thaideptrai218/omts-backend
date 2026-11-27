@@ -60,10 +60,22 @@ public sealed record RaftPhotoView(Guid Id, int SortOrder, string Url);
 /// <param name="DamagedLaneCount">Lanes In Use that are damaged now.</param>
 /// <param name="OutOfServiceLaneCount">Lanes In Use that were put out of service.</param>
 /// <param name="CurrentCycle">The Open cultivation cycle of the raft; null when it has none (a raft holds at most one).</param>
+/// <param name="LaneSummary">The lanes In Use of the raft by state today; null when the raft has no lane In Use.</param>
 public sealed record RaftListItem(
     Guid Id, Guid ZoneId, string Code, decimal? Latitude, decimal? Longitude, string? Size, int LaneCount, int StatusId, string Status,
     decimal? LengthM = null, decimal? WidthM = null, decimal? AreaM2 = null, int DamagedLaneCount = 0, int OutOfServiceLaneCount = 0,
-    RaftCurrentCycle? CurrentCycle = null);
+    RaftCurrentCycle? CurrentCycle = null, RaftLaneSummary? LaneSummary = null);
+
+/// <summary>
+/// The lanes In Use of a raft by what they are today, as the cycle progress shows them ("6/10 lanes farming"): every lane In Use is counted once, in the first of
+/// out of service, damaged, then its state (Growing and Being harvested are <paramref name="Farming"/>).
+/// </summary>
+public sealed record RaftLaneSummary(int Farming, int NotSeeded, int Harvested, int Damaged, int OutOfService);
+
+/// <summary>The Open cultivation cycle of a raft in its detail.</summary>
+/// <param name="DaysFarming">From the start date to today (Vietnam time), both days counted.</param>
+/// <param name="SeedNames">The distinct names of the seed the cycle farms; empty while it has no seed.</param>
+public sealed record RaftCurrentCycleDetail(Guid Id, DateOnly StartDate, int DaysFarming, IReadOnlyList<string> SeedNames, RaftLaneSummary? LaneSummary);
 
 /// <summary>The Open cultivation cycle of a raft in a list.</summary>
 public sealed record RaftCurrentCycle(Guid Id, DateOnly StartDate);
@@ -82,6 +94,7 @@ public sealed record RaftLookupItem(Guid Id, string Code, string ZoneCode, Guid 
 /// <param name="WidthM">Metres across the lanes; null as <paramref name="LengthM"/>.</param>
 /// <param name="AreaM2">Length times width rounded to 2 decimals; null when a side is unknown.</param>
 /// <param name="TotalLineLengthM">Two lines per lane In Use: the metres of line the lanes need; null when a length is unknown.</param>
+/// <param name="CurrentCycle">The Open cultivation cycle with its lane summary: set by the raft detail read only, null on the answer of a save and when the raft has no Open cycle.</param>
 public sealed record RaftView(
     Guid Id,
     ZoneRef Zone,
@@ -103,7 +116,8 @@ public sealed record RaftView(
     decimal? AreaM2 = null,
     decimal? TotalLineLengthM = null,
     int DamagedLaneCount = 0,
-    int OutOfServiceLaneCount = 0);
+    int OutOfServiceLaneCount = 0,
+    RaftCurrentCycleDetail? CurrentCycle = null);
 
 /// <summary>Answer of a raft create, edit or photo change (FARM-04.0 step 6), in the shape of the zone saves.</summary>
 /// <param name="Message">MSG-GEN-05, e.g. "Raft saved.".</param>

@@ -239,9 +239,24 @@ longer lists those functions. The lot trace and the reverse trace by seed lot st
   or null, read in the same SQL statement as the page (a left join on the Open cycles, at most one per raft
   by `UX_CultivationCycles_RaftId_Open`; no query per raft). `GET /api/zones/{zoneId}/rafts?statusId` (a plain array by code) has the
   same items.
+- Raft lane summary (27/11/2026): every list item (both lists above) also has `laneSummary` `{ farming, notSeeded, harvested, damaged,
+  outOfService }` (integers) or null when the raft has no lane In Use. It counts the lanes In Use as the cycle progress of today shows
+  them (`LaneStateReader`, the same percentages and corrections): each lane once, as `outOfService` when it was put out of service,
+  else `damaged` when it is damaged, else by its state: Growing and Being harvested are `farming`, `harvested`, `notSeeded` (also every
+  lane of a raft with no cycle open today). The five add up to `laneCount`, so "x/y lanes farming, z not seeded" is `farming`/sum and
+  `notSeeded`. The summaries of a page are read together after the page (the rafts with their lanes, then one read each of the open
+  cycles, seedings, harvest lots and progress corrections of the whole page): the number of reads does not grow with the page size.
+  `GET /api/rafts/{id}` (the raft detail only, not the answer of a save) also has `currentCycle` `{ id, startDate, daysFarming,
+  seedNames, laneSummary }` of the Open cycle or null: `daysFarming` counts from the start date to today (Vietnam date), both days;
+  `seedNames` are the distinct seed names the cycle farms (the seed of its nursery batch, or the distinct seed items of its seeding
+  records, the one with most seed first; empty while it has no seed); `laneSummary` is the same object as in the list.
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder, legal scope and the scan file are optional (on create, edit and replace). A license is Replaced from the day the license replacing it is recorded,
   whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
+- `DELETE /api/zone-licenses/{id}?rowVersion=...` (Owner, like editing a license) answers 204 and deletes the license and its stored scan file;
+  the audit log keeps a `ZoneLicense.Deleted` row with the values it had (`before`). 404 for an unknown id; 409 MSG-GEN-09 while the license is
+  Replaced (the answer carries `replacementId`) or is itself the renewal of another license (the renewal chain is never cut), and while its zone is
+  not In Use; 409 MSG06 for a stale `rowVersion`, 400 for a missing one. A refused delete changes nothing and removes no file.
 
 ### Water measurements: voided, never corrected (owner decision of 26/11/2026)
 

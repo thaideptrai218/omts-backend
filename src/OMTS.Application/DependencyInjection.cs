@@ -200,6 +200,7 @@ public static class DependencyInjection
         services.AddScoped<OMTS.Application.Features.Farming.Rafts.FormScan.RaftFormScanService>();
         services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
+        services.AddScoped<RaftLiveReader>();
         services.AddScoped<RaftPhotoService>();
         services.AddScoped<LaneIncidentViews>();
         services.AddScoped<LaneIncidentNotifier>();

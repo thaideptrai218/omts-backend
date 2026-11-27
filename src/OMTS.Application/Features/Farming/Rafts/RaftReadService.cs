@@ -16,7 +16,8 @@ public sealed class RaftReadService(
     IFarmingZoneRepository zones,
     RaftViews views,
     FarmingLookupAccess lookupAccess,
-    IStatusCatalog statusCatalog)
+    IStatusCatalog statusCatalog,
+    RaftLiveReader live)
 {
     private const int MaxPageSize = 100;
 
@@ -33,7 +34,7 @@ public sealed class RaftReadService(
         }
 
         var found = await rafts.ListRowsByZoneAsync(zoneId, statusId, cancellationToken);
-        return found.Select(Item).ToList();
+        return await ItemsAsync(found, cancellationToken);
     }
 
     /// <summary>
@@ -64,13 +65,20 @@ public sealed class RaftReadService(
         // The upper bound keeps (page - 1) * pageSize inside int.
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
         var (items, total) = await rafts.SearchRowsAsync(visible, zoneId, statusId, search, page, pageSize, cancellationToken);
-        return new Paged<RaftListItem>(items.Select(Item).ToList(), page, pageSize, total);
+        return new Paged<RaftListItem>(await ItemsAsync(items, cancellationToken), page, pageSize, total);
     }
 
-    private RaftListItem Item(RaftListRow row) => new(
+    /// <summary>The items of a list with their lane summaries, read together for every raft of the list.</summary>
+    private async Task<List<RaftListItem>> ItemsAsync(IReadOnlyList<RaftListRow> rows, CancellationToken cancellationToken)
+    {
+        var summaries = await live.SummariesAsync(rows.Select(r => r.Raft.Id).ToList(), cancellationToken);
+        return rows.Select(row => Item(row, summaries.GetValueOrDefault(row.Raft.Id))).ToList();
+    }
+
+    private RaftListItem Item(RaftListRow row, RaftLaneSummary? laneSummary) => new(
         row.Raft.Id, row.Raft.ZoneId, row.Raft.Code, row.Raft.Latitude, row.Raft.Longitude, row.Raft.Size, row.LaneCount, row.Raft.StatusId,
         statusCatalog.DisplayNameOf(row.Raft.StatusId), row.Raft.LengthM, row.Raft.WidthM, row.Raft.AreaM2, row.DamagedLaneCount, row.OutOfServiceLaneCount,
-        row.CurrentCycle);
+        row.CurrentCycle, laneSummary);
 
     public async Task<Result<RaftView>> GetAsync(Guid raftId, CancellationToken cancellationToken)
     {
@@ -80,7 +88,12 @@ public sealed class RaftReadService(
             return AppError.NotFound;
         }
 
-        return (await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId) ? await views.ViewAsync(raft, cancellationToken) : AppError.Forbidden;
+        if (!(await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId))
+        {
+            return AppError.Forbidden;
+        }
+
+        return (await views.ViewAsync(raft, cancellationToken)) with { CurrentCycle = await live.CurrentCycleAsync(raft, cancellationToken) };
     }
 
     /// <summary>The proposed code of a new raft of the zone ({zone code}-B01, -B02…; GBR-03); the Owner may replace it.</summary>

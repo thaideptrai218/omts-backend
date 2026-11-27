@@ -72,6 +72,18 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
         (await licenses.ReplaceAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken))
             .ToActionResult(l => StatusCode(StatusCodes.Status201Created, l));
 
+    /// <summary>
+    /// Deletes a license and its stored file (204). 409 MSG-GEN-09 while it is Replaced or is the renewal of another license, or its zone is not In Use; 404 when unknown;
+    /// 409 MSG06 when <c>rowVersion</c> is not the one read.
+    /// </summary>
+    /// <param name="id">The license.</param>
+    /// <param name="rowVersion">The <c>rowVersion</c> the license was read with.</param>
+    /// <param name="cancellationToken">Request aborted.</param>
+    [HttpDelete("api/zone-licenses/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] string? rowVersion, CancellationToken cancellationToken) =>
+        (await licenses.DeleteAsync(id, rowVersion, cancellationToken)).ToActionResult(_ => NoContent());
+
     private static async Task<IncomingFile?> IncomingAsync(IFormFile? file, CancellationToken cancellationToken) =>
         file is null ? null : await file.ToIncomingFileAsync(cancellationToken);
 }
