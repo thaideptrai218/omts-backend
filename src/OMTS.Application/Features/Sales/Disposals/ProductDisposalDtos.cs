@@ -81,6 +81,7 @@ public enum ProductDisposalStatusFilter
 /// <param name="Search">Text in the code, the notes or the reason.</param>
 /// <param name="Status">All (the default), Draft, Completed or Cancelled.</param>
 /// <param name="ProductId">Disposals that have a line of the product.</param>
+/// <param name="ZoneIds">Only the disposals of these zones (repeat the parameter), together with <paramref name="ZoneId"/>; a zone the caller may not read is left out, at most 200.</param>
 /// <param name="CreatedById">The account that recorded the disposal.</param>
 /// <param name="SortBy">code (the default, newest first), disposedAt, totalKg or status.</param>
 /// <param name="SortDir">asc or desc; the default is desc.</param>
@@ -95,7 +96,8 @@ public sealed record ProductDisposalListQuery(
     string? SortBy = null,
     string? SortDir = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    Guid[]? ZoneIds = null);
 
 /// <param name="TotalKg">Σ the kg of the Completed disposals that match, not only the page.</param>
 public sealed record ProductDisposalListSummary(decimal TotalKg);

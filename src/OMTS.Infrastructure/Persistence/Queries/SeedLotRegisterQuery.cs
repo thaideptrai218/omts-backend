@@ -44,11 +44,12 @@ internal sealed class SeedLotRegisterQuery(OmtsDbContext db) : ISeedLotRegisterQ
             lines = lines.Where(l => l.ItemId == itemId);
         }
 
-        if (filter.ZoneId is { } zoneId)
+        if (filter.ZoneIds is { Count: > 0 } chosen)
         {
-            lines = lines.Where(l => l.Receipt.ZoneId == zoneId
-                || db.NurseryBatches.Any(b => b.SeedLotLineId == l.Id && b.ZoneId == zoneId)
-                || db.SeedingRecords.Any(s => s.SeedLotLineId == l.Id && s.Cycle.Raft.ZoneId == zoneId));
+            var zoneIds = chosen.ToList();
+            lines = lines.Where(l => (l.Receipt.ZoneId != null && zoneIds.Contains(l.Receipt.ZoneId.Value))
+                || db.NurseryBatches.Any(b => b.SeedLotLineId == l.Id && zoneIds.Contains(b.ZoneId))
+                || db.SeedingRecords.Any(s => s.SeedLotLineId == l.Id && zoneIds.Contains(s.Cycle.Raft.ZoneId)));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))

@@ -27,12 +27,12 @@ public sealed class WorkforceController(
 {
     private DateOnly DayOrToday(DateOnly? day) => day ?? timeProvider.Today();
 
-    /// <summary>The day board: every employee with work on the day on the rafts of the caller's zones, with the check-in and check-out. <c>day</c> defaults to today.</summary>
+    /// <summary>The day board: every employee with work on the day on the rafts of the caller's zones, with the check-in and check-out. <c>day</c> defaults to today; a repeated <c>zoneIds</c> keeps the rafts of those zones (a zone the caller may not read is left out, at most 200).</summary>
     [HttpGet("assignments")]
     [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<IReadOnlyList<AssignmentView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(DateOnly? day, CancellationToken cancellationToken) =>
-        (await queries.ListAssignmentsAsync(DayOrToday(day), cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> List(DateOnly? day, [FromQuery] Guid[]? zoneIds, CancellationToken cancellationToken) =>
+        (await queries.ListAssignmentsAsync(DayOrToday(day), zoneIds, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The job types In Use and the Employed employees of the caller's zones, with their leave and raft on <c>day</c>.</summary>
     [HttpGet("lookups")]

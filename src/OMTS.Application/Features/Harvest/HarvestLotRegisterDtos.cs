@@ -11,7 +11,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default).</param>
 public sealed record HarvestLotListQuery(
     DateOnly? From = null, DateOnly? To = null, Guid? ZoneId = null, Guid? RaftId = null, Guid? ProductId = null, int? StatusId = null, bool? Weighed = null, string? CloseReason = null,
-    bool? HasPlan = null, string? Search = null, int Page = 1, int PageSize = 20, string? Sort = null, string? SortDir = null);
+    bool? HasPlan = null, string? Search = null, int Page = 1, int PageSize = 20, string? Sort = null, string? SortDir = null,
+    Guid[]? ZoneIds = null);
 
 /// <summary>A product the lot is split into.</summary>
 public sealed record HarvestLotRegisterProduct(Guid ProductId, string Code, string Name);

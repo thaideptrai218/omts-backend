@@ -90,6 +90,11 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             query = query.Where(e => e.WorkingZones.Any(w => w.ZoneId == filter.ZoneId));
         }
 
+        if (filter.ZoneIds is { } zoneIds)
+        {
+            query = query.Where(e => e.WorkingZones.Any(w => zoneIds.Contains(w.ZoneId)));
+        }
+
         if (filter.Type is { } type)
         {
             // The same expression the sort uses, compared with the type asked for.

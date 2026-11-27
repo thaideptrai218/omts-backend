@@ -185,7 +185,8 @@ public sealed record EmployeeListQuery(
     string? SortBy = null,
     string? SortDir = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    Guid[]? ZoneIds = null);
 
 /// <summary>The export query: the list query without paging, or only the employees of <paramref name="Ids"/>, whose other filters are ignored.</summary>
 /// <param name="Ids">At most 200 ids: the rows selected on the screen.</param>
@@ -197,7 +198,8 @@ public sealed record EmployeeExportQuery(
     Guid? JobTypeId = null,
     string? SortBy = null,
     string? SortDir = null,
-    IReadOnlyList<Guid>? Ids = null);
+    IReadOnlyList<Guid>? Ids = null,
+    Guid[]? ZoneIds = null);
 
 /// <param name="Row">The row number in the file.</param>
 /// <param name="Fields">The invalid fields, named as in the API (e.g. "Full name", "Working zones").</param>

@@ -45,7 +45,7 @@ public sealed class NurseryReadService(
     public async Task<Result<NurseryBatchPage>> SearchAsync(NurseryListQuery query, CancellationToken cancellationToken)
     {
         var zonesAllowed = await zoneAccess.PermittedZonesAsync(PermissionFunctions.CultivationCycles, PermissionAction.View, cancellationToken);
-        if (zonesAllowed.IsEmpty || (query.ZoneId is { } chosen && !zonesAllowed.Allows(chosen)))
+        if (zonesAllowed.IsEmpty || (query.ZoneId is { } single && !zonesAllowed.Allows(single)))
         {
             return AppError.Forbidden;
         }
@@ -56,9 +56,16 @@ public sealed class NurseryReadService(
             return statuses.Error;
         }
 
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
+        // A zone asked for that the caller may not read is left out; none left is an empty page, never every zone.
         var filter = new NurseryBatchFilter(
-            query.ZoneId, zonesAllowed.AllZones ? null : zonesAllowed.ZoneIds.ToHashSet(), statuses.Ids, query.From, query.To, query.Search, SortOf(query.SortBy),
+            null, zonesAllowed.Narrow(chosen.Value).ZoneIds, statuses.Ids, query.From, query.To, query.Search, SortOf(query.SortBy),
             !string.Equals(query.SortDir, "asc", StringComparison.OrdinalIgnoreCase));
         var (rows, total, totals) = await nurseries.SearchAsync(filter, page, pageSize, cancellationToken);
         var seeded = await nurseries.SeededByBatchAsync(rows.Select(r => r.Id).ToList(), null, cancellationToken);

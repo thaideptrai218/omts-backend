@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.Labor.Costs;
@@ -26,10 +27,17 @@ public sealed class LaborCostService(
             return AppError.Invalid("Period");
         }
 
-        var (pieces, jobNames, _) = await PiecesAsync(query.From, query.To, cancellationToken);
-        if (query.ZoneId is { } zoneId)
+        // The cost is the cooperative's (PAYROLL has no zone), so every zone asked for is kept.
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
         {
-            pieces = pieces.Where(c => c.ZoneId == zoneId).ToList();
+            return chosen.Error!;
+        }
+
+        var (pieces, jobNames, _) = await PiecesAsync(query.From, query.To, cancellationToken);
+        if (chosen.Value!.Count > 0)
+        {
+            pieces = pieces.Where(c => chosen.Value.Contains(c.ZoneId)).ToList();
         }
 
         var totals = pieces.GroupBy(c => (c.RaftId, c.ZoneId)).Select(g => (g.Key.RaftId, g.Key.ZoneId, Pieces: g.ToList())).ToList();

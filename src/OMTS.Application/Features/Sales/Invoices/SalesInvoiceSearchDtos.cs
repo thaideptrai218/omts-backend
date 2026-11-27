@@ -12,9 +12,11 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// <param name="OrderCode">Part of the code (DH) of the purchase request the invoice fulfils, read as plain text like <paramref name="Code"/> (PM answer 12/11/2026, OMTS-224 [5.5]).</param>
 /// <param name="CashCollectedByMe">"Cash I collected that is not confirmed yet" (SALE-09 step 3).</param>
 /// <param name="SalesOrderId">Invoices made from this order.</param>
+/// <param name="ZoneIds">Invoices of these zones (repeat the parameter), together with <paramref name="ZoneId"/>; a zone the caller may not read is left out, at most 200.</param>
 public sealed record SalesInvoiceSearchQuery(
     DateOnly? From = null, DateOnly? To = null, Guid? ZoneId = null, Guid? CustomerId = null, Guid? HarvestLotId = null, Guid? RaftId = null,
-    int? StatusId = null, bool? Paid = null, string? Code = null, string? OrderCode = null, bool CashCollectedByMe = false, int Page = 1, int PageSize = 20, Guid? SalesOrderId = null);
+    int? StatusId = null, bool? Paid = null, string? Code = null, string? OrderCode = null, bool CashCollectedByMe = false, int Page = 1, int PageSize = 20, Guid? SalesOrderId = null,
+    Guid[]? ZoneIds = null);
 
 /// <summary>One row of the list (SALE-09 step 1).</summary>
 /// <param name="Customer">Null for a walk-in customer.</param>

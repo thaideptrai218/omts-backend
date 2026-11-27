@@ -44,9 +44,17 @@ internal static class CultivationLogListFilters
             return invalidSort;
         }
 
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error;
+        }
+
+        // A zone asked for in zoneIds that the caller may not read is left out; none left is an empty list, never every zone.
+        var zones = allowed.Narrow(chosen.Value);
         (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         filter = new CultivationLogFilter(
-            query.ZoneId, query.RaftId, allowed.AllZones ? null : allowed.ZoneIds.ToHashSet(), logType, query.From, query.To, string.IsNullOrEmpty(search) ? null : search, sort, descending);
+            null, query.RaftId, zones.ZoneIds, logType, query.From, query.To, string.IsNullOrEmpty(search) ? null : search, sort, descending);
         return null;
     }
 

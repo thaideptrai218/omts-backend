@@ -50,9 +50,10 @@ public sealed record SalesReturnView(
 /// <summary>The list query of the sales returns. The period is on the return date; <c>Search</c> is text in the code of the return, of the invoice or of the customer, or in the name of the customer.</summary>
 /// <param name="Sort"><c>code</c> (the default), <c>returnDate</c> or <c>value</c>.</param>
 /// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default).</param>
+/// <param name="ZoneIds">Returns of the invoices of these zones (repeat the parameter), together with <c>ZoneId</c>; a zone the caller may not read is left out, at most 200.</param>
 public sealed record SalesReturnListQuery(
     DateOnly? From = null, DateOnly? To = null, Guid? CustomerId = null, Guid? ZoneId = null, int? StatusId = null, string? Search = null, int Page = 1, int PageSize = 20, string? Sort = null,
-    string? SortDir = null);
+    string? SortDir = null, Guid[]? ZoneIds = null);
 
 /// <summary>A return of the list.</summary>
 /// <param name="RecordedAt">When the return was saved.</param>

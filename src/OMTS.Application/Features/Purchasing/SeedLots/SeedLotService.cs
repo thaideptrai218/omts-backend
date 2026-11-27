@@ -2,6 +2,7 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Authorization.Models;
 
 namespace OMTS.Application.Features.Purchasing.SeedLots;
 
@@ -170,8 +171,15 @@ public sealed class SeedLotService(ISeedLotRegisterQuery lots, IStatusCatalog st
             return AppError.Invalid("Sort direction", "Use asc or desc.");
         }
 
+        // The register is not scoped to a zone (it follows the purchase receipt rules), so every zone asked for is kept.
+        var zones = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!zones.IsSuccess)
+        {
+            return zones.Error!;
+        }
+
         var descending = !string.Equals(query.SortDir?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
         var search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
-        return (new SeedLotRegisterFilter(query.From, query.To, query.SupplierId, query.ItemId, query.ZoneId, search), states, sort, descending);
+        return (new SeedLotRegisterFilter(query.From, query.To, query.SupplierId, query.ItemId, zones.Value!.Count > 0 ? zones.Value : null, search), states, sort, descending);
     }
 }

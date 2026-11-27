@@ -41,7 +41,7 @@ public sealed class EmployeeQueryService(
         // The upper bound keeps (page - 1) * pageSize inside int.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var caller = await callers.GetAsync(cancellationToken);
-        var filter = FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
+        var filter = FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.ZoneIds, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
         if (!filter.IsSuccess)
         {
             return filter.Error!;
@@ -93,8 +93,8 @@ public sealed class EmployeeQueryService(
 
         var caller = await callers.GetAsync(cancellationToken);
         var filter = ids is { Count: > 0 }
-            ? FilterOf(caller, null, null, null, null, null, query.SortBy, query.SortDir, ids)
-            : FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
+            ? FilterOf(caller, null, null, null, null, null, null, query.SortBy, query.SortDir, ids)
+            : FilterOf(caller, query.Search, query.StatusId, query.ZoneId, query.ZoneIds, query.EmployeeType, query.JobTypeId, query.SortBy, query.SortDir, null);
         if (!filter.IsSuccess)
         {
             return filter.Error!;
@@ -115,7 +115,7 @@ public sealed class EmployeeQueryService(
 
     /// <summary>The filter of the query; a success with null when the search text is longer than any name, code or number, so nothing can match.</summary>
     private Result<EmployeeSearchFilter?> FilterOf(
-        EmployeeCaller caller, string? search, int? statusId, Guid? zoneId, EmployeeType? type, Guid? jobTypeId, string? sortBy, string? sortDir, IReadOnlyCollection<Guid>? ids)
+        EmployeeCaller caller, string? search, int? statusId, Guid? zoneId, Guid[]? zoneIds, EmployeeType? type, Guid? jobTypeId, string? sortBy, string? sortDir, IReadOnlyCollection<Guid>? ids)
     {
         if (type is { } t && !Enum.IsDefined(t))
         {
@@ -143,6 +143,24 @@ public sealed class EmployeeQueryService(
             return AppError.Invalid("Sort direction");
         }
 
+        var chosen = PermittedZones.Choose(null, zoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
+        // The zones asked for in zoneIds that the caller may not see are left out; the legacy zoneId is kept as it always was.
+        var wanted = chosen.Value!.Count > 0 ? caller.Visible.Narrow(chosen.Value).ZoneIds!.ToHashSet() : [];
+        if (chosen.Value.Count > 0 && wanted.Count == 0 && zoneId is null)
+        {
+            return Result<EmployeeSearchFilter?>.Success(null);
+        }
+
+        if (zoneId is { } single)
+        {
+            wanted.Add(single);
+        }
+
         var text = search?.Trim();
         if (text?.Length > MaxSearchLength)
         {
@@ -150,7 +168,8 @@ public sealed class EmployeeQueryService(
         }
 
         return Result<EmployeeSearchFilter?>.Success(new EmployeeSearchFilter(
-            text, PhoneNumbers.Normalize(text), statusId, zoneId, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids, caller.VisibleZoneIds, caller.SeesSeasonalWorkers));
+            text, PhoneNumbers.Normalize(text), statusId, null, type, jobTypeId, timeProvider.Today(), sort.Value, sortDir == "desc", ids, caller.VisibleZoneIds, caller.SeesSeasonalWorkers,
+            wanted.Count > 0 ? wanted : null));
     }
 
     public async Task<Result<EmployeeView>> GetAsync(Guid id, CancellationToken cancellationToken)

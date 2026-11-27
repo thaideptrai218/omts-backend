@@ -91,7 +91,8 @@ public sealed record NurseryBatchPage(IReadOnlyList<NurseryBatchListItem> Items,
 /// <param name="SortBy"><c>code</c> (the default), <c>startDate</c>, <c>quantityIn</c> or <c>status</c>.</param>
 /// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default).</param>
 public sealed record NurseryListQuery(
-    Guid? ZoneId = null, string? Status = null, DateOnly? From = null, DateOnly? To = null, string? Search = null, string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20);
+    Guid? ZoneId = null, string? Status = null, DateOnly? From = null, DateOnly? To = null, string? Search = null, string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20,
+    Guid[]? ZoneIds = null);
 
 /// <summary>The seed lots a nursery can take (a lot with something on hand), for the form of NURSERY-01.</summary>
 public sealed record NurserySeedLotList(Guid ZoneId, IReadOnlyList<SeedLotOption> Lots, string? Message, string? MessageCode);

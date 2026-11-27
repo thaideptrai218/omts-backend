@@ -55,7 +55,7 @@ public sealed record CultivationLogView(
 /// <param name="PageSize">1 to 100.</param>
 public sealed record CultivationLogListQuery(
     Guid? ZoneId = null, Guid? RaftId = null, string? LogType = null, DateOnly? From = null, DateOnly? To = null, string? Search = null,
-    string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20);
+    string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20, Guid[]? ZoneIds = null);
 
 /// <summary>A page of the cross-raft log list, the latest visit first.</summary>
 public sealed record CultivationLogPage(IReadOnlyList<CultivationLogView> Items, int Page, int PageSize, int Total);

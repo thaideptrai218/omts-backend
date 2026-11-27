@@ -4,10 +4,10 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
 /// <summary>
-/// The seed lot register filters; null means "any". The period is on the date the receipt was received. <paramref name="ZoneId"/> keeps the lots used in that zone (a nursery batch of the zone, a seeding on a raft of
+/// The seed lot register filters; null means "any". The period is on the date the receipt was received. <paramref name="ZoneIds"/> keeps the lots used in one of those zones (a nursery batch of the zone, a seeding on a raft of
 /// the zone) or received for it. <paramref name="Search"/> is text in the receipt code, the seed lot code (PN000123-1), the supplier's lot code or the code or name of the seed item.
 /// </summary>
-public sealed record SeedLotRegisterFilter(DateOnly? From = null, DateOnly? To = null, Guid? SupplierId = null, Guid? ItemId = null, Guid? ZoneId = null, string? Search = null);
+public sealed record SeedLotRegisterFilter(DateOnly? From = null, DateOnly? To = null, Guid? SupplierId = null, Guid? ItemId = null, IReadOnlyList<Guid>? ZoneIds = null, string? Search = null);
 
 /// <summary>A seed lot (a Seed line of a Completed receipt) with its supplier, seed item, the product the item sells as, and its quantities.</summary>
 public sealed record SeedLotFiguresRow(

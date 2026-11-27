@@ -121,6 +121,7 @@ public sealed record HarvestPlanPage(IReadOnlyList<HarvestPlanListItem> Items, i
 /// <param name="From">The first planned day, included.</param>
 /// <param name="To">The last planned day, included.</param>
 /// <param name="ZoneId">Only the plans with a line (a raft) in this zone.</param>
+/// <param name="ZoneIds">Only the plans with a line in one of these zones (repeat the parameter), together with <paramref name="ZoneId"/>; a zone the caller may not read is left out, at most 200.</param>
 public sealed record HarvestPlanListQuery(
     string? Search = null,
     IReadOnlyList<int>? StatusIds = null,
@@ -129,7 +130,8 @@ public sealed record HarvestPlanListQuery(
     Guid? ZoneId = null,
     Guid? SalesOrderId = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    Guid[]? ZoneIds = null);
 
 public sealed record HarvestPlanNextCode(string Code);
 
