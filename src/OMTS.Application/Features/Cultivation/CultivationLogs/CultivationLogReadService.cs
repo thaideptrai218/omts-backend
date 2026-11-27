@@ -30,7 +30,7 @@ public sealed class CultivationLogReadService(
         return Result<IReadOnlyList<CultivationLogView>>.Success(await views.ListAsync(cycle, wanted, cancellationToken));
     }
 
-    /// <summary>The logs of every raft the caller may read, one page, the latest visit first. Zone-scoped staff see only their zones; a zone they cannot read is MSG-GEN-08.</summary>
+    /// <summary>The logs of every raft the caller may read, one page, ordered by <c>sortBy</c> (the latest visit first by default). Zone-scoped staff see only their zones; a zone they cannot read is MSG-GEN-08.</summary>
     public async Task<Result<CultivationLogPage>> SearchAsync(CultivationLogListQuery query, CancellationToken cancellationToken)
     {
         var allowed = await zoneAccess.PermittedZonesAsync(PermissionFunctions.CultivationLogs, PermissionAction.View, cancellationToken);

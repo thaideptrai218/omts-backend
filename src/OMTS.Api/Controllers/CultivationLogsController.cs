@@ -46,7 +46,7 @@ public sealed class CultivationLogsController(
     }
 
     /// <summary>
-    /// The logs of every raft the caller may read (the "Nhật ký" screen), the latest visit first: query <c>zoneId</c>, <c>raftId</c>, <c>logType</c>, <c>from</c> and <c>to</c> (visit dates, <c>yyyy-MM-dd</c>, inclusive),
+    /// The logs of every raft the caller may read (the "Nhật ký" screen), the latest visit first unless <c>sortBy</c> (<c>visitDate</c>, <c>zone</c>, <c>raft</c>, <c>logType</c>, <c>recordedBy</c>, <c>recordedAt</c>) and <c>sortDir</c> (<c>asc</c>, <c>desc</c>) say otherwise: query <c>zoneId</c>, <c>raftId</c>, <c>logType</c>, <c>from</c> and <c>to</c> (visit dates, <c>yyyy-MM-dd</c>, inclusive),
     /// <c>search</c> (raft code or notes), <c>page</c> and <c>pageSize</c> (at most 100). A zone the caller cannot read answers 403.
     /// </summary>
     [HttpGet("api/cultivation-logs")]

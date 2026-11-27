@@ -47,9 +47,12 @@ public sealed record CultivationLogView(
 /// <param name="RaftId">Only the logs of this raft, in every cycle it had.</param>
 /// <param name="LogType">One code of <see cref="OMTS.Domain.Constants.CultivationLogTypes"/>; blank is any.</param>
 /// <param name="Search">Text in the raft code or the notes.</param>
+/// <param name="SortBy"><c>visitDate</c> (the default), <c>zone</c>, <c>raft</c>, <c>logType</c>, <c>recordedBy</c> or <c>recordedAt</c>, any letter case; another value is MSG-GEN-01 on <c>SortBy</c>.</param>
+/// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default), any letter case; another value is MSG-GEN-01 on <c>SortDir</c>.</param>
 /// <param name="PageSize">1 to 100.</param>
 public sealed record CultivationLogListQuery(
-    Guid? ZoneId = null, Guid? RaftId = null, string? LogType = null, DateOnly? From = null, DateOnly? To = null, string? Search = null, int Page = 1, int PageSize = 20);
+    Guid? ZoneId = null, Guid? RaftId = null, string? LogType = null, DateOnly? From = null, DateOnly? To = null, string? Search = null,
+    string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20);
 
 /// <summary>A page of the cross-raft log list, the latest visit first.</summary>
 public sealed record CultivationLogPage(IReadOnlyList<CultivationLogView> Items, int Page, int PageSize, int Total);

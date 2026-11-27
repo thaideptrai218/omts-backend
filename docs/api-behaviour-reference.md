@@ -622,7 +622,9 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
 
 ### Cross-raft cultivation log list (the "Nhật ký" screen, 27/11/2026)
 
-- `GET /api/cultivation-logs?zoneId&raftId&logType&from&to&search&page&pageSize` answers `{ items, page, pageSize, total }`; `items` are the same `CultivationLogView` as everywhere, ordered `visitDate` desc, then `recordedAt` desc.
+- `GET /api/cultivation-logs?zoneId&raftId&logType&from&to&search&sortBy&sortDir&page&pageSize` answers `{ items, page, pageSize, total }`; `items` are the same `CultivationLogView` as everywhere, ordered `visitDate` desc, then `recordedAt` desc, unless sorted.
+- Sort (over the whole result, in SQL): `sortBy` is one of `visitDate` (default), `zone` (zone code), `raft` (raft code), `logType`, `recordedBy` (the recorder's display name) or `recordedAt`, any letter case; `sortDir` is `asc` or `desc` (default), any letter case.
+  Blank = the default. Any other value = 400 MSG-GEN-01 naming `SortBy` or `SortDir` (after the access check). Ties always fall back to `recordedAt` desc, then `id` desc, so a page boundary never repeats or skips a log.
 - Every log view now also has `zoneId`, `zoneCode`, `zoneName` (beside `cycleId`, `raftId`, `raftCode`).
 - `from` and `to` are visit dates (`yyyy-MM-dd`), inclusive, each optional; `to` before `from` = 400 MSG-GEN-01 on `To`. `logType`: same codes and rules as the cycle list (unknown = 400 on `LogType`). `search`: text in the raft code or the notes
   (a `LIKE` with `%` and `_` escaped, so they match themselves), at most 100 characters (else 400 on `Search`). `page` from 1, `pageSize` clamped to 1-100 (default 20). `raftId` matches the raft in every cycle it had.

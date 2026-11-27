@@ -34,8 +34,7 @@ internal sealed class CultivationLogRepository(OmtsDbContext db) : ICultivationL
             && (filter.To == null || l.VisitDate <= filter.To)
             && (search == null || l.Cycle.Raft.Code.Contains(search) || (l.Notes != null && l.Notes.Contains(search))));
         var total = await query.CountAsync(cancellationToken);
-        var rows = await query
-            .OrderByDescending(l => l.VisitDate).ThenByDescending(l => l.CreatedAt).ThenByDescending(l => l.Id)
+        var rows = await Sorted(query, filter)
             .Include(l => l.Photos)
             .Include(l => l.Cycle).ThenInclude(c => c.Raft).ThenInclude(r => r.Zone)
             .AsSplitQuery()
@@ -54,6 +53,27 @@ internal sealed class CultivationLogRepository(OmtsDbContext db) : ICultivationL
     {
         db.CultivationLogPhotos.RemoveRange(log.Photos);
         db.CultivationLogs.Remove(log);
+    }
+
+    // Every key is translated to SQL; the recorder's name is a correlated lookup of the account. Equal keys fall back to the recording time, then the id, so pages never repeat or skip a row.
+    private IOrderedQueryable<CultivationLog> Sorted(IQueryable<CultivationLog> logs, CultivationLogFilter filter)
+    {
+        var desc = filter.Descending;
+        var accounts = db.Accounts;
+        var ordered = filter.Sort switch
+        {
+            CultivationLogSort.Zone => desc ? logs.OrderByDescending(l => l.Cycle.Raft.Zone.Code) : logs.OrderBy(l => l.Cycle.Raft.Zone.Code),
+            CultivationLogSort.Raft => desc ? logs.OrderByDescending(l => l.Cycle.Raft.Code) : logs.OrderBy(l => l.Cycle.Raft.Code),
+            CultivationLogSort.LogType => desc ? logs.OrderByDescending(l => l.LogType) : logs.OrderBy(l => l.LogType),
+            CultivationLogSort.RecordedBy => desc
+                ? logs.OrderByDescending(l => accounts.Where(a => a.Id == l.RecordedByAccountId).Select(a => a.DisplayName).FirstOrDefault())
+                : logs.OrderBy(l => accounts.Where(a => a.Id == l.RecordedByAccountId).Select(a => a.DisplayName).FirstOrDefault()),
+            CultivationLogSort.RecordedAt => desc ? logs.OrderByDescending(l => l.CreatedAt) : logs.OrderBy(l => l.CreatedAt),
+            _ => desc ? logs.OrderByDescending(l => l.VisitDate) : logs.OrderBy(l => l.VisitDate),
+        };
+        return filter.Sort == CultivationLogSort.RecordedAt
+            ? ordered.ThenByDescending(l => l.Id)
+            : ordered.ThenByDescending(l => l.CreatedAt).ThenByDescending(l => l.Id);
     }
 
     private static IQueryable<CultivationLog> WithCycle(IQueryable<CultivationLog> logs) =>
