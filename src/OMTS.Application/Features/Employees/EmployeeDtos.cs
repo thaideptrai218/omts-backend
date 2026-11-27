@@ -124,6 +124,7 @@ public sealed record EmployeeView(
 
 /// <param name="Account">The linked account's basic identity and status, within the caller's employee scope. Managing accounts remains Owner-only.</param>
 /// <param name="MonthHours">Paid hours worked from the first of this month to today (break deducted, as the payroll counts them); only for a caller with PAYROLL View (Owner, Accountant), else null.</param>
+/// <param name="IdNumber">This and the other personal fields down to <paramref name="Notes"/> (the optional columns of the list) only when <paramref name="CanMaintain"/>, as in the detail view.</param>
 /// <param name="OutstandingWage">What the employee is still owed on Finalized payroll sheets, VND; same visibility as <paramref name="MonthHours"/>.</param>
 /// <param name="SalaryType">The salary type in force today, or the default of the employee type; null for a Staff employee without a setup ("Chưa thiết lập lương"), and always null for a caller who does not see <paramref name="MonthHours"/>.</param>
 public sealed record EmployeeListItem(
@@ -142,7 +143,15 @@ public sealed record EmployeeListItem(
     decimal? MonthHours = null,
     decimal? OutstandingWage = null,
     SalaryType? SalaryType = null,
-    string? PhotoUrl = null);
+    string? PhotoUrl = null,
+    string? IdNumber = null,
+    DateOnly? Birthday = null,
+    Gender? Gender = null,
+    DateOnly? StartDate = null,
+    string? Address = null,
+    string? Area = null,
+    string? Ward = null,
+    string? Notes = null);
 
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>

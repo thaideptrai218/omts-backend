@@ -45,7 +45,15 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             maintains ? e.WardCode : null);
     }
 
-    public EmployeeListItem ListItem(Employee e, EmployeeCaller caller) => new(
+    public EmployeeListItem ListItem(Employee e, EmployeeCaller caller)
+    {
+        var row = Row(e, caller);
+        return row.CanMaintain
+            ? row with { IdNumber = e.IdNumber, Birthday = e.Birthday, Gender = e.Gender, StartDate = e.StartDate, Address = e.Address, Area = e.Area, Ward = e.Ward, Notes = e.Notes }
+            : row;
+    }
+
+    private EmployeeListItem Row(Employee e, EmployeeCaller caller) => new(
         e.Id,
         e.Code,
         e.FullName,
