@@ -86,9 +86,8 @@ public sealed class EmployeeSalaryService(
         var enteredBy = currentUser.AccountId ?? throw new InvalidOperationException("A salary is entered by a logged-in user.");
         if (sameDate is null)
         {
-            var setup = new EmployeeSalarySetup { EmployeeId = employee.Id, Type = type, MonthlyAmount = amount, EffectiveFrom = from, EnteredByAccountId = enteredBy };
-            salaries.Add(setup);
-            employee.SalarySetups.Add(setup);
+            // The employee is tracked, so adding the row also puts it in employee.SalarySetups for the answer.
+            salaries.Add(new EmployeeSalarySetup { EmployeeId = employee.Id, Type = type, MonthlyAmount = amount, EffectiveFrom = from, EnteredByAccountId = enteredBy });
         }
         else
         {
