@@ -1,7 +1,7 @@
 namespace OMTS.Application.Features.Labor.Costs;
 
-/// <summary>The period of the cost by raft: both dates are included; at most one year.</summary>
-public sealed record LaborCostQuery(DateOnly From, DateOnly To, Guid? ZoneId);
+/// <summary>The period of the cost by raft: both dates are included; at most one year. <paramref name="ZoneIds"/> (repeat the parameter, at most 200) and <paramref name="ZoneId"/> together keep the cost of those zones.</summary>
+public sealed record LaborCostQuery(DateOnly From, DateOnly To, Guid? ZoneId, Guid[]? ZoneIds = null);
 
 /// <summary>The hours and cost of one job type inside a raft, a cycle or an employee's share of one.</summary>
 public sealed record JobLaborCost(Guid JobTypeId, string JobName, decimal Hours, decimal Amount);

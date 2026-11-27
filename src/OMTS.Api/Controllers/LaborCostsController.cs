@@ -21,7 +21,7 @@ public sealed class LaborCostsController(LaborCostService costs, LaborCostExport
 {
     /// <summary>
     /// The cost of every raft in the period (<c>from</c> and <c>to</c> included, at most 366 days), with the cost of work at zone level as a row
-    /// without a raft; <c>zoneId</c> keeps one zone. 400 for a period that is back to front or longer than a year.
+    /// without a raft; <c>zoneId</c> keeps one zone and a repeated <c>zoneIds</c> keeps several (at most 200). 400 for a period that is back to front or longer than a year.
     /// </summary>
     [HttpGet("rafts")]
     [ProducesResponseType<LaborCostByRaft>(StatusCodes.Status200OK)]

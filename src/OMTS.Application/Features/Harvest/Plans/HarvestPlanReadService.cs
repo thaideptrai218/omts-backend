@@ -49,9 +49,22 @@ public sealed class HarvestPlanReadService(
             return AppError.Invalid("Status");
         }
 
+        // Without zoneIds the single zoneId filters as it always did; with them, the zones asked for that the caller may not read are left out.
+        var (zoneId, reach) = (query.ZoneId, scope.ZoneIds);
+        if (query.ZoneIds is { Length: > 0 })
+        {
+            var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+            if (!chosen.IsSuccess)
+            {
+                return chosen.Error!;
+            }
+
+            (zoneId, reach) = (null, new PermittedZones(scope.ZoneIds is null, scope.ZoneIds ?? new HashSet<Guid>()).Narrow(chosen.Value).ZoneIds);
+        }
+
         var text = DisplayNames.Normalize(query.Search);
         var filter = new HarvestPlanFilter(
-            text.Length == 0 ? null : text, query.StatusIds is { Count: > 0 } ? query.StatusIds : null, query.From, query.To, query.ZoneId, query.SalesOrderId, scope.ZoneIds, scope.AssignedOnly);
+            text.Length == 0 ? null : text, query.StatusIds is { Count: > 0 } ? query.StatusIds : null, query.From, query.To, zoneId, query.SalesOrderId, reach, scope.AssignedOnly);
         // The upper bound keeps (page - 1) * pageSize inside int.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var (items, total) = await plans.SearchAsync(filter, page, pageSize, cancellationToken);

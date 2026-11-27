@@ -36,10 +36,17 @@ public sealed class WorkQueryService(
     private const int MaxRequests = 500;
 
     /// <summary>LABOR-02.0 step 1: every employee with work on the day on the rafts of the caller's zones, with the check-in and check-out.</summary>
-    public async Task<Result<IReadOnlyList<AssignmentView>>> ListAssignmentsAsync(DateOnly day, CancellationToken cancellationToken)
+    /// <param name="zoneIds">Only the rafts of these zones; a zone the caller may not read is left out, at most 200 (MSG-GEN-01 <c>ZoneIds</c>). None: every zone of the caller.</param>
+    public async Task<Result<IReadOnlyList<AssignmentView>>> ListAssignmentsAsync(DateOnly day, IReadOnlyCollection<Guid>? zoneIds, CancellationToken cancellationToken)
     {
-        var permitted = await zones.PermittedZonesAsync(PermissionFunctions.WorkAssignments, PermissionAction.View, cancellationToken);
-        var periods = (await assignments.ListDayAsync(day, cancellationToken)).Where(p => permitted.Allows(p.ZoneId)).ToList();
+        var chosen = PermittedZones.Choose(null, zoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
+        var shown = (await zones.PermittedZonesAsync(PermissionFunctions.WorkAssignments, PermissionAction.View, cancellationToken)).Narrow(chosen.Value);
+        var periods = (await assignments.ListDayAsync(day, cancellationToken)).Where(p => shown.ZoneIds is null || shown.ZoneIds.Contains(p.ZoneId)).ToList();
         var ids = periods.Select(p => p.EmployeeId).Distinct().ToList();
         var attended = (await attendances.ListOfEmployeesAsync(ids, day, cancellationToken)).ToDictionary(a => a.EmployeeId);
         var leave = (await requests.ListApprovedLeaveAsync(ids, day, cancellationToken)).Select(l => l.EmployeeId).ToHashSet();

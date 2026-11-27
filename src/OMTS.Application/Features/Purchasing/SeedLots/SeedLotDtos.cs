@@ -7,9 +7,10 @@ namespace OMTS.Application.Features.Purchasing.SeedLots;
 /// <param name="Search">Text in the receipt code, the seed lot code (PN000123-1), the supplier's lot code or the code or name of the seed item.</param>
 /// <param name="Sort"><c>code</c> (the default, by receipt code then line number), <c>receivedAt</c> or <c>remaining</c>.</param>
 /// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default).</param>
+/// <param name="ZoneIds">Lots received for, nursed in or seeded in one of these zones (repeat the parameter), together with <paramref name="ZoneId"/>; at most 200.</param>
 public sealed record SeedLotListQuery(
     DateOnly? From = null, DateOnly? To = null, Guid? SupplierId = null, Guid? ItemId = null, Guid? ZoneId = null, string? State = null, string? Search = null,
-    int Page = 1, int PageSize = 20, string? Sort = null, string? SortDir = null);
+    int Page = 1, int PageSize = 20, string? Sort = null, string? SortDir = null, Guid[]? ZoneIds = null);
 
 public sealed record SeedLotNamedRef(Guid Id, string Code, string Name);
 

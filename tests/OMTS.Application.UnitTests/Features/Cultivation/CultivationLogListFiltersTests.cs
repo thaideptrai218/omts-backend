@@ -36,8 +36,45 @@ public class CultivationLogListFiltersTests
     {
         Assert.Null(Read(new CultivationLogListQuery(ZoneId: ZoneA), OnlyA, out var filter, out _, out _));
 
-        Assert.Equal(ZoneA, filter.ZoneId);
+        Assert.Null(filter.ZoneId);
         Assert.Equal([ZoneA], filter.ZoneIds!);
+    }
+
+    [Fact]
+    public void Zone_ids_keep_the_zones_the_caller_reads_and_leave_the_others_out_without_a_refusal()
+    {
+        Assert.Null(Read(new CultivationLogListQuery(ZoneIds: [ZoneA, ZoneB]), OnlyA, out var filter, out _, out _));
+
+        Assert.Equal([ZoneA], filter.ZoneIds!);
+    }
+
+    [Fact]
+    public void Zone_ids_none_of_which_the_caller_reads_keep_no_zone_never_every_zone()
+    {
+        Assert.Null(Read(new CultivationLogListQuery(ZoneIds: [ZoneB]), OnlyA, out var filter, out _, out _));
+
+        Assert.NotNull(filter.ZoneIds);
+        Assert.Empty(filter.ZoneIds);
+    }
+
+    [Fact]
+    public void The_single_zone_and_the_zone_ids_are_joined_and_the_single_zone_is_still_refused_when_not_read()
+    {
+        Assert.Null(Read(new CultivationLogListQuery(ZoneId: ZoneA, ZoneIds: [ZoneA]), PermittedZones.Everywhere, out var filter, out _, out _));
+        var error = Read(new CultivationLogListQuery(ZoneId: ZoneB, ZoneIds: [ZoneA]), OnlyA, out _, out _, out _);
+
+        Assert.Equal([ZoneA], filter.ZoneIds!);
+        Assert.Equal(ErrorKind.Forbidden, error!.Kind);
+    }
+
+    [Fact]
+    public void More_than_two_hundred_zone_ids_are_refused()
+    {
+        var many = Enumerable.Range(0, PermittedZones.MaxChosen + 1).Select(_ => Guid.NewGuid()).ToArray();
+
+        var error = Read(new CultivationLogListQuery(ZoneIds: many), PermittedZones.Everywhere, out _, out _, out _);
+
+        Assert.Equal("ZoneIds", error!.Details!["field"]);
     }
 
     [Fact]
@@ -54,8 +91,8 @@ public class CultivationLogListFiltersTests
     {
         Assert.Null(Read(new CultivationLogListQuery(ZoneId: ZoneB), PermittedZones.Everywhere, out var filter, out _, out _));
 
-        Assert.Null(filter.ZoneIds);
-        Assert.Equal(ZoneB, filter.ZoneId);
+        Assert.Null(filter.ZoneId);
+        Assert.Equal([ZoneB], filter.ZoneIds!);
     }
 
     [Fact]

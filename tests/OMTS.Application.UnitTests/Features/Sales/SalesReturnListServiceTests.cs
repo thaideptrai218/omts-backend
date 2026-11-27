@@ -89,8 +89,42 @@ public sealed class SalesReturnListServiceTests
         var result = await Service(returns, Owner()).SearchAsync(query, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(new SalesReturnFilter(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), customer, zoneB, null, StatusIds.SalesReturn.Cancelled, "TL0"), returns.Filter);
+        Assert.Null(returns.Filter!.ZoneId);
+        Assert.Equal([zoneB], returns.Filter.ZoneIds!);
+        Assert.Equal(
+            (new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), customer, StatusIds.SalesReturn.Cancelled, "TL0"),
+            (returns.Filter.From, returns.Filter.To, returns.Filter.CustomerId, returns.Filter.StatusId, returns.Filter.Search));
         Assert.Equal((SalesReturnSort.Value, false, 2, 50), returns.Paging);
+    }
+
+    [Fact]
+    public async Task Zone_ids_keep_the_chosen_zones_the_caller_may_view_and_none_left_is_no_zone_never_every_zone()
+    {
+        var returns = new FakeReturns([]);
+        var manager = Viewer(zoneA);
+
+        var partly = await Service(returns, manager).SearchAsync(new SalesReturnListQuery(ZoneIds: [zoneA, zoneB]), CancellationToken.None);
+        var keptPartly = returns.Filter!.ZoneIds!.ToArray();
+        var none = await Service(returns, manager).SearchAsync(new SalesReturnListQuery(ZoneIds: [zoneB]), CancellationToken.None);
+        var keptNone = returns.Filter!.ZoneIds!.ToArray();
+        var joined = await Service(returns, Owner()).SearchAsync(new SalesReturnListQuery(ZoneId: zoneA, ZoneIds: [zoneB, zoneA]), CancellationToken.None);
+
+        Assert.True(partly.IsSuccess);
+        Assert.Equal([zoneA], keptPartly);
+        Assert.True(none.IsSuccess);
+        Assert.Empty(keptNone);
+        Assert.True(joined.IsSuccess);
+        Assert.True(new HashSet<Guid> { zoneA, zoneB }.SetEquals(returns.Filter!.ZoneIds!));
+    }
+
+    [Fact]
+    public async Task More_than_two_hundred_zone_ids_are_refused()
+    {
+        var many = Enumerable.Range(0, PermittedZones.MaxChosen + 1).Select(_ => Guid.NewGuid()).ToArray();
+
+        var result = await Service(new FakeReturns([]), Owner()).SearchAsync(new SalesReturnListQuery(ZoneIds: many), CancellationToken.None);
+
+        Assert.Equal(ErrorKind.Validation, result.Error!.Kind);
     }
 
     [Fact]

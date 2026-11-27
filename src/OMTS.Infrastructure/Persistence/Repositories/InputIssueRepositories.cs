@@ -133,6 +133,12 @@ internal sealed class InputIssueRepository(OmtsDbContext db) : IInputIssueReposi
             issues = issues.Where(i => i.ZoneId == zoneId);
         }
 
+        if (filter.ZoneIds is { } chosenZones)
+        {
+            var chosen = chosenZones.ToList();
+            issues = issues.Where(i => i.ZoneId != null && chosen.Contains(i.ZoneId.Value));
+        }
+
         if (filter.RaftId is { } raftId)
         {
             issues = issues.Where(i => i.RaftId == raftId);

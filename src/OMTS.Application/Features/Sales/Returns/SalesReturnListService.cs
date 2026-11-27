@@ -25,7 +25,7 @@ public sealed class SalesReturnListService(ISalesReturnRepository salesReturns, 
     private async Task<Result<SalesReturnListPage>> PageAsync(SalesReturnListQuery query, int page, int pageSize, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.SalesReturns, PermissionAction.View, cancellationToken);
-        if (zones.IsEmpty || (query.ZoneId is { } chosen && !zones.Allows(chosen)))
+        if (zones.IsEmpty || (query.ZoneId is { } single && !zones.Allows(single)))
         {
             return AppError.Forbidden;
         }
@@ -52,8 +52,15 @@ public sealed class SalesReturnListService(ISalesReturnRepository salesReturns, 
             return AppError.Invalid("Sort direction", "Use asc or desc.");
         }
 
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
         var descending = !string.Equals(query.SortDir?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
-        var filter = new SalesReturnFilter(query.From, query.To, query.CustomerId, query.ZoneId, zones.AllZones ? null : zones.ZoneIds.ToHashSet(), query.StatusId, query.Search);
+        // A zone asked for that the caller may not read is left out; none left is an empty list, never every zone.
+        var filter = new SalesReturnFilter(query.From, query.To, query.CustomerId, null, zones.Narrow(chosen.Value).ZoneIds, query.StatusId, query.Search);
         var (rows, total, sums) = await salesReturns.SearchAsync(filter, sort.Value, descending, page, pageSize, cancellationToken);
         var people = rows.Select(r => r.RecordedByAccountId).Distinct().ToList();
         var names = people.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(people, cancellationToken);

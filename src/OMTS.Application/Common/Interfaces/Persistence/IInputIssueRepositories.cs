@@ -3,7 +3,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>Issue list filters; null means "any". The period is on <c>IssuedAt</c>. A caller who sees only some zones passes them in <see cref="UseZoneIds"/>; disposals have no zone and show only with <see cref="IncludeDisposals"/>.</summary>
+/// <summary>Issue list filters; null means "any". The period is on <c>IssuedAt</c>. A caller who sees only some zones passes them in <see cref="UseZoneIds"/>; disposals have no zone and show only with <see cref="IncludeDisposals"/>. <see cref="ZoneIds"/> keeps the issues of one of these zones (a disposal has none), on top of what the caller sees.</summary>
 public sealed record InputIssueFilter(
     string? Search,
     InputIssueKind? Kind,
@@ -19,7 +19,8 @@ public sealed record InputIssueFilter(
     IReadOnlySet<Guid>? UseZoneIds,
     bool IncludeDisposals,
     InputIssueSort Sort,
-    bool Descending);
+    bool Descending,
+    IReadOnlySet<Guid>? ZoneIds = null);
 
 public enum InputIssueSort
 {

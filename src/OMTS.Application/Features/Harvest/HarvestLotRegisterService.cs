@@ -34,7 +34,7 @@ public sealed class HarvestLotRegisterService(
     private async Task<Result<HarvestLotRegisterPage>> ReadAsync(HarvestLotListQuery query, int requestedPage, int requestedSize, int maxPageSize, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.Harvests, PermissionAction.View, cancellationToken);
-        if (zones.IsEmpty || (query.ZoneId is { } chosen && !zones.Allows(chosen)))
+        if (zones.IsEmpty || (query.ZoneId is { } single && !zones.Allows(single)))
         {
             return AppError.Forbidden;
         }
@@ -74,8 +74,14 @@ public sealed class HarvestLotRegisterService(
 
         var descending = !string.Equals(query.SortDir?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
         var (page, pageSize) = (Math.Clamp(requestedPage, 1, int.MaxValue / maxPageSize), Math.Clamp(requestedSize, 1, maxPageSize));
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
         var filter = new HarvestLotFilter(
-            query.From, query.To, query.ZoneId, zones.AllZones ? null : zones.ZoneIds.ToHashSet(), query.RaftId, query.ProductId, query.StatusId, query.Weighed, closeReason, query.HasPlan, query.Search);
+            query.From, query.To, null, zones.Narrow(chosen.Value).ZoneIds, query.RaftId, query.ProductId, query.StatusId, query.Weighed, closeReason, query.HasPlan, query.Search);
         return await ReadPageAsync(filter, sort.Value, descending, page, pageSize, cancellationToken);
     }
 

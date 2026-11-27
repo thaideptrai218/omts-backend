@@ -669,12 +669,25 @@ public sealed class ProductDisposalService(
             ProductDisposalStatusFilter.Cancelled => [StatusIds.ProductDisposal.Cancelled],
             _ => null,
         };
+        // Without zoneIds the single zoneId filters as it always did; with them, the zones asked for that the caller may not read are left out (none left is an empty list, never every zone).
+        var (zoneId, reach) = (query.ZoneId, scope.ZoneIds);
+        if (query.ZoneIds is { Length: > 0 })
+        {
+            var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+            if (!chosen.IsSuccess)
+            {
+                return chosen.Error!;
+            }
+
+            (zoneId, reach) = (null, new PermittedZones(scope.ZoneIds is null, scope.ZoneIds ?? new HashSet<Guid>()).Narrow(chosen.Value).ZoneIds);
+        }
+
         var text = DisplayNames.Normalize(query.Search);
         return new ProductDisposalFilter(
             text.Length == 0 ? null : text, statusIds,
             query.From is { } from ? BusinessClock.FromLocal(from.ToDateTime(TimeOnly.MinValue)) : null,
             query.To is { } to ? BusinessClock.FromLocal(to.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
-            query.ZoneId, query.ProductId, query.CreatedById, scope.ZoneIds, sort.Value, query.SortDir != "asc");
+            zoneId, query.ProductId, query.CreatedById, reach, sort.Value, query.SortDir != "asc");
     }
 
     private async Task<IReadOnlyList<ProductDisposalListItem>> ListItemsAsync(IReadOnlyList<ProductDisposalRow> rows, CancellationToken cancellationToken)

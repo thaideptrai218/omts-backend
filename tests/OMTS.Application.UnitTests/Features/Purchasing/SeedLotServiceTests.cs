@@ -1,6 +1,7 @@
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Domain.Constants;
@@ -127,7 +128,42 @@ public sealed class SeedLotServiceTests
             new SeedLotListQuery(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), supplierId, itemId, zone, null, "  PN0000  "), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(new SeedLotRegisterFilter(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), supplierId, itemId, zone, "PN0000"), query.Filter);
+        var filter = query.Filter!;
+        Assert.Equal((new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), supplierId, itemId, "PN0000"), (filter.From, filter.To, filter.SupplierId, filter.ItemId, filter.Search));
+        Assert.Equal([zone], filter.ZoneIds);
+    }
+
+    [Fact]
+    public async Task Zone_ids_and_the_single_zone_reach_the_query_as_one_distinct_set()
+    {
+        var query = new FakeQuery([]);
+        var (a, b, c) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var result = await Service(query).SearchAsync(new SeedLotListQuery(ZoneId: c, ZoneIds: [a, b, a, c]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal([a, b, c], query.Filter!.ZoneIds);
+    }
+
+    [Fact]
+    public async Task More_than_two_hundred_zone_ids_are_refused()
+    {
+        var zoneIds = Enumerable.Range(0, PermittedZones.MaxChosen + 1).Select(_ => Guid.NewGuid()).ToArray();
+
+        var result = await Service(new FakeQuery([])).SearchAsync(new SeedLotListQuery(ZoneIds: zoneIds), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("ZoneIds", result.Error!.Details!["field"]);
+    }
+
+    [Fact]
+    public async Task Two_hundred_zone_ids_are_accepted()
+    {
+        var zoneIds = Enumerable.Range(0, PermittedZones.MaxChosen).Select(_ => Guid.NewGuid()).ToArray();
+
+        var result = await Service(new FakeQuery([])).SearchAsync(new SeedLotListQuery(ZoneIds: zoneIds), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
     }
 
     [Fact]

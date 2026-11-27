@@ -76,6 +76,7 @@ public enum EmployeeSort
 /// <param name="Ids">Only these employees (the export of selected rows); the filters above are then left empty by the caller.</param>
 /// <param name="VisibleZoneIds">Only the employees with a working zone among these zones (a caller limited to some zones); null: every employee, an empty collection: none.</param>
 /// <param name="IncludeSeasonal">With <paramref name="VisibleZoneIds"/>: also every seasonal worker, who has no fixed zone.</param>
+/// <param name="ZoneIds">Only the employees with a working zone among these zones, as <paramref name="ZoneId"/> does for one; null: any.</param>
 public sealed record EmployeeSearchFilter(
     string? Search,
     string? PhoneNumber,
@@ -88,4 +89,5 @@ public sealed record EmployeeSearchFilter(
     bool Descending = false,
     IReadOnlyCollection<Guid>? Ids = null,
     IReadOnlyCollection<Guid>? VisibleZoneIds = null,
-    bool IncludeSeasonal = false);
+    bool IncludeSeasonal = false,
+    IReadOnlyCollection<Guid>? ZoneIds = null);

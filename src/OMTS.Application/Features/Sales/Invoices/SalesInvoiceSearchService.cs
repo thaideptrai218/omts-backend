@@ -56,7 +56,7 @@ public sealed class SalesInvoiceSearchService(
         SalesInvoiceSearchQuery query, PermissionAction action, int page, int pageSize, int? maxMatches, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.SalesInvoices, action, cancellationToken);
-        if (zones.IsEmpty || query.ZoneId is { } chosen && !zones.Allows(chosen))
+        if (zones.IsEmpty || query.ZoneId is { } single && !zones.Allows(single))
         {
             return AppError.Forbidden;
         }
@@ -67,8 +67,15 @@ public sealed class SalesInvoiceSearchService(
             return period.Error!;
         }
 
+        var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
         var (from, to) = period.Value;
-        IReadOnlyCollection<Guid>? zoneIds = query.ZoneId is { } zoneId ? [zoneId] : zones.AllZones ? null : zones.ZoneIds.ToList();
+        // A zone asked for in zoneIds that the caller may not read is left out; none left is an empty list, never every zone.
+        var zoneIds = zones.Narrow(chosen.Value).ZoneIds;
         var collector = query.CashCollectedByMe ? currentUser.AccountId : null;
         var filter = new SalesInvoiceSearchFilter(
             from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.SalesOrderId, query.OrderCode);

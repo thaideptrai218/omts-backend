@@ -835,13 +835,27 @@ public sealed class InputIssueService(
             InputIssueStatusFilter.Cancelled => [StatusIds.InputIssue.Cancelled],
             _ => null,
         };
+        // Without zoneIds the single zoneId filters as it always did; with them, the zones asked for that the caller may not read are left out (and a disposal, which has no zone, is not listed).
+        var (zoneId, zoneIds) = (query.ZoneId, (IReadOnlySet<Guid>?)null);
+        if (query.ZoneIds is { Length: > 0 })
+        {
+            var chosen = PermittedZones.Choose(query.ZoneId, query.ZoneIds);
+            if (!chosen.IsSuccess)
+            {
+                return chosen.Error!;
+            }
+
+            var readable = scope.IncludeUse ? new PermittedZones(scope.UseZoneIds is null, scope.UseZoneIds ?? new HashSet<Guid>()) : PermittedZones.None;
+            (zoneId, zoneIds) = (null, readable.Narrow(chosen.Value).ZoneIds);
+        }
+
         var text = DisplayNames.Normalize(query.Search);
         return new InputIssueFilter(
             text.Length == 0 ? null : text, query.Kind, statusIds,
             query.From is { } from ? BusinessClock.FromLocal(from.ToDateTime(TimeOnly.MinValue)) : null,
             query.To is { } to ? BusinessClock.FromLocal(to.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
-            query.ZoneId, query.RaftId, query.IssueTypeId, query.CreatedById, query.ReceiverId,
-            scope.IncludeUse, scope.UseZoneIds, scope.IncludeDisposals, sort.Value, query.SortDir != "asc");
+            zoneId, query.RaftId, query.IssueTypeId, query.CreatedById, query.ReceiverId,
+            scope.IncludeUse, scope.UseZoneIds, scope.IncludeDisposals, sort.Value, query.SortDir != "asc", zoneIds);
     }
 
     private async Task<IReadOnlyList<InputIssueListItem>> ListItemsAsync(IReadOnlyList<InputIssueRow> rows, CancellationToken cancellationToken)
