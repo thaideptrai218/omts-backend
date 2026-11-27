@@ -138,7 +138,7 @@ public class PayrollSqlServerTests
         Assert.Equal(2, detail.GetProperty("attendance").GetArrayLength());
 
         var finalizedApril = await (await s.Owner.PostAsJsonAsync($"/api/payrolls/{april.GetProperty("id").GetGuid()}/finalize", new { expenseMonth = "2024-04" })).BodyAsync(HttpStatusCode.OK);
-        Assert.Equal((320_000m, 100_000m, 220_000m), (finalizedApril.GetProperty("slips")[0].GetProperty("income").GetDecimal(), finalizedApril.GetProperty("slips")[0].GetProperty("deduction").GetDecimal(), finalizedApril.GetProperty("slips")[0].GetProperty("net").GetDecimal()));
+        Assert.Equal((320_000m, 100_000m, 220_000m), (finalizedApril.GetProperty("slips")[0].GetProperty("income").GetDecimal(), finalizedApril.GetProperty("slips")[0].GetProperty("advanceDeduction").GetDecimal(), finalizedApril.GetProperty("slips")[0].GetProperty("net").GetDecimal()));
         var export = await s.Owner.GetAsync("/api/payrolls/export");
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
     }

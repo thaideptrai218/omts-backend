@@ -188,20 +188,20 @@ public class PayrollPaymentTests
         Assert.Equal((0m, 500_000m), (summary.Money("outstanding"), summary.Money("advanceBalance")));
 
         var april = await NewSheetAsync(s.Owner, 4, an);
-        Assert.Equal((320_000m, 320_000m, 0m), (april.SlipOf(an).Money("income"), april.SlipOf(an).Money("deduction"), april.SlipOf(an).Money("net")));
+        Assert.Equal((320_000m, 320_000m, 0m), (april.SlipOf(an).Money("income"), april.SlipOf(an).Money("advanceDeduction"), april.SlipOf(an).Money("net")));
         var finalized = await FinalizedAsync(s.Owner, april);
         var slip = finalized.SlipOf(an);
-        Assert.Equal((320_000m, 320_000m, 0m, 0m), (slip.Money("income"), slip.Money("deduction"), slip.Money("net"), slip.Money("outstanding")));
+        Assert.Equal((320_000m, 320_000m, 0m, 0m), (slip.Money("income"), slip.Money("advanceDeduction"), slip.Money("net"), slip.Money("outstanding")));
 
         summary = (await s.Owner.JsonAsync($"/api/employees/{an}/payslips?status=Finalized")).GetProperty("summary");
         Assert.Equal((0m, 180_000m), (summary.Money("outstanding"), summary.Money("advanceBalance")));
         var may = await FinalizedAsync(s.Owner, await NewSheetAsync(s.Owner, 5, an));
-        Assert.Equal((180_000m, 140_000m), (may.SlipOf(an).Money("deduction"), may.SlipOf(an).Money("net")));
+        Assert.Equal((180_000m, 140_000m), (may.SlipOf(an).Money("advanceDeduction"), may.SlipOf(an).Money("net")));
         Assert.Equal(0m, (await s.Owner.JsonAsync($"/api/employees/{an}/payslips")).GetProperty("summary").Money("advanceBalance"));
     }
 
     [Fact]
-    public async Task A_payment_outside_a_sheet_needs_a_real_employee_and_an_advance_needs_an_employed_worker()
+    public async Task A_payment_outside_a_sheet_needs_a_real_employee_and_an_advance_needs_an_employed_employee()
     {
         await using var factory = new AuthApiFactory();
         var s = await SetupWorkAsync(factory);
@@ -213,7 +213,8 @@ public class PayrollPaymentTests
 
         Assert.Equal(HttpStatusCode.BadRequest, (await PayEmployeeAsync(s.Owner, Guid.NewGuid(), 1_000)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await PayEmployeeAsync(s.Owner, worker, 0)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await PayEmployeeAsync(s.Owner, staff, 1_000)).StatusCode);
+        // A Staff employee is paid through OMTS like anyone else, so an advance is open to them.
+        Assert.Equal(HttpStatusCode.Created, (await PayEmployeeAsync(s.Owner, staff, 1_000)).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await PayEmployeeAsync(s.Owner, worker, 1_000)).StatusCode);
         // A Left employee is paid only what is owed on the payslips.
         var owed = await PayEmployeeAsync(s.Owner, left, 320_001);

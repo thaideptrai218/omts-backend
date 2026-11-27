@@ -36,7 +36,7 @@ public class PayrollSheetTests
         var first = sheet.SlipOf(an);
         Assert.Matches(@"^PL\d{6}$", first.Str("code"));
         Assert.Matches(@"^NV\d{6}$", first.Str("employeeCode"));
-        Assert.Equal((32m, 1_280_000m, 0m, 0m, 1_280_000m, 1_280_000m, 0m, 1_280_000m), (first.Money("hours"), first.Money("mainPay"), first.Money("bonus"), first.Money("deduction"), first.Money("income"), first.Money("net"), first.Money("paid"), first.Money("outstanding")));
+        Assert.Equal((32m, 1_280_000m, 0m, 0m, 1_280_000m, 1_280_000m, 0m, 1_280_000m), (first.Money("hours"), first.Money("mainPay"), first.Money("bonus"), first.Money("advanceDeduction"), first.Money("income"), first.Money("net"), first.Money("paid"), first.Money("outstanding")));
         Assert.Equal("40.000", first.Str("hourlyRateNote"));
         Assert.Equal((16m, 640_000m), (sheet.SlipOf(binh).Money("hours"), sheet.SlipOf(binh).Money("mainPay")));
         Assert.Equal((1_920_000m, 0m, 1_920_000m), (sheet.Money("total"), sheet.Money("paid"), sheet.Money("outstanding")));
