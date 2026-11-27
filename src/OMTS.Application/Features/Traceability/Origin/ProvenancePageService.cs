@@ -16,7 +16,8 @@ public sealed partial class ProvenancePageService(
     IProvenancePageQuery pages,
     ICooperativeRepository cooperatives,
     CooperativeProfileViews cooperativeViews,
-    IFileStorage storage)
+    IFileStorage storage,
+    ILandingRepository catalogue)
 {
     /// <summary>
     /// ORIGIN-01.0: the page in <paramref name="lang"/> ("vi" by default). An unknown QR code, or a link that is no QR code at all, is 404 MSG-ORIGIN-03 in the page language,
@@ -51,7 +52,11 @@ public sealed partial class ProvenancePageService(
             photoUrls[key] = await storage.GetReadUrlAsync(key, PhotoLinkLifetime, cancellationToken);
         }
 
-        return ProvenancePageBuilder.Build(invoice, lots, seedings, photoUrls, block, language);
+        var page = ProvenancePageBuilder.Build(invoice, lots, seedings, photoUrls, block, language);
+        // The catalogue introduction of the products the page already names (owner decision of 27/11/2026).
+        var names = page.Lots.Where(l => l.OriginState == HarvestLotOriginState.Published).SelectMany(l => l.Products).Distinct().ToList();
+        var details = await ShowcaseProducts.ViewsAsync(await catalogue.ProductsByNameAsync(names, cancellationToken), storage, cancellationToken);
+        return page with { ProductDetails = details };
     }
 
     // The page is never cached, but a photo the browser loads later (a gallery opened, a lazy image) must still open: links live as long as the page is read (design §3).

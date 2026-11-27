@@ -95,7 +95,7 @@ public static class ProvenancePageBuilder
         keys.Where(photoUrls.ContainsKey).Select(k => photoUrls[k]).ToList();
 
     // BR-ORIGIN-02: the introduction in the page language, the Vietnamese one when the English one is empty (the preview already falls back).
-    private static ProvenanceCooperative Cooperative(PublicCooperativePreview c, string language) => new(
+    public static ProvenanceCooperative Cooperative(PublicCooperativePreview c, string language) => new(
         c.FullName, c.ShortName, c.YearEstablished, c.OfficeAddress, c.PhoneNumber, c.Email, c.Website, c.SocialLink, c.LogoUrl, c.CoverPhotoUrl,
         language == ProvenanceLanguages.English && !string.IsNullOrWhiteSpace(c.IntroductionEn) ? c.IntroductionEn : c.IntroductionVi,
         c.Certifications);

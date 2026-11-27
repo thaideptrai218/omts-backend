@@ -43,6 +43,9 @@ public class Cooperative : AuditableEntity
     /// <summary>Storage key of the cover photo of the provenance page; a replaced or removed one is deleted.</summary>
     public string? CoverPhotoUrl { get; set; }
 
+    /// <summary>Code of the invoice whose provenance page the introduction page shows as the example; null when none is chosen.</summary>
+    public string? FeaturedInvoiceCode { get; set; }
+
     /// <summary>Introduction in Vietnamese, shown on the provenance page (BR-ORIGIN-02).</summary>
     public string? IntroductionVi { get; set; }
 

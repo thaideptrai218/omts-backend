@@ -78,7 +78,7 @@ public class ProvenancePageAccessTests
                 "cooperative.certifications[].name", "cooperative.certifications[].number", "cooperative.certifications[].state", "cooperative.coverPhotoUrl", "cooperative.email",
                 "cooperative.fullName", "cooperative.introduction", "cooperative.logoUrl", "cooperative.officeAddress", "cooperative.phoneNumber", "cooperative.shortName",
                 "cooperative.socialLink", "cooperative.website", "cooperative.yearEstablished", "invoice", "language", "lots", "message", "messageCode", "messageParams",
-                "messageParams.cooperative_phone", "status"),
+                "messageParams.cooperative_phone", "productDetails", "status"),
             page.PropertyPaths());
     }
 

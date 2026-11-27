@@ -21,6 +21,9 @@ public static class FileCategories
     /// <summary>FARM-01 cover photo of the provenance page, <c>Cooperative.CoverPhotoUrl</c>.</summary>
     public const string CooperativeCoverPhotos = "cooperative-covers";
 
+    /// <summary>Pictures of the public introduction page, <c>LandingPhoto.StorageKey</c>.</summary>
+    public const string LandingPhotos = "landing-photos";
+
     /// <summary>FARM-01.1 certificate file, <c>CooperativeCertification.FileUrl</c>.</summary>
     public const string CooperativeCertifications = "cooperative-certifications";
 

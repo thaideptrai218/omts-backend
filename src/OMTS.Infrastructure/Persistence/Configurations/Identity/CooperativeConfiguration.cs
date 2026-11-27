@@ -24,6 +24,7 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
         builder.Property(x => x.LegalRepresentative).HasMaxLength(255);
         builder.Property(x => x.BusinessLines).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.LogoUrl).HasMaxLength(Lengths.Url);
+        builder.Property(x => x.FeaturedInvoiceCode).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.CoverPhotoUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.IntroductionVi).HasMaxLength(Introduction);
         builder.Property(x => x.IntroductionEn).HasMaxLength(Introduction);

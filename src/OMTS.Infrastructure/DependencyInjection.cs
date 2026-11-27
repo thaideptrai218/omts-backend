@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
         services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
+        services.AddScoped<ILandingRepository, LandingRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<ISalesProductRepository, SalesProductRepository>();
