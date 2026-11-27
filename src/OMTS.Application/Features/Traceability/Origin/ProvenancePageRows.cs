@@ -31,5 +31,5 @@ public sealed record ProvenanceLotRow(
     public HarvestLotOriginState OriginState => HarvestLot.OriginStateOf(PublishedAt, WithdrawnAt);
 }
 
-/// <summary>A seeding session of the lot's cycle on a lane of the lot: its date and the seed item of its seed lot, never the supplier or the quantity (BR-ORIGIN-03/04).</summary>
-public sealed record ProvenanceSeedingRow(Guid LotId, DateOnly SeedingDate, string SeedItemName);
+/// <summary>A seeding session of the lot's cycle on a lane of the lot: its date, the seed item of its seed lot and the supplier's name, never the quantity (BR-ORIGIN-03/04).</summary>
+public sealed record ProvenanceSeedingRow(Guid LotId, DateOnly SeedingDate, string SeedItemName, string SupplierName);

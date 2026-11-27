@@ -26,7 +26,7 @@ public class ProvenancePageWhitelistTests
         "lots", "lots[].lotCode", "lots[].products", "lots[].originState", "lots[].withdrawalDate", "lots[].message", "lots[].messageCode", "lots[].messageParams",
         "lots[].messageParams.cooperative_short_name", "lots[].messageParams.lot_code", "lots[].messageParams.withdrawal_date", "lots[].messageParams.cooperative_phone",
         "lots[].origin", "lots[].origin.harvestDate", "lots[].origin.raftCode", "lots[].origin.zoneName", "lots[].origin.map", "lots[].origin.map.latitude",
-        "lots[].origin.map.longitude", "lots[].origin.map.source", "lots[].origin.seedings", "lots[].origin.seedings[].seedingDate", "lots[].origin.seedings[].seedItemName",
+        "lots[].origin.map.longitude", "lots[].origin.map.source", "lots[].origin.seedings", "lots[].origin.seedings[].seedingDate", "lots[].origin.seedings[].seedItemName", "lots[].origin.seedings[].supplierName",
         "lots[].origin.daysOfFarming", "lots[].origin.harvestPhotoUrls", "lots[].origin.raftPhotoUrls",
         "productDetails", "productDetails[].name", "productDetails[].description", "productDetails[].sizeMinCm", "productDetails[].sizeMaxCm", "productDetails[].photoUrls");
 
@@ -46,7 +46,7 @@ public class ProvenancePageWhitelistTests
         var (invoice, token) = await sale.SoldWithQrCodeAsync((sale.LotId, 300m), (sale.OtherLotId, 200m));
         await api.UpdateAsync<HarvestLot>(sale.OtherLotId, l => (l.WithdrawnAt, l.WithdrawalReason) = (DateTimeOffset.UtcNow, "DEMO internal withdrawal reason"));
         var customer = await api.QueryAsync(db => db.Customers.AsNoTracking().SingleAsync(c => c.Id == sale.CustomerId));
-        var supplierNames = await api.QueryAsync(db => db.Suppliers.Select(s => s.Name).ToListAsync());
+        var supplierPhones = await api.QueryAsync(db => db.Suppliers.Where(s => s.PhoneNumber != "").Select(s => s.PhoneNumber).ToListAsync());
 
         var response = await api.CreateClient().GetProvenanceAsync(token);
         var raw = await response.Content.ReadAsStringAsync();
@@ -58,7 +58,7 @@ public class ProvenancePageWhitelistTests
             {
                 customer.Name, customer.PhoneNumber!, invoice.Id().ToString(), sale.LotId.ToString(), sale.OtherLotId.ToString(), sale.RaftId.ToString(), sale.ZoneId.ToString(),
                 "DEMO internal withdrawal reason", profile.TaxCode, DemoAccountNumber, DemoBankName, profile.ExpiredName,
-            }.Concat(supplierNames),
+            }.Concat(supplierPhones),
             hidden => Assert.DoesNotContain(hidden, raw, StringComparison.OrdinalIgnoreCase));
 
         var published = page.LotsByCode()[(await api.LotRowAsync(sale.LotId)).LotCode].GetProperty("origin");

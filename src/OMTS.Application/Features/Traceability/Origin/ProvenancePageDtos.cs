@@ -85,7 +85,7 @@ public sealed record ProvenanceLot(
 
 /// <summary>The origin information of a Published lot (BR-ORIGIN-03), always the current data (BR-TRACE-05).</summary>
 /// <param name="Map">The raft's map location, or the zone's; null when neither has one.</param>
-/// <param name="Seedings">Each seeding date of the lot's lanes with the seed item hung, oldest first (no supplier, no quantity).</param>
+/// <param name="Seedings">Each seeding date of the lot's lanes with the seed item hung and its supplier's name, oldest first (no quantity, no supplier contact).</param>
 /// <param name="DaysOfFarming">From the earliest seeding date to the harvest date; null when no session is found.</param>
 /// <param name="HarvestPhotoUrls">Signed read URLs (10 minutes): ask the page again rather than keeping them.</param>
 /// <param name="RaftPhotoUrls">Signed read URLs (10 minutes).</param>
@@ -101,4 +101,4 @@ public sealed record ProvenanceOrigin(
 
 public sealed record ProvenanceMapPoint(decimal Latitude, decimal Longitude, ProvenanceMapSource Source);
 
-public sealed record ProvenanceSeeding(DateOnly SeedingDate, string SeedItemName);
+public sealed record ProvenanceSeeding(DateOnly SeedingDate, string SeedItemName, string SupplierName);

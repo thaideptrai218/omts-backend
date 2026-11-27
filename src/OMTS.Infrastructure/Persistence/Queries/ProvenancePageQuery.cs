@@ -76,9 +76,10 @@ internal sealed class ProvenancePageQuery(OmtsDbContext db) : IProvenancePageQue
                     lane.LotId,
                     seeded.SeedingRecord.SeedingDate,
                     ItemName = seeded.SeedingRecord.SeedLotLine.Item == null ? string.Empty : seeded.SeedingRecord.SeedLotLine.Item.Name,
+                    SupplierName = seeded.SeedingRecord.SeedLotLine.Receipt.Supplier.Name,
                 })
             .Distinct()
             .ToListAsync(cancellationToken);
-        return rows.Select(r => new ProvenanceSeedingRow(r.LotId, r.SeedingDate, r.ItemName)).ToList();
+        return rows.Select(r => new ProvenanceSeedingRow(r.LotId, r.SeedingDate, r.ItemName, r.SupplierName)).ToList();
     }
 }

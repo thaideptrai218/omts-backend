@@ -28,10 +28,10 @@ public sealed class ProvenancePageQaTests
     {
         var published = new DateTimeOffset(2026, 11, 8, 3, 0, 0, TimeSpan.Zero);
         var day = new DateOnly(2026, 10, 1);
-        var page = Build(Lot(published, null), [new(LotId, day, "Seed B"), new(LotId, day, "Seed A"), new(LotId, day, "Seed B"), new(LotId, day.AddDays(-3), "Seed B")]);
+        var page = Build(Lot(published, null), [new(LotId, day, "Seed B", "Seed farm"), new(LotId, day, "Seed A", "Seed farm"), new(LotId, day, "Seed B", "Seed farm"), new(LotId, day.AddDays(-3), "Seed B", "Seed farm")]);
 
         var origin = Assert.Single(page.Lots).Origin!;
-        Assert.Equal([new ProvenanceSeeding(day.AddDays(-3), "Seed B"), new ProvenanceSeeding(day, "Seed A"), new ProvenanceSeeding(day, "Seed B")], origin.Seedings);
+        Assert.Equal([new ProvenanceSeeding(day.AddDays(-3), "Seed B", "Seed farm"), new ProvenanceSeeding(day, "Seed A", "Seed farm"), new ProvenanceSeeding(day, "Seed B", "Seed farm")], origin.Seedings);
         Assert.Equal(HarvestDate.DayNumber - day.AddDays(-3).DayNumber, origin.DaysOfFarming);
     }
 

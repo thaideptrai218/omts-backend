@@ -75,9 +75,9 @@ public static class ProvenancePageBuilder
         }
 
         var seedings = sessions
-            .Select(s => new ProvenanceSeeding(s.SeedingDate, s.SeedItemName))
+            .Select(s => new ProvenanceSeeding(s.SeedingDate, s.SeedItemName, s.SupplierName))
             .Distinct()
-            .OrderBy(s => s.SeedingDate).ThenBy(s => s.SeedItemName, StringComparer.Ordinal)
+            .OrderBy(s => s.SeedingDate).ThenBy(s => s.SeedItemName, StringComparer.Ordinal).ThenBy(s => s.SupplierName, StringComparer.Ordinal)
             .ToList();
         var origin = new ProvenanceOrigin(
             lot.HarvestDate,
