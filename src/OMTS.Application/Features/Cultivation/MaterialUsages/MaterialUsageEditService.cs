@@ -16,7 +16,7 @@ namespace OMTS.Application.Features.Cultivation.MaterialUsages;
 
 /// <summary>
 /// CYCLE-03.1 edit a usage record with a reason. Any Zone Manager of the raft's zone and the Cooperative Owner, not only who recorded it: BR-CYCLE-03 has no own-record rule. The
-/// raft must be In Use (GBR-01) and no closed cycle may lock the record (BR-CYCLE-04). The edit may move the record to another raft In Use, in a zone the caller also has access to.
+/// raft must be In Use or Discontinued, in a zone In Use (GBR-01), and no closed cycle may lock the record (BR-CYCLE-04). The edit may move the record to another such raft, in a zone the caller also has access to.
 /// A record carries a version (NFR-09 excepts only logs and water measurements).
 /// </summary>
 public sealed class MaterialUsageEditService(
@@ -47,7 +47,7 @@ public sealed class MaterialUsageEditService(
             return AppError.Forbidden;
         }
 
-        if ((raftViews.EditRefusal(usage.Raft) ?? await cycleGuard.RefusalAsync(usage.Raft, usage.UsageDate, cancellationToken)) is { } refused)
+        if ((raftViews.CareRecordRefusal(usage.Raft) ?? await cycleGuard.RefusalAsync(usage.Raft, usage.UsageDate, cancellationToken)) is { } refused)
         {
             return refused;
         }
@@ -80,7 +80,7 @@ public sealed class MaterialUsageEditService(
         }
 
         var date = request.UsageDate!.Value;
-        if (raftViews.EditRefusal(target!) is { } wrongRaft)
+        if (raftViews.CareRecordRefusal(target!) is { } wrongRaft)
         {
             return wrongRaft;
         }

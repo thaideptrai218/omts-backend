@@ -42,7 +42,7 @@ public class CultivationLogsMigrationTests
         Assert.Equal(0, await ScalarAsync(db, TablesOfLogs));
 
         // The zone, raft and cycle are rows of the old schema: the entities have columns that later migrations add.
-        var (_, _, cycleId) = await OldSchemaRows.OpenCycleRowsAsync(db, await OldSchemaRows.CooperativeAsync(db));
+        var (_, raftId, cycleId) = await OldSchemaRows.OpenCycleRowsAsync(db, await OldSchemaRows.CooperativeAsync(db));
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         db.Add(account);
         await db.SaveChangesAsync();
@@ -61,7 +61,7 @@ public class CultivationLogsMigrationTests
 
         var log = new CultivationLog
         {
-            CycleId = cycleId, VisitDate = new DateOnly(2026, 2, 1), RecordedByAccountId = account.Id,
+            RaftId = raftId, CycleId = cycleId, VisitDate = new DateOnly(2026, 2, 1), RecordedByAccountId = account.Id,
             Photos = [new CultivationLogPhoto { SortOrder = 1, FileKey = "cultivation-log-photos/2026/02/a.jpg" }],
         };
         db.CultivationLogs.Add(log);

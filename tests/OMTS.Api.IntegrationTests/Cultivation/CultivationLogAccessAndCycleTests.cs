@@ -95,7 +95,7 @@ public class CultivationLogAccessAndCycleTests(AuthApiFactory factory) : IClassF
         Assert.Equal(HttpStatusCode.NoContent, (await owner.CancelCycleAsync(setup.CycleId, empty.Text("rowVersion"))).StatusCode);
     }
 
-    // BR-CYCLE-01: a new start date must not be after the first log, and a log cannot move before the start date.
+    // BR-CYCLE-01: a new start date must not be after the first log; a log moved before the start date leaves the cycle, as its date is then in none.
     [Fact]
     public async Task The_start_date_stays_on_or_before_the_first_log()
     {
@@ -111,7 +111,8 @@ public class CultivationLogAccessAndCycleTests(AuthApiFactory factory) : IClassF
         var moved = await owner.EditCycleAsync(setup.CycleId, new CycleBody(Today.AddDays(-5), RowVersion: cycle.Text("rowVersion")));
         Assert.Equal(Today.AddDays(-5), moved.Date("startDate"));
         var before = new LogFields { VisitDate = Today.AddDays(-6), Reason = "wrong date", RowVersion = await factory.LogVersionAsync(log.Id()), KeepPhotoKeys = log.PhotoKeys(), Photos = [] };
-        Assert.Equal(["Visit date"], await (await owner.PutLogAsync(log.Id(), before)).InvalidFieldsAsync());
+        var left = await (await owner.PutLogAsync(log.Id(), before)).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(JsonValueKind.Null, left.GetProperty("log").GetProperty("cycleId").ValueKind);
     }
 
     [Fact]

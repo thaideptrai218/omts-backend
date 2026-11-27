@@ -4,16 +4,17 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
-using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 
 /// <summary>
-/// CYCLE-04.1 correct or remove a cultivation log while its cycle is Open, with a reason: a Zone Manager only what they recorded, the Cooperative
-/// Owner any log (BR-CYCLE-05). The Owner is not notified again. After the close, a log is corrected only in TRACE-03 (BR-CYCLE-04).
+/// CYCLE-04.1 correct or remove a cultivation log while its cycle, if it has one, is Open, with a reason: a Zone Manager only what they recorded, the Cooperative
+/// Owner any log (BR-CYCLE-05). The raft may be In Use or Discontinued. A correction works the cycle out from the visit date again, as a new log does, so a changed date can move
+/// the log into the Open cycle or out of it, and a date inside a Closed cycle is refused. The Owner is not notified again. After the close, a log is corrected only in TRACE-03 (BR-CYCLE-04).
 /// <para>
 /// A log has no version check (NFR-09): the client sends none and the last save wins. The row that is changed is read after the uploads, so a
 /// correction that took minutes to upload builds on what was saved meanwhile. The database still puts saves in one order: each change moves the row version
@@ -23,9 +24,10 @@ namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 /// </summary>
 public sealed class CultivationLogCorrectionService(
     ICultivationLogRepository logs,
-    CycleWriteGuard writes,
+    CultivationLogWriteGuard writes,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
+    CultivationLogCycleResolver resolver,
     CultivationLogViews views,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -53,7 +55,7 @@ public sealed class CultivationLogCorrectionService(
         var keptCount = seen.Photos.Count(p => keep.Contains(p.FileKey));
         if (CultivationLogValues.Read(
                 request.VisitDate, request.LogType, request.Notes, newPhotos, request.OtherFilePart, keptCount, keysAreKnown: keptCount == keep.Count, request.Reason, reasonRequired: true,
-                seen.Cycle.StartDate, timeProvider.Today(), out var values) is { } invalid)
+                earliest: null, timeProvider.Today(), out var values) is { } invalid)
         {
             return invalid;
         }
@@ -91,27 +93,39 @@ public sealed class CultivationLogCorrectionService(
         }
 
         var kept = log.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
-        if ((await RefusalAsync(log, cancellationToken) ?? CultivationLogValues.ReadAgain(values.VisitDate, log.Cycle.StartDate, kept.Count == keep.Count)) is { } refused)
+        if ((await RefusalAsync(log, cancellationToken) ?? CultivationLogValues.ReadAgain(values.VisitDate, earliest: null, kept.Count == keep.Count)) is { } refused)
         {
             return refused;
         }
 
+        var resolved = await resolver.ResolveAsync(log.Raft, values.VisitDate, cancellationToken);
+        if (resolved.Refusal is { } closed)
+        {
+            return closed;
+        }
+
         var before = CultivationLogValues.Snapshot(log);
+        var previousCycle = log.Cycle;
         (log.VisitDate, log.LogType, log.Notes) = (values.VisitDate, values.LogType ?? log.LogType, values.Notes);
+        (log.Cycle, log.CycleId) = (resolved.Cycle, resolved.Cycle?.Id);
         var removedKeys = CultivationLogPhotoRows.Apply(logs, log, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationLogValues.Snapshot(log));
         if (changedAfter is not null)
         {
             // Photos are rows of their own: a change of photos only must still give the log a new row version.
             unitOfWork.MarkChanged(log);
-            unitOfWork.MarkChanged(log.Cycle);
+            if (previousCycle is not null)
+            {
+                unitOfWork.MarkChanged(previousCycle);
+            }
+
             audit.Record(CultivationLogAudit.Entry(CultivationLogAudit.Corrected, log) with { Before = changedBefore, After = changedAfter, Reason = reason });
         }
 
         return new Applied(log, removedKeys, changedAfter is not null);
     }
 
-    /// <summary>Removes the log and its photos; the audit log keeps them with the reason. With no record left, the cycle can be cancelled again.</summary>
+    /// <summary>Removes the log and its photos; the audit log keeps them with the reason. With no record left, the cycle can be cancelled again. The row that guards the save is the cycle, or the raft when the log has none.</summary>
     public async Task<Result<bool>> RemoveAsync(Guid logId, RemoveCultivationLogRequest request, CancellationToken cancellationToken)
     {
         var log = await logs.GetForEditAsync(logId, cancellationToken);
@@ -134,15 +148,15 @@ public sealed class CultivationLogCorrectionService(
 
         var keys = log.Photos.Select(p => p.FileKey).ToList();
         audit.Record(CultivationLogAudit.Entry(CultivationLogAudit.Removed, log) with { Before = CultivationLogValues.Snapshot(log), Reason = request.Reason!.Trim() });
-        unitOfWork.MarkChanged(log.Cycle);
+        unitOfWork.MarkChanged(log.Cycle ?? (AuditableEntity)log.Raft);
         logs.Remove(log);
         await fileSaver.SaveAsync([], keys, cancellationToken);
         return true;
     }
 
-    /// <summary>MSG-GEN-08 when the caller may not correct this log, MSG-GEN-09 when its cycle no longer allows a change.</summary>
+    /// <summary>MSG-GEN-08 when the caller may not correct this log, MSG-GEN-09 when its cycle or raft no longer allows a change.</summary>
     private async Task<AppError?> RefusalAsync(CultivationLog log, CancellationToken cancellationToken) =>
-        CultivationLogViews.MayCorrect(await views.AccessAsync(cancellationToken), log, log.Cycle.Raft.ZoneId) ? writes.Refusal(log.Cycle) : AppError.Forbidden;
+        CultivationLogViews.MayCorrect(await views.AccessAsync(cancellationToken), log, log.Raft.ZoneId) ? writes.Refusal(log) : AppError.Forbidden;
 
     private async Task SaveAsync(IReadOnlyList<string> uploadedKeys, List<string> removedKeys, CancellationToken cancellationToken)
     {

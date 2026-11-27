@@ -5,6 +5,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -36,7 +37,7 @@ public sealed class MaterialUsageViews(
                     .Select(repair => new MaterialUsageRepair(repair.Key.UsageDate, repair.Key.RepairReason, repair.Select(r => r.Second).ToList()))
                     .ToList()))
             .ToList();
-        var canRecord = IsInUse(raft) && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, raft.ZoneId, cancellationToken);
+        var canRecord = RaftViews.AcceptsCareRecords(raft) && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, raft.ZoneId, cancellationToken);
         return new MaterialUsageList(raft.Id, raft.Code, canRecord, groups);
     }
 
@@ -58,7 +59,7 @@ public sealed class MaterialUsageViews(
         Raft raft, IReadOnlyList<MaterialUsage> records, IReadOnlyList<CultivationCycle> ofRaft, CancellationToken cancellationToken)
     {
         var names = await accounts.GetDisplayNamesAsync(records.Select(u => u.RecordedByAccountId).Distinct().ToList(), cancellationToken);
-        var mayEdit = IsInUse(raft) && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Edit, raft.ZoneId, cancellationToken);
+        var mayEdit = RaftViews.AcceptsCareRecords(raft) && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Edit, raft.ZoneId, cancellationToken);
         return records.Select(u =>
         {
             var cycle = CycleOn(ofRaft, u.UsageDate);
@@ -74,6 +75,4 @@ public sealed class MaterialUsageViews(
 
     private static CultivationCycle? CycleOn(IReadOnlyList<CultivationCycle> ofRaft, DateOnly date) =>
         ofRaft.FirstOrDefault(c => new CycleSpan(c.Id, c.RaftId, c.StartDate, c.CloseDate).IsOpenOn(date));
-
-    private static bool IsInUse(Raft raft) => raft.StatusId == StatusIds.Usage.InUse && raft.Zone.StatusId == StatusIds.Usage.InUse;
 }

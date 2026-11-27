@@ -1,6 +1,6 @@
 namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 
-/// <summary>CYCLE-04.0; the photos come beside it.</summary>
+/// <summary>CYCLE-04.0, in a cycle or on a raft; the photos come beside it.</summary>
 /// <param name="LogType">One of <c>FEEDING</c>, <c>CLEANING</c>, <c>INSPECTION</c>, <c>DISEASE</c>, <c>REPAIR</c>, <c>OTHER</c>; missing or blank is <c>OTHER</c>, any other value is refused.</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
 public sealed record RecordCultivationLogRequest(DateOnly? VisitDate, string? Notes, bool OtherFilePart = false, string? LogType = null);
@@ -22,11 +22,14 @@ public sealed record CultivationLogPhotoView(string Key, int SortOrder, string U
 
 /// <summary>A cultivation log (CYCLE-04, CYCLE-05).</summary>
 /// <param name="LogType">A code of <see cref="OMTS.Domain.Constants.CultivationLogTypes"/>.</param>
+/// <param name="CycleId">The Open cycle of the raft that the visit date falls in; null for a visit in no cycle.</param>
+/// <param name="CycleStartDate">The start date of that cycle; null with <paramref name="CycleId"/>.</param>
 /// <param name="Photos">In slot order.</param>
-/// <param name="CanCorrect">The caller may correct or remove it now: the cycle is Open on a raft In Use, and the caller recorded it or is the Owner (BR-CYCLE-05).</param>
+/// <param name="CanCorrect">The caller may correct or remove it now: its cycle, if any, is Open, the raft is In Use or Discontinued in a zone In Use, and the caller recorded it or is the Owner (BR-CYCLE-05).</param>
 public sealed record CultivationLogView(
     Guid Id,
-    Guid CycleId,
+    Guid? CycleId,
+    DateOnly? CycleStartDate,
     Guid RaftId,
     string RaftCode,
     Guid ZoneId,
@@ -44,7 +47,7 @@ public sealed record CultivationLogView(
 
 /// <summary>The query of the cross-raft log list (the "Nhật ký" screen). <c>from</c> and <c>to</c> are visit dates, inclusive.</summary>
 /// <param name="ZoneId">Only the logs of rafts of this zone; none asks for every zone the caller may read.</param>
-/// <param name="RaftId">Only the logs of this raft, in every cycle it had.</param>
+/// <param name="RaftId">Only the logs of this raft, in every cycle it had and in none.</param>
 /// <param name="LogType">One code of <see cref="OMTS.Domain.Constants.CultivationLogTypes"/>; blank is any.</param>
 /// <param name="Search">Text in the raft code or the notes.</param>
 /// <param name="SortBy"><c>visitDate</c> (the default), <c>zone</c>, <c>raft</c>, <c>logType</c>, <c>recordedBy</c> or <c>recordedAt</c>, any letter case; another value is MSG-GEN-01 on <c>SortBy</c>.</param>

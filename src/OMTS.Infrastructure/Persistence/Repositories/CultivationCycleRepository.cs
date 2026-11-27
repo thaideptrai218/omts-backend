@@ -36,7 +36,7 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
         }
 
         var seeded = await db.SeedingRecords.AsNoTracking().Where(r => cycleIds.Contains(r.CycleId)).Select(r => r.CycleId).Distinct().ToListAsync(cancellationToken);
-        var logged = await db.CultivationLogs.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
+        var logged = await db.CultivationLogs.AsNoTracking().Where(l => l.CycleId != null && cycleIds.Contains(l.CycleId.Value)).Select(l => l.CycleId!.Value).Distinct().ToListAsync(cancellationToken);
         var harvested = await db.HarvestLots.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
         return seeded.Concat(logged).Concat(harvested).ToHashSet();
     }

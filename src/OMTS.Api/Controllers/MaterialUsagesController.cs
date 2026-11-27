@@ -30,7 +30,7 @@ public sealed class MaterialUsagesController(MaterialUsageReadService reads, Mat
     public async Task<IActionResult> Get(Guid usageId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(usageId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Edits a record that no closed cycle locks, with the reason for the edit; another raft In Use moves it there.</summary>
+    /// <summary>Edits a record that no closed cycle locks, with the reason for the edit; another raft that takes records (In Use or Discontinued) moves it there.</summary>
     [HttpPut("api/material-usages/{usageId:guid}")]
     [ProducesResponseType<MaterialUsageSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Edit(Guid usageId, EditMaterialUsageRequest request, CancellationToken cancellationToken) =>

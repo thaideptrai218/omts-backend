@@ -129,7 +129,7 @@ public class MaterialUsagesQaTestsGrouping(AuthApiFactory factory) : IClassFixtu
         Assert.Equal(2, repairs.Single(r => r.Text("repairReason") == "broken buoy").GetProperty("records").GetArrayLength());
     }
 
-    // canRecord: the raft and zone In Use and the caller may record, for each kind of caller that can read. A closed cycle of today does not hide it (the date is checked on save).
+    // canRecord: the raft In Use or Discontinued, the zone In Use and the caller may record, for each kind of caller that can read. A closed cycle of today does not hide it (the date is checked on save).
     [Fact]
     public async Task Can_record_follows_the_raft_and_the_zone_for_each_caller_and_not_a_closed_cycle()
     {
@@ -148,7 +148,7 @@ public class MaterialUsagesQaTestsGrouping(AuthApiFactory factory) : IClassFixtu
         await factory.DiscontinueRaftAsync(setup.RaftId);
         foreach (var client in clients)
         {
-            Assert.False((await client.UsageListAsync(setup.RaftId)).Flag("canRecord"));
+            Assert.True((await client.UsageListAsync(setup.RaftId)).Flag("canRecord"));
         }
 
         await factory.UpdateAsync<Raft>(setup.RaftId, r => r.StatusId = StatusIds.Usage.InUse);
@@ -159,20 +159,23 @@ public class MaterialUsagesQaTestsGrouping(AuthApiFactory factory) : IClassFixtu
         }
     }
 
-    // A resume gives the commands back: GBR-01 "with the same code and history".
+    // A Discontinued raft keeps its commands, and a Discontinued zone takes them away: GBR-01 "with the same code and history".
     [Fact]
-    public async Task A_resumed_raft_gets_its_commands_back_on_the_same_records()
+    public async Task A_discontinued_raft_keeps_its_commands_on_the_same_records_and_a_discontinued_zone_takes_them_away()
     {
         var setup = await factory.RaftAsync();
         var owner = setup.Owner.Client;
         var record = await owner.RecordUsageAsync(setup.RaftId, await factory.ItemAsync());
 
         await factory.DiscontinueRaftAsync(setup.RaftId);
-        var off = Groups(await owner.UsageListAsync(setup.RaftId)).Single();
-        Assert.False(off.Flag("locked"));
-        Assert.False(FirstRecord(off).Flag("canEdit"));
+        var on = Groups(await owner.UsageListAsync(setup.RaftId)).Single();
+        Assert.False(on.Flag("locked"));
+        Assert.True(FirstRecord(on).Flag("canEdit"));
 
-        await factory.UpdateAsync<Raft>(setup.RaftId, r => r.StatusId = StatusIds.Usage.InUse);
+        await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
+        Assert.False(FirstRecord(Groups(await owner.UsageListAsync(setup.RaftId)).Single()).Flag("canEdit"));
+
+        await factory.UpdateAsync<FarmingZone>(setup.ZoneId, z => z.StatusId = StatusIds.Usage.InUse);
         Assert.True((await owner.GetUsageAsync(record.Id())).Flag("canEdit"));
     }
 

@@ -33,7 +33,7 @@ public class CultivationLogDemoTests
             Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(api)).ExitCode);
 
             var logs = await UseDbAsync(api, db => db.CultivationLogs.AsNoTracking()
-                .Select(l => new { l.Id, Raft = l.Cycle.Raft.Code, l.VisitDate, l.Cycle.StartDate, l.RecordedByAccountId, Photos = l.Photos.Select(p => p.FileKey).ToList() })
+                .Select(l => new { l.Id, Raft = l.Raft.Code, l.VisitDate, l.Cycle!.StartDate, l.RecordedByAccountId, Photos = l.Photos.Select(p => p.FileKey).ToList() })
                 .ToListAsync());
             Assert.Equal(["B1-01", "B1-02", "B1-03", "B2-01", "B2-02", "B2-03"], logs.Select(l => l.Raft).Distinct().Order());
             Assert.All(logs, l => Assert.True(l.VisitDate > l.StartDate));
