@@ -66,7 +66,7 @@ public sealed class InputStockLedger(
         var refs = await ItemsAsync(purchaseReturn.Lines.Select(l => (Guid?)l.ItemId), cancellationToken);
         var postings = purchaseReturn.Lines.Where(l => l.Quantity > 0 && refs.ContainsKey(l.ItemId))
             .Select(l => new StockPosting(
-                l.ItemId, refs[l.ItemId].Group == InputItemGroup.Seed ? l.ReceiptLineId : null, -l.Quantity, ReceiptLineUnits.WithVat(ReceiptLineUnits.PricePerBase(l.EnteredUnitPrice, l.UnitFactor), l.VatRate)))
+                l.ItemId, refs[l.ItemId].Group == InputItemGroup.Seed ? l.ReceiptLineId : null, -l.Quantity, ReceiptLineUnits.WithVat(ReceiptLineUnits.PricePerBase(l.EnteredUnitPrice, l.UnitFactor), l.VatPercent)))
             .ToList();
         await PostAsync(
             InputStockMovementKind.PurchaseReturn, purchaseReturn.Id, purchaseReturn.Code, purchaseReturn.ReturnedAt,

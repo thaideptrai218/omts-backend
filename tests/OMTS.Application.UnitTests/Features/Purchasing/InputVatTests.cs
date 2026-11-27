@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Purchasing;
@@ -20,96 +18,30 @@ public sealed class InputVatTests
     private static readonly DateTimeOffset At = new(2026, 11, 28, 9, 0, 0, TimeSpan.FromHours(7));
     private static readonly DateOnly Today = new(2026, 11, 28);
 
-    private static PurchaseReceipt Receipt(decimal discount, params (decimal Amount, VatRate? Rate)[] lines)
+    private static PurchaseReceipt Receipt(decimal discount, params (decimal Amount, decimal? Percent)[] lines)
     {
         var receipt = new PurchaseReceipt { Discount = discount, StatusId = StatusIds.PurchaseReceipt.Completed };
         var number = 0;
-        foreach (var (amount, rate) in lines)
+        foreach (var (amount, percent) in lines)
         {
-            receipt.Lines.Add(new PurchaseReceiptLine { LineNumber = ++number, LineAmount = amount, VatRate = rate });
+            receipt.Lines.Add(new PurchaseReceiptLine { LineNumber = ++number, LineAmount = amount, VatPercent = percent });
         }
 
         PurchaseMoney.ApplyVat(receipt);
         return receipt;
     }
 
-    // ---- rates ----
-
-    [Theory]
-    [InlineData(VatRate.Kct, "KCT", 0)]
-    [InlineData(VatRate.Zero, "0", 0)]
-    [InlineData(VatRate.Five, "5", 5)]
-    [InlineData(VatRate.Eight, "8", 8)]
-    [InlineData(VatRate.Ten, "10", 10)]
-    public void A_rate_has_its_text_and_its_percent(VatRate rate, string text, decimal percent)
-    {
-        Assert.Equal(text, VatRates.Text(rate));
-        Assert.Equal(percent, VatRates.Percent(rate));
-        Assert.True(VatRates.TryParse(text, out var parsed));
-        Assert.Equal(rate, parsed);
-    }
-
-    [Theory]
-    [InlineData(" 10 ", VatRate.Ten)]
-    [InlineData("8%", VatRate.Eight)]
-    [InlineData("kct", VatRate.Kct)]
-    public void A_rate_is_read_with_a_percent_sign_spaces_and_any_letter_case(string text, VatRate expected)
-    {
-        Assert.True(VatRates.TryParse(text, out var rate));
-        Assert.Equal(expected, rate);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("12")]
-    [InlineData("Ten")]
-    [InlineData("-5")]
-    public void Anything_else_is_not_a_rate(string? text) => Assert.False(VatRates.TryParse(text, out _));
-
-    [Fact]
-    public void No_rate_is_no_VAT_and_seed_is_always_KCT_while_supplies_start_at_ten_percent()
-    {
-        Assert.Equal(0m, VatRates.Percent(null));
-        Assert.Equal(VatRate.Kct, VatRates.DefaultFor(InputItemGroup.Seed));
-        Assert.Equal(VatRate.Ten, VatRates.DefaultFor(InputItemGroup.Material));
-        Assert.Equal(VatRate.Ten, VatRates.DefaultFor(InputItemGroup.Other));
-    }
-
-    [Fact]
-    public void A_rate_travels_as_its_text_even_behind_the_string_enum_converter_of_the_API()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new VatRateJsonConverter(), new JsonStringEnumConverter() } };
-
-        Assert.Equal("""{"rate":"10","other":null,"kind":"Seed"}""", JsonSerializer.Serialize(new Wire(VatRate.Ten, null, InputItemGroup.Seed), options));
-        Assert.Equal("""{"rate":"KCT","other":"0","kind":"Other"}""", JsonSerializer.Serialize(new Wire(VatRate.Kct, VatRate.Zero, InputItemGroup.Other), options));
-
-        var read = JsonSerializer.Deserialize<Wire>("""{"rate":"8","other":"5","kind":"Material"}""", options)!;
-        Assert.Equal((VatRate.Eight, (VatRate?)VatRate.Five, InputItemGroup.Material), (read.Rate, read.Other, read.Kind));
-        Assert.Null(JsonSerializer.Deserialize<Wire>("""{"rate":"10","other":null,"kind":"Seed"}""", options)!.Other);
-    }
-
-    [Theory]
-    [InlineData("\"12\"")]
-    [InlineData("10")]
-    [InlineData("\"Ten\"")]
-    public void A_rate_that_is_not_one_of_the_five_texts_cannot_be_read(string json) =>
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Wire>($$"""{"rate":{{json}},"kind":"Seed"}""", new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new VatRateJsonConverter() } }));
-
-    private sealed record Wire(VatRate Rate, VatRate? Other, InputItemGroup Kind);
-
     // ---- the VAT of a line ----
 
     [Theory]
-    [InlineData(100_000, 0, VatRate.Ten, 10_000)]
-    [InlineData(100_000, 10_000, VatRate.Ten, 9_000)]
-    [InlineData(100_000, 0, VatRate.Eight, 8_000)]
-    [InlineData(100_000, 0, VatRate.Five, 5_000)]
-    [InlineData(100_000, 0, VatRate.Zero, 0)]
-    [InlineData(100_000, 0, VatRate.Kct, 0)]
+    [InlineData(100_000, 0, 10d, 10_000)]
+    [InlineData(100_000, 10_000, 10d, 9_000)]
+    [InlineData(100_000, 0, 8d, 8_000)]
+    [InlineData(100_000, 0, 5d, 5_000)]
+    [InlineData(100_000, 0, 0d, 0)]
     [InlineData(100_000, 0, null, 0)]
-    public void The_VAT_of_a_line_is_its_amount_less_its_share_of_the_receipt_discount_times_the_rate(decimal amount, decimal discount, VatRate? rate, decimal expected) =>
-        Assert.Equal(expected, PurchaseMoney.LineVat(amount, amount, discount, rate));
+    public void The_VAT_of_a_line_is_its_amount_less_its_share_of_the_receipt_discount_times_the_rate(decimal amount, decimal discount, double? percent, decimal expected) =>
+        Assert.Equal(expected, PurchaseMoney.LineVat(amount, amount, discount, (decimal?)percent));
 
     [Theory]
     [InlineData(5, 0.5, 1)]
@@ -119,14 +51,14 @@ public sealed class InputVatTests
     public void The_VAT_is_rounded_half_up_to_the_dong(decimal amount, decimal exactVat, decimal expected)
     {
         Assert.Equal(exactVat, amount * 0.10m);
-        Assert.Equal(expected, PurchaseMoney.LineVat(amount, amount, 0, VatRate.Ten));
+        Assert.Equal(expected, PurchaseMoney.LineVat(amount, amount, 0, 10m));
     }
 
     [Fact]
     public void The_discount_of_the_receipt_is_shared_by_line_amount_and_every_line_has_its_own_rate()
     {
         // 60,000 at 10% and 40,000 at KCT, 10,000 off: the first line carries 54,000 × 10% = 5,400, the second none.
-        var receipt = Receipt(10_000, (60_000m, VatRate.Ten), (40_000m, VatRate.Kct));
+        var receipt = Receipt(10_000, (60_000m, 10m), (40_000m, null));
 
         Assert.Equal([5_400m, 0m], receipt.Lines.OrderBy(l => l.LineNumber).Select(l => l.VatAmount));
         var figures = PurchaseMoney.Of(receipt);
@@ -137,7 +69,7 @@ public sealed class InputVatTests
     public void The_share_of_the_discount_is_exact_before_rounding_so_each_line_rounds_once()
     {
         // 3 lines of 33,333 with 10 off: each 33,333 × 99,989 / 99,999 × 8% = 2,666.4 -> 2,666 (not rounded twice).
-        var receipt = Receipt(10, (33_333m, VatRate.Eight), (33_333m, VatRate.Eight), (33_333m, VatRate.Eight));
+        var receipt = Receipt(10, (33_333m, 8m), (33_333m, 8m), (33_333m, 8m));
 
         Assert.All(receipt.Lines, l => Assert.Equal(PurchaseMoney.RoundHalfUp(33_333m * 99_989m * 8m / (99_999m * 100m)), l.VatAmount));
         Assert.Equal(7_998m, PurchaseMoney.Vat(receipt.Lines));
@@ -146,10 +78,10 @@ public sealed class InputVatTests
     [Fact]
     public void A_receipt_of_one_phao_at_100000_and_ten_percent_is_owed_110000_and_a_discount_of_10000_leaves_99000()
     {
-        var plain = Receipt(0, (100_000m, VatRate.Ten));
+        var plain = Receipt(0, (100_000m, 10m));
         Assert.Equal((10_000m, 110_000m), (PurchaseMoney.Vat(plain.Lines), PurchaseMoney.Of(plain).Payable));
 
-        var discounted = Receipt(10_000, (100_000m, VatRate.Ten));
+        var discounted = Receipt(10_000, (100_000m, 10m));
         Assert.Equal((9_000m, 99_000m), (PurchaseMoney.Vat(discounted.Lines), PurchaseMoney.Of(discounted).Payable));
     }
 
@@ -161,16 +93,16 @@ public sealed class InputVatTests
         var figures = PurchaseMoney.Of(old);
 
         Assert.Equal((12_000m, 0m, 11_500m), (figures.Total, figures.Vat, figures.Payable));
-        Assert.All(old.Lines, l => Assert.Null(l.VatRate));
+        Assert.All(old.Lines, l => Assert.Null(l.VatRateId));
     }
 
     [Fact]
     public void Applying_the_VAT_again_after_the_discount_or_a_rate_changes_gives_the_new_figures()
     {
-        var receipt = Receipt(0, (100_000m, VatRate.Ten));
+        var receipt = Receipt(0, (100_000m, 10m));
 
         receipt.Discount = 10_000;
-        receipt.Lines.Single().VatRate = VatRate.Eight;
+        receipt.Lines.Single().VatPercent = 8m;
         PurchaseMoney.ApplyVat(receipt);
 
         Assert.Equal(7_200m, receipt.Lines.Single().VatAmount);
@@ -179,57 +111,132 @@ public sealed class InputVatTests
     [Fact]
     public void A_receipt_with_no_amount_yet_has_no_VAT()
     {
-        var draft = Receipt(0, (0m, VatRate.Ten));
+        var draft = Receipt(0, (0m, 10m));
         Assert.Equal(0m, draft.Lines.Single().VatAmount);
-        Assert.Equal(0m, PurchaseMoney.LineVat(100m, 0m, 0m, VatRate.Ten));
+        Assert.Equal(0m, PurchaseMoney.LineVat(100m, 0m, 0m, 10m));
     }
 
     // ---- which rate a line gets ----
 
-    [Fact]
-    public void A_line_takes_the_rate_sent_else_the_rate_of_its_item_and_a_seed_line_is_always_KCT()
-    {
-        var phao = new FarmingInputItem { Group = InputItemGroup.Material, PurchaseVatRate = VatRate.Ten };
-        var seed = new FarmingInputItem { Group = InputItemGroup.Seed, PurchaseVatRate = VatRate.Kct };
+    private readonly IReadOnlyDictionary<Guid, VatRate> Rates = VatKit.Catalogue();
 
-        Assert.Equal(VatRate.Ten, PurchaseReceiptService.LineVatRate(null, phao, kept: null));
-        Assert.Equal(VatRate.Eight, PurchaseReceiptService.LineVatRate(VatRate.Eight, phao, kept: null));
-        Assert.Equal(VatRate.Kct, PurchaseReceiptService.LineVatRate(VatRate.Ten, seed, kept: null));
-        Assert.Equal(VatRate.Kct, PurchaseReceiptService.LineVatRate(null, seed, kept: null));
+    private static FarmingInputItem Supply(Guid rateId, InputItemGroup group = InputItemGroup.Material) => new() { Group = group, PurchaseVatRateId = rateId };
+
+    private static PurchaseReceiptLine Taken(FarmingInputItem item, VatRate? rate)
+    {
+        var line = new PurchaseReceiptLine { ItemId = item.Id };
+        if (rate is not null)
+        {
+            VatSnapshot.Of(rate).ApplyTo(line);
+        }
+
+        return line;
     }
 
     [Fact]
-    public void An_edit_keeps_the_rate_of_a_kept_line_of_the_same_item_so_an_old_receipt_is_not_taxed_by_an_edit()
+    public void A_new_line_takes_the_rate_sent_else_the_current_rate_of_its_item_and_a_seed_line_is_always_KCT()
     {
-        var phao = new FarmingInputItem { Group = InputItemGroup.Material, PurchaseVatRate = VatRate.Ten };
-        var other = new FarmingInputItem { Group = InputItemGroup.Other, PurchaseVatRate = VatRate.Five };
-        var old = new PurchaseReceiptLine { ItemId = phao.Id, VatRate = null };
-        var eight = new PurchaseReceiptLine { ItemId = phao.Id, VatRate = VatRate.Eight };
+        var phao = Supply(VatRateIds.Ten);
+        var seed = Supply(VatRateIds.Kct, InputItemGroup.Seed);
 
-        Assert.Null(PurchaseReceiptService.LineVatRate(null, phao, old));
-        Assert.Equal(VatRate.Eight, PurchaseReceiptService.LineVatRate(null, phao, eight));
-        Assert.Equal(VatRate.Ten, PurchaseReceiptService.LineVatRate(VatRate.Ten, phao, old));
+        Assert.Equal(new VatSnapshot(VatRateIds.Ten, "10%", 10m), VatSnapshot.ForReceiptLine(null, phao, kept: null, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Eight, "8%", 8m), VatSnapshot.ForReceiptLine(VatRateIds.Eight, phao, kept: null, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Kct, "KCT", null), VatSnapshot.ForReceiptLine(VatRateIds.Ten, seed, kept: null, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Kct, "KCT", null), VatSnapshot.ForReceiptLine(null, seed, kept: null, Rates));
+    }
+
+    [Fact]
+    public void A_new_line_reads_the_percent_the_rate_has_now_and_a_kept_line_keeps_the_percent_it_took()
+    {
+        var phao = Supply(VatRateIds.Ten);
+        var kept = Taken(phao, Rates[VatRateIds.Ten]);
+        VatKit.Edit(Rates, VatRateIds.Ten, "10%", 12m);
+
+        // The rate was edited to 12% afterwards: the kept line still says 10, a new line (or another item) says 12.
+        Assert.Equal(new VatSnapshot(VatRateIds.Ten, "10%", 10m), VatSnapshot.ForReceiptLine(null, phao, kept, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Ten, "10%", 10m), VatSnapshot.ForReceiptLine(VatRateIds.Ten, phao, kept, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Ten, "10%", 12m), VatSnapshot.ForReceiptLine(null, phao, kept: null, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Ten, "10%", 12m), VatSnapshot.ForReceiptLine(null, phao, new PurchaseReceiptLine { ItemId = Guid.NewGuid() }, Rates));
+    }
+
+    [Fact]
+    public void A_kept_line_given_another_rate_takes_that_rate_as_it_is_now()
+    {
+        var phao = Supply(VatRateIds.Ten);
+        var kept = Taken(phao, Rates[VatRateIds.Ten]);
+
+        Assert.Equal(new VatSnapshot(VatRateIds.Five, "5%", 5m), VatSnapshot.ForReceiptLine(VatRateIds.Five, phao, kept, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Kct, "KCT", null), VatSnapshot.ForReceiptLine(VatRateIds.Kct, phao, kept, Rates));
+    }
+
+    [Fact]
+    public void A_kept_line_of_the_same_item_sent_without_a_rate_keeps_its_snapshot_and_none_stays_none_so_an_old_receipt_is_not_taxed_by_an_edit()
+    {
+        var phao = Supply(VatRateIds.Ten);
+        var old = Taken(phao, null);
+        var eight = Taken(phao, Rates[VatRateIds.Eight]);
+
+        Assert.Equal(VatSnapshot.None, VatSnapshot.ForReceiptLine(null, phao, old, Rates));
+        Assert.Equal(new VatSnapshot(VatRateIds.Eight, "8%", 8m), VatSnapshot.ForReceiptLine(null, phao, eight, Rates));
         // Another item on the line takes that item's rate.
-        Assert.Equal(VatRate.Five, PurchaseReceiptService.LineVatRate(null, other, eight));
+        Assert.Equal(new VatSnapshot(VatRateIds.Five, "5%", 5m), VatSnapshot.ForReceiptLine(null, Supply(VatRateIds.Five), eight, Rates));
     }
 
     [Fact]
-    public void A_line_sent_again_without_a_rate_keeps_the_stored_rate_and_only_a_new_line_takes_the_item_rate()
+    public void An_old_receipt_saved_again_keeps_its_figures()
     {
-        var phao = new FarmingInputItem { Group = InputItemGroup.Material, PurchaseVatRate = VatRate.Ten };
-        var stored = new PurchaseReceiptLine { ItemId = phao.Id, VatRate = null };
-
-        // Existing line, same item, no rate sent: none stays none, so totals and debt of an old receipt do not move.
-        Assert.Null(PurchaseReceiptService.LineVatRate(null, phao, stored));
-        // New line (nothing stored for it): the item's rate.
-        Assert.Equal(VatRate.Ten, PurchaseReceiptService.LineVatRate(null, phao, new PurchaseReceiptLine()));
-
-        // The re-saved old receipt keeps its figures: the lines take the stored rate and the VAT is worked out again to 0.
+        var phao = Supply(VatRateIds.Ten);
         var receipt = Receipt(0, (100_000m, null));
-        receipt.Lines.Single().ItemId = phao.Id;
-        receipt.Lines.Single().VatRate = PurchaseReceiptService.LineVatRate(null, phao, receipt.Lines.Single());
+        var line = receipt.Lines.Single();
+        line.ItemId = phao.Id;
+
+        VatSnapshot.ForReceiptLine(null, phao, line, Rates).ApplyTo(line);
         PurchaseMoney.ApplyVat(receipt);
+
+        Assert.Null(line.VatRateId);
         Assert.Equal((0m, 100_000m), (PurchaseMoney.Vat(receipt.Lines), PurchaseMoney.Of(receipt).Payable));
+    }
+
+    [Fact]
+    public void An_edit_of_the_percent_of_a_rate_does_not_change_the_VAT_of_a_receipt_that_exists_but_the_next_receipt_uses_it()
+    {
+        var phao = Supply(VatRateIds.Ten);
+        var first = Receipt(0, (100_000m, 10m));
+        var firstLine = first.Lines.Single();
+        VatSnapshot.Of(Rates[VatRateIds.Ten]).ApplyTo(firstLine);
+        firstLine.ItemId = phao.Id;
+
+        VatKit.Edit(Rates, VatRateIds.Ten, "10%", 8m);
+
+        // The first receipt is saved again (an edit of its discount): the line keeps 10%, so the VAT is still 10,000.
+        first.Discount = 0;
+        VatSnapshot.ForReceiptLine(null, phao, firstLine, Rates).ApplyTo(firstLine);
+        PurchaseMoney.ApplyVat(first);
+        Assert.Equal(10_000m, firstLine.VatAmount);
+
+        // A new receipt takes the item's rate as it is now.
+        var second = Receipt(0, (100_000m, null));
+        var secondLine = second.Lines.Single();
+        VatSnapshot.ForReceiptLine(null, phao, kept: null, Rates).ApplyTo(secondLine);
+        PurchaseMoney.ApplyVat(second);
+        Assert.Equal((8m, 8_000m), (secondLine.VatPercent!.Value, secondLine.VatAmount));
+    }
+
+    [Fact]
+    public void A_rate_that_is_not_in_the_list_or_is_inactive_is_refused_unless_the_stored_line_already_has_it()
+    {
+        var phao = Supply(VatRateIds.Ten);
+        var seed = Supply(VatRateIds.Kct, InputItemGroup.Seed);
+        var catalogue = VatKit.Catalogue();
+        catalogue[VatRateIds.Five].IsActive = false;
+
+        Assert.False(PurchaseReceiptValidator.VatRateRejected(null, phao, null, catalogue));
+        Assert.False(PurchaseReceiptValidator.VatRateRejected(VatRateIds.Eight, phao, null, catalogue));
+        Assert.True(PurchaseReceiptValidator.VatRateRejected(Guid.NewGuid(), phao, null, catalogue));
+        Assert.True(PurchaseReceiptValidator.VatRateRejected(VatRateIds.Five, phao, null, catalogue));
+        Assert.False(PurchaseReceiptValidator.VatRateRejected(VatRateIds.Five, phao, VatRateIds.Five, catalogue));
+        // A seed line is always KCT, so what is sent for it is not looked at.
+        Assert.False(PurchaseReceiptValidator.VatRateRejected(Guid.NewGuid(), seed, null, catalogue));
     }
 
     // ---- returns ----
@@ -237,12 +244,12 @@ public sealed class InputVatTests
     [Fact]
     public void A_return_line_gives_back_the_VAT_of_the_rate_it_holds_on_its_recorded_value()
     {
-        var line = new PurchaseReturnLine { VatRate = VatRate.Ten };
+        var line = new PurchaseReturnLine { VatPercent = 10m };
 
         ReceiptLineUnits.FillReturn(line, "cái", null, 1m, 1m, 100_000m);
 
         Assert.Equal((100_000m, 10_000m), (line.ReturnValue, line.VatAmount));
-        var kct = new PurchaseReturnLine { VatRate = VatRate.Kct };
+        var kct = new PurchaseReturnLine { VatPercent = null };
         ReceiptLineUnits.FillReturn(kct, "cái", null, 1m, 1m, 100_000m);
         var old = new PurchaseReturnLine();
         ReceiptLineUnits.FillReturn(old, "cái", null, 1m, 1m, 100_000m);
@@ -253,8 +260,8 @@ public sealed class InputVatTests
     public void The_refund_of_a_return_is_its_lines_and_their_VAT_less_its_discount_rounded_half_up_per_line()
     {
         var purchaseReturn = new PurchaseReturn { Discount = 1_000 };
-        var rope = new PurchaseReturnLine { VatRate = VatRate.Eight };
-        var buoy = new PurchaseReturnLine { VatRate = VatRate.Ten };
+        var rope = new PurchaseReturnLine { VatPercent = 8m };
+        var buoy = new PurchaseReturnLine { VatPercent = 10m };
         // 1.5 × 3,333 = 4,999.5 -> 5,000 at 8% = 400; 15 at 10% = 1.5 -> 2.
         ReceiptLineUnits.FillReturn(rope, "m", null, 1m, 1.5m, 3_333m);
         ReceiptLineUnits.FillReturn(buoy, "cái", null, 1m, 1m, 15m);
@@ -270,15 +277,15 @@ public sealed class InputVatTests
     [Fact]
     public void A_recorded_return_of_the_phao_clears_the_110000_the_receipt_added_to_the_debt_and_a_cancelled_one_counts_for_nothing()
     {
-        var receipt = Receipt(0, (100_000m, VatRate.Ten));
+        var receipt = Receipt(0, (100_000m, 10m));
         var line = receipt.Lines.Single();
         var recorded = new PurchaseReturn { StatusId = StatusIds.PurchaseReturn.Recorded };
-        var phao = new PurchaseReturnLine { ReceiptLineId = line.Id, VatRate = line.VatRate };
+        var phao = new PurchaseReturnLine { ReceiptLineId = line.Id, VatPercent = line.VatPercent };
         ReceiptLineUnits.FillReturn(phao, "cái", null, 1m, 1m, 100_000m);
         recorded.Lines.Add(phao);
         receipt.Returns.Add(recorded);
         var cancelled = new PurchaseReturn { StatusId = StatusIds.PurchaseReturn.Cancelled };
-        var again = new PurchaseReturnLine { ReceiptLineId = line.Id, VatRate = line.VatRate };
+        var again = new PurchaseReturnLine { ReceiptLineId = line.Id, VatPercent = line.VatPercent };
         ReceiptLineUnits.FillReturn(again, "cái", null, 1m, 1m, 100_000m);
         cancelled.Lines.Add(again);
         receipt.Returns.Add(cancelled);
@@ -295,10 +302,10 @@ public sealed class InputVatTests
     [Fact]
     public void The_cost_of_a_base_unit_is_its_net_price_with_the_VAT_of_the_line()
     {
-        var phao = new PurchaseReceiptLine { VatRate = VatRate.Ten, UnitFactor = 1m, EnteredUnitPrice = 100_000m };
-        var discounted = new PurchaseReceiptLine { VatRate = VatRate.Ten, UnitFactor = 1m, EnteredUnitPrice = 100_000m, EnteredDiscount = 5_000m };
-        var box = new PurchaseReceiptLine { VatRate = VatRate.Eight, UnitFactor = 12m, EnteredUnitPrice = 120_000m };
-        var kct = new PurchaseReceiptLine { VatRate = VatRate.Kct, UnitFactor = 1m, EnteredUnitPrice = 100_000m };
+        var phao = new PurchaseReceiptLine { VatPercent = 10m, UnitFactor = 1m, EnteredUnitPrice = 100_000m };
+        var discounted = new PurchaseReceiptLine { VatPercent = 10m, UnitFactor = 1m, EnteredUnitPrice = 100_000m, EnteredDiscount = 5_000m };
+        var box = new PurchaseReceiptLine { VatPercent = 8m, UnitFactor = 12m, EnteredUnitPrice = 120_000m };
+        var kct = new PurchaseReceiptLine { VatPercent = null, UnitFactor = 1m, EnteredUnitPrice = 100_000m };
         var old = new PurchaseReceiptLine { UnitFactor = 1m, EnteredUnitPrice = 100_000m };
 
         Assert.Equal(110_000m, ReceiptLineUnits.CostPerBase(phao));
@@ -306,7 +313,7 @@ public sealed class InputVatTests
         Assert.Equal(10_800m, ReceiptLineUnits.CostPerBase(box));
         Assert.Equal(100_000m, ReceiptLineUnits.CostPerBase(kct));
         Assert.Equal(100_000m, ReceiptLineUnits.CostPerBase(old));
-        Assert.Equal(1.1m, ReceiptLineUnits.WithVat(1m, VatRate.Ten));
+        Assert.Equal(1.1m, ReceiptLineUnits.WithVat(1m, 10m));
     }
 
     private sealed class Account : ICurrentUser
@@ -318,7 +325,7 @@ public sealed class InputVatTests
     private sealed class Fixture(InputCostMethod method, decimal? cost)
     {
         public InMemoryStock Stock { get; } = new();
-        public FarmingInputItem Phao { get; } = new() { Code = "VT000001", Name = "Phao", Group = InputItemGroup.Material, Unit = "cái", CostPrice = cost, PurchaseVatRate = VatRate.Ten };
+        public FarmingInputItem Phao { get; } = new() { Code = "VT000001", Name = "Phao", Group = InputItemGroup.Material, Unit = "cái", CostPrice = cost };
 
         public InputStockLedger Ledger() => new(
             Stock,
@@ -331,19 +338,19 @@ public sealed class InputVatTests
         public void Stocked(decimal quantity) =>
             Stock.Add(new InputStockMovement { ItemId = Phao.Id, Kind = InputStockMovementKind.Opening, DocumentId = Phao.Id, DocumentCode = Phao.Code, OccurredAt = At, Quantity = quantity });
 
-        public PurchaseReceipt Receipt(decimal quantity, decimal price, VatRate? rate)
+        public PurchaseReceipt Receipt(decimal quantity, decimal price, decimal? percent)
         {
             var receipt = new PurchaseReceipt
             {
                 Code = "PN000001", ReceivedAt = At,
-                Lines = [new PurchaseReceiptLine { LineNumber = 1, ItemId = Phao.Id, Quantity = quantity, EnteredQuantity = quantity, EnteredUnitPrice = price, UnitFactor = 1m, VatRate = rate }],
+                Lines = [new PurchaseReceiptLine { LineNumber = 1, ItemId = Phao.Id, Quantity = quantity, EnteredQuantity = quantity, EnteredUnitPrice = price, UnitFactor = 1m, VatPercent = percent }],
             };
             return receipt;
         }
 
-        public PurchaseReturn Return(decimal quantity, decimal price, VatRate? rate)
+        public PurchaseReturn Return(decimal quantity, decimal price, decimal? percent)
         {
-            var line = new PurchaseReturnLine { ItemId = Phao.Id, VatRate = rate };
+            var line = new PurchaseReturnLine { ItemId = Phao.Id, VatPercent = percent };
             ReceiptLineUnits.FillReturn(line, "cái", null, 1m, quantity, price);
             return new PurchaseReturn { Code = "TH000001", ReturnedAt = At, Lines = [line] };
         }
@@ -354,7 +361,7 @@ public sealed class InputVatTests
     {
         var f = new Fixture(InputCostMethod.Average, null);
 
-        await f.Ledger().PostReceiptAsync(f.Receipt(1m, 100_000m, VatRate.Ten), CancellationToken.None);
+        await f.Ledger().PostReceiptAsync(f.Receipt(1m, 100_000m, 10m), CancellationToken.None);
 
         var row = Assert.Single(f.Stock.Rows, r => r.Kind == InputStockMovementKind.Receipt);
         Assert.Equal((110_000m, 110_000m), (row.TransactionPrice!.Value, f.Phao.CostPrice!.Value));
@@ -366,7 +373,7 @@ public sealed class InputVatTests
     {
         var f = new Fixture(InputCostMethod.Fixed, null);
 
-        await f.Ledger().PostReceiptAsync(f.Receipt(2m, 50_000m, VatRate.Eight), CancellationToken.None);
+        await f.Ledger().PostReceiptAsync(f.Receipt(2m, 50_000m, 8m), CancellationToken.None);
 
         Assert.Equal(54_000m, f.Phao.CostPrice);
     }
@@ -378,11 +385,11 @@ public sealed class InputVatTests
         f.Stocked(10m);
 
         // 10 on hand at 100, 10 received at 200 + 10% = 220: (1,000 + 2,200) / 20 = 160.
-        await f.Ledger().PostReceiptAsync(f.Receipt(10m, 200m, VatRate.Ten), CancellationToken.None);
+        await f.Ledger().PostReceiptAsync(f.Receipt(10m, 200m, 10m), CancellationToken.None);
         Assert.Equal(160m, f.Phao.CostPrice);
 
         // 5 go back at 200 + 10% = 220: (20 × 160 − 5 × 220) / 15 = 140.
-        await f.Ledger().PostReturnAsync(f.Return(5m, 200m, VatRate.Ten), CancellationToken.None);
+        await f.Ledger().PostReturnAsync(f.Return(5m, 200m, 10m), CancellationToken.None);
         var returnRow = f.Stock.Rows.Single(r => r.Kind == InputStockMovementKind.PurchaseReturn);
         Assert.Equal((-5m, 220m), (returnRow.Quantity, returnRow.TransactionPrice!.Value));
         Assert.Equal(140m, f.Phao.CostPrice);
@@ -403,11 +410,11 @@ public sealed class InputVatTests
     public async Task The_edit_of_a_receipt_rate_is_undone_at_the_old_cost_and_posted_at_the_new_one()
     {
         var f = new Fixture(InputCostMethod.Average, null);
-        var receipt = f.Receipt(1m, 100_000m, VatRate.Ten);
+        var receipt = f.Receipt(1m, 100_000m, 10m);
         await f.Ledger().PostReceiptAsync(receipt, CancellationToken.None);
         Assert.Equal(110_000m, f.Phao.CostPrice);
 
-        receipt.Lines.Single().VatRate = VatRate.Eight;
+        receipt.Lines.Single().VatPercent = 8m;
         var ledger = f.Ledger();
         await ledger.ReverseAsync(receipt.Id, afterReceiptRemoved: false, CancellationToken.None);
         await ledger.PostReceiptAsync(receipt, CancellationToken.None);

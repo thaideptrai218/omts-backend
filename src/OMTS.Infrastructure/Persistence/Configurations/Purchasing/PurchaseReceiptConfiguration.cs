@@ -44,6 +44,11 @@ internal sealed class PurchaseReceiptLineConfiguration : IEntityTypeConfiguratio
         // Rounded half up to the dong, not to thousands (BR-PURCHASE-02): PurchaseMoney.RoundHalfUp.
         builder.Property(x => x.LineAmount).HasPrecision(18, 0);
         builder.Property(x => x.VatAmount).HasPrecision(18, 0);
+        // The rate as the line took it: the name and the percent stay when the rate is edited later.
+        builder.HasOne(x => x.VatRate).WithMany().HasForeignKey(x => x.VatRateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.VatRateId);
+        builder.Property(x => x.VatRateName).HasMaxLength(50);
+        builder.Property(x => x.VatPercent).HasPrecision(5, 2);
         builder.Property(x => x.SupplierLotCode).HasMaxLength(Lengths.ShortText);
     }
 }
@@ -83,6 +88,10 @@ internal sealed class PurchaseReturnLineConfiguration : IEntityTypeConfiguration
         // Rounded half up to the dong when recorded (BR-PURCHASE-02), and kept: PM 03/11.
         builder.Property(x => x.ReturnValue).HasPrecision(18, 0);
         builder.Property(x => x.VatAmount).HasPrecision(18, 0);
+        builder.HasOne(x => x.VatRate).WithMany().HasForeignKey(x => x.VatRateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.VatRateId);
+        builder.Property(x => x.VatRateName).HasMaxLength(50);
+        builder.Property(x => x.VatPercent).HasPrecision(5, 2);
     }
 }
 

@@ -61,6 +61,9 @@ public static class UserMessages
     /// </summary>
     public static UserMessage HarvestRefused(string text) => new(Gen09, text, Legacy.Msg61);
 
+    /// <summary>MSG-GEN-09 in Vietnamese for the VAT rate list: the same code and legacy code as <see cref="WrongStatus"/>, with a text the settings screen can show as it is. The caller adds a <c>reasonCode</c>.</summary>
+    public static UserMessage VatRateRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>
     /// <param name="status">The display name of the current status, e.g. "Discontinued".</param>

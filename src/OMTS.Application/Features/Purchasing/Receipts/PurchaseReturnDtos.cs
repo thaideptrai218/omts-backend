@@ -55,11 +55,13 @@ public sealed record SavePurchaseReturnRequest(
 public sealed record CancelPurchaseReturnRequest(string? Reason, string? RowVersion = null);
 
 /// <param name="ReceiptLineId">Null on a return without a receipt.</param>
-/// <param name="VatRate">The VAT rate copied from the receipt line (the item's rate on a return without a receipt); null when the receipt line has none.</param>
+/// <param name="VatRateId">The VAT rate of the receipt line the line came from (the current rate of the item on a return without a receipt); null with <paramref name="VatRateName"/> and <paramref name="VatPercent"/> when the receipt line has none.</param>
+/// <param name="VatRateName">The name of the rate when the line took it.</param>
+/// <param name="VatPercent">The percent of the rate when the line took it; null on KCT and on a line without a rate.</param>
 /// <param name="VatAmount">The VAT given back with the line: <paramref name="ReturnValue"/> times the rate, half up to the dong.</param>
 public sealed record PurchaseReturnLineView(
     Guid? ReceiptLineId, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal UnitPrice, decimal ReturnValue,
-    Guid? ItemUnitId = null, decimal UnitFactor = 1, decimal? BaseQuantity = null, VatRate? VatRate = null, decimal VatAmount = 0);
+    Guid? ItemUnitId = null, decimal UnitFactor = 1, decimal? BaseQuantity = null, Guid? VatRateId = null, string? VatRateName = null, decimal? VatPercent = null, decimal VatAmount = 0);
 
 /// <summary>A money-paid-back record made with the return; a Cancelled one stays listed with its status.</summary>
 public sealed record ReturnRefundView(

@@ -18,6 +18,7 @@ public sealed class FarmingInputItemFileService(
     FarmingInputItemService itemService,
     IFarmingInputItemRepository items,
     IInputItemCategoryRepository groups,
+    IVatRateRepository vatRates,
     ISpreadsheetWriter spreadsheets,
     ISpreadsheetReader reader,
     TimeProvider timeProvider)
@@ -64,7 +65,7 @@ public sealed class FarmingInputItemFileService(
             i.Code, i.Name, i.Group.ToString(), i.ItemGroupName, i.Unit,
             string.Join("; ", i.Units.Where(u => !u.IsBase).Select(u => $"{u.Name} = {u.Factor.ToString("0.###", CultureInfo.InvariantCulture)} {i.Unit} ({u.Code})")),
             i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.Status, i.CreatedBy,
-            i.CreatedAt.ToOffset(BusinessClock.UtcOffset).DateTime, VatRates.Text(i.PurchaseVatRate),
+            i.CreatedAt.ToOffset(BusinessClock.UtcOffset).DateTime, i.PurchaseVatRateName,
         }).ToList();
         return Write(new SpreadsheetSheet("Items", headers, rows), $"input-items-{timeProvider.Today():yyyyMMdd}.xlsx");
     }
@@ -115,6 +116,8 @@ public sealed class FarmingInputItemFileService(
         }
 
         var groupByName = (await groups.ListAsync(cancellationToken)).ToDictionary(g => g.Name, g => g.Id, StringComparer.OrdinalIgnoreCase);
+        // The rates an item can take: the active ones, by name.
+        var activeRates = (await vatRates.ListAsync(cancellationToken)).Where(r => r.IsActive).ToDictionary(r => r.Name, r => r.Id, StringComparer.OrdinalIgnoreCase);
         var requests = new List<(int Row, SaveFarmingInputItemRequest Request)>();
         var errors = new List<InputItemImportError>();
         var codesInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -161,13 +164,13 @@ public sealed class FarmingInputItemFileService(
             }
 
             var (min, max, cost, opening) = (Number(MinQuantity), Number(MaxQuantity), Number(CostPrice), Number(OpeningQuantity));
-            // The rate of the item: KCT, 0, 5, 8 or 10; left empty, a new item starts at 10%.
-            VatRate? vatRate = null;
+            // The name of an active rate (a bare number such as 10 also finds "10%"); left empty, a new item starts at the default rate.
+            Guid? vatRateId = null;
             if (Cell(PurchaseVat) is { } vatText)
             {
-                if (VatRates.TryParse(vatText, out var parsedRate))
+                if (activeRates.TryGetValue(vatText, out var rateId) || activeRates.TryGetValue(vatText + "%", out rateId))
                 {
-                    vatRate = parsedRate;
+                    vatRateId = rateId;
                 }
                 else
                 {
@@ -193,7 +196,7 @@ public sealed class FarmingInputItemFileService(
             }
 
             requests.Add((row.Number, new SaveFarmingInputItemRequest(
-                code, Cell(Name), type, Cell(Unit), Cell(Description), null, groupId, Cell(Notes), min, max, cost, opening, PurchaseVatRate: vatRate)));
+                code, Cell(Name), type, Cell(Unit), Cell(Description), null, groupId, Cell(Notes), min, max, cost, opening, PurchaseVatRateId: vatRateId)));
         }
 
         // Nothing is saved while a row cannot be read; the other rows are checked against the catalogue once these are fixed.

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -24,36 +25,53 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
 
     private static async Task<JsonElement> ReceiptAsync(HttpClient owner, JsonElement receipt) => await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
 
+    private static string Rate(JsonElement item) => item.GetProperty("purchaseVatRateName").GetString()!;
+
     [Fact]
-    public async Task A_supply_item_starts_at_ten_percent_a_seed_item_is_always_KCT_and_the_list_filters_by_rate()
+    public async Task A_supply_item_starts_at_the_default_rate_a_seed_item_is_always_KCT_and_the_list_filters_by_rate()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var phao = await (await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = $"Phao {NewCode()}", group = "Material", unit = "cái" })).ReadAsync(HttpStatusCode.Created);
-        var lowered = await (await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = $"Lưới {NewCode()}", group = "Other", unit = "m", purchaseVatRate = "5" })).ReadAsync(HttpStatusCode.Created);
+        var lowered = await (await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = $"Lưới {NewCode()}", group = "Other", unit = "m", purchaseVatRateId = VatRateIds.Five })).ReadAsync(HttpStatusCode.Created);
         var seed = await (await owner.PostAsJsonAsync(Items, new
         {
-            code = NewCode(), name = $"Giống {NewCode()}", group = "Seed", unit = "con", purchaseVatRate = "10", productId = await owner.SeedProductAsync(),
+            code = NewCode(), name = $"Giống {NewCode()}", group = "Seed", unit = "con", purchaseVatRateId = VatRateIds.Ten, productId = await owner.SeedProductAsync(),
         })).ReadAsync(HttpStatusCode.Created);
 
-        Assert.Equal(("10", "5", "KCT"), (phao.GetProperty("purchaseVatRate").GetString(), lowered.GetProperty("purchaseVatRate").GetString(), seed.GetProperty("purchaseVatRate").GetString()));
+        Assert.Equal(("10%", "5%", "KCT"), (Rate(phao), Rate(lowered), Rate(seed)));
+        Assert.Equal((VatRateIds.Ten, 10m), (phao.GetProperty("purchaseVatRateId").GetGuid(), phao.Money("purchaseVatPercent")));
+        Assert.Equal(JsonValueKind.Null, seed.GetProperty("purchaseVatPercent").ValueKind);
+        Assert.Equal(VatRateIds.Kct, seed.GetProperty("purchaseVatRateId").GetGuid());
 
         // An update that sends no rate keeps it; one that sends a rate changes it; a seed item stays KCT whatever is sent.
         var kept = await (await owner.PutAsJsonAsync($"{Items}/{lowered.Id()}", new
         {
             code = lowered.GetProperty("code").GetString(), name = lowered.GetProperty("name").GetString(), group = "Other", unit = "m", rowVersion = lowered.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("5", kept.GetProperty("purchaseVatRate").GetString());
+        Assert.Equal("5%", Rate(kept));
         var changed = await (await owner.PutAsJsonAsync($"{Items}/{lowered.Id()}", new
         {
-            code = lowered.GetProperty("code").GetString(), name = lowered.GetProperty("name").GetString(), group = "Other", unit = "m", purchaseVatRate = "0",
+            code = lowered.GetProperty("code").GetString(), name = lowered.GetProperty("name").GetString(), group = "Other", unit = "m", purchaseVatRateId = VatRateIds.Zero,
             rowVersion = kept.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("0", changed.GetProperty("purchaseVatRate").GetString());
+        Assert.Equal(("0%", 0m), (Rate(changed), changed.Money("purchaseVatPercent")));
 
-        var ten = await owner.GetFromJsonAsync<JsonElement>($"{Items}/search?purchaseVatRate=10&pageSize=100");
+        var ten = await owner.GetFromJsonAsync<JsonElement>($"{Items}/search?purchaseVatRateId={VatRateIds.Ten}&pageSize=100");
         Assert.Contains(ten.GetProperty("items").EnumerateArray(), i => i.Id() == phao.Id());
         Assert.DoesNotContain(ten.GetProperty("items").EnumerateArray(), i => i.Id() == lowered.Id() || i.Id() == seed.Id());
-        Assert.Equal("Purchase VAT rate", await (await owner.GetAsync($"{Items}/search?purchaseVatRate=12")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+    }
+
+    [Fact]
+    public async Task An_item_refuses_a_rate_that_is_not_in_the_list_or_is_inactive()
+    {
+        var owner = await factory.PurchasingOwnerAsync();
+        var unknown = await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = $"Phao {NewCode()}", group = "Material", unit = "cái", purchaseVatRateId = Guid.NewGuid() });
+        Assert.Equal("Purchase VAT rate", await unknown.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+
+        var rate = await (await owner.PostAsJsonAsync("/api/vat-rates", new { name = $"Tạm {NewCode()}", percent = 3 })).ReadAsync(HttpStatusCode.Created);
+        await (await owner.PostAsJsonAsync($"/api/vat-rates/{rate.Id()}/deactivate", new { rowVersion = rate.GetProperty("rowVersion").GetString() })).ReadAsync(HttpStatusCode.OK);
+        var inactive = await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = $"Phao {NewCode()}", group = "Material", unit = "cái", purchaseVatRateId = rate.Id() });
+        Assert.Equal("Purchase VAT rate", await inactive.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -63,31 +81,31 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
         var (a, b) = (await PhaoAsync(world, "10"), await PhaoAsync(world, "5"));
         var receipt = await world.CompletedAsync(new LineBody(a, 1, 100_000));
 
-        var done = await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { a, b }, purchaseVatRate = "8" })).ReadAsync(HttpStatusCode.OK);
+        var done = await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { a, b }, vatRateId = VatRateIds.Eight })).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(2, done.GetProperty("updated").GetInt32());
-        Assert.Equal(["8", "8"], new[] { await ItemAsync(world.Owner, a), await ItemAsync(world.Owner, b) }.Select(i => i.GetProperty("purchaseVatRate").GetString()));
+        Assert.Equal(["8%", "8%"], new[] { await ItemAsync(world.Owner, a), await ItemAsync(world.Owner, b) }.Select(Rate));
         var line = (await ReceiptAsync(world.Owner, receipt)).LineViewOf(a);
-        Assert.Equal(("10", 10_000m), (line.GetProperty("vatRate").GetString(), line.Money("vatAmount")));
+        Assert.Equal(("10%", 10m, 10_000m), (line.GetProperty("vatRateName").GetString(), line.Money("vatPercent"), line.Money("vatAmount")));
         Assert.Equal(110_000m, await world.DebtAsync());
 
         // The route the contract names reaches the same action.
-        await (await world.Owner.PostAsJsonAsync("/api/input-items/purchase-vat-rate", new { itemIds = new[] { a }, purchaseVatRate = "KCT" })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("KCT", (await ItemAsync(world.Owner, a)).GetProperty("purchaseVatRate").GetString());
+        await (await world.Owner.PostAsJsonAsync("/api/input-items/purchase-vat-rate", new { itemIds = new[] { a }, vatRateId = VatRateIds.Kct })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal("KCT", Rate(await ItemAsync(world.Owner, a)));
     }
 
     [Fact]
-    public async Task The_bulk_change_refuses_a_seed_item_an_empty_list_and_an_unknown_item_with_the_field_itemIds()
+    public async Task The_bulk_change_refuses_a_seed_item_an_empty_list_and_an_unknown_item_with_the_field_itemIds_and_a_bad_rate_with_vatRateId()
     {
         var world = await factory.WorldAsync();
         var phao = await PhaoAsync(world);
 
-        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao, world.Seed }, purchaseVatRate = "8" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = Array.Empty<Guid>(), purchaseVatRate = "8" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao, Guid.NewGuid() }, purchaseVatRate = "8" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("purchaseVatRate", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao } })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal(HttpStatusCode.BadRequest, (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao }, purchaseVatRate = "12" })).StatusCode);
-        Assert.Equal("10", (await ItemAsync(world.Owner, phao)).GetProperty("purchaseVatRate").GetString());
+        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao, world.Seed }, vatRateId = VatRateIds.Eight })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = Array.Empty<Guid>(), vatRateId = VatRateIds.Eight })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("itemIds", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao, Guid.NewGuid() }, vatRateId = VatRateIds.Eight })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("vatRateId", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao } })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("vatRateId", await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao }, vatRateId = Guid.NewGuid() })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("10%", Rate(await ItemAsync(world.Owner, phao)));
     }
 
     [Fact]
@@ -99,7 +117,8 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
         var receipt = await world.CompletedAsync(new LineBody(phao, 1, 100_000));
 
         var line = receipt.LineViewOf(phao);
-        Assert.Equal(("10", 10_000m), (line.GetProperty("vatRate").GetString(), line.Money("vatAmount")));
+        Assert.Equal(("10%", 10m, 10_000m), (line.GetProperty("vatRateName").GetString(), line.Money("vatPercent"), line.Money("vatAmount")));
+        Assert.Equal(VatRateIds.Ten, line.GetProperty("vatRateId").GetGuid());
         Assert.Equal((100_000m, 10_000m, 110_000m), (receipt.Money("total"), receipt.Money("vatTotal"), receipt.Money("payable")));
         Assert.Equal(110_000m, await world.DebtAsync());
         var item = await ItemAsync(world.Owner, phao);
@@ -129,10 +148,10 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
         var world = await factory.WorldAsync();
         var phao = await PhaoAsync(world);
 
-        var receipt = await world.CompletedAsync(new LineBody(phao, 1, 100_000, VatRate: "8"), new LineBody(await PhaoAsync(world, "5"), 1, 100_000, VatRate: "KCT"));
+        var receipt = await world.CompletedAsync(new LineBody(phao, 1, 100_000, VatRateId: VatRateIds.Eight), new LineBody(await PhaoAsync(world, "5"), 1, 100_000, VatRateId: VatRateIds.Kct));
 
         Assert.Equal((8_000m, 208_000m), (receipt.Money("vatTotal"), receipt.Money("payable")));
-        Assert.Equal("10", (await ItemAsync(world.Owner, phao)).GetProperty("purchaseVatRate").GetString());
+        Assert.Equal("10%", Rate(await ItemAsync(world.Owner, phao)));
         Assert.Equal(208_000m, await world.DebtAsync());
     }
 
@@ -141,10 +160,11 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var world = await factory.WorldAsync();
 
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000, VatRate: "10"));
+        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000, VatRateId: VatRateIds.Ten));
 
         var line = receipt.LineViewOf(world.Seed);
-        Assert.Equal(("KCT", 0m), (line.GetProperty("vatRate").GetString(), line.Money("vatAmount")));
+        Assert.Equal(("KCT", 0m), (line.GetProperty("vatRateName").GetString(), line.Money("vatAmount")));
+        Assert.Equal(JsonValueKind.Null, line.GetProperty("vatPercent").ValueKind);
         Assert.Equal(10_000m, await world.DebtAsync());
     }
 
@@ -165,7 +185,7 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-returns/{back.Id()}");
         var line = view.GetProperty("lines")[0];
-        Assert.Equal(("10", 10_000m), (line.GetProperty("vatRate").GetString(), line.Money("vatAmount")));
+        Assert.Equal(("10%", 10m, 10_000m), (line.GetProperty("vatRateName").GetString(), line.Money("vatPercent"), line.Money("vatAmount")));
         Assert.Equal((110_000m, 10_000m), (view.Money("netValue"), view.Money("vatRefund")));
     }
 
@@ -202,7 +222,7 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         var body = new ReceiptBody
         {
-            SupplierId = world.SupplierId, ReceiptDate = null, Complete = true, Lines = [new LineBody(phao, 1, 100_000, LineId: lineId, VatRate: "8")],
+            SupplierId = world.SupplierId, ReceiptDate = null, Complete = true, Lines = [new LineBody(phao, 1, 100_000, LineId: lineId, VatRateId: VatRateIds.Eight)],
         };
         var edited = await (await world.Owner.EditAsync(await ReceiptAsync(world.Owner, receipt), body)).ReadAsync(HttpStatusCode.OK);
 
@@ -225,17 +245,17 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
         var receipt = await world.CompletedAsync(new LineBody(phao, 1, 100_000));
         var lineId = receipt.LineOf(phao);
         // What a row of the migration looks like: no rate, no VAT.
-        await factory.UpdateAsync<PurchaseReceiptLine>(lineId, l => (l.VatRate, l.VatAmount) = (null, 0m));
+        await factory.UpdateAsync<PurchaseReceiptLine>(lineId, l => (l.VatRateId, l.VatRateName, l.VatPercent, l.VatAmount) = (null, null, null, 0m));
 
         var old = await ReceiptAsync(world.Owner, receipt);
 
-        Assert.Equal(JsonValueKind.Null, old.LineViewOf(phao).GetProperty("vatRate").ValueKind);
+        Assert.Equal(JsonValueKind.Null, old.LineViewOf(phao).GetProperty("vatRateId").ValueKind);
         Assert.Equal((0m, 100_000m), (old.Money("vatTotal"), old.Money("payable")));
         Assert.Equal(100_000m, await world.DebtAsync());
 
         await (await world.Owner.EditLineAsync(receipt.Id(), lineId, quantity: 2)).ReadAsync(HttpStatusCode.OK);
         var edited = await ReceiptAsync(world.Owner, receipt);
-        Assert.Equal(JsonValueKind.Null, edited.LineViewOf(phao).GetProperty("vatRate").ValueKind);
+        Assert.Equal(JsonValueKind.Null, edited.LineViewOf(phao).GetProperty("vatRateId").ValueKind);
         Assert.Equal((200_000m, 0m, 200_000m), (edited.Money("total"), edited.Money("vatTotal"), edited.Money("payable")));
         Assert.Equal(200_000m, await world.DebtAsync());
     }
@@ -262,5 +282,34 @@ public class PurchaseInputVatTests(AuthApiFactory factory) : IClassFixture<AuthA
         var group = Assert.Single(report.GetProperty("groups").EnumerateArray());
         Assert.Equal((totals.Money("netValue"), totals.Money("vatAmount")), (group.Money("netValue"), group.Money("vatAmount")));
         Assert.Equal(totals.Money("netValue"), await world.DebtAsync());
+    }
+
+    [Fact]
+    public async Task Editing_the_percent_of_a_rate_leaves_the_lines_made_before_and_the_next_receipt_uses_the_new_percent()
+    {
+        var world = await factory.WorldAsync();
+        var rate = await (await world.Owner.PostAsJsonAsync("/api/vat-rates", new { name = $"Mức {NewCode()}", percent = 10 })).ReadAsync(HttpStatusCode.Created);
+        var phao = await world.Owner.CreateItemAsync("Material", "cái", vatRate: null);
+        await (await world.Owner.PostAsJsonAsync($"{Items}/purchase-vat-rate", new { itemIds = new[] { phao }, vatRateId = rate.Id() })).ReadAsync(HttpStatusCode.OK);
+        var first = await world.CompletedAsync(new LineBody(phao, 1, 100_000));
+        var lineId = first.LineOf(phao);
+        Assert.Equal(10_000m, first.LineViewOf(phao).Money("vatAmount"));
+
+        await (await world.Owner.PutAsJsonAsync($"/api/vat-rates/{rate.Id()}", new { name = rate.GetProperty("name").GetString(), percent = 8, rowVersion = rate.GetProperty("rowVersion").GetString() })).ReadAsync(HttpStatusCode.OK);
+
+        // The receipt made before still has the percent it took, also when it is saved again without a rate or with the rate it shows.
+        var sameLine = (await ReceiptAsync(world.Owner, first)).LineViewOf(phao);
+        Assert.Equal((10m, 10_000m), (sameLine.Money("vatPercent"), sameLine.Money("vatAmount")));
+        var body = new ReceiptBody { SupplierId = world.SupplierId, ReceiptDate = null, Complete = true, Lines = [new LineBody(phao, 2, 100_000, LineId: lineId)] };
+        var edited = await (await world.Owner.EditAsync(await ReceiptAsync(world.Owner, first), body)).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal((10m, 20_000m), (edited.LineViewOf(phao).Money("vatPercent"), edited.Money("vatTotal")));
+        var resent = await (await world.Owner.EditAsync(edited, body with { Lines = [new LineBody(phao, 2, 100_000, LineId: lineId, VatRateId: rate.Id())] })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal((10m, 20_000m), (resent.LineViewOf(phao).Money("vatPercent"), resent.Money("vatTotal")));
+
+        // A new receipt reads the percent the rate has now.
+        var second = await world.CompletedAsync(new LineBody(phao, 1, 100_000));
+        var newLine = second.LineViewOf(phao);
+        Assert.Equal((8m, 8_000m), (newLine.Money("vatPercent"), newLine.Money("vatAmount")));
+        Assert.Equal(rate.GetProperty("name").GetString(), newLine.GetProperty("vatRateName").GetString());
     }
 }

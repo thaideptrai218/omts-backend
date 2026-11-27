@@ -38,7 +38,7 @@ public sealed class PurchaseReturnQueryService(
             found.ReturnDate, found.Reason, found.Discount, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
             found.CancelledAt, found.CancelReason, new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty),
             value, PurchaseMoney.ReturnNet(found),
-            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity, l.VatRate, l.VatAmount)).ToList(),
+            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity, l.VatRateId, l.VatRateName, l.VatPercent, l.VatAmount)).ToList(),
             refunds.Select(p => new ReturnRefundView(p.Id, p.Code, p.PaymentDate, p.Amount, p.Method, p.BankReference, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt)).ToList(),
             RowVersionGuard.Encode(found.RowVersion),
             found.ReturnedAt,

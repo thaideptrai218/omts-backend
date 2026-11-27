@@ -20,11 +20,11 @@ public static class ReceiptLineUnits
     public static decimal NetPricePerBase(PurchaseReceiptLine line) =>
         decimal.Round(((line.EnteredUnitPrice ?? 0m) - line.EnteredDiscount) / line.UnitFactor, 4);
 
-    /// <summary>A price per base unit with the input VAT of <paramref name="rate"/> in it, exact to 4 decimals: 100,000 at 10% is 110,000. The VAT is part of what the goods cost, so it goes into the cost and the last purchase price.</summary>
-    public static decimal WithVat(decimal pricePerBase, VatRate? rate) => decimal.Round(pricePerBase * (1m + VatRates.Percent(rate) / 100m), 4);
+    /// <summary>A price per base unit with the input VAT of <paramref name="percent"/> (the percent a line took; null is none) in it, exact to 4 decimals: 100,000 at 10% is 110,000. The VAT is part of what the goods cost, so it goes into the cost and the last purchase price.</summary>
+    public static decimal WithVat(decimal pricePerBase, decimal? percent) => decimal.Round(pricePerBase * (1m + (percent ?? 0m) / 100m), 4);
 
     /// <summary>What one base unit cost on the line with its VAT: <see cref="NetPricePerBase"/> with the rate of the line; what the stock ledger posts for a receipt.</summary>
-    public static decimal CostPerBase(PurchaseReceiptLine line) => WithVat(NetPricePerBase(line), line.VatRate);
+    public static decimal CostPerBase(PurchaseReceiptLine line) => WithVat(NetPricePerBase(line), line.VatPercent);
 
     /// <summary>Sets the unit of a line and the figures that depend on it; the item may be null on a Draft line that has none yet.</summary>
     public static void SetUnit(PurchaseReceiptLine line, FarmingInputItem? item, InputItemUnit? unit)
@@ -51,7 +51,7 @@ public static class ReceiptLineUnits
         line.Quantity = quantity * line.UnitFactor;
         line.UnitPrice = PricePerBase(unitPrice, line.UnitFactor);
         line.ReturnValue = PurchaseMoney.LineAmount(quantity, unitPrice);
-        line.VatAmount = PurchaseMoney.ReturnLineVat(line.ReturnValue, line.VatRate);
+        line.VatAmount = PurchaseMoney.ReturnLineVat(line.ReturnValue, line.VatPercent);
     }
 
     /// <summary>Sets the typed values of a line and everything worked out from them, in the unit the line has.</summary>

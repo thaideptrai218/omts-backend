@@ -42,6 +42,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<InputUnit> InputUnits => Set<InputUnit>();
     public DbSet<InputItemUnit> InputItemUnits => Set<InputItemUnit>();
     public DbSet<InputItemCategory> InputItemGroups => Set<InputItemCategory>();
+    public DbSet<VatRate> VatRates => Set<VatRate>();
     public DbSet<InputItemPhoto> InputItemPhotos => Set<InputItemPhoto>();
     public DbSet<InputStockMovement> InputStockMovements => Set<InputStockMovement>();
     public DbSet<InputIssueType> InputIssueTypes => Set<InputIssueType>();

@@ -75,11 +75,11 @@ public static class PurchaseMoney
 
     /// <summary>
     /// The input VAT of one line, half up to the dong: the amount of the line less its share of the receipt discount (prorated by line amount, like <see cref="ReturnUnitPrice"/>) times the rate.
-    /// 100,000 at 10% is 10,000; with 10,000 off the receipt it is 9,000. No rate, KCT and 0% give 0.
+    /// 100,000 at 10% is 10,000; with 10,000 off the receipt it is 9,000. No rate, KCT and 0% give 0 (a percent of null or 0).
     /// </summary>
-    public static decimal LineVat(decimal lineAmount, decimal receiptTotal, decimal receiptDiscount, VatRate? rate)
+    public static decimal LineVat(decimal lineAmount, decimal receiptTotal, decimal receiptDiscount, decimal? percentOfLine)
     {
-        var percent = VatRates.Percent(rate);
+        var percent = percentOfLine ?? 0m;
         if (percent == 0m || lineAmount <= 0m || receiptTotal <= 0m)
         {
             return 0m;
@@ -94,12 +94,12 @@ public static class PurchaseMoney
         var total = Total(receipt.Lines);
         foreach (var line in receipt.Lines)
         {
-            line.VatAmount = LineVat(line.LineAmount, total, receipt.Discount, line.VatRate);
+            line.VatAmount = LineVat(line.LineAmount, total, receipt.Discount, line.VatPercent);
         }
     }
 
-    /// <summary>The VAT given back with a return line: its recorded value times the rate of the receipt line, half up to the dong; 0 without a rate.</summary>
-    public static decimal ReturnLineVat(decimal returnValue, VatRate? rate) => RoundHalfUp(returnValue * VatRates.Percent(rate) / 100m);
+    /// <summary>The VAT given back with a return line: its recorded value times the percent the receipt line took, half up to the dong; 0 without a percent.</summary>
+    public static decimal ReturnLineVat(decimal returnValue, decimal? percent) => RoundHalfUp(returnValue * (percent ?? 0m) / 100m);
 
     /// <summary>The VAT given back with a return: the sum of the VAT of its lines.</summary>
     public static decimal ReturnVat(PurchaseReturn purchaseReturn) => purchaseReturn.Lines.Sum(l => l.VatAmount);

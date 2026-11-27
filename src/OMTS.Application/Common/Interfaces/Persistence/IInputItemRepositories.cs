@@ -67,10 +67,36 @@ public interface IInputItemCategoryRepository
     void Remove(InputItemCategory group);
 }
 
+/// <summary>The VAT rate catalogue of the cooperative (a short list: every rate is loaded when a document needs one).</summary>
+public interface IVatRateRepository
+{
+    /// <summary>Every rate, active ones first and then by sort order; not tracked.</summary>
+    Task<IReadOnlyList<VatRate>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>Every rate keyed by id, for the lines of a document; not tracked.</summary>
+    Task<IReadOnlyDictionary<Guid, VatRate>> CatalogueAsync(CancellationToken cancellationToken);
+
+    Task<VatRate?> GetForEditAsync(Guid rateId, CancellationToken cancellationToken);
+
+    /// <summary>Every rate, tracked: a change of the default touches two rows.</summary>
+    Task<IReadOnlyList<VatRate>> GetAllForEditAsync(CancellationToken cancellationToken);
+
+    /// <summary>The rate named <paramref name="name"/> ignoring letter case, other than the given one; not tracked.</summary>
+    Task<VatRate?> FindByNameAsync(string name, Guid? exceptRateId, CancellationToken cancellationToken);
+
+    /// <summary>How many items (not deleted) have each rate; a rate with none is absent.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> ItemCountsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Every item (deleted ones too) that has the rate, tracked: they move to another rate when the rate is deactivated.</summary>
+    Task<IReadOnlyList<FarmingInputItem>> ItemsOfAsync(Guid rateId, CancellationToken cancellationToken);
+
+    void Add(VatRate rate);
+}
+
 /// <summary>Filters of the item list; null means "any". The period is on the business date of the creation.</summary>
 public sealed record InputItemFilter(
     string? Search, InputItemGroup? Group, Guid? ItemGroupId, InputStockState Stock, Guid? SupplierId, DateTimeOffset? CreatedFrom, DateTimeOffset? CreatedBefore,
-    int? StatusId, InputItemSort Sort, bool Descending, PurchaseReceiptKind? Kind = null, VatRate? PurchaseVatRate = null);
+    int? StatusId, InputItemSort Sort, bool Descending, PurchaseReceiptKind? Kind = null, Guid? PurchaseVatRateId = null);
 
 public enum InputStockState
 {

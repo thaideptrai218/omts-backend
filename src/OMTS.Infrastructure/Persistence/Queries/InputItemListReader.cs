@@ -81,9 +81,9 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
             items = kind == PurchaseReceiptKind.Seed ? items.Where(i => i.Group == InputItemGroup.Seed) : items.Where(i => i.Group != InputItemGroup.Seed);
         }
 
-        if (filter.PurchaseVatRate is { } vatRate)
+        if (filter.PurchaseVatRateId is { } vatRateId)
         {
-            items = items.Where(i => i.PurchaseVatRate == vatRate);
+            items = items.Where(i => i.PurchaseVatRateId == vatRateId);
         }
 
         if (filter.ItemGroupId is { } itemGroupId)

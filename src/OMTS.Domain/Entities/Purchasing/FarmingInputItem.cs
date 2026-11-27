@@ -47,10 +47,11 @@ public class FarmingInputItem : AuditableEntity, IHasStatus
     public int? MaturityDays { get; set; }
 
     /// <summary>
-    /// The input VAT rate a receipt line of this item starts with ("VAT mua vào"). Seed is always <see cref="VatRate.Kct"/> (the farm sells oysters, which are not subject to VAT, so input VAT is never deducted and goes into the cost);
-    /// a supply item is created at 10%. A receipt line copies it and may differ; changing it here never touches a receipt.
+    /// The input VAT rate a receipt line of this item starts with ("VAT mua vào"). Seed is always the system rate KCT (the farm sells oysters, which are not subject to VAT, so input VAT is never deducted and goes into the cost);
+    /// a supply item is created at the default rate. A receipt line copies the rate and may differ; changing it here never touches a receipt.
     /// </summary>
-    public VatRate PurchaseVatRate { get; set; } = VatRate.Kct;
+    public Guid PurchaseVatRateId { get; set; } = VatRateIds.Kct;
+    public VatRate PurchaseVatRate { get; set; } = null!;
 
     public ICollection<InputItemUnit> Units { get; set; } = [];
     public ICollection<InputItemPhoto> Photos { get; set; } = [];

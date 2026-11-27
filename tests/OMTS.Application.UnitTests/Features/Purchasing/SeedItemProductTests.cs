@@ -19,6 +19,7 @@ public sealed class SeedItemProductTests
             h["IsSeedInUseAsync"] = _ => seedInUse;
         }),
         null!, null!, null!,
+        StubProxy.Create<IVatRateRepository>(h => h["CatalogueAsync"] = _ => VatKit.Catalogue()),
         StubProxy.Create<IProductRepository>(h => h["GetForEditAsync"] = a => product is not null && (Guid)a[0]! == product.Id ? product : null),
         null!, null!, null!, null!, null!, null!, null!, null!, null!, null!);
 
