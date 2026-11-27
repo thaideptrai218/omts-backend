@@ -16,6 +16,8 @@ internal static class EmployeeProfileChanges
         employee.Address = input.Address;
         employee.Area = input.Area;
         employee.Ward = input.Ward;
+        employee.ProvinceCode = input.ProvinceCode;
+        employee.WardCode = input.WardCode;
         employee.OtherInformation = input.OtherInformation;
         employee.Notes = input.Notes;
         employee.BankAccount = input.BankAccount;
@@ -34,6 +36,8 @@ internal static class EmployeeProfileChanges
         employee.Address = input.Address;
         employee.Area = input.Area;
         employee.Ward = input.Ward;
+        employee.ProvinceCode = input.ProvinceCode;
+        employee.WardCode = input.WardCode;
         employee.OtherInformation = input.OtherInformation;
         employee.Notes = input.Notes;
         employee.BankAccount = input.BankAccount;

@@ -4,6 +4,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.AccessManagement.Dtos;
@@ -22,6 +23,7 @@ public sealed class EmployeeQueryService(
     IPayrollReader payrollReader,
     IPayrollWorkReader workReader,
     IEmployeeSalaryRepository salaries,
+    IFileStorage storage,
     ICurrentUser currentUser,
     PermissionService permissions,
     TimeProvider timeProvider)
@@ -55,7 +57,13 @@ public sealed class EmployeeQueryService(
         }
 
         var (items, total) = await employees.SearchAsync(filter.Value, FirstZones(caller), page, pageSize, cancellationToken);
-        var listed = items.Select(e => views.ListItem(e, caller)).ToList();
+        var listed = new List<EmployeeListItem>(items.Count);
+        foreach (var e in items)
+        {
+            var row = views.ListItem(e, caller);
+            listed.Add(e.PhotoUrl is { } key ? row with { PhotoUrl = await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) } : row);
+        }
+
         return new Paged<EmployeeListItem>(await WithPayrollFiguresAsync(listed, cancellationToken), page, pageSize, total);
     }
 
@@ -178,6 +186,7 @@ public sealed class EmployeeQueryService(
     {
         var hasStaffAccount = employee.PhoneNumber is { } phone
             && await accounts.FindByPhoneAsync(phone, cancellationToken) is { SubjectType: SubjectType.Staff };
-        return views.View(employee, caller, hasStaffAccount);
+        var view = views.View(employee, caller, hasStaffAccount);
+        return employee.PhotoUrl is { } key ? view with { PhotoUrl = await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) } : view;
     }
 }

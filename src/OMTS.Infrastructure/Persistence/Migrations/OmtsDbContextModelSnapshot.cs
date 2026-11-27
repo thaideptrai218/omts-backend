@@ -2841,6 +2841,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("PhotoUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ProvinceCode")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -2862,6 +2868,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Ward")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("WardCode")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

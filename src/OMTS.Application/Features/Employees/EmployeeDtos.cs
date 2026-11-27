@@ -39,6 +39,8 @@ public sealed record LinkEmployeeAccountRequest(Guid? AccountId);
 /// <param name="Gender">Optional. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
 /// <param name="IdNumber">Optional, 9 or 12 digits. Null on an edit leaves it, an empty text clears it. Never in a file.</param>
 /// <param name="StartDate">Optional first day of work, not after today. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
+/// <param name="ProvinceCode">The province picked from the administrative units list; <paramref name="Area"/> is its name. Null keeps a typed name without a code.</param>
+/// <param name="WardCode">The ward of that province; <paramref name="Ward"/> is its name. Needs <paramref name="ProvinceCode"/>.</param>
 public sealed record SaveEmployeeRequest(
     string? FullName,
     string? PhoneNumber,
@@ -59,7 +61,9 @@ public sealed record SaveEmployeeRequest(
     string? Code = null,
     Gender? Gender = null,
     string? IdNumber = null,
-    DateOnly? StartDate = null);
+    DateOnly? StartDate = null,
+    int? ProvinceCode = null,
+    int? WardCode = null);
 
 /// <param name="ZoneId">One of the caller's zones.</param>
 public sealed record AddWorkingZoneRequest(Guid? ZoneId);
@@ -87,6 +91,8 @@ public sealed record EmployeeBankAccountView(string BankName, string AccountNumb
 /// <param name="Code">Null only for a profile older than the code; every profile has one after the migration.</param>
 /// <param name="Birthday">This and the other personal fields (gender, ID number, start date, address…), down to <paramref name="BankAccount"/>, only when <paramref name="CanMaintain"/>.</param>
 /// <param name="Account">The linked staff account; for the Cooperative Owner only.</param>
+/// <param name="ProvinceCode">The codes of the address, with the personal fields.</param>
+/// <param name="PhotoUrl">A temporary address of the photo; null without one.</param>
 public sealed record EmployeeView(
     Guid Id,
     string? Code,
@@ -111,7 +117,10 @@ public sealed record EmployeeView(
     string? Notes,
     EmployeeBankAccountView? BankAccount,
     LinkedAccountView? Account,
-    string RowVersion);
+    string RowVersion,
+    int? ProvinceCode = null,
+    int? WardCode = null,
+    string? PhotoUrl = null);
 
 /// <param name="Account">The linked account's basic identity and status, within the caller's employee scope. Managing accounts remains Owner-only.</param>
 /// <param name="MonthHours">Paid hours worked from the first of this month to today (break deducted, as the payroll counts them); only for a caller with PAYROLL View (Owner, Accountant), else null.</param>
@@ -132,7 +141,8 @@ public sealed record EmployeeListItem(
     string RowVersion,
     decimal? MonthHours = null,
     decimal? OutstandingWage = null,
-    SalaryType? SalaryType = null);
+    SalaryType? SalaryType = null,
+    string? PhotoUrl = null);
 
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>

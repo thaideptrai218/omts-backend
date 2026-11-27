@@ -42,6 +42,13 @@ public class Employee : AuditableEntity, IHasStatus
     public string? Address { get; set; }
     public string? Area { get; set; }
     public string? Ward { get; set; }
+
+    /// <summary>The codes of <see cref="Area"/> (the province) and <see cref="Ward"/> in the administrative units list; null for an entry typed before the picker or not matched.</summary>
+    public int? ProvinceCode { get; set; }
+    public int? WardCode { get; set; }
+
+    /// <summary>Storage key of the photo (JPEG or PNG, at most 2 MB).</summary>
+    public string? PhotoUrl { get; set; }
     public string? OtherInformation { get; set; }
     public string? Notes { get; set; }
 
