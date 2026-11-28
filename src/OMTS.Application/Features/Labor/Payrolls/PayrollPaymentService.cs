@@ -19,7 +19,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Labor.Payrolls;
 
 /// <summary>
-/// LABOR-14 for the Cooperative Owner: pays the payslips of a Finalized sheet, or pays an employee outside any sheet (oldest payslips first, the
+/// LABOR-14 for the Cooperative Owner and the Accountant (PAYROLL Create/Edit): pays the payslips of a Finalized sheet, or pays an employee outside any sheet (oldest payslips first, the
 /// rest an advance). Each payment is one wage payment and one cash voucher (a payment voucher of the Payroll type, party the employee) saved
 /// together with the audit record, so the cash book shows it at once. A payslip that is paid meanwhile by another request is touched by this
 /// save, which then meets a new row version and answers MSG06: the same send twice never pays twice. A client may also send an
