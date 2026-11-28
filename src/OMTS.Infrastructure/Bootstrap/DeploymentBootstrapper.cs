@@ -33,6 +33,7 @@ public sealed class DeploymentBootstrapper(
     TimeProvider timeProvider,
     AddressCodeBackfill addressCodes,
     RetiredSeasonalPasswordCleanup retiredSeasonalPassword,
+    WorkDayPlanDataMove workDayPlanMove,
     IServiceProvider services)
 {
     public const int Success = 0;
@@ -129,6 +130,9 @@ public sealed class DeploymentBootstrapper(
         }
 
         messages.Add(await retiredSeasonalPassword.RunAsync(cancellationToken));
+
+        // The open harvest plans get the work-day plans of their lines (idempotent, and never a reason to fail).
+        messages.Add(await workDayPlanMove.RunAsync(cancellationToken));
 
         // Last, and never a reason to fail: it only needs the outside list of provinces and wards, which may be out of reach.
         messages.Add(await addressCodes.RunAsync(cancellationToken));

@@ -225,6 +225,7 @@ public static class DependencyInjection
 
         services.AddScoped<AddressCodeBackfill>();
         services.AddScoped<RetiredSeasonalPasswordCleanup>();
+        services.AddScoped<WorkDayPlanDataMove>();
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
 
@@ -266,6 +267,11 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<LoginSessionCleanupJob>();
         services.AddHostedService<LoginSessionCleanupHostedService>();
+
+        // Invitations to a work-day plan that were not answered before their deadline expire, every minute
+        services.AddOptions<WorkDayPlanExpiryOptions>().Bind(configuration.GetSection(WorkDayPlanExpiryOptions.SectionName));
+        services.AddSingleton<WorkDayPlanExpiryJob>();
+        services.AddHostedService<WorkDayPlanExpiryHostedService>();
         services.AddHealthChecks().AddReadinessChecks();
 
         return services;

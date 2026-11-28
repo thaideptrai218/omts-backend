@@ -201,6 +201,14 @@ public sealed class CashVoucherService(
                 ErrorKind.Conflict, PayrollMessages.PayrollVoucherNotCancellable(voucher.Code), new Dictionary<string, object?> { ["reasonCode"] = "PAYROLL_VOUCHER" });
         }
 
+        // The pay of people hired outside is made by the work-day plan, whose line points at the voucher.
+        if (voucher.TypeId == CashVoucherTypeIds.PaymentOutsiderLabour)
+        {
+            return AppError.Conflict(
+                UserMessages.WorkPlanRefused($"Phiếu chi {voucher.Code} là tiền nhân công thuê ngoài của một kế hoạch ngày làm nên không hủy trong sổ quỹ."),
+                new Dictionary<string, object?> { ["reasonCode"] = "OUTSIDER_VOUCHER" });
+        }
+
         var reason = SupplierPaymentRules.Trimmed(request.Reason);
         if (reason?.Length > CashBookRules.MaxReasonLength)
         {

@@ -3,7 +3,10 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Application.Features.WorkDayPlans;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Harvest.Plans;
@@ -73,7 +76,8 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
                 HarvestPlanRules.LineState(fact),
                 line.Lot is { } lot ? new HarvestPlanLotView(lot.Id, lot.LotCode, lot.CageCount, lot.EstimatedKg, lot.HarvestedAt) : null,
                 lanes, canHarvest, HarvestPlanRules.LineLocked(fact),
-                line.Lot is null && maturity.TryGetValue(line.RaftId, out var cycle) ? cycle.ExpectedHarvestDate : null));
+                line.Lot is null && maturity.TryGetValue(line.RaftId, out var cycle) ? cycle.ExpectedHarvestDate : null,
+                WorkPlanOf(line)));
         }
 
         var hasLot = plan.Lines.Any(l => l.Lot is not null);
@@ -82,7 +86,7 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
             Ref(plan.CreatedByAccountId), plan.AssignedAt, Ref(plan.AssignedByAccountId), plan.CompletedAt, plan.CancelledAt, Ref(plan.CancelledByAccountId), plan.CancelReason,
             lineViews, OrderViews(plan), Progress(visible),
             HarvestPlanRules.AllowedActions(plan.StatusId, caller, hasLot, canHarvestNow, mayHarvest.Values.Any(m => m), HarvestPlanProgress.AllDone(plan), plan.Executor),
-            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion), HarvestPlanRosterRules.Summary(plan));
+            plan.CreatedAt, RowVersionGuard.Encode(plan.RowVersion), StaffingOf(plan));
     }
 
     public async Task<IReadOnlyList<HarvestPlanListItem>> ListItemsAsync(IReadOnlyList<HarvestPlan> plans, CancellationToken cancellationToken)
@@ -98,8 +102,35 @@ public sealed class HarvestPlanViews(IAccountRepository accounts, IStatusCatalog
                 visible.OrderBy(l => l.LineNumber).Select(l => l.Raft.Code).Distinct().ToList(), OrderViews(p), Progress(visible),
                 names.GetValueOrDefault(p.CreatedByAccountId), RowVersionGuard.Encode(p.RowVersion),
                 visible.Any(l => l.ExpectedCageCount is not null) ? visible.Sum(l => l.ExpectedCageCount ?? 0m) : null,
-                HarvestPlanRosterRules.Summary(p));
+                StaffingOf(p));
         }).ToList();
+    }
+
+    private static HarvestLineWorkPlanView? WorkPlanOf(HarvestPlanLine line) => line.WorkDayPlan is { } w
+        ? new HarvestLineWorkPlanView(w.Id, w.Code, w.Status, w.RequiredPeople, WorkDayPlanRules.Present(w), WorkDayPlanRules.Missing(w), WorkDayPlanRules.IsFull(w))
+        : null;
+
+    /// <summary>
+    /// The people of a plan: the sum over the work-day plans of its lines (the people needed, confirmed, invited, declined and hired outside; ready when every plan is staffed). A plan whose lines have no work-day plan yet
+    /// (made before them) still reads its old roster.
+    /// </summary>
+    private static HarvestPlanStaffingSummary StaffingOf(HarvestPlan plan)
+    {
+        var works = plan.Lines.Select(l => l.WorkDayPlan).OfType<WorkDayPlan>().Where(w => w.Status != WorkDayPlanStatus.Cancelled).ToList();
+        if (works.Count == 0)
+        {
+            return HarvestPlanRosterRules.Summary(plan);
+        }
+
+        var confirmed = works.Sum(w => w.Members.Count(m => m.IsConfirmed));
+        return new HarvestPlanStaffingSummary(
+            works.Sum(w => w.RequiredPeople),
+            confirmed,
+            works.Sum(w => w.Members.Count(m => m.State == WorkDayMemberState.Invited)),
+            works.Sum(w => w.Members.Count(m => m.State == WorkDayMemberState.Declined)),
+            works.Sum(w => w.OutsiderHires.Sum(h => h.People)),
+            works.Sum(WorkDayPlanRules.Missing),
+            works.All(w => WorkDayPlanRules.IsStaffed(w.Status)));
     }
 
     public HarvestPlanOrderView OrderView(SalesOrder order) => new(

@@ -8,6 +8,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.WorkDayPlans;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
@@ -32,6 +33,7 @@ public sealed class HarvestPlanService(
     HarvestPlanProgress progress,
     HarvestPlanNotifier notifier,
     HarvestPlanStaffingService staffing,
+    WorkDayPlanHarvestLink workPlans,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -96,6 +98,8 @@ public sealed class HarvestPlanService(
             plan.Orders.Add(new SalesOrderHarvestPlan { OrderId = order.Id, PlanId = plan.Id });
         }
 
+        // Each line has the work-day plan of the people who harvest it.
+        await workPlans.EnsurePlansAsync(plan, RequiredByLine(entries), cancellationToken);
         plans.Add(plan);
         audit.Record(new AuditEntry("HarvestPlan.Created", RecordType) { RecordId = plan.Id, RecordCode = plan.Code, After = Snapshot(plan, ready.Orders.ToDictionary(o => o.Id, o => o.Code)) });
         if (await SaveAsync(plan, cancellationToken) is { } error)
@@ -178,6 +182,12 @@ public sealed class HarvestPlanService(
         // The crew chosen for the lines goes with them: to the new day, and off a line that is taken out or moved to another raft. Checked before the plan changes.
         var newDate = BusinessClock.ToBusinessDate(ready.PlannedAt);
         var leaving = plan.Lines.Where(l => entries.Lines.FirstOrDefault(e => e.Id == l.Id) is not { } kept || kept.RaftId != l.RaftId).Select(l => l.Id).ToHashSet();
+        var keptLines = plan.Lines.Where(l => entries.Lines.Any(e => e.Id == l.Id)).ToDictionary(l => l.Id, l => ready.Rafts[entries.Lines.First(e => e.Id == l.Id).RaftId]);
+        if (await workPlans.FollowAsync(plan, ready.PlannedAt, newDate, keptLines, cancellationToken) is { } workPlanRefused)
+        {
+            return workPlanRefused;
+        }
+
         if (await staffing.FollowAsync(plan, newDate, leaving, cancellationToken) is { } staffingRefused)
         {
             return staffingRefused;
@@ -191,6 +201,7 @@ public sealed class HarvestPlanService(
         plan.Note = entries.Note;
         ApplyOrders(plan, ready.Orders);
         ApplyLines(plan, entries, ready);
+        await workPlans.EnsurePlansAsync(plan, RequiredByLine(entries), cancellationToken);
         unitOfWork.MarkChanged(plan);
         if (!isDraft)
         {
@@ -266,10 +277,18 @@ public sealed class HarvestPlanService(
             return clash;
         }
 
+        // A plan is handed out once every raft has the people it needs.
+        await workPlans.EnsurePlansAsync(plan, new Dictionary<int, int?>(), cancellationToken);
+        if (WorkDayPlanHarvestLink.GateAssign(plan) is { } shortOfPeople)
+        {
+            return shortOfPeople;
+        }
+
         var me = currentUser.AccountId!.Value;
         plan.AssignedAt = timeProvider.GetUtcNow();
         plan.AssignedByAccountId = me;
         plan.Executor = executor;
+        await workPlans.ApplyExecutorAsync(plan, cancellationToken);
         progress.Move(plan, StatusIds.HarvestPlan.Assigned);
         audit.Record(new AuditEntry("HarvestPlan.ExecutorSet", RecordType) { RecordId = plan.Id, RecordCode = plan.Code, After = new { Executor = executor.ToString() } });
         // A plan the Owner harvests himself is not handed to anyone: the Zone Managers are not told and never see it.
@@ -370,6 +389,8 @@ public sealed class HarvestPlanService(
         {
             return staffingRefused;
         }
+
+        await workPlans.CancelAsync(plan, reason, cancellationToken);
 
         plan.CancelledAt = timeProvider.GetUtcNow();
         plan.CancelledByAccountId = currentUser.AccountId;
@@ -668,6 +689,9 @@ public sealed class HarvestPlanService(
         var saved = UserMessages.Saved($"{HarvestPlanCodeService.ObjectName} {plan.Code}");
         return new HarvestPlanSaved(await views.ViewAsync(plan, cancellationToken), saved.Text, saved.Code);
     }
+
+    /// <summary>The people each line needs as sent, by line number; a line that sends none keeps (or starts with) its own number.</summary>
+    private static IReadOnlyDictionary<int, int?> RequiredByLine(HarvestPlanEntries entries) => entries.Lines.ToDictionary(l => l.LineNumber, l => l.RequiredPeople);
 
     private static object Snapshot(HarvestPlan plan, IReadOnlyDictionary<Guid, string> orderCodes) => new
     {

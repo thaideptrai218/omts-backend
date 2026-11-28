@@ -27,6 +27,7 @@ public sealed class AttendanceRecordingService(
     IAttendanceRepository attendances,
     IWorkEmployeeReader employeeReader,
     IEmployeeRequestRepository requests,
+    IWorkDayPlanRepository workPlans,
     ZoneAccessGuard zones,
     PayPeriodLock payPeriods,
     IAttendanceQrCodes qrCodes,
@@ -266,6 +267,11 @@ public sealed class AttendanceRecordingService(
         {
             RecordId = record.Id, RecordCode = employee.Code, ZoneId = zoneId, Before = before, After = Snapshot(record), Reason = reason,
         });
+        if (isCheckIn)
+        {
+            await StartPlansAsync(employee.Id, day, cancellationToken);
+        }
+
         if (save)
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -276,6 +282,28 @@ public sealed class AttendanceRecordingService(
             ? WorkMessages.CheckOutWithoutCheckIn(employee.FullName, time)
             : UserMessages.Saved($"{name} of {employee.FullName} at {BusinessClock.Format(time)[..5]}");
         return new RecordedTime(record, message);
+    }
+
+    /// <summary>The first check-in of a person on a work-day plan starts the plan: Staffing or Ready becomes InProgress. Nothing is saved.</summary>
+    private async Task StartPlansAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken)
+    {
+        var planIds = (await assignments.ListOfEmployeesAsync([employeeId], day, cancellationToken)).Select(a => a.WorkDayPlanId).OfType<Guid>().Distinct().ToList();
+        foreach (var planId in planIds)
+        {
+            if (await workPlans.GetForEditAsync(planId, cancellationToken) is not { Status: WorkDayPlanStatus.Staffing or WorkDayPlanStatus.Ready } plan)
+            {
+                continue;
+            }
+
+            var from = plan.Status;
+            plan.Status = WorkDayPlanStatus.InProgress;
+            unitOfWork.MarkChanged(plan);
+            audit.Record(new AuditEntry("WorkDayPlan.StatusChanged", nameof(WorkDayPlan))
+            {
+                RecordId = plan.Id, RecordCode = plan.Code, ZoneId = plan.ZoneId, Before = new { Status = from.ToString() }, After = new { Status = plan.Status.ToString() },
+                Reason = "First check-in on the plan.",
+            });
+        }
     }
 
     private static AppError Recorded(Employee employee, string what, DateTimeOffset time) => AppError.Conflict(

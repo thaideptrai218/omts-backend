@@ -140,6 +140,12 @@ public static class NotificationTypes
     /// <summary>An employee accepted or declined a harvest plan; to the Owners and, for a plan harvested by Zone Managers, the Zone Managers of its zones. Opens the harvest plan.</summary>
     public const string HarvestShiftResponded = "HARVEST_SHIFT_RESPONDED";
 
+    /// <summary>An employee was invited to a work-day plan and has until the deadline to answer; to the employee (the answer is given by phone or Zalo until the Mini App answers).</summary>
+    public const string WorkDayPlanInvited = "WORK_DAY_PLAN_INVITED";
+
+    /// <summary>The staffing of a work-day plan moved: it is full, short again, or invitations expired with people still missing; to the person in charge. Opens the plan.</summary>
+    public const string WorkDayPlanStaffing = "WORK_DAY_PLAN_STAFFING";
+
     /// <summary>MSG-CLAIM-05, a new sales return, to the Cooperative Owner (BR-CLAIM-03); to the Accountant the same message goes as <see cref="CustomerMoneyOwedBack"/>, only when money is owed back.</summary>
     public const string SalesReturnRecorded = "SALES_RETURN_RECORDED";
 
@@ -237,6 +243,9 @@ public static class NotificationTypes
         new(HarvestShiftInvited, "Harvest shift invited", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
         new(HarvestShiftResponded, "Harvest shift responded", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
+        new(WorkDayPlanInvited, "Work-day plan invited", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new(WorkDayPlanStaffing, "Work-day plan staffing", Default, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
         new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
@@ -270,6 +279,8 @@ public static class NotificationTypes
         ["WORK_PLAN_STAFF_RESPONDED"] = NotificationCategories.Work,
         [HarvestShiftInvited] = NotificationCategories.Work,
         [HarvestShiftResponded] = NotificationCategories.Work,
+        [WorkDayPlanInvited] = NotificationCategories.Work,
+        [WorkDayPlanStaffing] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_INVITED"] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_ASSIGNED"] = NotificationCategories.Work,
         ["PURCHASE_SHIFT_RESPONDED"] = NotificationCategories.Work,

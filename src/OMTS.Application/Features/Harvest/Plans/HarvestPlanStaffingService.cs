@@ -139,7 +139,8 @@ public sealed class HarvestPlanStaffingService(
     /// </summary>
     public async Task<AppError?> FollowAsync(HarvestPlan plan, DateOnly newDate, IReadOnlySet<Guid> leavingLineIds, CancellationToken cancellationToken)
     {
-        var linked = await assignments.ListOfPlanLinesAsync(plan.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        // The assignments made for a work-day plan follow it through the plan of the line; the rest follow here.
+        var linked = (await assignments.ListOfPlanLinesAsync(plan.Lines.Select(l => l.Id).ToList(), cancellationToken)).Where(a => a.WorkDayPlanId is null).ToList();
         if (linked.Count == 0)
         {
             return null;

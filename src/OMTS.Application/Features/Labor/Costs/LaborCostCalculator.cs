@@ -1,6 +1,8 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Features.Labor.Work;
+using OMTS.Application.Features.WorkDayPlans;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Labor.Costs;
@@ -28,6 +30,20 @@ public static class LaborCostCalculator
     public static IReadOnlyList<RaftDayCost> Calculate(DateOnly from, DateOnly to, PayrollWorkData data) =>
         CalculatePieces(from, to, data).GroupBy(p => (p.RaftId, p.ZoneId, p.Date))
             .Select(g => new RaftDayCost(g.Key.RaftId, g.Key.ZoneId, g.Key.Date, g.Sum(p => p.Amount))).OrderBy(c => c.Date).ToList();
+
+    /// <summary>The "employee" an outsider line is booked under, so it shares the pieces, the split by job type and the totals of the cost.</summary>
+    public static readonly Guid OutsiderEmployeeId = Guid.Empty;
+
+    /// <summary>
+    /// The people hired outside for the day of a work-day plan (the plans that are not cancelled): People times the rate on the raft of the plan, or on its zone for a nursery plan, as shifts of a seasonal worker
+    /// of the job type of the plan's kind. They are outside payroll and cost their agreed pay from the day they are hired, paid or not.
+    /// </summary>
+    public static IReadOnlyList<LaborCostPiece> OutsiderPieces(IEnumerable<PlanOutsiderHire> hires, IReadOnlyDictionary<Guid, JobType> jobTypes) =>
+        hires.Where(h => h.Plan.Status != WorkDayPlanStatus.Cancelled && h.Amount > 0)
+            .Select(h => new LaborCostPiece(
+                h.Plan.RaftId, h.Plan.ZoneId, h.Plan.WorkDate, OutsiderEmployeeId,
+                jobTypes.Values.FirstOrDefault(j => string.Equals(j.Name, WorkDayPlanRules.JobNameOf(h.Plan.Kind), StringComparison.OrdinalIgnoreCase))?.Id ?? Guid.Empty,
+                0, h.Amount, PayLineKind.Shift, h.People, EmployeeType.SeasonalWorker)).ToList();
 
     public static IReadOnlyList<LaborCostPiece> CalculatePieces(DateOnly from, DateOnly to, PayrollWorkData data)
     {

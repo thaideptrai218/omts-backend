@@ -77,7 +77,7 @@ public sealed class WorkAssignmentService(
             return AppError.NotUsableChoice($"Employee {left.FullName}", statusCatalog.DisplayNameOf(StatusIds.Employee.Left), "Employees");
         }
 
-        if (await PlaceAsync(people, date, place, jobType, request.MoveExisting, null, cancellationToken) is { } refused)
+        if (await PlaceAsync(people, date, place, jobType, request.MoveExisting, null, null, null, cancellationToken) is { } refused)
         {
             return refused;
         }
@@ -126,6 +126,11 @@ public sealed class WorkAssignmentService(
                 return AppError.Forbidden;
             }
 
+            if (assignment.WorkDayPlanId is not null)
+            {
+                return OnPlan(assignment);
+            }
+
             if (await RefuseChangeAsync(assignment, cancellationToken) is { } refused)
             {
                 return refused;
@@ -153,7 +158,7 @@ public sealed class WorkAssignmentService(
                 return AppError.NotUsableChoice($"Employee {left.FullName}", statusCatalog.DisplayNameOf(StatusIds.Employee.Left), "Employees");
             }
 
-            if (await PlaceAsync(people, date, place, jobType, moveExisting, line.Id, cancellationToken) is { } placed)
+            if (await PlaceAsync(people, date, place, jobType, moveExisting, line.Id, null, null, cancellationToken) is { } placed)
             {
                 return placed;
             }
@@ -175,12 +180,91 @@ public sealed class WorkAssignmentService(
     }
 
     /// <summary>
+    /// The people who are confirmed on a work-day plan get the first assignment of the plan's day on its place (the raft, or the zone for a nursery plan) with the job type of its kind, linked to the plan, by the rules of
+    /// <see cref="AssignAsync"/>: an open pay period, nobody checked in, and a person already on another raft (or on another plan) that day moved only with <paramref name="moveExisting"/> (MSG-LABOR-06). Nothing is saved:
+    /// the caller adds its own audit record and saves once. Returns the assignment each person has for the plan.
+    /// </summary>
+    public async Task<Result<IReadOnlyDictionary<Guid, WorkAssignment>>> StagePlanCrewAsync(
+        WorkDayPlan plan, Guid jobTypeId, IReadOnlyList<Guid> employeeIds, bool moveExisting, CancellationToken cancellationToken)
+    {
+        if (employeeIds.Count is < 1 or > MaxEmployees || employeeIds.Distinct().Count() != employeeIds.Count || employeeIds.Any(i => i == Guid.Empty))
+        {
+            return AppError.InvalidFields(["Employees"]);
+        }
+
+        if (plan.WorkDate < timeProvider.Today())
+        {
+            return AppError.Invalid("Date (today or later)");
+        }
+
+        var chosen = await ChooseAsync(plan.RaftId, plan.ZoneId, jobTypeId, PermissionAction.Create, cancellationToken);
+        if (!chosen.IsSuccess)
+        {
+            return chosen.Error!;
+        }
+
+        var (place, jobType) = chosen.Value;
+        var people = await employeeReader.GetForWorkAsync(employeeIds, cancellationToken);
+        if (people.Count != employeeIds.Count)
+        {
+            return AppError.Invalid("Employees");
+        }
+
+        if (people.FirstOrDefault(e => !WorkRules.IsEmployedOn(e, plan.WorkDate)) is { } left)
+        {
+            return AppError.NotUsableChoice($"Employee {left.FullName}", statusCatalog.DisplayNameOf(StatusIds.Employee.Left), "Employees");
+        }
+
+        var placed = new List<WorkAssignment>();
+        if (await PlaceAsync(people, plan.WorkDate, place, jobType, moveExisting, null, plan.Id, placed, cancellationToken) is { } refused)
+        {
+            return refused;
+        }
+
+        return Result<IReadOnlyDictionary<Guid, WorkAssignment>>.Success(placed.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.Last()));
+    }
+
+    /// <summary>
+    /// Takes the assignment of a member who is taken off a work-day plan, as <see cref="RemoveAsync"/> does (the zone right, the day not past, nobody checked in, the pay period open: MSG-LABOR-07
+    /// for a person who checked in). Nothing is saved.
+    /// </summary>
+    public async Task<AppError?> StageRemovePlanAssignmentAsync(WorkAssignment assignment, CancellationToken cancellationToken)
+    {
+        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.ZoneId, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
+        if (await RefuseChangeAsync(assignment, cancellationToken) is { } refused)
+        {
+            return refused;
+        }
+
+        assignments.Remove(assignment);
+        audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
+        {
+            RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = assignment.ZoneId,
+            Before = Snapshot(assignment.Employee, assignment.Date, PlaceOf(assignment), assignment.JobType),
+        });
+        return null;
+    }
+
+    /// <summary>An assignment made for a work-day plan is changed through the plan (409, <c>reasonCode</c> ASSIGNMENT_ON_PLAN).</summary>
+    private static AppError OnPlan(WorkAssignment assignment) => AppError.Conflict(
+        UserMessages.WorkPlanRefused($"Phân công của {assignment.Employee.FullName} thuộc một kế hoạch ngày làm. Hãy đổi hoặc bỏ người này trong kế hoạch ngày làm."),
+        new Dictionary<string, object?> { ["reasonCode"] = "ASSIGNMENT_ON_PLAN", ["workDayPlanId"] = assignment.WorkDayPlanId });
+
+    private static bool OnAnotherPlan(WorkAssignment first, Guid? workDayPlanId) =>
+        workDayPlanId is { } planId && first.WorkDayPlanId is { } other && other != planId;
+
+    /// <summary>
     /// The rules every first assignment of a day follows (LABOR-02.0), checked for all the employees before anything changes: the pay period is open, no one is checked in, and an employee on another raft is moved only
     /// with <paramref name="moveExisting"/>. Then each gets the assignment or has it changed, and the zone joins the working zones. Nothing is saved: the caller saves. <paramref name="planLineId"/> links the
     /// assignments to a harvest plan line; a plain assignment that moves one to another raft clears the link.
     /// </summary>
     private async Task<AppError?> PlaceAsync(
-        IReadOnlyList<Employee> people, DateOnly date, Place place, JobType jobType, bool moveExisting, Guid? planLineId, CancellationToken cancellationToken)
+        IReadOnlyList<Employee> people, DateOnly date, Place place, JobType jobType, bool moveExisting, Guid? planLineId, Guid? workDayPlanId, List<WorkAssignment>? placed,
+        CancellationToken cancellationToken)
     {
         if (await payPeriods.CheckAsync(date, cancellationToken) is { } locked)
         {
@@ -200,8 +284,14 @@ public sealed class WorkAssignmentService(
         var elsewhere = people
             .Where(e => !Finished(e))
             .Select(e => (Employee: e, First: existing[e.Id].FirstOrDefault(w => w.StartsAt is null)))
-            .Where(x => x.First is not null && !place.Holds(x.First))
+            .Where(x => x.First is not null && (!place.Holds(x.First) || OnAnotherPlan(x.First, workDayPlanId)))
             .ToList();
+        // The people of a work-day plan are moved through the plan, so its members and its count stay right.
+        if (workDayPlanId is null && elsewhere.FirstOrDefault(x => x.First!.WorkDayPlanId is not null) is { First: { } planned })
+        {
+            return OnPlan(planned);
+        }
+
         if (elsewhere.Count > 0 && !moveExisting)
         {
             var (employee, first) = elsewhere[0];
@@ -224,7 +314,7 @@ public sealed class WorkAssignmentService(
         {
             if (Finished(employee))
             {
-                ReopenDay(employee, attended[employee.Id], existing[employee.Id].ToList(), date, place, jobType, planLineId, account);
+                placed?.Add(ReopenDay(employee, attended[employee.Id], existing[employee.Id].ToList(), date, place, jobType, planLineId, workDayPlanId, account));
                 AddWorkingZone(employee, place.ZoneId);
                 continue;
             }
@@ -235,8 +325,10 @@ public sealed class WorkAssignmentService(
                 var created = new WorkAssignment
                 {
                     EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId,
+                    WorkDayPlanId = workDayPlanId,
                 };
                 assignments.Add(created);
+                placed?.Add(created);
                 audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
                 {
                     RecordId = created.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, After = Snapshot(employee, date, place, jobType),
@@ -244,14 +336,17 @@ public sealed class WorkAssignmentService(
             }
             else
             {
-                var moved = !place.Holds(first);
+                var moved = !place.Holds(first) || OnAnotherPlan(first, workDayPlanId);
                 var link = planLineId ?? (moved ? null : first.HarvestPlanLineId);
-                if (moved || first.JobTypeId != jobType.Id || link != first.HarvestPlanLineId)
+                var planLink = workDayPlanId ?? (moved ? null : first.WorkDayPlanId);
+                placed?.Add(first);
+                if (moved || first.JobTypeId != jobType.Id || link != first.HarvestPlanLineId || planLink != first.WorkDayPlanId)
                 {
                     var before = Snapshot(employee, date, PlaceOf(first), first.JobType);
                     (first.RaftId, first.ZoneId) = (place.Raft?.Id, place.ZoneId);
                     first.JobTypeId = jobType.Id;
                     first.HarvestPlanLineId = link;
+                    first.WorkDayPlanId = planLink;
                     first.AssignedByAccountId = account;
                     audit.Record(new AuditEntry(moved ? "WorkAssignment.Moved" : "WorkAssignment.Updated", nameof(WorkAssignment))
                     {
@@ -270,24 +365,28 @@ public sealed class WorkAssignmentService(
     /// A new session for an employee who checked out: the check-out is cleared (the audit row keeps the old place and the old check-out) and, when the place or the job differs from the latest period,
     /// a new job period starts now there, so the earlier session keeps its place. One open session per employee stays true: the day has one attendance record, open again.
     /// </summary>
-    private void ReopenDay(Employee employee, Attendance record, List<WorkAssignment> periods, DateOnly date, Place place, JobType jobType, Guid? planLineId, Guid account)
+    private WorkAssignment ReopenDay(Employee employee, Attendance record, List<WorkAssignment> periods, DateOnly date, Place place, JobType jobType, Guid? planLineId, Guid? workDayPlanId, Guid account)
     {
+        WorkAssignment period;
         var last = periods.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).LastOrDefault();
         var before = new { record.CheckInAt, record.CheckOutAt, Place = last is null ? null : PlaceOf(last).Code, Job = last?.JobType.Name };
         if (last is null)
         {
-            assignments.Add(new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId });
+            period = new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId, WorkDayPlanId = workDayPlanId };
+            assignments.Add(period);
         }
         else
         {
             // The earlier session ends at the old check-out and a new period starts now, even on the same raft and job, so the gap between the two sessions is not counted as work (L1, BR-LABOR-05).
             last.EndsAt ??= record.CheckOutAt;
             var sameWork = place.Holds(last) && last.JobTypeId == jobType.Id;
-            assignments.Add(new WorkAssignment
+            period = new WorkAssignment
             {
                 EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = WorkRules.Now(timeProvider), AssignedByAccountId = account,
                 HarvestPlanLineId = planLineId ?? (sameWork ? last.HarvestPlanLineId : null),
-            });
+                WorkDayPlanId = workDayPlanId ?? (sameWork ? last.WorkDayPlanId : null),
+            };
+            assignments.Add(period);
         }
 
         (record.CheckOutAt, record.CheckOutMethod, record.CheckOutRecordedByAccountId, record.CheckOutReason) = (null, null, null, null);
@@ -297,6 +396,7 @@ public sealed class WorkAssignmentService(
             RecordId = record.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, Before = before, After = new { record.CheckInAt, CheckOutAt = (DateTimeOffset?)null, Place = place.Code, Job = jobType.Name },
             Reason = "Employee assigned again after checking out.",
         });
+        return period;
     }
 
     /// <summary>LABOR-02.2: the raft or the job type of an assignment of today or later, before the employee is checked in.</summary>
@@ -321,6 +421,11 @@ public sealed class WorkAssignmentService(
             return AppError.Forbidden;
         }
 
+        if (assignment.WorkDayPlanId is not null)
+        {
+            return OnPlan(assignment);
+        }
+
         if (await RefuseChangeAsync(assignment, cancellationToken) is { } refused)
         {
             return refused;
@@ -341,6 +446,7 @@ public sealed class WorkAssignmentService(
             if (!place.Holds(assignment))
             {
                 assignment.HarvestPlanLineId = null;
+                assignment.WorkDayPlanId = null;
             }
 
             (assignment.RaftId, assignment.ZoneId) = (place.Raft?.Id, place.ZoneId);
@@ -370,6 +476,11 @@ public sealed class WorkAssignmentService(
         if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.ZoneId, cancellationToken))
         {
             return AppError.Forbidden;
+        }
+
+        if (assignment.WorkDayPlanId is not null)
+        {
+            return OnPlan(assignment);
         }
 
         if (await RefuseChangeAsync(assignment, cancellationToken) is { } refused)
@@ -448,6 +559,7 @@ public sealed class WorkAssignmentService(
                 if (!place.Holds(current))
                 {
                     current.HarvestPlanLineId = null;
+                    current.WorkDayPlanId = null;
                 }
 
                 (current.RaftId, current.ZoneId) = (place.Raft?.Id, place.ZoneId);

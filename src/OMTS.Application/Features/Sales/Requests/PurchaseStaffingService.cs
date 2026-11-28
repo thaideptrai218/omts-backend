@@ -76,7 +76,7 @@ public sealed class PurchaseStaffingService(
         var plan = await plans.ForPurchaseAsync(id, ct);
         if (plan is null) return AppError.Invalid("Work plan required");
         if (!await planAccess.CanAssignAsync(plan, ct)) return AppError.Forbidden;
-        if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
+        if (plan.Raft!.StatusId != StatusIds.Usage.InUse || plan.Raft!.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType!.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Work plan");
         var row = await requests.GetAsync(id, ct);
         if (row is null) return AppError.NotFound;
@@ -188,10 +188,10 @@ public sealed class PurchaseStaffingService(
             return AppError.Invalid("Plan responsible");
         var responsibleAccess = await permissions.GetAccessAsync(plan.ResponsibleAccountId, ct);
         if (responsibleAccess is null ||
-            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, plan.Raft.ZoneId) ||
-            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, plan.Raft.ZoneId))
+            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, plan.ZoneId) ||
+            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, plan.ZoneId))
             return AppError.Invalid("Plan responsible");
-        if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
+        if (plan.Raft!.StatusId != StatusIds.Usage.InUse || plan.Raft!.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType!.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Work plan");
         // Người đã đồng ý có thể được duyệt nghỉ, bị khóa tài khoản, nghỉ việc hoặc nhận việc khác trong ngày sau khi đồng ý. Ca đã là
         // phân công của kế hoạch này (luồng 24-25/11) thì không kiểm tra lại.
@@ -228,19 +228,19 @@ public sealed class PurchaseStaffingService(
     {
         var assignment = new WorkAssignment
         {
-            EmployeeId = employeeId, Date = plan.WorkDate, RaftId = plan.RaftId, ZoneId = plan.Raft.ZoneId, JobTypeId = plan.JobTypeId, AssignedByAccountId = assignedBy,
+            EmployeeId = employeeId, Date = plan.WorkDate, RaftId = plan.RaftId, ZoneId = plan.ZoneId, JobTypeId = plan.JobTypeId!.Value, AssignedByAccountId = assignedBy,
         };
         assignments.Add(assignment);
         var profile = (await employeeProfiles.GetForEditAsync(employeeId, ct))!;
-        if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId) && !IsSeasonalWorker(profile))
+        if (!profile.WorkingZones.Any(w => w.ZoneId == plan.ZoneId) && !IsSeasonalWorker(profile))
         {
-            employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employeeId, ZoneId = plan.Raft.ZoneId });
+            employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employeeId, ZoneId = plan.ZoneId });
             uow.MarkChanged(profile);
         }
 
         audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
         {
-            RecordId = assignment.Id, RecordCode = profile.Code, ZoneId = plan.Raft.ZoneId,
+            RecordId = assignment.Id, RecordCode = profile.Code, ZoneId = plan.ZoneId,
             After = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
         });
     }
@@ -277,7 +277,7 @@ public sealed class PurchaseStaffingService(
                 assignments.Remove(assignment);
                 audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
                 {
-                    RecordId = assignment.Id, ZoneId = plan.Raft.ZoneId,
+                    RecordId = assignment.Id, ZoneId = plan.ZoneId,
                     Before = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
                 });
             }

@@ -12,17 +12,21 @@ public sealed class WorkPlanAccessService(ICurrentUser user, PermissionService p
 {
     public Task<AccountAccess?> CurrentAsync(CancellationToken ct) => user.AccountId is { } id
         ? permissions.GetAccessAsync(id, ct) : Task.FromResult<AccountAccess?>(null);
+
+    /// <summary>The rights of another account (the people a plan can be given to).</summary>
+    public Task<AccountAccess?> AccessOfAsync(Guid accountId, CancellationToken ct) => permissions.GetAccessAsync(accountId, ct);
+
     public async Task<bool> CanViewAsync(WorkDayPlan plan, CancellationToken ct)
     {
         var who = await CurrentAsync(ct);
         return who?.IsCooperativeOwner == true || who?.AccountId == plan.ResponsibleAccountId &&
-            who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, plan.Raft.ZoneId);
+            who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, plan.ZoneId);
     }
     public async Task<bool> CanAssignAsync(WorkDayPlan plan, CancellationToken ct)
     {
         var who = await CurrentAsync(ct);
         return plan.Approved == true && who?.AccountId == plan.ResponsibleAccountId &&
             plan.ResponsibleAccount.StatusId == StatusIds.Account.Active &&
-            who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, plan.Raft.ZoneId);
+            who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, plan.ZoneId);
     }
 }

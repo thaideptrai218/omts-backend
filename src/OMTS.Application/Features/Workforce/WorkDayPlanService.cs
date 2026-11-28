@@ -10,6 +10,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Labor.Work;
+using OMTS.Application.Features.WorkDayPlans;
 using OMTS.Application.Features.Sales.Requests;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Application.Features.Workforce.Dtos;
@@ -30,7 +31,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
     IPurchaseRequestRepository purchases,
     IAccountRepository accounts, ICurrentUser user, PermissionService permissions, WorkPlanAccessService access,
     PurchaseStaffingService staffing, WorkAssignmentService work, RowVersionGuard versions, EmployeeCallerAccess employeeCallers,
-    AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
+    WorkDayPlanCodeService codes, AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
     public async Task<Result<IReadOnlyList<WorkDayPlanView>>> ListAsync(DateOnly from, DateOnly to, CancellationToken ct)
@@ -105,10 +106,10 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             p = await plans.GetAsync(planId, ct);
             if (p is null) return AppError.NotFound;
             // The plan being changed must be in a zone the caller may edit, and a Zone Manager changes only a plan it is responsible for.
-            if (!who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Edit, PermissionScope.ZoneScoped, p.Raft.ZoneId) ||
+            if (!who.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Edit, PermissionScope.ZoneScoped, p.ZoneId) ||
                 !who.IsCooperativeOwner && !await access.CanViewAsync(p, ct)) return AppError.Forbidden;
             if (await versions.CheckAsync(p, input.RowVersion, ct) is { } stale) return stale;
-            if (await AssignedCountAsync(p, ct) > 0 || p.PurchaseRequest?.ShiftInvitations.Count > 0)
+            if (await AssignedCountAsync(p, ct) > 0 || p.PurchaseRequest?.ShiftInvitations.Count > 0 || p.Members.Count > 0)
                 return AppError.Invalid("Work plan already assigned");
             if (p.PurchaseRequestId != input.PurchaseRequestId) return AppError.Invalid("Purchase request");
         }
@@ -127,6 +128,8 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             if (input.PurchaseRequestId is { } purchaseId && await plans.ForPurchaseAsync(purchaseId, ct) is { } existing)
                 return AppError.AlreadyExists("Work plan", existing.Id);
             p = new WorkDayPlan { CreatorAccountId = who.AccountId, CreatorAccount = (await accounts.GetByIdAsync(who.AccountId, ct))!, ClientOperationId = input.ClientOperationId };
+            if (WorkDayPlanRules.KindOfJob(job.Name) is null) return AppError.Invalid("Job type");
+            p.Code = await codes.NextAsync(ct);
         }
         PurchaseRequest? order = null;
         if (input.PurchaseRequestId is { } orderId)
@@ -140,14 +143,19 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             order.CagesPerEmployeePerDay = input.CagesPerEmployeePerDay; order.StaffingNote = input.Note?.Trim();
             uow.MarkChanged(order);
         }
-        p.RaftId = raft.Id; p.Raft = raft; p.JobTypeId = job.Id; p.JobType = job; p.WorkDate = input.WorkDate;
+        // The older plan is one raft and one job type: the job type gives the kind, and a nursery plan is in the zone of the raft alone.
+        var kind = WorkDayPlanRules.KindOfJob(job.Name);
+        if (kind is null || kind == WorkDayPlanKind.Nursery && input.PurchaseRequestId is not null) return AppError.Invalid("Job type");
+        p.Kind = kind.Value; p.ZoneId = raft.ZoneId; p.Zone = raft.Zone;
+        p.RaftId = kind == WorkDayPlanKind.Nursery ? null : raft.Id; p.Raft = kind == WorkDayPlanKind.Nursery ? null : raft;
+        p.JobTypeId = job.Id; p.JobType = job; p.WorkDate = input.WorkDate;
         p.ResponsibleAccountId = responsible.Id; p.ResponsibleAccount = responsible; p.PurchaseRequestId = order?.Id; p.PurchaseRequest = order;
         p.Note = input.Note?.Trim(); p.ResponseReason = null;
         p.Approved = responsible.Id == who.AccountId ? true : null;
         p.RespondedAt = p.Approved == true ? clock.GetUtcNow() : null;
         if (id is null) plans.Add(p); else uow.MarkChanged(p);
         audit.Record(new AuditEntry(id is null ? "WorkDayPlan.Created" : "WorkDayPlan.Updated", nameof(WorkDayPlan))
-        { RecordId = p.Id, ZoneId = raft.ZoneId, After = new { p.WorkDate, p.RaftId, p.JobTypeId, p.ResponsibleAccountId, p.PurchaseRequestId } });
+        { RecordId = p.Id, RecordCode = p.Code, ZoneId = raft.ZoneId, After = new { p.WorkDate, p.RaftId, p.JobTypeId, p.ResponsibleAccountId, p.PurchaseRequestId } });
         if (p.Approved is null)
             await notifications.NotifyAsync([responsible.Id], "WORK_PLAN_REQUESTED", "Kế hoạch ngày làm cần xác nhận",
                 $"{input.WorkDate:dd/MM/yyyy}: {job.Name}, bè {raft.Code}. Vui lòng nhận hoặc từ chối kế hoạch.", nameof(WorkDayPlan), p.Id.ToString(), false, ct, p.Id);
@@ -164,10 +172,10 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         if (p.PurchaseRequest?.StatusId is S.Cancelled or S.Declined) return AppError.Invalid("Purchase request status");
         if (await versions.CheckAsync(p, input.RowVersion, ct) is { } stale) return stale;
         var who = await access.CurrentAsync(ct);
-        if (!who!.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, p.Raft.ZoneId)) return AppError.Forbidden;
+        if (!who!.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, p.ZoneId)) return AppError.Forbidden;
         p.Approved = input.Approved; p.RespondedAt = clock.GetUtcNow(); p.ResponseReason = input.Reason?.Trim();
         audit.Record(new AuditEntry("WorkDayPlan.Responded", nameof(WorkDayPlan))
-        { RecordId = p.Id, ZoneId = p.Raft.ZoneId, After = new { p.Approved, p.ResponseReason } });
+        { RecordId = p.Id, ZoneId = p.ZoneId, After = new { p.Approved, p.ResponseReason } });
         await notifications.NotifyAsync([p.CreatorAccountId], "WORK_PLAN_RESPONDED", "Quản lý phản hồi kế hoạch",
             $"{p.ResponsibleAccount.DisplayName} {(input.Approved ? "đồng ý" : "từ chối")} kế hoạch {p.WorkDate:dd/MM/yyyy}. {p.ResponseReason}", nameof(WorkDayPlan), p.Id.ToString(), false, ct, p.Id);
         await uow.SaveChangesAsync(ct);
@@ -204,7 +212,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         else
         {
             // LABOR-02.0 với bè, loại việc và ngày của kế hoạch: cùng quy tắc và cùng câu hỏi chuyển bè (MSG-LABOR-06) như phân công trực tiếp.
-            var result = await work.AssignAsync(new AssignWorkRequest(p.RaftId, p.JobTypeId, p.WorkDate, input.EmployeeIds), ct);
+            var result = await work.AssignAsync(new AssignWorkRequest(p.RaftId, p.JobTypeId, p.WorkDate, input.EmployeeIds, ZoneId: p.RaftId is null ? p.ZoneId : null), ct);
             if (!result.IsSuccess) return result.Error!;
         }
         return await ViewAsync(p, ct);
@@ -216,7 +224,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         var assigned = await AssignedCountAsync(p, ct);
         var state = closed ? "CLOSED" : p.Approved is null ? "PENDING_MANAGER" : p.Approved == false ? "DECLINED"
             : p.PurchaseRequest?.StatusId == S.Accepted || assigned > 0 ? "ASSIGNED" : staffingSummary?.InvitedEmployees > 0 ? "AWAITING_STAFF" : "READY_TO_ASSIGN";
-        return new(p.Id, p.WorkDate, p.RaftId, p.Raft.Code, p.Raft.ZoneId, p.Raft.Zone.Name, p.JobTypeId, p.JobType.Name,
+        return new(p.Id, p.WorkDate, p.RaftId ?? Guid.Empty, p.Raft?.Code ?? string.Empty, p.ZoneId, p.Zone.Name, p.JobTypeId ?? Guid.Empty, p.JobType?.Name ?? WorkDayPlanNotifier.WorkOf(p),
             p.ResponsibleAccountId, p.ResponsibleAccount.DisplayName, p.CreatorAccount.DisplayName, state, p.ResponseReason,
             !closed && p.WorkDate >= Today && p.Approved is null && p.ResponsibleAccountId == user.AccountId && await access.CanViewAsync(p, ct),
             !closed && p.WorkDate >= Today && p.PurchaseRequest?.StatusId != S.Accepted && await access.CanAssignAsync(p, ct),

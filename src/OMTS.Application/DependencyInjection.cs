@@ -97,6 +97,17 @@ public static class DependencyInjection
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanAccess>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.IHarvestResponsibleLookup>(provider => provider.GetRequiredService<OMTS.Application.Features.WorkDayPlans.WorkDayPlanAccess>());
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanCodeService>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanNotifier>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanSettler>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanViews>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanCrudService>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanStaffingService>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanOutsiderService>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanHarvestLink>();
+        services.AddScoped<OMTS.Application.Features.WorkDayPlans.WorkDayPlanExpiryService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());

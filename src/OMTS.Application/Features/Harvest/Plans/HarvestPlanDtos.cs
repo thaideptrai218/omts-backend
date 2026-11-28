@@ -63,13 +63,20 @@ public sealed record HarvestPlanLineView(
     IReadOnlyList<HarvestPlanLaneView> Lanes,
     bool CanHarvest,
     bool Locked,
-    DateOnly? ExpectedHarvestDate = null);
+    DateOnly? ExpectedHarvestDate = null,
+    HarvestLineWorkPlanView? WorkPlan = null);
+
+/// <summary>
+/// The work-day plan (Kế hoạch ngày làm) of the people who harvest a line: its id and code, its status (<c>Staffing</c> "Chưa đủ người", <c>Ready</c> "Đủ người", <c>InProgress</c>, <c>Completed</c>, <c>Cancelled</c>), the people needed
+/// and present (confirmed members plus people hired outside) and how many are missing.
+/// </summary>
+public sealed record HarvestLineWorkPlanView(Guid Id, string Code, OMTS.Domain.Enums.WorkDayPlanStatus Status, int RequiredPeople, int Present, int Missing, bool Full);
 
 /// <summary>How far the plan is: lines done of all lines, and the lanes harvested, left out and still planned.</summary>
 public sealed record HarvestPlanProgressView(int Lines, int LinesDone, int Lanes, int LanesHarvested, int LanesSkipped);
 
 /// <param name="Executor">Who harvests the plan, chosen when it is assigned: <c>ZoneManager</c> (the default; also for a Draft) or <c>Owner</c> (no reception or hand-over; Zone Managers do not see it).</param>
-/// <param name="Staffing">The people confirmed against the people needed (<c>requiredPeople</c>, <c>confirmed</c>, <c>invited</c>, <c>declined</c>, <c>external</c>, <c>missing</c>, <c>ready</c>); <c>ready</c> false means the plan is short of people (a warning, never a block).</param>
+/// <param name="Staffing">The people of the plan's lines against the people needed, summed over the work-day plans of the lines (<c>requiredPeople</c>, <c>confirmed</c>, <c>invited</c>, <c>declined</c>, <c>external</c> = people hired outside, <c>missing</c>, <c>ready</c>); <c>ready</c> false means a raft is short of people and the plan cannot be handed out.</param>
 /// <param name="Zones">The zones of the lines the caller sees, by code. A Zone Manager gets only the lines (and so the zones and the progress) of its own zones.</param>
 public sealed record HarvestPlanView(
     Guid Id,
@@ -137,7 +144,8 @@ public sealed record HarvestPlanNextCode(string Code);
 
 /// <summary>A line of a saved plan as sent: a raft of any zone, its lanes and the cages expected (the product is that of the raft's cultivation cycle; an <c>expectedProductId</c> sent is ignored). <paramref name="Id"/> names a line of the plan being updated; without it the line is new.</summary>
 /// <param name="LaneNumbers">The lanes to harvest, each given once; at least one.</param>
-public sealed record SaveHarvestPlanLineRequest(Guid? Id, Guid? RaftId, IReadOnlyList<int>? LaneNumbers, decimal? ExpectedCageCount, string? Note);
+/// <param name="RequiredPeople">The people the work of this line needs (1 to 500); it goes to the work-day plan of the line. Empty: a new line starts with 1, a line kept keeps its number.</param>
+public sealed record SaveHarvestPlanLineRequest(Guid? Id, Guid? RaftId, IReadOnlyList<int>? LaneNumbers, decimal? ExpectedCageCount, string? Note, int? RequiredPeople = null);
 
 /// <summary>Create (POST) and update (PUT) of a plan, which spans the rafts of its lines whatever their zones (a <c>zoneId</c> sent is ignored); an update replaces the header, the orders and the lines.</summary>
 /// <param name="Code">1-30 letters, digits and . _ -; empty = the next KHT on create, the stored one on update.</param>

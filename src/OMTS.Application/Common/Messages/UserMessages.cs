@@ -61,6 +61,9 @@ public static class UserMessages
     /// </summary>
     public static UserMessage HarvestRefused(string text) => new(Gen09, text, Legacy.Msg61);
 
+    /// <summary>MSG-GEN-09 in Vietnamese for the work-day plans: the same code and legacy code as <see cref="WrongStatus"/>, with a text the screen can show as it is. The caller adds a <c>reasonCode</c>.</summary>
+    public static UserMessage WorkPlanRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
     /// <summary>MSG-GEN-09 in Vietnamese for the VAT rate list: the same code and legacy code as <see cref="WrongStatus"/>, with a text the settings screen can show as it is. The caller adds a <c>reasonCode</c>.</summary>
     public static UserMessage VatRateRefused(string text) => new(Gen09, text, Legacy.Msg61);
 

@@ -3,6 +3,9 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.WorkDayPlans;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Enums;
@@ -99,7 +102,30 @@ public sealed class HarvestPlanProgress(
             Move(plan, target);
         }
 
+        FollowLines(plan);
         return moves.Count > 0;
+    }
+
+    /// <summary>The work-day plan of a line is Completed when the line is done (its lot is recorded, or every lane is left out) and open again when the line is.</summary>
+    private void FollowLines(HarvestPlan plan)
+    {
+        foreach (var line in plan.Lines)
+        {
+            if (line.WorkDayPlan is not { } work)
+            {
+                continue;
+            }
+
+            var from = work.Status;
+            if (WorkDayPlanRules.FollowHarvestLine(work, HarvestPlanRules.LineDone(HarvestPlanRules.FactsOf(line)), timeProvider.GetUtcNow()))
+            {
+                unitOfWork.MarkChanged(work);
+                audit.Record(new AuditEntry("WorkDayPlan.StatusChanged", nameof(WorkDayPlan))
+                {
+                    RecordId = work.Id, RecordCode = work.Code, ZoneId = work.ZoneId, Before = new { Status = from.ToString() }, After = new { Status = work.Status.ToString() },
+                });
+            }
+        }
     }
 
     /// <summary>Moves a plan to another status, with the stamps of that status, and audits it.</summary>

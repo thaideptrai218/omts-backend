@@ -24,6 +24,9 @@ public interface IWorkAssignmentRepository
     /// <summary>The assignments made for these harvest plan lines, with raft, zone, job type and employee, tracked, by employee name.</summary>
     Task<IReadOnlyList<WorkAssignment>> ListOfPlanLinesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
 
+    /// <summary>The assignments made for these work-day plans, with raft, zone, job type and employee, tracked, by employee name.</summary>
+    Task<IReadOnlyList<WorkAssignment>> ListOfPlansAsync(IReadOnlyCollection<Guid> planIds, CancellationToken cancellationToken);
+
     /// <summary>The first job period of the employee on the day, if any (the one that holds the work assigned for it).</summary>
     Task<WorkAssignment?> FindFirstAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken);
 

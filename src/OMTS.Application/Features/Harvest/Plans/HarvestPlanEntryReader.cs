@@ -3,7 +3,7 @@ using OMTS.Application.Features.Purchasing;
 namespace OMTS.Application.Features.Harvest.Plans;
 
 /// <summary>One line as read: the raft, the lanes to harvest by number, the cages expected, and the line of the stored plan it stands for (none: a new line).</summary>
-internal sealed record HarvestPlanLineEntries(int LineNumber, Guid? Id, Guid RaftId, IReadOnlyList<int> LaneNumbers, decimal? ExpectedCageCount, string? Note);
+internal sealed record HarvestPlanLineEntries(int LineNumber, Guid? Id, Guid RaftId, IReadOnlyList<int> LaneNumbers, decimal? ExpectedCageCount, string? Note, int? RequiredPeople = null);
 
 /// <summary>The fields of a plan once their shapes are right; what they name is checked against the database after.</summary>
 internal sealed record HarvestPlanEntries(
@@ -66,6 +66,11 @@ internal static class HarvestPlanEntryReader
                 invalid.Add($"{field} cages");
             }
 
+            if (line.RequiredPeople is { } people && !Features.WorkDayPlans.WorkDayPlanRules.ValidRequiredPeople(people))
+            {
+                invalid.Add($"{field} required people");
+            }
+
             var lineNote = line.Note?.Trim();
             if (lineNote?.Length > HarvestPlanRules.MaxLineNoteLength)
             {
@@ -73,7 +78,7 @@ internal static class HarvestPlanEntryReader
             }
 
             lines.Add(new HarvestPlanLineEntries(
-                number, line.Id, line.RaftId ?? Guid.Empty, lanes.Order().ToList(), line.ExpectedCageCount, string.IsNullOrEmpty(lineNote) ? null : lineNote));
+                number, line.Id, line.RaftId ?? Guid.Empty, lanes.Order().ToList(), line.ExpectedCageCount, string.IsNullOrEmpty(lineNote) ? null : lineNote, line.RequiredPeople));
         }
 
         var ids = lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToList();

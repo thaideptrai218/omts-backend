@@ -38,7 +38,7 @@ public sealed class HarvestPlanStaffingServiceTests
     }
 
     /// <summary>The work assignments and attendance kept in memory; an assignment added gets its navigations as the database would give them.</summary>
-    private sealed class Store(IReadOnlyList<Employee> employees, IReadOnlyList<Raft> rafts, JobType job) : IWorkAssignmentRepository, IAttendanceRepository
+    internal sealed class Store(IReadOnlyList<Employee> employees, IReadOnlyList<Raft> rafts, JobType job) : IWorkAssignmentRepository, IAttendanceRepository
     {
         public List<WorkAssignment> Rows { get; } = [];
         public List<Attendance> Attendance { get; } = [];
@@ -59,6 +59,9 @@ public sealed class HarvestPlanStaffingServiceTests
 
         public Task<IReadOnlyList<WorkAssignment>> ListOfPlanLinesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<WorkAssignment>>(Rows.Where(w => w.HarvestPlanLineId is { } l && lineIds.Contains(l)).OrderBy(w => w.Employee.FullName).ToList());
+
+        public Task<IReadOnlyList<WorkAssignment>> ListOfPlansAsync(IReadOnlyCollection<Guid> planIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WorkAssignment>>(Rows.Where(w => w.WorkDayPlanId is { } p && planIds.Contains(p)).ToList());
 
         public Task<WorkAssignment?> FindFirstAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
             Task.FromResult(Rows.FirstOrDefault(w => w.EmployeeId == employeeId && w.Date == day && w.StartsAt is null));
