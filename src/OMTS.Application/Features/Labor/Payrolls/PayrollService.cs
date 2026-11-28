@@ -80,11 +80,16 @@ public sealed class PayrollService(
             return AppError.Invalid("Period", "Kỳ này chưa có nhân viên nào có lương hoặc giờ công.");
         }
 
-        if (await OverlapAsync(start, end, paid.Select(f => f.Employee.Id).ToHashSet(), null, cancellationToken) is { } overlap)
+        // An employee who already belongs to another live sheet of an overlapping period is left out; the sheet is refused only when nobody is left.
+        var others = await sheets.ListActiveOverlappingAsync(start, end, null, cancellationToken);
+        var held = EmployeesOf(others);
+        paid = paid.Where(f => !held.Contains(f.Employee.Id)).ToList();
+        if (paid.Count == 0)
         {
-            return overlap;
+            return ClashOf(others, start, end, figures.Where(f => f.OnSheet).Select(f => f.Employee.Id).ToHashSet())!;
         }
 
+        figures = figures.Where(f => !held.Contains(f.Employee.Id)).ToList();
         TouchEmployees(paid);
         var sheet = new Payroll
         {
@@ -132,10 +137,12 @@ public sealed class PayrollService(
         }
 
         var figures = await FiguresAsync(sheet, mode == PayrollReloadMode.All, cancellationToken);
-        if (mode == PayrollReloadMode.All
-            && await OverlapAsync(sheet.PeriodStart, sheet.PeriodEnd, figures.Where(f => f.OnSheet).Select(f => f.Employee.Id).ToHashSet(), sheet.Id, cancellationToken) is { } overlap)
+        if (mode == PayrollReloadMode.All)
         {
-            return overlap;
+            // Employees already on this sheet stay; one who would newly join but belongs to another live overlapping sheet is left out.
+            var held = EmployeesOf(await sheets.ListActiveOverlappingAsync(sheet.PeriodStart, sheet.PeriodEnd, sheet.Id, cancellationToken));
+            var members = sheet.Lines.Select(l => l.EmployeeId).ToHashSet();
+            figures = figures.Where(f => members.Contains(f.Employee.Id) || !held.Contains(f.Employee.Id)).ToList();
         }
 
         TouchEmployees(figures.Where(f => f.OnSheet));
@@ -275,7 +282,7 @@ public sealed class PayrollService(
     }
 
     /// <summary>Whether a sheet of this scope covers the employee: the Staff and SeasonalWorker scopes follow the employee type on the last day of the period; All and Selected are narrowed when the employees are loaded.</summary>
-    private static bool Covers(PayrollScope scope, Employee employee, DateOnly periodEnd) => scope switch
+    internal static bool Covers(PayrollScope scope, Employee employee, DateOnly periodEnd) => scope switch
     {
         PayrollScope.Staff => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.Staff,
         PayrollScope.SeasonalWorker => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.SeasonalWorker,
@@ -360,15 +367,17 @@ public sealed class PayrollService(
         return (paid.Count, total);
     }
 
+    /// <summary>The employees another sheet already pays or lists: its payslips and the employees it was created for.</summary>
+    private static HashSet<Guid> EmployeesOf(IEnumerable<Payroll> others) =>
+        others.SelectMany(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId))).ToHashSet();
+
     /// <summary>
-    /// 409 when another sheet that is not Cancelled has the same period and pays one of these employees (MSG-GEN-02, "already exists"); 400 when
-    /// its period only overlaps. Sheets of other employees do not clash.
+    /// The refusal when every employee of a new sheet is already on another live sheet: 409 when that sheet has the same period (MSG-GEN-02, "already exists"), 400 when
+    /// its period only overlaps; null when none of these employees is on one.
     /// </summary>
-    private async Task<AppError?> OverlapAsync(DateOnly from, DateOnly to, IReadOnlySet<Guid> employeeIds, Guid? exceptId, CancellationToken cancellationToken)
+    private static AppError? ClashOf(IReadOnlyList<Payroll> others, DateOnly from, DateOnly to, IReadOnlySet<Guid> employeeIds)
     {
-        var clashing = (await sheets.ListActiveOverlappingAsync(from, to, exceptId, cancellationToken))
-            .Where(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId)).Any(employeeIds.Contains))
-            .ToList();
+        var clashing = others.Where(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId)).Any(employeeIds.Contains)).ToList();
         if (clashing.FirstOrDefault(s => s.PeriodStart == from && s.PeriodEnd == to) is { } same)
         {
             return AppError.AlreadyExists($"Payroll {same.Code}", same.Id, "Period");

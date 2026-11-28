@@ -63,8 +63,8 @@ public sealed class PayrollsController(
         File(await exports.ExportSlipAsync(slipId, format, cancellationToken));
 
     /// <summary>
-    /// Makes the sheet and calculates its payslips in one step: 201 with the Provisional sheet. 409 when a sheet of the same period already pays one
-    /// of the employees, 400 when the period only overlaps one, has no hours, is a Monthly period that is not a whole month, or starts after today.
+    /// Makes the sheet and calculates its payslips in one step: 201 with the Provisional sheet. Employees that another live sheet of an overlapping period already has are left out (listed in <c>leftOut</c>); 409 when that leaves nobody and the period is the same,
+    /// 400 when it only overlaps, has no hours, is a Monthly period that is not a whole month, or starts after today.
     /// </summary>
     [HttpPost("payrolls")]
     [RequirePermission(PermissionFunctions.Payroll, PermissionAction.Create, PermissionScope.NoZone)]

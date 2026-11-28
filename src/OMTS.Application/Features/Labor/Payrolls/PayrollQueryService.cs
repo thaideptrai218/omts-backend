@@ -1,6 +1,7 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Labor.Work;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
@@ -14,6 +15,7 @@ namespace OMTS.Application.Features.Labor.Payrolls;
 public sealed class PayrollQueryService(
     IPayrollReader reader,
     IPayrollWorkReader workReader,
+    IPayrollSheetRepository sheets,
     IAccountRepository accounts,
     IEmployeeRepository employees,
     IRaftRepository rafts)
@@ -113,7 +115,43 @@ public sealed class PayrollQueryService(
         var paid = slips.Sum(s => s.Paid);
         return new PayrollSheetDetail(
             raw.Id, raw.Code, PayrollRules.NameOf(raw.PeriodType, raw.From, raw.To), raw.PeriodType, raw.From, raw.To, raw.Scope, PayrollRules.StatusOf(raw.StatusId),
-            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count, raw.UpdatedAt ?? raw.CreatedAt, finalizedBy, raw.FinalizedAt);
+            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count, raw.UpdatedAt ?? raw.CreatedAt, finalizedBy, raw.FinalizedAt,
+            await LeftOutAsync(raw, cancellationToken));
+    }
+
+    /// <summary>
+    /// The employees this sheet would pay but another live sheet of an overlapping period already has (they are left out when a sheet is created or reloaded). Only the employees
+    /// that sheet holds and this one does not are worked out, so the read stays small; a cancelled sheet lists none.
+    /// </summary>
+    private async Task<IReadOnlyList<PayrollLeftOut>> LeftOutAsync(PayrollDetailRaw raw, CancellationToken cancellationToken)
+    {
+        if (raw.StatusId == StatusIds.Payroll.Cancelled)
+        {
+            return [];
+        }
+
+        var onSheet = raw.Slips.Select(s => s.EmployeeId).ToHashSet();
+        var holder = new Dictionary<Guid, Payroll>();
+        foreach (var other in (await sheets.ListActiveOverlappingAsync(raw.From, raw.To, raw.Id, cancellationToken)).OrderBy(s => s.Code, StringComparer.Ordinal))
+        {
+            foreach (var employeeId in other.Lines.Select(l => l.EmployeeId).Concat(other.SelectedEmployees.Select(e => e.EmployeeId)))
+            {
+                holder.TryAdd(employeeId, other);
+            }
+        }
+
+        var candidates = holder.Keys.Where(id => !onSheet.Contains(id) && (raw.Scope != PayrollScope.Selected || raw.SelectedEmployeeIds?.Contains(id) == true)).ToList();
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var data = await workReader.LoadAsync(raw.From, raw.To, candidates, cancellationToken);
+        return data.Employees.Where(e => PayrollService.Covers(raw.Scope, e, raw.To))
+            .Select(e => PayrollCalculator.Calculate(e, raw.From, raw.To, raw.PeriodType, data))
+            .Where(f => f.OnSheet && holder.ContainsKey(f.Employee.Id))
+            .Select(f => new PayrollLeftOut(f.Employee.Id, f.Employee.FullName, holder[f.Employee.Id].Id, holder[f.Employee.Id].Code, holder[f.Employee.Id].PeriodStart, holder[f.Employee.Id].PeriodEnd))
+            .OrderBy(l => l.EmployeeName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     /// <summary>The employees among these who are Staff on <paramref name="day"/>: only they get adjustments.</summary>

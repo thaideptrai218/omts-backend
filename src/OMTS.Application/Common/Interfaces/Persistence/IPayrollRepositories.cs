@@ -107,7 +107,7 @@ public sealed record SlipAdjustmentRaw(PayrollAdjustmentKind Kind, decimal Amoun
 public sealed record PayrollDetailRaw(
     Guid Id, string Code, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, int StatusId, string? ExpenseMonth,
     string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null,
-    Guid? FinalizedBy = null, DateTimeOffset? FinalizedAt = null);
+    Guid? FinalizedBy = null, DateTimeOffset? FinalizedAt = null, IReadOnlyList<Guid>? SelectedEmployeeIds = null);
 
 public sealed record SlipJobRaw(
     string JobName, decimal Hours, decimal HourlyRate, decimal Amount, PayLineKind Kind = PayLineKind.Hourly, decimal ShiftRate = 0, decimal Shifts = 0);

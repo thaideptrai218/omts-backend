@@ -111,11 +111,14 @@ public sealed record PayrollSlipRow(
     decimal MainPay, decimal ShiftPay, decimal Bonus, decimal ManualDeduction, decimal AdvanceDeduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding,
     IReadOnlyList<SlipAdjustmentView> Adjustments, bool AllowsAdjustments);
 
+/// <summary>An employee with pay in the period who is not on a sheet because another live sheet of an overlapping period already has them.</summary>
+public sealed record PayrollLeftOut(Guid EmployeeId, string EmployeeName, Guid PayrollId, string PayrollCode, DateOnly From, DateOnly To);
+
 public sealed record PayrollSheetDetail(
     Guid Id, string Code, string Name, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, PayrollSheetStatus Status,
     string? ExpenseMonth, string? Note, string? CreatedBy, DateTimeOffset CreatedAt, decimal Total, decimal Paid, decimal Outstanding,
     IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount, DateTimeOffset? CalculatedAt = null,
-    string? FinalizedBy = null, DateTimeOffset? FinalizedAt = null);
+    string? FinalizedBy = null, DateTimeOffset? FinalizedAt = null, IReadOnlyList<PayrollLeftOut>? LeftOut = null);
 
 public sealed record PayrollVoucherRef(Guid Id, string Code, Guid SlipId, string EmployeeName, decimal Amount);
 
@@ -184,7 +187,7 @@ public sealed record PayrollSlipAttendanceDay(
     DateOnly Date, string JobName, decimal Hours, string? RaftCodes = null, DateTimeOffset? CheckInAt = null, DateTimeOffset? CheckOutAt = null, decimal HourlyRate = 0, decimal Amount = 0,
     PayLineKind Kind = PayLineKind.Hourly, decimal Shifts = 0, decimal ShiftRate = 0);
 
-/// <param name="FixedPay">The fixed monthly salary inside <c>MainPay</c> (0 on a Custom sheet and for the other types); the rest of <c>MainPay</c> is the sum of the Hourly and Shift lines.</param>
+/// <param name="FixedPay">The fixed monthly salary inside <c>MainPay</c> (in full on every sheet, 0 for the other types); the rest of <c>MainPay</c> is the sum of the Hourly and Shift lines.</param>
 public sealed record PayrollSlipDetail(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, Guid EmployeeId, string EmployeeName, DateOnly From, DateOnly To, decimal Hours,
     decimal MainPay, decimal Bonus, decimal AdvanceDeduction, decimal Income, decimal Net, decimal Paid, decimal Outstanding, PayrollSheetStatus Status,

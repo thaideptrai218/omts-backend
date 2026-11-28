@@ -30,7 +30,7 @@ public sealed record SlipFigures(
     /// <summary>The day by day pay behind <see cref="Jobs"/>.</summary>
     public IReadOnlyList<SlipDay> Days { get; init; } = [];
 
-    /// <summary>The fixed monthly amount of a Monthly sheet; 0 on a Custom sheet and for the other salary types.</summary>
+    /// <summary>The fixed monthly amount, in full on every sheet whatever its period; 0 for the other salary types.</summary>
     public decimal FixedPay { get; init; }
 
     /// <summary>The salary type in force on the last day of the period; null for a Staff employee with no setup.</summary>
@@ -67,7 +67,7 @@ public sealed record SlipFigures(
 /// <list type="bullet">
 /// <item><b>PerShift</b>: the shifts of each job type (<see cref="ShiftCounter"/>) times the shift rate in force on that day; the pay is the main pay.</item>
 /// <item><b>Hourly</b>: the hours of each job type (BR-LABOR-05, <see cref="WorkHoursCalculator"/>) times the hourly rate in force on that day (BR-LABOR-12).</item>
-/// <item><b>FixedMonthly</b>: the monthly amount once on a Monthly sheet (the whole month, no pro rata, from the setup in force on its last day); a Custom sheet carries none.
+/// <item><b>FixedMonthly</b>: the monthly amount in full once on every sheet, Monthly or Custom (no pro rata, from the setup in force on its last day).
 /// With <see cref="EmployeeSalarySetup.PayFieldShifts"/> the shifts of the days that have a work assignment are paid at the shift rate as the shift pay; ordinary attendance with no assignment earns nothing.</item>
 /// <item>No setup (Staff): nothing is worked out and <see cref="SlipFigures.MissingSetup"/> says so.</item>
 /// </list>
@@ -162,7 +162,7 @@ public static class PayrollCalculator
             })
             .OrderBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ThenBy(j => j.Kind).ThenBy(j => j.Rate)
             .ToList();
-        var fixedSetup = periodType == PayrollPeriodType.Monthly ? EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, to) : null;
+        var fixedSetup = EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, to);
         return new SlipFigures(employee, jobs, incomplete, unrated)
         {
             Days = days,

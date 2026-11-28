@@ -67,9 +67,10 @@ internal sealed class PayrollReader(OmtsDbContext db) : IPayrollReader
         }
 
         var slips = await SlipsAsync(db.PayrollLines.Where(l => l.PayrollId == id), cancellationToken);
+        var selected = await db.PayrollSelectedEmployees.AsNoTracking().Where(s => s.PayrollId == id).Select(s => s.EmployeeId).ToListAsync(cancellationToken);
         return new PayrollDetailRaw(
             sheet.Id, sheet.Code, sheet.PeriodType, sheet.PeriodStart, sheet.PeriodEnd, sheet.Scope, sheet.StatusId, sheet.ExpenseMonth, sheet.Note, sheet.CreatedBy, sheet.CreatedAt, slips, sheet.UpdatedAt,
-            sheet.FinalizedByAccountId, sheet.FinalizedAt);
+            sheet.FinalizedByAccountId, sheet.FinalizedAt, selected);
     }
 
     private async Task<IReadOnlyList<PayrollSlipRaw>> SlipsAsync(IQueryable<PayrollLine> lines, CancellationToken cancellationToken)
