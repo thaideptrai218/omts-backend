@@ -104,7 +104,7 @@ public sealed record StaffAttendanceView(Guid EmployeeId, string EmployeeName, s
 public sealed record DayPeriodInput(Guid? JobTypeId, Guid? RaftId, DateTimeOffset? StartsAt, Guid? ZoneId = null);
 
 /// <param name="CheckInAt">Null leaves the check-in missing (an incomplete day).</param>
-/// <param name="Periods">The job periods of the day after the correction, replacing the earlier ones: of a seasonal worker, each with a job type and a raft; of a Staff employee, none.</param>
+/// <param name="Periods">The job periods of the day after the correction, replacing the earlier ones: of a seasonal worker, each with a job type and a raft; of a Staff employee, none for a plain attendance day, or the field work recorded back-dated (paid as field shifts).</param>
 /// <param name="Reason">Mandatory (LABOR-04.4.E2).</param>
 /// <param name="RowVersion">The version of the attendance record the screen was read from; empty for a day with no record.</param>
 public sealed record CorrectAttendanceRequest(

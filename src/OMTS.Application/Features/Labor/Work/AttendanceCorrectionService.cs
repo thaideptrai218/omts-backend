@@ -169,7 +169,7 @@ public sealed class AttendanceCorrectionService(
         return true;
     }
 
-    /// <summary>The checks of LABOR-04.4.E2: the times are on the day and in order, and each period of a seasonal worker has a job type and a raft and starts between them.</summary>
+    /// <summary>The checks of LABOR-04.4.E2: the times are on the day and in order, and each period (a seasonal worker has at least one) has a job type and a raft and starts between them.</summary>
     private static void Validate(FieldCheck check, Employee employee, DateOnly day, CorrectAttendanceRequest request, IReadOnlyList<DayPeriodInput> inputs)
     {
         check.Check(request.CheckInAt is null || BusinessClock.ToBusinessDate(request.CheckInAt.Value) == day, "Check-in");
@@ -181,14 +181,8 @@ public sealed class AttendanceCorrectionService(
             "Check-out");
         check.Check(request.CheckInAt is null || request.CheckOutAt is null || request.CheckOutAt > request.CheckInAt, "Check-out");
         check.Check(request.CheckInAt is not null || request.CheckOutAt is not null, "Check-in");
-        if (WorkRules.TypeOn(employee, day) == EmployeeType.Staff)
-        {
-            // A Staff employee has no raft and no job period (BR-LABOR-06).
-            check.Check(inputs.Count == 0, "Job periods");
-            return;
-        }
-
-        check.Check(inputs.Count >= 1, "Job periods");
+        // A seasonal worker has at least one period; a Staff employee has none for a plain attendance day, or the same periods when the Owner records field work back-dated (paid as field shifts).
+        check.Check(inputs.Count >= 1 || WorkRules.TypeOn(employee, day) == EmployeeType.Staff, "Job periods");
         check.Check(inputs.All(p => p.JobTypeId is { } j && j != Guid.Empty), "Job type");
         // A period is on a raft, or in a zone the day already has when it has no raft (nursery).
         check.Check(inputs.All(p => p.RaftId is { } r ? r != Guid.Empty : p.ZoneId is { } z && z != Guid.Empty), "Raft");
