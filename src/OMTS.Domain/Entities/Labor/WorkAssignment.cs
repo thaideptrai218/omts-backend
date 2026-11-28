@@ -53,4 +53,8 @@ public class WorkAssignment : AuditableEntity
     /// </summary>
     public Guid? HarvestPlanLineId { get; set; }
     public HarvestPlanLine? HarvestPlanLine { get; set; }
+
+    /// <summary>The work-day plan this assignment was made for; null for work assigned on its own. It follows the plan's day and place and goes when the member is taken off.</summary>
+    public Guid? WorkDayPlanId { get; set; }
+    public WorkDayPlan? WorkDayPlan { get; set; }
 }

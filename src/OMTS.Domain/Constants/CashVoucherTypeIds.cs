@@ -14,4 +14,7 @@ public static class CashVoucherTypeIds
     public static readonly Guid PaymentPayroll = new("5d6c1a10-0000-4c3a-9a10-000000000006");
     public static readonly Guid PaymentOther = new("5d6c1a10-0000-4c3a-9a10-000000000007");
     public static readonly Guid PaymentToCustomer = new("5d6c1a10-0000-4c3a-9a10-000000000008");
+
+    /// <summary>The pay of people hired outside the system for the day of a work-day plan; made by the plan, not by hand.</summary>
+    public static readonly Guid PaymentOutsiderLabour = new("5d6c1a10-0000-4c3a-9a10-000000000009");
 }

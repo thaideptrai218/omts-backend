@@ -94,6 +94,9 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<HarvestPlanLine> HarvestPlanLines => Set<HarvestPlanLine>();
     public DbSet<HarvestPlanLane> HarvestPlanLanes => Set<HarvestPlanLane>();
     public DbSet<HarvestPlanStaffMember> HarvestPlanStaffMembers => Set<HarvestPlanStaffMember>();
+    public DbSet<WorkDayPlan> WorkDayPlans => Set<WorkDayPlan>();
+    public DbSet<WorkDayPlanMember> WorkDayPlanMembers => Set<WorkDayPlanMember>();
+    public DbSet<PlanOutsiderHire> PlanOutsiderHires => Set<PlanOutsiderHire>();
     public DbSet<SalesOrderHarvestPlan> SalesOrderHarvestPlans => Set<SalesOrderHarvestPlan>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();

@@ -36,6 +36,9 @@ public static class DocumentSequenceKeys
     /// <summary>Customer debt adjustments, DC000123.</summary>
     public const string CustomerDebtAdjustment = "DC";
 
+    /// <summary>Work-day plans, KNL000123.</summary>
+    public const string WorkDayPlan = "KNL";
+
     /// <summary>Payroll sheets, BL000123 (LABOR-12).</summary>
     public const string PayrollSheet = "BL";
 

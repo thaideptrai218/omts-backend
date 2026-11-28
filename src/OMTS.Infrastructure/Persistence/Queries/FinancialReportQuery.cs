@@ -79,6 +79,14 @@ internal sealed class FinancialReportQuery(OmtsDbContext db) : IFinancialReportQ
             .ToListAsync(cancellationToken);
         entries.AddRange(payrolls.Select(p => new FinancialEntry(FinancialEntryCodes.LaborCost, DateOnly.ParseExact($"{p.Month}-01", "yyyy-MM-dd"), p.Net)));
 
+        // People hired outside for the day of a work-day plan are labour cost too, on the day they were paid (their vouchers are of their own type, so no other line counts them).
+        entries.AddRange((await db.CashVouchers.AsNoTracking()
+                .Where(v => v.CancelledAt == null && v.TypeId == CashVoucherTypeIds.PaymentOutsiderLabour && v.VoucherDate >= from && v.VoucherDate <= to)
+                .GroupBy(v => v.VoucherDate)
+                .Select(g => new { Date = g.Key, Amount = g.Sum(v => v.Amount) })
+                .ToListAsync(cancellationToken))
+            .Select(d => new FinancialEntry(FinancialEntryCodes.LaborCost, d.Date, d.Amount)));
+
         // Other expenses and other income: the vouchers that count in the result, of those two categories only (goods and wages have their own lines; a transfer is no result).
         entries.AddRange((await db.CashVouchers.AsNoTracking()
                 .Where(v => v.CancelledAt == null && v.CountsInResult && v.VoucherDate >= from && v.VoucherDate <= to

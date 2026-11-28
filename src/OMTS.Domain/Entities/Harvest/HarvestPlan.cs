@@ -84,6 +84,9 @@ public class HarvestPlanLine : Entity
 
     /// <summary>The lot recorded from this line (it holds the link, <see cref="HarvestLot.HarvestPlanLineId"/>); null until the Zone Manager records it, and again when that lot is removed.</summary>
     public HarvestLot? Lot { get; set; }
+
+    /// <summary>The work-day plan of the people who harvest this line (one per line); null until it is made.</summary>
+    public Labor.WorkDayPlan? WorkDayPlan { get; set; }
 }
 
 /// <summary>A lane planned on a line. It is harvested when it is among the lanes of the line's lot, and left out ("Không thu") when <see cref="SkippedAt"/> is set.</summary>

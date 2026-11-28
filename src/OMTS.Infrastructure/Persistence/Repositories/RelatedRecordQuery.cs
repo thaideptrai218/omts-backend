@@ -39,7 +39,7 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
     {
         if (recordType == nameof(WorkDayPlan))
             return db.Set<WorkDayPlan>().Where(p => p.Id == recordId)
-                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, null, p.ResponsibleAccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
+                .Select(p => new RelatedRecordLocation(p.ZoneId, null, null, p.ResponsibleAccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
         if (recordType == nameof(WorkAssignment))
             return db.WorkAssignments.Where(p => p.Id == recordId)
                 .Select(p => new RelatedRecordLocation(p.ZoneId, null, p.Employee.AccountId, null, null, null)).FirstOrDefaultAsync(cancellationToken);
