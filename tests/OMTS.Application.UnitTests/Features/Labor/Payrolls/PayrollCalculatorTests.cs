@@ -434,6 +434,22 @@ public sealed class PayrollCalculatorTests
     }
 
     [Fact]
+    public void An_assignment_made_for_a_work_day_plan_counts_as_field_work_like_any_other()
+    {
+        var staff = Staff("Quản lý", Fixed(8_000_000, fieldShifts: true));
+        var harvest = ShiftJob("Thu hoạch", 300_000, Long);
+        var field = new DateOnly(2026, 9, 8);
+        var assignment = Assigned(staff, field, harvest);
+        assignment.WorkDayPlanId = Guid.NewGuid();
+        var data = Data(staff, [Attended(staff, field, "07:00", "18:00")], [assignment], [harvest], Break());
+
+        var figures = Calculate(staff, data);
+
+        Assert.Equal((900_000m, 3m), (figures.ShiftPay, figures.Shifts));
+        Assert.Equal([PayLineKind.FieldShift], figures.Jobs.Select(j => j.Kind));
+    }
+
+    [Fact]
     public void A_fixed_salary_without_the_field_shift_option_earns_nothing_for_assigned_days()
     {
         var staff = Staff("Quản lý", Fixed(8_000_000, fieldShifts: false));

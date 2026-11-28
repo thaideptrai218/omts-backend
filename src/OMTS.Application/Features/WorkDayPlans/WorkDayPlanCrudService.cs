@@ -372,7 +372,7 @@ public sealed class WorkDayPlanCrudService(
                 $"Kế hoạch {plan.Code} đang ở trạng thái {WorkDayPlanRules.StatusName(plan.Status)} nên không thể hủy.", "PLAN_CLOSED");
         }
 
-        if (await rowVersions.CheckAsync(plan, request.RowVersion, cancellationToken) is { } stale)
+        if (request.RowVersion is not null && await rowVersions.CheckAsync(plan, request.RowVersion, cancellationToken) is { } stale)
         {
             return stale;
         }
@@ -413,7 +413,7 @@ public sealed class WorkDayPlanCrudService(
                 $"Kế hoạch {plan.Code} ({WorkDayPlanRules.StatusName(plan.Status)}) chưa thể hoàn thành: cần đủ người và đã đến ngày làm.", "PLAN_NOT_RUNNING");
         }
 
-        if (await rowVersions.CheckAsync(plan, request.RowVersion, cancellationToken) is { } stale)
+        if (request.RowVersion is not null && await rowVersions.CheckAsync(plan, request.RowVersion, cancellationToken) is { } stale)
         {
             return stale;
         }
@@ -466,7 +466,8 @@ public sealed class WorkDayPlanCrudService(
                 invalid.Add("Raft");
             }
 
-            var zone = zoneId is { } z && z != Guid.Empty ? (await zones.GetByIdsAsync([z], cancellationToken)).FirstOrDefault() : null;
+            // Tracked, so the plan points at the zone that is there and does not insert it again.
+            var zone = zoneId is { } z && z != Guid.Empty ? await zones.GetForEditAsync(z, cancellationToken) : null;
             if (zone is null || zone.StatusId != StatusIds.Usage.InUse)
             {
                 invalid.Add("Zone");
@@ -476,7 +477,7 @@ public sealed class WorkDayPlanCrudService(
             Domain.Entities.Cultivation.NurseryBatch? batch = null;
             if (batchId is { } b)
             {
-                batch = await batches.GetAsync(b, cancellationToken);
+                batch = await batches.GetForEditAsync(b, cancellationToken);
                 if (batch is null || batch.ZoneId != zone.Id || batch.StatusId != StatusIds.NurseryBatch.Nursing)
                 {
                     invalid.Add("Nursery batch");
