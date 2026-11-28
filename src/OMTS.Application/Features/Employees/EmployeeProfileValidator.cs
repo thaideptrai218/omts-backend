@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Parties;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
@@ -14,7 +15,8 @@ namespace OMTS.Application.Features.Employees;
 /// LABOR-01 step 4: the fields, then what they point to. A zone or job type is checked only when it is new on the profile,
 /// so one discontinued later does not stop other edits (GBR-01).
 /// </summary>
-public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFarmingZoneRepository zones, PayPeriodLock payPeriods, TimeProvider timeProvider)
+public sealed class EmployeeProfileValidator(
+    IEmployeeRepository employees, IFarmingZoneRepository zones, PayPeriodLock payPeriods, PartyAddressVerifier addresses, TimeProvider timeProvider)
 {
     /// <param name="employee">The profile being edited; null when adding.</param>
     public async Task<Result<EmployeeInput>> ValidateAsync(
@@ -25,6 +27,24 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
         {
             return AppError.InvalidFields(invalid);
         }
+
+        // The phone number is how the employee signs in to the Mini App (owner decision of 27/11/2026). A profile saved before it was
+        // required gets it at its next edit; a Left profile, edited only for wages, may keep none.
+        if (input.PhoneNumber is null && (employee is null || employee.StatusId == StatusIds.Employee.Working))
+        {
+            return AppError.Invalid("Phone number");
+        }
+
+        // A picked province and ward are checked against the administrative units list, and take the names of the list.
+        var addressInvalid = new List<string>();
+        var address = await addresses.VerifyAsync(
+            new AddressParts(input.ProvinceCode, input.Area, input.WardCode, input.Ward, input.Address), "Area", "Ward", addressInvalid, cancellationToken);
+        if (addressInvalid.Count > 0)
+        {
+            return AppError.InvalidFields(addressInvalid);
+        }
+
+        input = input with { Area = address.ProvinceName, Ward = address.WardName };
 
         var newZones = input.WorkingZoneIds.Where(z => employee is null || employee.WorkingZones.All(w => w.ZoneId != z)).ToList();
         if (newZones.Any(z => !caller.HasZone(z)))

@@ -4,10 +4,12 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Labor.Payrolls;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Employees;
@@ -20,6 +22,8 @@ public sealed class EmployeeQueryService(
     EmployeeViewBuilder views,
     IPayrollReader payrollReader,
     IPayrollWorkReader workReader,
+    IEmployeeSalaryRepository salaries,
+    IFileStorage storage,
     ICurrentUser currentUser,
     PermissionService permissions,
     TimeProvider timeProvider)
@@ -53,12 +57,18 @@ public sealed class EmployeeQueryService(
         }
 
         var (items, total) = await employees.SearchAsync(filter.Value, FirstZones(caller), page, pageSize, cancellationToken);
-        var listed = items.Select(e => views.ListItem(e, caller)).ToList();
+        var listed = new List<EmployeeListItem>(items.Count);
+        foreach (var e in items)
+        {
+            var row = views.ListItem(e, caller);
+            listed.Add(e.PhotoUrl is { } key ? row with { PhotoUrl = await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) } : row);
+        }
+
         return new Paged<EmployeeListItem>(await WithPayrollFiguresAsync(listed, cancellationToken), page, pageSize, total);
     }
 
     /// <summary>
-    /// Adds the hours of this month and the wage still owed to each row for a caller with PAYROLL View (Owner, Accountant): one read of the month's work and one grouped read of the debts for the
+    /// Adds the hours of this month, the wage still owed and the salary type in force today to each row for a caller with PAYROLL View (Owner, Accountant): one read of the month's work and one grouped read of the debts for the
     /// whole page, never one per employee. Other callers get the rows as they are.
     /// </summary>
     private async Task<List<EmployeeListItem>> WithPayrollFiguresAsync(List<EmployeeListItem> rows, CancellationToken cancellationToken)
@@ -75,7 +85,13 @@ public sealed class EmployeeQueryService(
         var data = await workReader.LoadAsync(from, today, ids, cancellationToken);
         var hours = data.Employees.ToDictionary(e => e.Id, e => PayrollCalculator.Calculate(e, from, today, data).Hours);
         var owed = await payrollReader.OwedByEmployeeAsync(ids, cancellationToken);
-        return rows.Select(r => r with { MonthHours = hours.GetValueOrDefault(r.Id), OutstandingWage = owed.GetValueOrDefault(r.Id) }).ToList();
+        var salaryTypes = await salaries.TypesOnAsync(ids, today, cancellationToken);
+        return rows.Select(r => r with
+        {
+            MonthHours = hours.GetValueOrDefault(r.Id),
+            OutstandingWage = owed.GetValueOrDefault(r.Id),
+            SalaryType = salaryTypes.TryGetValue(r.Id, out var set) ? set : EmployeeSalarySetup.DefaultFor(r.EmployeeType),
+        }).ToList();
     }
 
     /// <summary>
@@ -189,6 +205,7 @@ public sealed class EmployeeQueryService(
     {
         var hasStaffAccount = employee.PhoneNumber is { } phone
             && await accounts.FindByPhoneAsync(phone, cancellationToken) is { SubjectType: SubjectType.Staff };
-        return views.View(employee, caller, hasStaffAccount);
+        var view = views.View(employee, caller, hasStaffAccount);
+        return employee.PhotoUrl is { } key ? view with { PhotoUrl = await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) } : view;
     }
 }

@@ -55,9 +55,8 @@ public sealed record StaffAccountPairView(Guid Id, Guid? ZoneId, string? ZoneNam
 
 /// <summary>Returned once, never stored in clear, never sent by SMS or email (ACCOUNT-09, BR-ACCOUNT-06).</summary>
 /// <param name="MessageCode">MSG-ACCOUNT-23, which clients fill in with the username, this password and its expiry.</param>
-/// <param name="TemporaryPasswordExpiresAt">24 hours after issue; null for the fixed initial password of a seasonal worker, which does not expire.</param>
-/// <param name="FixedPassword">True for the fixed initial password of a seasonal worker's account (the same for every seasonal worker); it must still be changed at the first login.</param>
-public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset? TemporaryPasswordExpiresAt, string MessageCode, bool FixedPassword = false);
+/// <param name="TemporaryPasswordExpiresAt">24 hours after issue.</param>
+public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset? TemporaryPasswordExpiresAt, string MessageCode);
 
 public sealed record Paged<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 

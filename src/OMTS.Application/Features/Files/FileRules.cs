@@ -23,6 +23,9 @@ public sealed record FileRules(IReadOnlySet<FileFormat> AllowedFormats, long Max
     /// <summary>Customer photo: JPEG or PNG, at most 2 MB.</summary>
     public static readonly FileRules CustomerPhoto = new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png }, 2L * 1024 * 1024, 1);
 
+    /// <summary>Employee photo: JPEG or PNG, at most 2 MB.</summary>
+    public static readonly FileRules EmployeePhoto = new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png }, 2L * 1024 * 1024, 1);
+
     /// <summary>Input item photo: JPEG or PNG, at most 2 MB each (an item keeps at most five, one per upload).</summary>
     public static readonly FileRules ItemPhoto = new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png }, 2L * 1024 * 1024, 1);
 

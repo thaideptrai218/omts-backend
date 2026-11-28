@@ -284,9 +284,7 @@ public sealed class HarvestPlanRosterService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var roster = await views.BuildAsync(plan, true, cancellationToken);
-        var result = saved.Value!;
-        return new HarvestPlanExternalAdded(
-            roster, roster.People.First(p => p.Id == row.Id), result.Employee.Account?.Username, result.TemporaryPassword, result.FixedPassword, result.AccountMessageCode, result.AccountNote);
+        return new HarvestPlanExternalAdded(roster, roster.People.First(p => p.Id == row.Id));
     }
 
     // ---- Building ----

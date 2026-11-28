@@ -1,4 +1,6 @@
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
@@ -30,6 +32,18 @@ public interface IJobTypeRepository
     void Add(JobType jobType);
 
     void AddRate(PayRate rate);
+}
+
+/// <summary>The salary setup of each employee, from its date (tab "Thiết lập lương").</summary>
+public interface IEmployeeSalaryRepository
+{
+    /// <summary>The employee with its type periods and salary setups, tracked.</summary>
+    Task<Employee?> GetWithSalarySetupsAsync(Guid employeeId, CancellationToken cancellationToken);
+
+    /// <summary>The salary type in force on <paramref name="day"/> of each employee that has a setup by then; employees without one are left out.</summary>
+    Task<IReadOnlyDictionary<Guid, SalaryType>> TypesOnAsync(IReadOnlyCollection<Guid> employeeIds, DateOnly day, CancellationToken cancellationToken);
+
+    void Add(EmployeeSalarySetup setup);
 }
 
 /// <summary>LABOR-15: the history of the attendance settings.</summary>

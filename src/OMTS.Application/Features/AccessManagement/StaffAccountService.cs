@@ -167,9 +167,8 @@ public sealed class StaffAccountService(
     /// can follow in FARM-05), and the employee link to the unit of work without saving, so LABOR-01 can save employee,
     /// account, grants and link together.
     /// </summary>
-    /// <param name="fixedPassword">The seasonal worker's fixed initial password (<see cref="Employees.SeasonalWorkerAccounts.InitialPassword"/>): it must still be changed at the first login and does not expire; null: a random one-time temporary password.</param>
     public async Task<Result<StaffAccountWithPassword>> AddStaffAccountAsync(
-        CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken, string? fixedPassword = null)
+        CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken)
     {
         if (RefuseOtherSubjectType(request.SubjectType, request.Username) is { } refused)
         {
@@ -189,7 +188,7 @@ public sealed class StaffAccountService(
 
         var (name, username, phone, email) = fields.Value!;
         var now = timeProvider.GetUtcNow();
-        var temporaryPassword = fixedPassword ?? TemporaryPasswords.New();
+        var temporaryPassword = TemporaryPasswords.New();
         var account = new Account
         {
             SubjectType = SubjectType.Staff,
@@ -201,7 +200,7 @@ public sealed class StaffAccountService(
             Note = note,
             PasswordHash = passwordHasher.Hash(temporaryPassword),
             MustChangePassword = true,
-            TemporaryPasswordIssuedAt = fixedPassword is null ? now : Employees.SeasonalWorkerAccounts.NeverExpiresIssuedAt,
+            TemporaryPasswordIssuedAt = now,
         };
         accounts.Add(account);
         if (employee is not null)
@@ -223,7 +222,7 @@ public sealed class StaffAccountService(
         });
 
         return new StaffAccountWithPassword(
-            await ViewAsync(account, cancellationToken), temporaryPassword, fixedPassword is null ? now + Account.TemporaryPasswordLifetime : null, MessageCodes.Account23, fixedPassword is not null);
+            await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
     }
 
     public async Task<Result<StaffAccountView>> UpdateAsync(Guid id, UpdateStaffAccountRequest request, CancellationToken cancellationToken)
@@ -407,12 +406,11 @@ public sealed class StaffAccountService(
         }
 
         var now = timeProvider.GetUtcNow();
-        // The account of a seasonal worker is reset to the fixed initial password, which does not expire; any other to a random one for 24 hours.
-        var seasonal = await employees.IsSeasonalWorkerAccountAsync(account.Id, timeProvider.Today(), cancellationToken);
-        var temporaryPassword = seasonal ? Employees.SeasonalWorkerAccounts.InitialPassword : TemporaryPasswords.New();
+        // Every account, a seasonal worker's too, gets a random one-time password for 24 hours: no account holds a shared, well-known password.
+        var temporaryPassword = TemporaryPasswords.New();
         account.PasswordHash = passwordHasher.Hash(temporaryPassword);
         account.MustChangePassword = true;
-        account.TemporaryPasswordIssuedAt = seasonal ? Employees.SeasonalWorkerAccounts.NeverExpiresIssuedAt : now;
+        account.TemporaryPasswordIssuedAt = now;
         // A fresh temporary password also lifts a temporary login lock.
         account.FailedLoginCount = 0;
         account.LockoutEndAt = null;
@@ -421,11 +419,11 @@ public sealed class StaffAccountService(
         {
             RecordId = account.Id,
             RecordCode = account.Username,
-            After = new { account.MustChangePassword, account.TemporaryPasswordIssuedAt, FixedPassword = seasonal, SessionsRevoked = true },
+            After = new { account.MustChangePassword, account.TemporaryPasswordIssuedAt, SessionsRevoked = true },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return new StaffAccountWithPassword(
-            await ViewAsync(account, cancellationToken), temporaryPassword, seasonal ? null : now + Account.TemporaryPasswordLifetime, MessageCodes.Account23, seasonal);
+            await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
     }
 
     private async Task<Result<StaffAccountView>> ChangeStatusAsync(Guid id, int from, int to, string? reason, CancellationToken cancellationToken)

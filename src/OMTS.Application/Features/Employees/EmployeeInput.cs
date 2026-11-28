@@ -23,7 +23,9 @@ public sealed partial record EmployeeInput(
     string? Code = null,
     Gender? Gender = null,
     string? IdNumber = null,
-    DateOnly? StartDate = null)
+    DateOnly? StartDate = null,
+    int? ProvinceCode = null,
+    int? WardCode = null)
 {
     /// <summary>The normalised input, or the names of every invalid field.</summary>
     /// <param name="adding">A new employee needs a type, and a Staff one a working zone (a seasonal worker has none fixed: today zone A, tomorrow zone B by assignment); an edit may leave the type out, and its zones are checked with those it keeps.</param>
@@ -93,11 +95,17 @@ public sealed partial record EmployeeInput(
             invalid.Add("ID number");
         }
 
+        // A ward is picked inside its province.
+        if (request.WardCode is not null && request.ProvinceCode is null)
+        {
+            invalid.Add("Ward");
+        }
+
         var bank = Bank(request.BankAccount, invalid);
         var typeFrom = request.EmployeeTypeFrom ?? (adding ? today : null);
         return invalid.Count > 0
             ? (null, invalid)
-            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank, code, request.Gender, idNumber, request.StartDate), invalid);
+            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank, code, request.Gender, idNumber, request.StartDate, request.ProvinceCode, request.WardCode), invalid);
     }
 
     /// <summary>A phone number is optional: empty gives none, anything else must be a valid number.</summary>

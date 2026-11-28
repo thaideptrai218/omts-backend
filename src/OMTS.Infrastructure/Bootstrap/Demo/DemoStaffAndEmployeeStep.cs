@@ -36,7 +36,8 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         {
             var phone = PhoneNumbers.Normalize(plan.Phone);
             var employee = await context.Db.Employees.FirstOrDefaultAsync(
-                e => phone == null ? e.FullName == plan.FullName && e.PhoneNumber == null : e.PhoneNumber == phone, cancellationToken);
+                // A database seeded before every demo employee had a phone number still holds that one without it, found by name.
+                e => e.PhoneNumber == phone || (e.FullName == plan.FullName && e.PhoneNumber == null), cancellationToken);
             if (employee is null)
             {
                 var saved = DemoSeedContext.Ensure(await service.CreateAsync(await RequestAsync(context, plan, cancellationToken), cancellationToken), $"employee {plan.FullName}");

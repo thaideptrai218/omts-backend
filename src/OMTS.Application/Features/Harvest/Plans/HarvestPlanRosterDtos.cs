@@ -56,9 +56,8 @@ public sealed record RemoveHarvestStaffRequest(string? Reason = null);
 /// </summary>
 public sealed record AddExternalHarvestStaffRequest(string? FullName, string? PhoneNumber, string? Note = null, string? Address = null, bool OwnerApproved = false);
 
-/// <summary>The answer of "Bổ sung nhân công": the roster, the new row and the login of the new seasonal worker (the fixed first password, shown once, as in the employee answer).</summary>
-public sealed record HarvestPlanExternalAdded(
-    HarvestPlanRoster Roster, HarvestPlanRosterRow Person, string? Username, string? TemporaryPassword, bool FixedPassword, string? AccountMessageCode, string? AccountNote);
+/// <summary>The answer of "Bổ sung nhân công": the roster and the new row. The person gets no login account.</summary>
+public sealed record HarvestPlanExternalAdded(HarvestPlanRoster Roster, HarvestPlanRosterRow Person);
 
 /// <summary>The number of people the plan needs (PUT required): 1 to 500, null clears it; <paramref name="RowVersion"/> is the plan's, checked when sent.</summary>
 public sealed record SetRequiredPeopleRequest(int? RequiredPeople, string? RowVersion = null);

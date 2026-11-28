@@ -23,8 +23,24 @@ public sealed class EmployeesController(
     EmployeeFileService files,
     EmployeeWorkingZoneService workingZones,
     EmploymentService employment,
-    EmploymentConsequencesService consequences) : ControllerBase
+    EmploymentConsequencesService consequences,
+    EmployeePhotoService photos) : ControllerBase
 {
+    /// <summary>Multipart field <c>file</c>: JPEG or PNG, at most 2 MB. Replaces the photo.</summary>
+    [HttpPut("{id:guid}/photo")]
+    [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Edit, PermissionScope.AnyZone)]
+    [RequestSizeLimit(3 * 1024 * 1024)]
+    [UploadField("Photo")]
+    [ProducesResponseType<EmployeeView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetPhoto(Guid id, IFormFile? file, CancellationToken cancellationToken) =>
+        (await photos.SetAsync(id, file is null ? null : await file.ToIncomingFileAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+
+    [HttpDelete("{id:guid}/photo")]
+    [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Edit, PermissionScope.AnyZone)]
+    [ProducesResponseType<EmployeeView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RemovePhoto(Guid id, CancellationToken cancellationToken) =>
+        (await photos.RemoveAsync(id, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>
     /// Filters: <c>search</c> (name, code or phone), <c>statusId</c>, <c>zoneId</c>, <c>employeeType</c> (SeasonalWorker or Staff, the
     /// type in force today) and <c>jobTypeId</c>. <c>sortBy</c> is name, code, phone, type, status or lastWorkingDay with

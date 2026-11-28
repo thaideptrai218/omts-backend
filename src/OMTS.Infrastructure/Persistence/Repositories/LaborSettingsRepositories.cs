@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -59,6 +61,34 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
     public void Add(JobType jobType) => db.JobTypes.Add(jobType);
 
     public void AddRate(PayRate rate) => db.PayRates.Add(rate);
+}
+
+internal sealed class EmployeeSalaryRepository(OmtsDbContext db) : IEmployeeSalaryRepository
+{
+    public Task<Employee?> GetWithSalarySetupsAsync(Guid employeeId, CancellationToken cancellationToken) =>
+        db.Employees
+            .Include(e => e.TypePeriods)
+            .Include(e => e.SalarySetups)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(e => e.Id == employeeId, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, SalaryType>> TypesOnAsync(IReadOnlyCollection<Guid> employeeIds, DateOnly day, CancellationToken cancellationToken)
+    {
+        if (employeeIds.Count == 0)
+        {
+            return new Dictionary<Guid, SalaryType>();
+        }
+
+        // The latest setup on or before the day, as EmployeeSalarySetup.EffectiveOn picks it, in one query for the whole page.
+        var rows = await db.EmployeeSalarySetups.AsNoTracking()
+            .Where(s => employeeIds.Contains(s.EmployeeId) && s.EffectiveFrom <= day)
+            .Where(s => s.EffectiveFrom == db.EmployeeSalarySetups.Where(o => o.EmployeeId == s.EmployeeId && o.EffectiveFrom <= day).Max(o => o.EffectiveFrom))
+            .Select(s => new { s.EmployeeId, s.Type })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(r => r.EmployeeId, r => r.Type);
+    }
+
+    public void Add(EmployeeSalarySetup setup) => db.EmployeeSalarySetups.Add(setup);
 }
 
 internal sealed class AttendanceSettingsRepository(OmtsDbContext db) : IAttendanceSettingsRepository

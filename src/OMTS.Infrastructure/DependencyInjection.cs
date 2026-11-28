@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddScoped<IEmployeeEndingReader, EmployeeEndingReader>();
         services.AddScoped<IEmployeeAppRepository, EmployeeAppRepository>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
+        services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IPayrollSheetRepository, PayrollSheetRepository>();
@@ -223,7 +224,7 @@ public static class DependencyInjection
         services.AddSingleton<IReportDocumentRenderer, ReportDocumentPdfRenderer>();
 
         services.AddScoped<AddressCodeBackfill>();
-        services.AddScoped<SeasonalAccountBackfill>();
+        services.AddScoped<RetiredSeasonalPasswordCleanup>();
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
 

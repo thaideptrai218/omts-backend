@@ -76,15 +76,6 @@ public class SeasonalWorkerRulesTests
     }
 
     [Fact]
-    public void The_fixed_initial_password_meets_the_password_policy_and_the_usernames_are_valid()
-    {
-        Assert.Equal("OMTS@1234", SeasonalWorkerAccounts.InitialPassword);
-        Assert.True(PasswordPolicy.IsValid(SeasonalWorkerAccounts.InitialPassword));
-        Assert.Equal(["nv000012", "tv0912345678"], SeasonalAccountProvisioner.Suggestions("NV000012", "0912345678"));
-        Assert.Equal(["tv0912345678"], SeasonalAccountProvisioner.Suggestions(null, "0912345678"));
-    }
-
-    [Fact]
     public void The_employee_role_is_fixed_holds_no_function_and_is_found_by_its_code()
     {
         var role = FixedRoles.FindByCode("employee");

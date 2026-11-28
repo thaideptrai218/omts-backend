@@ -19,7 +19,7 @@ public sealed record NewEmployeeAccount(
 /// <summary>Links an existing staff account that has no employee yet.</summary>
 public sealed record LinkEmployeeAccountRequest(Guid? AccountId);
 
-/// <param name="PhoneNumber">Optional; empty is no phone number.</param>
+/// <param name="PhoneNumber">Required for an Employed profile: it is the number the employee signs in with. A Left profile may keep none.</param>
 /// <param name="EmployeeType">
 /// Required when adding. When editing, a type other than the one in force on <paramref name="EmployeeTypeFrom"/> starts a
 /// new period from that date; left out, the type stays.
@@ -39,6 +39,8 @@ public sealed record LinkEmployeeAccountRequest(Guid? AccountId);
 /// <param name="Gender">Optional. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
 /// <param name="IdNumber">Optional, 9 or 12 digits. Null on an edit leaves it, an empty text clears it. Never in a file.</param>
 /// <param name="StartDate">Optional first day of work, not after today. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
+/// <param name="ProvinceCode">The province picked from the administrative units list; <paramref name="Area"/> is its name. Null keeps a typed name without a code.</param>
+/// <param name="WardCode">The ward of that province; <paramref name="Ward"/> is its name. Needs <paramref name="ProvinceCode"/>.</param>
 public sealed record SaveEmployeeRequest(
     string? FullName,
     string? PhoneNumber,
@@ -59,7 +61,9 @@ public sealed record SaveEmployeeRequest(
     string? Code = null,
     Gender? Gender = null,
     string? IdNumber = null,
-    DateOnly? StartDate = null);
+    DateOnly? StartDate = null,
+    int? ProvinceCode = null,
+    int? WardCode = null);
 
 /// <param name="ZoneId">One of the caller's zones.</param>
 public sealed record AddWorkingZoneRequest(Guid? ZoneId);
@@ -87,6 +91,8 @@ public sealed record EmployeeBankAccountView(string BankName, string AccountNumb
 /// <param name="Code">Null only for a profile older than the code; every profile has one after the migration.</param>
 /// <param name="Birthday">This and the other personal fields (gender, ID number, start date, address…), down to <paramref name="BankAccount"/>, only when <paramref name="CanMaintain"/>.</param>
 /// <param name="Account">The linked staff account; for the Cooperative Owner only.</param>
+/// <param name="ProvinceCode">The codes of the address, with the personal fields.</param>
+/// <param name="PhotoUrl">A temporary address of the photo; null without one.</param>
 public sealed record EmployeeView(
     Guid Id,
     string? Code,
@@ -111,11 +117,16 @@ public sealed record EmployeeView(
     string? Notes,
     EmployeeBankAccountView? BankAccount,
     LinkedAccountView? Account,
-    string RowVersion);
+    string RowVersion,
+    int? ProvinceCode = null,
+    int? WardCode = null,
+    string? PhotoUrl = null);
 
 /// <param name="Account">The linked account's basic identity and status, within the caller's employee scope. Managing accounts remains Owner-only.</param>
 /// <param name="MonthHours">Paid hours worked from the first of this month to today (break deducted, as the payroll counts them); only for a caller with PAYROLL View (Owner, Accountant), else null.</param>
+/// <param name="IdNumber">This and the other personal fields down to <paramref name="Notes"/> (the optional columns of the list) only when <paramref name="CanMaintain"/>, as in the detail view.</param>
 /// <param name="OutstandingWage">What the employee is still owed on Finalized payroll sheets, VND; same visibility as <paramref name="MonthHours"/>.</param>
+/// <param name="SalaryType">The salary type in force today, or the default of the employee type; null for a Staff employee without a setup ("Chưa thiết lập lương"), and always null for a caller who does not see <paramref name="MonthHours"/>.</param>
 public sealed record EmployeeListItem(
     Guid Id,
     string? Code,
@@ -130,18 +141,26 @@ public sealed record EmployeeListItem(
     LinkedAccountView? Account,
     string RowVersion,
     decimal? MonthHours = null,
-    decimal? OutstandingWage = null);
+    decimal? OutstandingWage = null,
+    SalaryType? SalaryType = null,
+    string? PhotoUrl = null,
+    string? IdNumber = null,
+    DateOnly? Birthday = null,
+    Gender? Gender = null,
+    DateOnly? StartDate = null,
+    string? Address = null,
+    string? Area = null,
+    string? Ward = null,
+    string? Notes = null);
 
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="TemporaryPassword">Only when a login account was created in the same save; shown once.</param>
 /// <param name="AccountMessageCode">MSG-ACCOUNT-23 with <paramref name="TemporaryPassword"/>: the client fills it in, as for a staff account.</param>
-/// <param name="FixedPassword">True when <paramref name="TemporaryPassword"/> is the fixed initial password of a seasonal worker account (the same for all of them, never expires, still changed at the first login).</param>
-/// <param name="AccountNote">Why a seasonal worker was saved without the login account every one of them has: the message code of the refusal (MSG-ACCOUNT-09: the phone number or username is another account); null otherwise.</param>
 /// <param name="DuplicateIdNumber">Another employee holds the same ID number (CCCD): the profile is saved all the same and the client shows this warning (L16). Null when there is none.</param>
 public sealed record EmployeeSaved(
     EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null, string? AccountMessageCode = null,
-    EmployeeIdNumberWarning? DuplicateIdNumber = null, bool FixedPassword = false, string? AccountNote = null);
+    EmployeeIdNumberWarning? DuplicateIdNumber = null);
 
 /// <summary>The other employee with the same ID number; <c>Message</c> is the Vietnamese warning.</summary>
 public sealed record EmployeeIdNumberWarning(Guid EmployeeId, string? Code, string FullName, string Message);

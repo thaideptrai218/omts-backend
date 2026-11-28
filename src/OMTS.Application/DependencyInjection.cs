@@ -142,7 +142,6 @@ public static class DependencyInjection
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();
         services.AddScoped<EmployeeProfileValidator>();
-        services.AddScoped<SeasonalAccountProvisioner>();
         services.AddScoped<EmployeeCodeAllocator>();
         services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeFileService>();
@@ -185,6 +184,8 @@ public static class DependencyInjection
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
+        services.AddScoped<EmployeeSalaryService>();
+        services.AddScoped<EmployeePhotoService>();
         services.AddScoped<AttendanceSettingsService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
