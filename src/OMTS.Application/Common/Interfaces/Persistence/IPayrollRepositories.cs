@@ -7,8 +7,11 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 /// <summary>The payroll sheets the services change (LABOR-12, LABOR-13).</summary>
 public interface IPayrollSheetRepository
 {
-    /// <summary>The sheet with its lines (and their job rows) and chosen employees, tracked.</summary>
+    /// <summary>The sheet with its lines (and their job rows and adjustments) and chosen employees, tracked.</summary>
     Task<Payroll?> GetForEditAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The sheet that has this payslip, loaded as <see cref="GetForEditAsync"/> does; null when no payslip has the id.</summary>
+    Task<Payroll?> GetForEditByLineAsync(Guid lineId, CancellationToken cancellationToken);
 
     /// <summary>The sheets that are not Cancelled whose period shares a day with <paramref name="from"/>…<paramref name="to"/>, with their lines and chosen employees, untracked.</summary>
     Task<IReadOnlyList<Payroll>> ListActiveOverlappingAsync(DateOnly from, DateOnly to, Guid? exceptId, CancellationToken cancellationToken);
@@ -20,18 +23,22 @@ public interface IPayrollSheetRepository
 
     void Add(PayrollLineJob job);
 
+    void Add(PayrollLineAdjustment adjustment);
+
     /// <summary>Removes the payslip of a sheet that is still Provisional, with its job rows.</summary>
     void Remove(PayrollLine line);
 
     void Remove(PayrollLineJob job);
+
+    void Remove(PayrollLineAdjustment adjustment);
 }
 
 /// <summary>What a payroll calculation reads for a period (BR-LABOR-10): everything is untracked.</summary>
-/// <param name="Employees">With type periods; the employees with attendance in the period, or the ones asked for.</param>
+/// <param name="Employees">With type periods and salary setups; the employees with attendance in the period, the ones asked for, and (when none were asked for) the employees with a fixed salary or no setup who were employed in the period.</param>
 /// <param name="Attendances">Of those employees in the period.</param>
 /// <param name="Assignments">The job periods of those employees in the period, with their job type.</param>
 /// <param name="Settings">Every version of the attendance settings.</param>
-/// <param name="JobTypes">The job types of the assignments, with their rates.</param>
+/// <param name="JobTypes">The job types of the assignments, with their hourly and shift rates.</param>
 public sealed record PayrollWorkData(
     IReadOnlyList<Employee> Employees,
     IReadOnlyList<Attendance> Attendances,
@@ -42,7 +49,7 @@ public sealed record PayrollWorkData(
 /// <summary>The records a payroll is calculated from, and the requests that stop it being finalized.</summary>
 public interface IPayrollWorkReader
 {
-    /// <summary>The work of the period. <paramref name="employeeIds"/> null means every employee with attendance in it.</summary>
+    /// <summary>The work of the period. <paramref name="employeeIds"/> null means every employee with attendance in it, and every employee employed in it who has a fixed salary or no setup.</summary>
     Task<PayrollWorkData> LoadAsync(DateOnly from, DateOnly to, IReadOnlyCollection<Guid>? employeeIds, CancellationToken cancellationToken);
 
     /// <summary>The employees with these ids, with type periods, untracked.</summary>
@@ -67,6 +74,15 @@ public interface IWagePaymentRepository
     /// <summary>The advances of these employees not cancelled and not fully deducted, oldest first, tracked.</summary>
     Task<IReadOnlyList<OpenAdvance>> ListOpenAdvancesAsync(IReadOnlyCollection<Guid> employeeIds, CancellationToken cancellationToken);
 
+    /// <summary>The payment whose cash voucher has this id, with its voucher (and bank account), employee and payslip with its sheet, tracked.</summary>
+    Task<WagePayment?> GetByVoucherForEditAsync(Guid voucherId, CancellationToken cancellationToken);
+
+    /// <summary>What was paid on the payslip before this payment (its other payments that are not cancelled, by time paid then by creation).</summary>
+    Task<decimal> PaidBeforeAsync(WagePayment payment, CancellationToken cancellationToken);
+
+    /// <summary>How much of this advance later payslips have taken off.</summary>
+    Task<decimal> DeductedAsync(Guid advanceId, CancellationToken cancellationToken);
+
     /// <summary>The payments saved with this request key, in order, with their voucher.</summary>
     Task<IReadOnlyList<WagePayment>> ListByRequestKeyAsync(string key, CancellationToken cancellationToken);
 
@@ -79,23 +95,32 @@ public sealed record PayrollHeaderRow(Guid Id, string Code, PayrollPeriodType Pe
 
 public sealed record PayrollSlipRaw(
     Guid Id, string Code, Guid EmployeeId, string? EmployeeCode, string EmployeeName, decimal Hours, string? HourlyRateNote,
-    decimal MainPay, decimal Bonus, decimal Deduction, decimal Paid);
+    decimal MainPay, decimal Bonus, decimal Deduction, decimal Paid,
+    SalaryType? SalaryType = null, decimal Shifts = 0, decimal ShiftPay = 0, decimal ManualDeduction = 0)
+{
+    /// <summary>The adjustments in the order they were entered.</summary>
+    public IReadOnlyList<SlipAdjustmentRaw> Adjustments { get; init; } = [];
+}
+
+public sealed record SlipAdjustmentRaw(PayrollAdjustmentKind Kind, decimal Amount, string Reason);
 
 public sealed record PayrollDetailRaw(
     Guid Id, string Code, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, int StatusId, string? ExpenseMonth,
-    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null);
+    string? Note, Guid? CreatedBy, DateTimeOffset CreatedAt, IReadOnlyList<PayrollSlipRaw> Slips, DateTimeOffset? UpdatedAt = null,
+    Guid? FinalizedBy = null, DateTimeOffset? FinalizedAt = null, IReadOnlyList<Guid>? SelectedEmployeeIds = null);
 
-public sealed record SlipJobRaw(string JobName, decimal Hours, decimal HourlyRate, decimal Amount);
+public sealed record SlipJobRaw(
+    string JobName, decimal Hours, decimal HourlyRate, decimal Amount, PayLineKind Kind = PayLineKind.Hourly, decimal ShiftRate = 0, decimal Shifts = 0);
 
 public sealed record SlipPaymentRaw(Guid Id, string VoucherCode, DateTimeOffset PaidAt, PaymentMethod Method, decimal Amount, WagePaymentKind Kind, bool Cancelled);
 
 public sealed record SlipDetailRaw(
     PayrollSlipRaw Slip, Guid PayrollId, string PayrollCode, DateOnly From, DateOnly To, int StatusId,
-    IReadOnlyList<SlipJobRaw> Jobs, IReadOnlyList<SlipPaymentRaw> Payments);
+    IReadOnlyList<SlipJobRaw> Jobs, IReadOnlyList<SlipPaymentRaw> Payments, PayrollPeriodType PeriodType = PayrollPeriodType.Custom);
 
 public sealed record EmployeeSlipRaw(
     Guid Id, string Code, Guid PayrollId, string PayrollCode, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, int StatusId,
-    decimal Income, decimal Net, decimal Paid);
+    decimal Income, decimal Net, decimal Paid, DateTimeOffset? FinalizedAt = null);
 
 public sealed record EmployeeSlipPageRaw(IReadOnlyList<EmployeeSlipRaw> Items, int Total, decimal Outstanding, decimal AdvanceBalance);
 

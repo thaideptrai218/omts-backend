@@ -12,9 +12,13 @@ internal sealed class EmployeeSalarySetupConfiguration : IEntityTypeConfiguratio
         builder.HasOne(x => x.Employee).WithMany(e => e.SalarySetups).HasForeignKey(x => x.EmployeeId);
         builder.HasIndex(x => new { x.EmployeeId, x.EffectiveFrom }).IsUnique();
         builder.ReferencesAccount(nameof(EmployeeSalarySetup.EnteredByAccountId));
-        // A fixed salary has its amount; an hourly one has none.
-        builder.ToTable(t => t.HasCheckConstraint(
-            "CK_EmployeeSalarySetups_MonthlyAmount",
-            "([Type] = 'FixedMonthly' AND [MonthlyAmount] > 0) OR ([Type] = 'Hourly' AND [MonthlyAmount] IS NULL)"));
+        // A fixed salary has its amount; the other types have none, and only a fixed salary may pay field shifts.
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint(
+                "CK_EmployeeSalarySetups_MonthlyAmount",
+                "([Type] = 'FixedMonthly' AND [MonthlyAmount] > 0) OR ([Type] IN ('Hourly', 'PerShift') AND [MonthlyAmount] IS NULL)");
+            t.HasCheckConstraint("CK_EmployeeSalarySetups_PayFieldShifts", "[Type] = 'FixedMonthly' OR [PayFieldShifts] = 0");
+        });
     }
 }

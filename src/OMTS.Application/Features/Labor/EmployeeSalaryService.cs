@@ -16,7 +16,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Labor;
 
 /// <summary>
-/// The salary setup of an employee (tab "Thiết lập lương", owner decision of 27/11/2026): a fixed monthly amount or pay by the hour,
+/// The salary setup of an employee (tab "Thiết lập lương", owner decision of 27/11/2026): a fixed monthly amount (with or without the shifts of field work), pay by the shift or pay by the hour,
 /// each from an effective date, like the hourly rate of a job type (<see cref="PayRateService"/>). The date of an existing setup
 /// replaces that setup and the others stay, so a change never rewrites another month. A date inside a finalized payroll is refused
 /// (BR-LABOR-13). Each save moves the row version of the employee, so parallel saves answer MSG06.
@@ -46,6 +46,7 @@ public sealed class EmployeeSalaryService(
 
         var check = new FieldCheck();
         var (type, amount) = Fields(check, request.Type, request.MonthlyAmount);
+        var fieldShifts = FieldShifts(check, type, request.PayFieldShifts);
         var from = JobTypeFields.EffectiveDate(check, request.EffectiveFrom);
         if (!check.IsValid)
         {
@@ -64,7 +65,7 @@ public sealed class EmployeeSalaryService(
         }
 
         var sameDate = employee.SalarySetups.FirstOrDefault(s => s.EffectiveFrom == from);
-        if (sameDate is not null && sameDate.Type == type && sameDate.MonthlyAmount == amount)
+        if (sameDate is not null && sameDate.Type == type && sameDate.MonthlyAmount == amount && sameDate.PayFieldShifts == fieldShifts)
         {
             // Nothing to save. The employee and its setups came from one read, so the version is read again before it is handed back (NFR-09).
             await unitOfWork.ReloadAsync(employee, cancellationToken);
@@ -80,19 +81,20 @@ public sealed class EmployeeSalaryService(
         {
             RecordId = employee.Id,
             RecordCode = employee.Code,
-            Before = sameDate is null ? null : new { sameDate.Type, sameDate.MonthlyAmount, EffectiveFrom = from },
-            After = new { Type = type, MonthlyAmount = amount, EffectiveFrom = from },
+            Before = sameDate is null ? null : new { sameDate.Type, sameDate.MonthlyAmount, sameDate.PayFieldShifts, EffectiveFrom = from },
+            After = new { Type = type, MonthlyAmount = amount, PayFieldShifts = fieldShifts, EffectiveFrom = from },
         });
         var enteredBy = currentUser.AccountId ?? throw new InvalidOperationException("A salary is entered by a logged-in user.");
         if (sameDate is null)
         {
             // The employee is tracked, so adding the row also puts it in employee.SalarySetups for the answer.
-            salaries.Add(new EmployeeSalarySetup { EmployeeId = employee.Id, Type = type, MonthlyAmount = amount, EffectiveFrom = from, EnteredByAccountId = enteredBy });
+            salaries.Add(new EmployeeSalarySetup { EmployeeId = employee.Id, Type = type, MonthlyAmount = amount, PayFieldShifts = fieldShifts, EffectiveFrom = from, EnteredByAccountId = enteredBy });
         }
         else
         {
             sameDate.Type = type;
             sameDate.MonthlyAmount = amount;
+            sameDate.PayFieldShifts = fieldShifts;
             sameDate.EnteredByAccountId = enteredBy;
         }
 
@@ -109,7 +111,19 @@ public sealed class EmployeeSalaryService(
         }
     }
 
-    /// <summary>A defined type; the amount is required and whole for a fixed salary, and must be absent for hourly pay.</summary>
+    /// <summary>Only a fixed salary may pay field shifts, and it does unless told not to; any other type with the flag set is refused.</summary>
+    internal static bool FieldShifts(FieldCheck check, SalaryType type, bool? requested)
+    {
+        if (type == SalaryType.FixedMonthly)
+        {
+            return requested ?? true;
+        }
+
+        check.Check(requested is not true, "Pay field shifts");
+        return false;
+    }
+
+    /// <summary>A defined type; the amount is required and whole for a fixed salary, and must be absent for hourly and per-shift pay.</summary>
     internal static (SalaryType Type, decimal? Amount) Fields(FieldCheck check, SalaryType? type, decimal? amount)
     {
         if (type is not { } t || !Enum.IsDefined(t))
@@ -118,7 +132,7 @@ public sealed class EmployeeSalaryService(
             return (default, null);
         }
 
-        if (t == SalaryType.Hourly)
+        if (t != SalaryType.FixedMonthly)
         {
             check.Check(amount is null, "Monthly amount");
             return (t, null);
@@ -143,5 +157,5 @@ public sealed class EmployeeSalaryService(
             RowVersionGuard.Encode(employee.RowVersion));
     }
 
-    private static SalarySetupView ViewOf(EmployeeSalarySetup setup) => new(setup.Type, setup.MonthlyAmount, setup.EffectiveFrom, setup.CreatedAt);
+    private static SalarySetupView ViewOf(EmployeeSalarySetup setup) => new(setup.Type, setup.MonthlyAmount, setup.EffectiveFrom, setup.CreatedAt, setup.PayFieldShifts);
 }

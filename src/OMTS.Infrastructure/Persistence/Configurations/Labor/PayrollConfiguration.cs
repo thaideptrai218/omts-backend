@@ -43,13 +43,17 @@ internal sealed class PayrollLineConfiguration : IEntityTypeConfiguration<Payrol
         builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
         builder.Property(x => x.HourlyRateNote).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.Hours).HasPrecision(18, 2);
+        builder.Property(x => x.Shifts).HasPrecision(18, 1);
         builder.Property(x => x.MainPay).HasPrecision(18, 0);
+        builder.Property(x => x.ShiftPay).HasPrecision(18, 0);
         builder.Property(x => x.Bonus).HasPrecision(18, 0);
+        builder.Property(x => x.ManualDeduction).HasPrecision(18, 0);
         builder.Property(x => x.Deduction).HasPrecision(18, 0);
         builder.Ignore(x => x.Income);
         builder.Ignore(x => x.Net);
         builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(x => x.Jobs).WithOne(x => x.PayrollLine).HasForeignKey(x => x.PayrollLineId);
+        builder.HasMany(x => x.Adjustments).WithOne(x => x.PayrollLine).HasForeignKey(x => x.PayrollLineId);
         // One payslip per employee in a sheet; every code is given once.
         builder.HasIndex(x => new { x.PayrollId, x.EmployeeId }).IsUnique();
         builder.HasIndex(x => x.Code).IsUnique();
@@ -63,9 +67,22 @@ internal sealed class PayrollLineJobConfiguration : IEntityTypeConfiguration<Pay
     {
         builder.Property(x => x.JobName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.HourlyRate).HasPrecision(18, 0);
+        builder.Property(x => x.ShiftRate).HasPrecision(18, 0);
         builder.Property(x => x.Hours).HasPrecision(18, 2);
+        builder.Property(x => x.Shifts).HasPrecision(18, 1);
         builder.Property(x => x.Amount).HasPrecision(18, 0);
         builder.HasIndex(x => x.PayrollLineId);
+    }
+}
+
+internal sealed class PayrollLineAdjustmentConfiguration : IEntityTypeConfiguration<PayrollLineAdjustment>
+{
+    public void Configure(EntityTypeBuilder<PayrollLineAdjustment> builder)
+    {
+        builder.Property(x => x.Amount).HasPrecision(18, 0);
+        builder.Property(x => x.Reason).HasMaxLength(PayrollLineAdjustment.MaxReasonLength);
+        builder.HasIndex(x => new { x.PayrollLineId, x.Position });
+        builder.ToTable(t => t.HasCheckConstraint("CK_PayrollLineAdjustments_Amount", "[Amount] > 0"));
     }
 }
 

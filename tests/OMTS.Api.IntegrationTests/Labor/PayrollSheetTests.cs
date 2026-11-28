@@ -36,7 +36,7 @@ public class PayrollSheetTests
         var first = sheet.SlipOf(an);
         Assert.Matches(@"^PL\d{6}$", first.Str("code"));
         Assert.Matches(@"^NV\d{6}$", first.Str("employeeCode"));
-        Assert.Equal((32m, 1_280_000m, 0m, 0m, 1_280_000m, 1_280_000m, 0m, 1_280_000m), (first.Money("hours"), first.Money("mainPay"), first.Money("bonus"), first.Money("deduction"), first.Money("income"), first.Money("net"), first.Money("paid"), first.Money("outstanding")));
+        Assert.Equal((32m, 1_280_000m, 0m, 0m, 1_280_000m, 1_280_000m, 0m, 1_280_000m), (first.Money("hours"), first.Money("mainPay"), first.Money("bonus"), first.Money("advanceDeduction"), first.Money("income"), first.Money("net"), first.Money("paid"), first.Money("outstanding")));
         Assert.Equal("40.000", first.Str("hourlyRateNote"));
         Assert.Equal((16m, 640_000m), (sheet.SlipOf(binh).Money("hours"), sheet.SlipOf(binh).Money("mainPay")));
         Assert.Equal((1_920_000m, 0m, 1_920_000m), (sheet.Money("total"), sheet.Money("paid"), sheet.Money("outstanding")));
@@ -114,7 +114,7 @@ public class PayrollSheetTests
     }
 
     [Fact]
-    public async Task The_same_period_for_the_same_worker_is_409_an_overlapping_one_is_400_and_a_cancelled_sheet_frees_the_period()
+    public async Task The_same_period_for_the_same_worker_is_409_an_overlapping_one_is_400_a_mixed_sheet_leaves_the_covered_worker_out_and_a_cancelled_sheet_frees_the_period()
     {
         await using var factory = new AuthApiFactory();
         var s = await SetupWorkAsync(factory);
@@ -124,14 +124,19 @@ public class PayrollSheetTests
 
         var same = await CreateSheetAsync(s.Owner, MonthBody(3, an));
         var overlapping = await CreateSheetAsync(s.Owner, new { periodType = "Custom", from = "2024-03-02", to = "2024-03-20", scope = "Selected", employeeIds = new[] { an } });
-        var allOverlap = await CreateSheetAsync(s.Owner, MonthBody(3));
         var other = await CreateSheetAsync(s.Owner, MonthBody(3, binh));
+        var allOverlap = await CreateSheetAsync(s.Owner, MonthBody(3));
+        await WorkerAsync(s, "Chi", FirstDays(3, 3));
+        var mixed = await CreateSheetAsync(s.Owner, MonthBody(3));
 
         Assert.Equal((HttpStatusCode.Conflict, "MSG-GEN-02"), (same.StatusCode, await same.ErrorCodeAsync()));
         Assert.Equal(first.GuidOf(), JsonDocument.Parse(await same.Content.ReadAsStringAsync()).RootElement.GetProperty("existingId").GetGuid());
         Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01"), (overlapping.StatusCode, await overlapping.ErrorCodeAsync()));
         Assert.Equal(HttpStatusCode.Conflict, allOverlap.StatusCode);
         Assert.Equal(HttpStatusCode.Created, other.StatusCode);
+        // Everyone on it is already on a live sheet of the period; with a free worker (Chi) the covered ones are left out instead of refusing the sheet.
+        Assert.Equal(HttpStatusCode.Created, mixed.StatusCode);
+        Assert.Equal(["Chi"], JsonDocument.Parse(await mixed.Content.ReadAsStringAsync()).RootElement.GetProperty("slips").EnumerateArray().Select(x => x.Str("employeeName")));
 
         await s.Owner.PostAsync($"{Payrolls}/{first.GuidOf()}/cancel", null);
         Assert.Equal(HttpStatusCode.Created, (await CreateSheetAsync(s.Owner, MonthBody(3, an))).StatusCode);

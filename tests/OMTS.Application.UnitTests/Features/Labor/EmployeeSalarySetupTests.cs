@@ -34,8 +34,8 @@ public sealed class EmployeeSalarySetupTests
     public void A_day_before_every_setup_has_none() => Assert.Null(EmployeeSalarySetup.EffectiveOn(Setups, D(2025, 12, 31)));
 
     [Fact]
-    public void A_seasonal_worker_without_a_setup_is_paid_by_the_hour() =>
-        Assert.Equal(SalaryType.Hourly, EmployeeSalarySetup.DefaultFor(EmployeeType.SeasonalWorker));
+    public void A_seasonal_worker_without_a_setup_is_paid_per_shift() =>
+        Assert.Equal(SalaryType.PerShift, EmployeeSalarySetup.DefaultFor(EmployeeType.SeasonalWorker));
 
     [Fact]
     public void A_staff_employee_without_a_setup_has_no_salary_yet() => Assert.Null(EmployeeSalarySetup.DefaultFor(EmployeeType.Staff));
@@ -73,6 +73,43 @@ public sealed class EmployeeSalarySetupTests
         var valid = new FieldCheck();
         Assert.Equal((SalaryType.Hourly, (decimal?)null), EmployeeSalaryService.Fields(valid, SalaryType.Hourly, null));
         Assert.True(valid.IsValid);
+    }
+
+    [Fact]
+    public void Per_shift_pay_has_no_monthly_amount()
+    {
+        var check = new FieldCheck();
+        EmployeeSalaryService.Fields(check, SalaryType.PerShift, 5_000_000m);
+        Assert.Equal(["Monthly amount"], check.Invalid);
+
+        var valid = new FieldCheck();
+        Assert.Equal((SalaryType.PerShift, (decimal?)null), EmployeeSalaryService.Fields(valid, SalaryType.PerShift, null));
+        Assert.True(valid.IsValid);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void A_fixed_salary_pays_field_shifts_unless_told_not_to(bool? requested, bool expected)
+    {
+        var check = new FieldCheck();
+        Assert.Equal(expected, EmployeeSalaryService.FieldShifts(check, SalaryType.FixedMonthly, requested));
+        Assert.True(check.IsValid);
+    }
+
+    [Theory]
+    [InlineData(SalaryType.Hourly)]
+    [InlineData(SalaryType.PerShift)]
+    public void Only_a_fixed_salary_may_pay_field_shifts(SalaryType type)
+    {
+        var none = new FieldCheck();
+        Assert.False(EmployeeSalaryService.FieldShifts(none, type, null));
+        Assert.True(none.IsValid);
+
+        var asked = new FieldCheck();
+        EmployeeSalaryService.FieldShifts(asked, type, true);
+        Assert.Equal(["Pay field shifts"], asked.Invalid);
     }
 
     [Fact]

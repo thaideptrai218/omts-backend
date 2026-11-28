@@ -11,7 +11,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// LABOR-11, LABOR-15: job types with rates, one with an earlier rate, one with a rate still to come and one discontinued, and
+/// LABOR-11, LABOR-15: job types with an hourly rate and a shift rate, one with an earlier hourly rate, one with a rate still to come and one discontinued, and
 /// two versions of the attendance settings; before the employees, whose profiles name the job types. The payroll settings stay
 /// as set up (start day 1, automatic payroll off). The payroll sheets come with <see cref="DemoPayrollStep"/>, after the attendance they
 /// are calculated from. A job type is matched by its name and by the audit row of its adding, which a rename leaves as it is; settings
@@ -32,11 +32,11 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
     {
         var thisMonth = new DateOnly(context.Today.Year, context.Today.Month, 1);
         var created = 0;
-        created += await AddJobTypeAsync(context, Harvesting, 38_000, thisMonth.AddMonths(-6), (40_000, thisMonth.AddMonths(-3)), cancellationToken);
-        created += await AddJobTypeAsync(context, HangingSeed, 35_000, thisMonth.AddMonths(-6), (36_000, thisMonth.AddMonths(1)), cancellationToken);
+        created += await AddJobTypeAsync(context, Harvesting, 38_000, thisMonth.AddMonths(-6), (40_000, thisMonth.AddMonths(-3)), 300_000, cancellationToken);
+        created += await AddJobTypeAsync(context, HangingSeed, 35_000, thisMonth.AddMonths(-6), (36_000, thisMonth.AddMonths(1)), 270_000, cancellationToken);
         // Placeholder rate: the owner or the accountant sets the real one (the Nursery job type is also added by a migration to an existing database).
-        created += await AddJobTypeAsync(context, Nursery, 30_000, thisMonth.AddMonths(-6), null, cancellationToken);
-        created += await AddJobTypeAsync(context, CleaningLines, 30_000, thisMonth.AddMonths(-6), null, cancellationToken);
+        created += await AddJobTypeAsync(context, Nursery, 30_000, thisMonth.AddMonths(-6), null, 240_000, cancellationToken);
+        created += await AddJobTypeAsync(context, CleaningLines, 30_000, thisMonth.AddMonths(-6), null, 240_000, cancellationToken);
         created += await AddOldJobTypeAsync(context, thisMonth, cancellationToken);
         created += await AddAttendanceSettingsAsync(context, thisMonth, cancellationToken);
         return created;
@@ -62,14 +62,14 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
         || await context.Db.AuditEvents.AnyAsync(e => e.Action == JobTypeService.CreatedAction && e.RecordCode == name, cancellationToken);
 
     private static async Task<int> AddJobTypeAsync(
-        DemoSeedContext context, string name, decimal rate, DateOnly from, (decimal Rate, DateOnly From)? second, CancellationToken cancellationToken)
+        DemoSeedContext context, string name, decimal rate, DateOnly from, (decimal Rate, DateOnly From)? second, decimal shiftRate, CancellationToken cancellationToken)
     {
         if (await AlreadyAddedAsync(context, name, cancellationToken))
         {
             return 0;
         }
 
-        var saved = DemoSeedContext.Ensure(await context.Get<JobTypeService>().AddAsync(new AddJobTypeRequest(name, rate, from), cancellationToken), $"job type {name}");
+        var saved = DemoSeedContext.Ensure(await context.Get<JobTypeService>().AddAsync(new AddJobTypeRequest(name, rate, from, shiftRate), cancellationToken), $"job type {name}");
         if (second is { } next)
         {
             DemoSeedContext.Ensure(
@@ -82,7 +82,7 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
 
     private static async Task<int> AddOldJobTypeAsync(DemoSeedContext context, DateOnly thisMonth, CancellationToken cancellationToken)
     {
-        var added = await AddJobTypeAsync(context, OldPacking, 28_000, thisMonth.AddMonths(-6), null, cancellationToken);
+        var added = await AddJobTypeAsync(context, OldPacking, 28_000, thisMonth.AddMonths(-6), null, 200_000, cancellationToken);
         if (added == 0)
         {
             return 0;

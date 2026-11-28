@@ -13,10 +13,10 @@ public enum JobTypeSort
     Status,
 }
 
-/// <summary>LABOR-11: job types with their rates.</summary>
+/// <summary>LABOR-11: job types with their hourly and shift rates.</summary>
 public interface IJobTypeRepository
 {
-    /// <summary>The job type with its rates, tracked.</summary>
+    /// <summary>The job type with its hourly and shift rates, tracked.</summary>
     Task<JobType?> GetForEditAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Another job type with the name, whatever its letter case (BR-LABOR-12).</summary>
@@ -32,6 +32,8 @@ public interface IJobTypeRepository
     void Add(JobType jobType);
 
     void AddRate(PayRate rate);
+
+    void AddShiftRate(ShiftRate rate);
 }
 
 /// <summary>The salary setup of each employee, from its date (tab "Thiết lập lương").</summary>

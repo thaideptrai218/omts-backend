@@ -7,7 +7,9 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
@@ -15,7 +17,7 @@ namespace OMTS.Application.Features.Labor.Payrolls;
 
 /// <summary>
 /// LABOR-12 and LABOR-13 for the Cooperative Owner, who does both (the API checks the role): creates a payroll sheet, recalculates it,
-/// finalizes it and cancels it. The pay is hours times the hourly rate in force (level A of the Owner); a sheet is made and calculated in
+/// finalizes it and cancels it. The pay follows the salary setup of each employee on each day (<see cref="PayrollCalculator"/>); a sheet is made and calculated in
 /// one step, so it is Provisional from its first save. Finalizing locks the records of the period (BR-LABOR-13: the sheet is Finalized, which
 /// <see cref="PayPeriodLock"/> reads) and takes the advances off the payslips. Each save holds the sheet and its audit record.
 /// </summary>
@@ -71,18 +73,23 @@ public sealed class PayrollService(
         }
 
         var data = await work.LoadAsync(start, end, periodScope == PayrollScope.Selected ? chosen : null, cancellationToken);
-        var figures = data.Employees.Select(e => PayrollCalculator.Calculate(e, start, end, data)).ToList();
-        var paid = figures.Where(f => f.Minutes > 0).ToList();
+        var figures = data.Employees.Where(e => Covers(periodScope, e, end)).Select(e => PayrollCalculator.Calculate(e, start, end, periodType, data)).ToList();
+        var paid = figures.Where(f => f.OnSheet).ToList();
         if (paid.Count == 0)
         {
-            return AppError.Invalid("Period", "Kỳ này chưa có nhân viên nào có giờ công.");
+            return AppError.Invalid("Period", "Kỳ này chưa có nhân viên nào có lương hoặc giờ công.");
         }
 
-        if (await OverlapAsync(start, end, paid.Select(f => f.Employee.Id).ToHashSet(), null, cancellationToken) is { } overlap)
+        // An employee who already belongs to another live sheet of an overlapping period is left out; the sheet is refused only when nobody is left.
+        var others = await sheets.ListActiveOverlappingAsync(start, end, null, cancellationToken);
+        var held = EmployeesOf(others);
+        paid = paid.Where(f => !held.Contains(f.Employee.Id)).ToList();
+        if (paid.Count == 0)
         {
-            return overlap;
+            return ClashOf(others, start, end, figures.Where(f => f.OnSheet).Select(f => f.Employee.Id).ToHashSet())!;
         }
 
+        figures = figures.Where(f => !held.Contains(f.Employee.Id)).ToList();
         TouchEmployees(paid);
         var sheet = new Payroll
         {
@@ -110,7 +117,7 @@ public sealed class PayrollService(
         return await queries.GetAsync(sheet.Id, cancellationToken);
     }
 
-    /// <summary>Recalculates a Provisional sheet: every line (the employees too) or only the hours and pay of its lines.</summary>
+    /// <summary>Recalculates a Provisional sheet: every line (the employees too) or only the hours and pay of its lines. The adjustments of the lines stay.</summary>
     public async Task<Result<PayrollSheetDetail>> ReloadAsync(Guid id, ReloadPayrollRequest request, CancellationToken cancellationToken)
     {
         var sheet = await sheets.GetForEditAsync(id, cancellationToken);
@@ -130,13 +137,15 @@ public sealed class PayrollService(
         }
 
         var figures = await FiguresAsync(sheet, mode == PayrollReloadMode.All, cancellationToken);
-        if (mode == PayrollReloadMode.All
-            && await OverlapAsync(sheet.PeriodStart, sheet.PeriodEnd, figures.Where(f => f.Minutes > 0).Select(f => f.Employee.Id).ToHashSet(), sheet.Id, cancellationToken) is { } overlap)
+        if (mode == PayrollReloadMode.All)
         {
-            return overlap;
+            // Employees already on this sheet stay; one who would newly join but belongs to another live overlapping sheet is left out.
+            var held = EmployeesOf(await sheets.ListActiveOverlappingAsync(sheet.PeriodStart, sheet.PeriodEnd, sheet.Id, cancellationToken));
+            var members = sheet.Lines.Select(l => l.EmployeeId).ToHashSet();
+            figures = figures.Where(f => members.Contains(f.Employee.Id) || !held.Contains(f.Employee.Id)).ToList();
         }
 
-        TouchEmployees(figures.Where(f => f.Minutes > 0));
+        TouchEmployees(figures.Where(f => f.OnSheet));
         await lines.SyncAsync(sheet, figures, dropEmpty: mode == PayrollReloadMode.All, cancellationToken);
         unitOfWork.MarkChanged(sheet);
         audit.Record(new AuditEntry("Payroll.Reloaded", RecordType)
@@ -148,8 +157,8 @@ public sealed class PayrollService(
     }
 
     /// <summary>
-    /// Provisional to Finalized (LABOR-13): the period has ended, no attendance of a seasonal worker is incomplete, no hours lack a rate and no
-    /// request for a day of the period awaits review; the lines are recalculated and saved, the advances are taken off, and the records of the
+    /// Provisional to Finalized (LABOR-13): the period has ended, no attendance paid by the hour or the shift is incomplete, no work lacks a rate, no Staff employee lacks a salary
+    /// setup, no payslip is negative and no request for a day of the period awaits review; the lines are recalculated and saved, the advances are taken off, and the records of the
     /// period are locked (BR-LABOR-13).
     /// </summary>
     public async Task<Result<PayrollSheetDetail>> FinalizeAsync(Guid id, FinalizePayrollRequest request, CancellationToken cancellationToken)
@@ -269,14 +278,22 @@ public sealed class PayrollService(
         }
 
         var data = await work.LoadAsync(sheet.PeriodStart, sheet.PeriodEnd, ids, cancellationToken);
-        return data.Employees.Select(e => PayrollCalculator.Calculate(e, sheet.PeriodStart, sheet.PeriodEnd, data)).ToList();
+        return data.Employees.Where(e => Covers(sheet.Scope, e, sheet.PeriodEnd)).Select(e => PayrollCalculator.Calculate(e, sheet.PeriodStart, sheet.PeriodEnd, sheet.PeriodType, data)).ToList();
     }
+
+    /// <summary>Whether a sheet of this scope covers the employee: the Staff and SeasonalWorker scopes follow the employee type on the last day of the period; All and Selected are narrowed when the employees are loaded.</summary>
+    internal static bool Covers(PayrollScope scope, Employee employee, DateOnly periodEnd) => scope switch
+    {
+        PayrollScope.Staff => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.Staff,
+        PayrollScope.SeasonalWorker => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.SeasonalWorker,
+        _ => true,
+    };
 
     /// <summary>
     /// Why the sheet cannot be finalized (MSG-LABOR-28), in Vietnamese with the names and dates; empty when it can. <see cref="NotReadyItem"/> carries the same reasons as data
     /// (the error's <c>items</c>), so the client can link each one to the screen that fixes it (correct attendance of an employee and day, a pay rate).
     /// </summary>
-    private static (List<string> Reasons, List<NotReadyItem> Items) NotReady(Payroll sheet, IReadOnlyList<SlipFigures> figures, DateOnly today)
+    internal static (List<string> Reasons, List<NotReadyItem> Items) NotReady(Payroll sheet, IReadOnlyList<SlipFigures> figures, DateOnly today)
     {
         var reasons = new List<string>();
         var items = new List<NotReadyItem>();
@@ -295,14 +312,39 @@ public sealed class PayrollService(
 
         foreach (var f in figures.Where(f => f.UnratedDays.Count > 0))
         {
-            var (day, job) = f.UnratedDays[0];
-            reasons.Add($"{f.Employee.FullName}: giờ làm \"{job}\" ngày {PayrollMessages.Date(day)} chưa có đơn giá");
-            items.Add(new NotReadyItem("NoRate", f.Employee.Id, f.Employee.FullName, f.UnratedDays.Select(u => u.Day).Distinct().ToList(), job));
+            foreach (var shift in new[] { false, true })
+            {
+                var unrated = f.UnratedDays.Where(u => (u.Kind != PayLineKind.Hourly) == shift).ToList();
+                if (unrated.Count == 0)
+                {
+                    continue;
+                }
+
+                var (day, job) = (unrated[0].Day, unrated[0].JobName);
+                reasons.Add($"{f.Employee.FullName}: {(shift ? "ca" : "giờ")} làm \"{job}\" ngày {PayrollMessages.Date(day)} chưa có đơn giá{(shift ? " ca" : string.Empty)}");
+                items.Add(new NotReadyItem(shift ? "NoShiftRate" : "NoRate", f.Employee.Id, f.Employee.FullName, unrated.Select(u => u.Day).Distinct().ToList(), job));
+            }
         }
 
-        if (figures.All(f => f.Minutes == 0))
+        foreach (var f in figures.Where(f => f.MissingSetup))
         {
-            reasons.Add("kỳ này chưa có nhân viên nào có giờ công");
+            reasons.Add($"{f.Employee.FullName}: Chưa thiết lập lương");
+            items.Add(new NotReadyItem("NoSalarySetup", f.Employee.Id, f.Employee.FullName, [], null));
+        }
+
+        foreach (var line in sheet.Lines)
+        {
+            var figure = figures.FirstOrDefault(f => f.Employee.Id == line.EmployeeId);
+            if ((figure?.MainPay ?? 0) + (figure?.ShiftPay ?? 0) + line.Bonus - line.ManualDeduction < 0)
+            {
+                reasons.Add($"{line.Employee.FullName}: khấu trừ lớn hơn thu nhập");
+                items.Add(new NotReadyItem("NegativePay", line.EmployeeId, line.Employee.FullName, [], null));
+            }
+        }
+
+        if (!figures.Any(f => f.OnSheet))
+        {
+            reasons.Add("kỳ này chưa có nhân viên nào có lương hoặc giờ công");
             items.Add(new NotReadyItem("NoHours", null, null, [], null));
         }
 
@@ -312,27 +354,30 @@ public sealed class PayrollService(
     /// <summary>The slips and the total (net of advances) the sheet would show if reloaded now, worked out without changing anything (L11).</summary>
     private async Task<(int Slips, decimal Total)> PreviewAsync(Payroll sheet, IReadOnlyList<SlipFigures> figures, CancellationToken cancellationToken)
     {
-        var paid = figures.Where(f => f.Minutes > 0).ToList();
+        var kept = sheet.Lines.ToDictionary(l => l.EmployeeId);
+        var paid = figures.Where(f => f.OnSheet || kept.GetValueOrDefault(f.Employee.Id)?.Adjustments.Count > 0).ToList();
         var balances = (await payments.ListOpenAdvancesAsync(paid.Select(f => f.Employee.Id).ToList(), cancellationToken))
             .GroupBy(a => a.Advance.EmployeeId).ToDictionary(g => g.Key, g => g.Sum(a => a.Remaining));
-        var bonus = sheet.Lines.ToDictionary(l => l.EmployeeId, l => l.Bonus);
         var total = paid.Sum(f =>
         {
-            var income = f.MainPay + bonus.GetValueOrDefault(f.Employee.Id);
-            return income - Math.Min(income, balances.GetValueOrDefault(f.Employee.Id));
+            var line = kept.GetValueOrDefault(f.Employee.Id);
+            var income = f.MainPay + f.ShiftPay + (line?.Bonus ?? 0) - (line?.ManualDeduction ?? 0);
+            return income - PayrollLineSync.AdvanceDeductionOf(income, balances.GetValueOrDefault(f.Employee.Id));
         });
         return (paid.Count, total);
     }
 
+    /// <summary>The employees another sheet already pays or lists: its payslips and the employees it was created for.</summary>
+    private static HashSet<Guid> EmployeesOf(IEnumerable<Payroll> others) =>
+        others.SelectMany(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId))).ToHashSet();
+
     /// <summary>
-    /// 409 when another sheet that is not Cancelled has the same period and pays one of these employees (MSG-GEN-02, "already exists"); 400 when
-    /// its period only overlaps. Sheets of other employees do not clash.
+    /// The refusal when every employee of a new sheet is already on another live sheet: 409 when that sheet has the same period (MSG-GEN-02, "already exists"), 400 when
+    /// its period only overlaps; null when none of these employees is on one.
     /// </summary>
-    private async Task<AppError?> OverlapAsync(DateOnly from, DateOnly to, IReadOnlySet<Guid> employeeIds, Guid? exceptId, CancellationToken cancellationToken)
+    private static AppError? ClashOf(IReadOnlyList<Payroll> others, DateOnly from, DateOnly to, IReadOnlySet<Guid> employeeIds)
     {
-        var clashing = (await sheets.ListActiveOverlappingAsync(from, to, exceptId, cancellationToken))
-            .Where(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId)).Any(employeeIds.Contains))
-            .ToList();
+        var clashing = others.Where(s => s.Lines.Select(l => l.EmployeeId).Concat(s.SelectedEmployees.Select(e => e.EmployeeId)).Any(employeeIds.Contains)).ToList();
         if (clashing.FirstOrDefault(s => s.PeriodStart == from && s.PeriodEnd == to) is { } same)
         {
             return AppError.AlreadyExists($"Payroll {same.Code}", same.Id, "Period");
@@ -350,7 +395,7 @@ public sealed class PayrollService(
             .GroupBy(a => a.Advance.EmployeeId).ToDictionary(g => g.Key, g => g.ToList());
         foreach (var line in sheet.Lines)
         {
-            var room = line.Income;
+            var room = Math.Max(line.Income, 0);
             line.Deduction = 0;
             foreach (var advance in open.GetValueOrDefault(line.EmployeeId) ?? [])
             {

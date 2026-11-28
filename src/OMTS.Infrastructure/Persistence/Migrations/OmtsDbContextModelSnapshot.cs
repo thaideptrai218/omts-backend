@@ -3321,6 +3321,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int>("ShiftMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShiftToleranceMinutes")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -3337,6 +3343,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("AttendanceSettingsVersions", t =>
                         {
                             t.HasCheckConstraint("CK_AttendanceSettingsVersions_Break", "([BreakStart] IS NULL AND [BreakEnd] IS NULL) OR ([BreakStart] IS NOT NULL AND [BreakEnd] IS NOT NULL AND [BreakEnd] > [BreakStart])");
+
+                            t.HasCheckConstraint("CK_AttendanceSettingsVersions_Shift", "[ShiftMinutes] BETWEEN 30 AND 720 AND [ShiftToleranceMinutes] >= 0 AND [ShiftToleranceMinutes] * 2 <= [ShiftMinutes]");
                         });
                 });
 
@@ -3590,6 +3598,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<bool>("PayFieldShifts")
+                        .HasColumnType("bit");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3616,7 +3627,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.ToTable("EmployeeSalarySetups", t =>
                         {
-                            t.HasCheckConstraint("CK_EmployeeSalarySetups_MonthlyAmount", "([Type] = 'FixedMonthly' AND [MonthlyAmount] > 0) OR ([Type] = 'Hourly' AND [MonthlyAmount] IS NULL)");
+                            t.HasCheckConstraint("CK_EmployeeSalarySetups_MonthlyAmount", "([Type] = 'FixedMonthly' AND [MonthlyAmount] > 0) OR ([Type] IN ('Hourly', 'PerShift') AND [MonthlyAmount] IS NULL)");
+
+                            t.HasCheckConstraint("CK_EmployeeSalarySetups_PayFieldShifts", "[Type] = 'FixedMonthly' OR [PayFieldShifts] = 0");
                         });
                 });
 
@@ -3976,6 +3989,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<decimal>("ManualDeduction")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<Guid>("PayrollId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3984,6 +4001,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SalaryType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("ShiftPay")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("Shifts")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -4002,6 +4031,60 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("PayrollLines");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayrollLineAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("PayrollLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollLineId", "Position");
+
+                    b.ToTable("PayrollLineAdjustments", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayrollLineAdjustments_Amount", "[Amount] > 0");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayrollLineJob", b =>
@@ -4030,8 +4113,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("JobTypeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<Guid>("PayrollLineId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ShiftRate")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("Shifts")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
 
                     b.HasKey("Id");
 
@@ -4053,6 +4149,56 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("PayrollSelectedEmployees");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.ShiftRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EnteredByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("JobTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnteredByAccountId");
+
+                    b.HasIndex("JobTypeId", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("ShiftRates", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShiftRates_Amount", "[Amount] > 0");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.WagePayment", b =>
@@ -9956,6 +10102,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Payroll");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayrollLineAdjustment", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Labor.PayrollLine", "PayrollLine")
+                        .WithMany("Adjustments")
+                        .HasForeignKey("PayrollLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollLine");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayrollLineJob", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Labor.PayrollLine", "PayrollLine")
@@ -9982,6 +10139,23 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Payroll");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.ShiftRate", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("EnteredByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Labor.JobType", "JobType")
+                        .WithMany("ShiftRates")
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("JobType");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.WagePayment", b =>
@@ -11333,6 +11507,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.JobType", b =>
                 {
                     b.Navigation("Rates");
+
+                    b.Navigation("ShiftRates");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.Payroll", b =>
@@ -11344,6 +11520,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayrollLine", b =>
                 {
+                    b.Navigation("Adjustments");
+
                     b.Navigation("Jobs");
                 });
 

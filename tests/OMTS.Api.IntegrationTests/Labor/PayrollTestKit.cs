@@ -24,10 +24,15 @@ internal static class PayrollTestKit
 
     public static string Last(int month) => Day(new DateOnly(2024, month, DateTime.DaysInMonth(2024, month)));
 
-    /// <summary>An employee with a complete day of 8 hours of harvesting on each of the days.</summary>
+    /// <summary>An employee paid by the hour (a seasonal worker is paid per shift unless told otherwise) with a complete day of 8 hours of harvesting on each of the days.</summary>
     public static async Task<Guid> WorkerAsync(WorkSetup s, string name, params DateOnly[] days)
     {
         var employee = await AddEmployeeAsync(s, name);
+        var enteredBy = await s.Factory.QueryAsync(db => db.Accounts.Select(a => a.Id).FirstAsync());
+        await s.Factory.UseDbAsync(db => db.EmployeeSalarySetups.Add(new OMTS.Domain.Entities.Labor.EmployeeSalarySetup
+        {
+            EmployeeId = employee, Type = OMTS.Domain.Enums.SalaryType.Hourly, EffectiveFrom = new DateOnly(2000, 1, 1), EnteredByAccountId = enteredBy,
+        }));
         foreach (var day in days)
         {
             await AddPastDayAsync(s, employee, day, "07:00", "15:00", (s.Harvest, s.Raft.Id, null));

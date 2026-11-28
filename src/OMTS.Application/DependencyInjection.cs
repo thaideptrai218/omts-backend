@@ -177,6 +177,7 @@ public static class DependencyInjection
         services.AddScoped<PayrollLineSync>();
         services.AddScoped<PayrollQueryService>();
         services.AddScoped<PayrollService>();
+        services.AddScoped<PayrollAdjustmentService>();
         services.AddScoped<PayrollPaymentService>();
         services.AddScoped<PayrollExportService>();
         services.AddScoped<LaborCostService>();
@@ -184,6 +185,7 @@ public static class DependencyInjection
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
+        services.AddScoped<ShiftRateService>();
         services.AddScoped<EmployeeSalaryService>();
         services.AddScoped<EmployeePhotoService>();
         services.AddScoped<AttendanceSettingsService>();

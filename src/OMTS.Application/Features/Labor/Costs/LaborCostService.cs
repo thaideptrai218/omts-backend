@@ -48,10 +48,10 @@ public sealed class LaborCostService(
         var items = totals
             .Select(t => new RaftLaborCost(
                 t.RaftId, t.RaftId is { } raftId ? raftCodes.GetValueOrDefault(raftId) : null, t.ZoneId, zoneNames.GetValueOrDefault(t.ZoneId, string.Empty),
-                t.Pieces.Sum(p => p.Amount), HoursOf(t.Pieces), ByJob(t.Pieces, jobNames)))
+                t.Pieces.Sum(p => p.Amount), HoursOf(t.Pieces), ByJob(t.Pieces, jobNames), ShiftsOf(t.Pieces), ByType(t.Pieces), ByKind(t.Pieces)))
             .OrderBy(i => i.ZoneName, StringComparer.CurrentCultureIgnoreCase).ThenBy(i => i.RaftCode, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
-        return new LaborCostByRaft(query.From, query.To, items.Sum(i => i.Amount), items, items.Sum(i => i.Hours));
+        return new LaborCostByRaft(query.From, query.To, items.Sum(i => i.Amount), items, items.Sum(i => i.Hours), items.Sum(i => i.Shifts), ByType(pieces), ByKind(pieces));
     }
 
     public async Task<Result<CycleLaborCost>> OfCycleAsync(Guid cycleId, CancellationToken cancellationToken)
@@ -66,7 +66,7 @@ public sealed class LaborCostService(
         var last = cycle.CloseDate ?? timeProvider.Today();
         if (cycle.StartDate > last)
         {
-            return new CycleLaborCost(cycle.Id, cycle.RaftId, raft?.Code ?? string.Empty, cycle.StartDate, cycle.CloseDate, 0, [], 0, [], []);
+            return new CycleLaborCost(cycle.Id, cycle.RaftId, raft?.Code ?? string.Empty, cycle.StartDate, cycle.CloseDate, 0, [], 0, [], [], 0, [], []);
         }
 
         var (all, jobNames, employeeNames) = await PiecesAsync(cycle.StartDate, last, cancellationToken);
@@ -107,15 +107,25 @@ public sealed class LaborCostService(
         var employees = pieces.GroupBy(c => c.EmployeeId).Select(g =>
         {
             var (code, name) = employeeNames.GetValueOrDefault(g.Key, (null, string.Empty));
-            return new EmployeeLaborCost(g.Key, code, name, HoursOf(g), g.Sum(c => c.Amount), ByJob(g, jobNames));
+            return new EmployeeLaborCost(g.Key, code, name, HoursOf(g), g.Sum(c => c.Amount), ByJob(g, jobNames), ShiftsOf(g));
         }).OrderByDescending(e => e.Amount).ThenBy(e => e.EmployeeName, StringComparer.CurrentCultureIgnoreCase).ToList();
         return new CycleLaborCost(
-            cycle.Id, cycle.RaftId, raftCode, cycle.StartDate, cycle.CloseDate, days.Sum(d => d.Amount), days, HoursOf(pieces), ByJob(pieces, jobNames), employees);
+            cycle.Id, cycle.RaftId, raftCode, cycle.StartDate, cycle.CloseDate, days.Sum(d => d.Amount), days, HoursOf(pieces), ByJob(pieces, jobNames), employees,
+            ShiftsOf(pieces), ByType(pieces), ByKind(pieces));
     }
+
     private static decimal HoursOf(IEnumerable<LaborCostPiece> pieces) => Math.Round(pieces.Sum(p => p.Minutes) / 60m, 2, MidpointRounding.AwayFromZero);
 
+    private static decimal ShiftsOf(IEnumerable<LaborCostPiece> pieces) => Math.Round(pieces.Sum(p => p.Shifts), 2, MidpointRounding.AwayFromZero);
+
+    private static IReadOnlyList<TypeLaborCost> ByType(IEnumerable<LaborCostPiece> pieces) =>
+        pieces.GroupBy(p => p.EmployeeType).Select(g => new TypeLaborCost(g.Key, HoursOf(g), ShiftsOf(g), g.Sum(p => p.Amount))).OrderBy(t => t.EmployeeType).ToList();
+
+    private static IReadOnlyList<KindLaborCost> ByKind(IEnumerable<LaborCostPiece> pieces) =>
+        pieces.GroupBy(p => p.Kind).Select(g => new KindLaborCost(g.Key, HoursOf(g), ShiftsOf(g), g.Sum(p => p.Amount))).OrderBy(k => k.Kind).ToList();
+
     private static IReadOnlyList<JobLaborCost> ByJob(IEnumerable<LaborCostPiece> pieces, IReadOnlyDictionary<Guid, string> jobNames) =>
-        pieces.GroupBy(p => p.JobTypeId).Select(g => new JobLaborCost(g.Key, jobNames.GetValueOrDefault(g.Key, string.Empty), HoursOf(g), g.Sum(p => p.Amount)))
+        pieces.GroupBy(p => p.JobTypeId).Select(g => new JobLaborCost(g.Key, jobNames.GetValueOrDefault(g.Key, string.Empty), HoursOf(g), g.Sum(p => p.Amount), ShiftsOf(g)))
             .OrderByDescending(j => j.Amount).ThenBy(j => j.JobName, StringComparer.CurrentCultureIgnoreCase).ToList();
 
     private async Task<(IReadOnlyList<LaborCostPiece> Pieces, IReadOnlyDictionary<Guid, string> JobNames, IReadOnlyDictionary<Guid, (string? Code, string Name)> Employees)> PiecesAsync(

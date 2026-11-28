@@ -151,7 +151,7 @@ public class PayrollListExportAndAccessTests
     }
 
     [Fact]
-    public async Task Only_the_cooperative_owner_changes_the_payroll_and_the_accountant_only_reads_and_exports_it_by_a_fixed_rule_whatever_roles_say()
+    public async Task Only_the_cooperative_owner_finalizes_cancels_and_adjusts_a_payroll_while_the_accountant_also_prepares_it_and_pays_wages()
     {
         await using var factory = new AuthApiFactory();
         var s = await SetupWorkAsync(factory);
@@ -171,21 +171,30 @@ public class PayrollListExportAndAccessTests
             (HttpMethod.Get, $"/api/payroll-slips/{id}", null),
             (HttpMethod.Post, Payrolls, MonthBody(3)),
             (HttpMethod.Post, $"{Payrolls}/{id}/reload", new { mode = "All" }),
+            (HttpMethod.Put, $"/api/payroll-slips/{id}/adjustments", new { items = Array.Empty<object>() }),
             (HttpMethod.Post, $"{Payrolls}/{id}/finalize", new { expenseMonth = "2024-03" }),
             (HttpMethod.Post, $"{Payrolls}/{id}/cancel", null),
             (HttpMethod.Post, $"{Payrolls}/{id}/payments", new { paidAt = DateTimeOffset.UtcNow.ToString("o"), method = "Cash", note = "", lines = new[] { new { slipId = id, amount = 1 } } }),
             (HttpMethod.Post, Payments, new { employeeId = id, amount = 1, paidAt = DateTimeOffset.UtcNow.ToString("o"), method = "Cash", note = "" }),
         };
 
+        // Finalizing, cancelling and adjusting a payslip are the Owner's by a fixed rule on the account; everything else follows PAYROLL View, Create, Edit and Export, which the Accountant holds.
+        static bool OwnerOnly(string url) => url.EndsWith("/finalize", StringComparison.Ordinal) || url.EndsWith("/cancel", StringComparison.Ordinal) || url.EndsWith("/adjustments", StringComparison.Ordinal);
+        var accountantSheets = 0;
         foreach (var (method, url, body) in requests)
         {
             foreach (var (who, expected) in new[] { (accountant, HttpStatusCode.Forbidden), (zoneManager, HttpStatusCode.Forbidden), (anonymous, HttpStatusCode.Unauthorized) })
             {
                 var response = await who.SendAsync(new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body) });
-                // The Accountant views and exports the payroll (PAYROLL View and Export, decision of 19/11/2026): its reads are not refused, whatever the unknown id then answers.
-                if (who == accountant && method == HttpMethod.Get)
+                // The Accountant reads, prepares and pays (PAYROLL View, Create, Edit and Export): none of that is refused, whatever the unknown id then answers.
+                if (who == accountant && !OwnerOnly(url))
                 {
                     Assert.True(response.StatusCode != HttpStatusCode.Forbidden && response.StatusCode != HttpStatusCode.Unauthorized, $"{method} {url}: the Accountant was refused with {(int)response.StatusCode}");
+                    if (method == HttpMethod.Post && url == Payrolls && response.IsSuccessStatusCode)
+                    {
+                        accountantSheets++;
+                    }
+
                     continue;
                 }
 
@@ -198,6 +207,6 @@ public class PayrollListExportAndAccessTests
         }
 
         Assert.Equal(HttpStatusCode.OK, (await s.Owner.GetAsync(Payrolls)).StatusCode);
-        Assert.Equal(0, await factory.QueryAsync(db => db.Payrolls.CountAsync()));
+        Assert.Equal(accountantSheets, await factory.QueryAsync(db => db.Payrolls.CountAsync()));
     }
 }

@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/job-types")]
 [Authorize]
-public sealed class JobTypesController(JobTypeService jobTypes, PayRateService rates, JobTypeQueryService queries) : ControllerBase
+public sealed class JobTypesController(JobTypeService jobTypes, PayRateService rates, ShiftRateService shiftRates, JobTypeQueryService queries) : ControllerBase
 {
     /// <summary>
     /// <c>sortBy</c> is name (default), rate, effectiveFrom or status with <c>sortDir</c> asc (default) or desc, over the whole result
@@ -54,6 +54,13 @@ public sealed class JobTypesController(JobTypeService jobTypes, PayRateService r
     [ProducesResponseType<JobTypeSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangeRate(Guid id, ChangeRateRequest request, CancellationToken cancellationToken) =>
         (await rates.ChangeRateAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>A new shift rate (the pay of one shift of this job type) from its date; the date of an existing shift rate replaces it. Same rules as the hourly rate, including MSG-LABOR-04.</summary>
+    [HttpPost("{id:guid}/shift-rates")]
+    [RequirePermission(PermissionFunctions.PayRules, PermissionAction.Edit, PermissionScope.AnyZone)]
+    [ProducesResponseType<JobTypeSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ChangeShiftRate(Guid id, ChangeShiftRateRequest request, CancellationToken cancellationToken) =>
+        (await shiftRates.ChangeShiftRateAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>LABOR-11.3. Ask MSG-GEN-04 first.</summary>
     [HttpPut("{id:guid}/name")]
