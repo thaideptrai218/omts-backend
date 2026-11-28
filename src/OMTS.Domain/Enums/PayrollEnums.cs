@@ -7,11 +7,13 @@ public enum PayrollPeriodType
     Custom,
 }
 
-/// <summary>Whose pay a payroll sheet covers: every employee with hours in the period, or the employees chosen when it was made.</summary>
+/// <summary>Whose pay a payroll sheet covers: every employee with hours in the period, only the Staff or only the SeasonalWorker employees (their type on the last day of the period), or the employees chosen when it was made.</summary>
 public enum PayrollScope
 {
     All,
     Selected,
+    Staff,
+    SeasonalWorker,
 }
 
 /// <summary>How the pay of one job row of a payslip was worked out: hours at the hourly rate, shifts of a per-shift employee, or the shifts of field work that a fixed-salary employee is paid on top.</summary>

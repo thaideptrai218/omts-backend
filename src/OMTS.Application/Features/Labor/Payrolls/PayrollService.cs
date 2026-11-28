@@ -7,7 +7,9 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 
@@ -71,7 +73,7 @@ public sealed class PayrollService(
         }
 
         var data = await work.LoadAsync(start, end, periodScope == PayrollScope.Selected ? chosen : null, cancellationToken);
-        var figures = data.Employees.Select(e => PayrollCalculator.Calculate(e, start, end, periodType, data)).ToList();
+        var figures = data.Employees.Where(e => Covers(periodScope, e, end)).Select(e => PayrollCalculator.Calculate(e, start, end, periodType, data)).ToList();
         var paid = figures.Where(f => f.OnSheet).ToList();
         if (paid.Count == 0)
         {
@@ -269,8 +271,16 @@ public sealed class PayrollService(
         }
 
         var data = await work.LoadAsync(sheet.PeriodStart, sheet.PeriodEnd, ids, cancellationToken);
-        return data.Employees.Select(e => PayrollCalculator.Calculate(e, sheet.PeriodStart, sheet.PeriodEnd, sheet.PeriodType, data)).ToList();
+        return data.Employees.Where(e => Covers(sheet.Scope, e, sheet.PeriodEnd)).Select(e => PayrollCalculator.Calculate(e, sheet.PeriodStart, sheet.PeriodEnd, sheet.PeriodType, data)).ToList();
     }
+
+    /// <summary>Whether a sheet of this scope covers the employee: the Staff and SeasonalWorker scopes follow the employee type on the last day of the period; All and Selected are narrowed when the employees are loaded.</summary>
+    private static bool Covers(PayrollScope scope, Employee employee, DateOnly periodEnd) => scope switch
+    {
+        PayrollScope.Staff => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.Staff,
+        PayrollScope.SeasonalWorker => WorkRules.TypeOn(employee, periodEnd) == EmployeeType.SeasonalWorker,
+        _ => true,
+    };
 
     /// <summary>
     /// Why the sheet cannot be finalized (MSG-LABOR-28), in Vietnamese with the names and dates; empty when it can. <see cref="NotReadyItem"/> carries the same reasons as data

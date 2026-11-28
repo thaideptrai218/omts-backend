@@ -21,7 +21,7 @@ public enum PayrollReloadMode
 /// <param name="PeriodType">Monthly (a whole calendar month) or Custom.</param>
 /// <param name="From">First day of the period.</param>
 /// <param name="To">Last day of the period.</param>
-/// <param name="Scope">All employees with pay in the period (attendance paid by the hour or the shift, a fixed salary, or a Staff employee with no salary setup), or the Selected ones named in <paramref name="EmployeeIds"/> (1 to 500).</param>
+/// <param name="Scope">All employees with pay in the period (attendance paid by the hour or the shift, a fixed salary, or a Staff employee with no salary setup), only the Staff or only the SeasonalWorker employees (their type on the last day of the period), or the Selected ones named in <paramref name="EmployeeIds"/> (1 to 500).</param>
 public sealed record CreatePayrollRequest(
     PayrollPeriodType? PeriodType, DateOnly? From, DateOnly? To, PayrollScope? Scope, IReadOnlyList<Guid>? EmployeeIds);
 
