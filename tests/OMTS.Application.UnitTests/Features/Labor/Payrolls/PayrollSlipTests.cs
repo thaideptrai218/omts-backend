@@ -144,13 +144,12 @@ public sealed class PayrollSlipTests
     public async Task A_slip_with_adjustments_stays_on_the_sheet_when_its_employee_has_nothing_to_pay_any_more()
     {
         var staff = Staff("Quản lý");
-        var setup = new EmployeeSalarySetup { EmployeeId = staff.Id, Type = SalaryType.FixedMonthly, MonthlyAmount = 8_000_000, PayFieldShifts = false, EffectiveFrom = new DateOnly(2026, 1, 1) };
-        staff.SalarySetups.Add(setup);
+        staff.SalarySetups.Add(new EmployeeSalarySetup { EmployeeId = staff.Id, Type = SalaryType.Hourly, EffectiveFrom = new DateOnly(2026, 1, 1) });
         var line = LineWith(staff, (PayrollAdjustmentKind.Bonus, 300_000));
         var sheet = SheetWith(line);
         sheet.PeriodType = PayrollPeriodType.Custom;
 
-        // On a custom sheet the fixed salary is not paid, so there is no pay, but the bonus is still the Owner's.
+        // An hourly employee with no hours has no pay, but the bonus is still the Owner's.
         var figures = PayrollCalculator.Calculate(staff, Start, End, PayrollPeriodType.Custom, new PayrollWorkData([staff], [], [], [], new Dictionary<Guid, JobType>()));
         await Sync(new FakeSheets()).SyncAsync(sheet, [figures], dropEmpty: true, CancellationToken.None);
 

@@ -395,14 +395,14 @@ public sealed class PayrollCalculatorTests
     }
 
     [Fact]
-    public void A_fixed_salary_is_not_paid_on_a_custom_sheet()
+    public void A_fixed_salary_is_paid_in_full_on_a_custom_sheet()
     {
         var staff = Staff("Quản lý", Fixed(8_000_000, fieldShifts: false));
 
         var figures = Calculate(staff, Nothing(staff), PayrollPeriodType.Custom);
 
-        Assert.Equal(0m, figures.MainPay);
-        Assert.False(figures.OnSheet);
+        Assert.Equal(8_000_000m, figures.MainPay);
+        Assert.True(figures.OnSheet);
     }
 
     [Fact]
@@ -449,7 +449,7 @@ public sealed class PayrollCalculatorTests
     }
 
     [Fact]
-    public void Field_shifts_of_a_fixed_salary_count_on_a_custom_sheet_without_the_salary()
+    public void Field_shifts_of_a_fixed_salary_count_on_a_custom_sheet_next_to_the_salary()
     {
         var staff = Staff("Quản lý", Fixed(8_000_000, fieldShifts: true));
         var harvest = ShiftJob("Thu hoạch", 300_000, Long);
@@ -458,7 +458,7 @@ public sealed class PayrollCalculatorTests
 
         var figures = Calculate(staff, data, PayrollPeriodType.Custom);
 
-        Assert.Equal(0m, figures.MainPay);
+        Assert.Equal(8_000_000m, figures.MainPay);
         Assert.Equal(900_000m, figures.ShiftPay);
         Assert.True(figures.OnSheet);
     }
