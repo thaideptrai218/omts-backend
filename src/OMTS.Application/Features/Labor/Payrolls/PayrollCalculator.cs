@@ -8,7 +8,14 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Labor.Payrolls;
 
 /// <summary>One job type on one day as it was paid: its minutes, the shifts counted (0 for hourly pay), the rate in force and the amount to the VND.</summary>
-public sealed record SlipDay(DateOnly Date, Guid JobTypeId, string JobName, PayLineKind Kind, int Minutes, decimal Shifts, decimal Rate, decimal Amount);
+public sealed record SlipDay(DateOnly Date, Guid JobTypeId, string JobName, PayLineKind Kind, int Minutes, decimal Shifts, decimal Rate, decimal Amount)
+{
+    /// <summary>Where the minutes of the job were worked: its periods of the day with their share of <see cref="Minutes"/>, which add up to it. The labour cost of a raft is made of these.</summary>
+    public IReadOnlyList<PeriodShare> Shares { get; init; } = [];
+}
+
+/// <summary>The paid minutes of one job period of a day (BR-LABOR-07): the raft it was worked on, or null for work at zone level, and the zone.</summary>
+public sealed record PeriodShare(Guid? RaftId, Guid ZoneId, int Minutes);
 
 /// <summary>A day and job type whose work has no rate in force on that day: an hourly rate for <see cref="PayLineKind.Hourly"/>, a shift rate for the shift kinds.</summary>
 public sealed record UnratedDay(DateOnly Day, string JobName, PayLineKind Kind);
@@ -79,6 +86,26 @@ public static class PayrollCalculator
 
     public static string FormatRate(decimal rate) => ((long)rate).ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.');
 
+    /// <summary>
+    /// The rounded minutes of a job shared between its periods of the day by their own minutes (each share floored, the remainder going to the last period), so the shares always add up
+    /// to the job's minutes and each period keeps its raft.
+    /// </summary>
+    private static IReadOnlyList<PeriodShare> SharesOf(DayHours day, JobHours job)
+    {
+        var periods = day.Periods.Where(p => p.JobTypeId == job.JobTypeId && p.Minutes > 0).ToList();
+        var rawTotal = periods.Sum(p => p.Minutes);
+        var shares = new List<PeriodShare>(periods.Count);
+        var given = 0;
+        for (var i = 0; i < periods.Count; i++)
+        {
+            var minutes = i == periods.Count - 1 ? job.Minutes - given : (int)Math.Floor((decimal)job.Minutes * periods[i].Minutes / rawTotal);
+            given += minutes;
+            shares.Add(new PeriodShare(periods[i].RaftId, periods[i].ZoneId, minutes));
+        }
+
+        return shares;
+    }
+
     public static SlipFigures Calculate(Employee employee, DateOnly from, DateOnly to, PayrollPeriodType periodType, PayrollWorkData data)
     {
         var periodsOf = data.Assignments.Where(a => a.EmployeeId == employee.Id).ToLookup(a => a.Date);
@@ -127,7 +154,7 @@ public static class PayrollCalculator
                         continue;
                     }
 
-                    days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, 0, rate.HourlyRate, Math.Round(job.Minutes * rate.HourlyRate / 60m, 0, MidpointRounding.AwayFromZero)));
+                    days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, 0, rate.HourlyRate, Math.Round(job.Minutes * rate.HourlyRate / 60m, 0, MidpointRounding.AwayFromZero)) { Shares = SharesOf(day, job) });
                     continue;
                 }
 
@@ -144,7 +171,7 @@ public static class PayrollCalculator
                     continue;
                 }
 
-                days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, shifts, shiftRate.Amount, Math.Round(shifts * shiftRate.Amount, 0, MidpointRounding.AwayFromZero)));
+                days.Add(new SlipDay(record.Date, job.JobTypeId, jobName, kind.Value, job.Minutes, shifts, shiftRate.Amount, Math.Round(shifts * shiftRate.Amount, 0, MidpointRounding.AwayFromZero)) { Shares = SharesOf(day, job) });
             }
         }
 
