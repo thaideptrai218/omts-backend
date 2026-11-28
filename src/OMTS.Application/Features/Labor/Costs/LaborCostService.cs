@@ -17,6 +17,7 @@ public sealed class LaborCostService(
     IRaftRepository rafts,
     IFarmingZoneRepository zones,
     IWorkDayPlanRepository workPlans,
+    IJobTypeRepository jobTypeRepository,
     TimeProvider timeProvider)
 {
     private const int MaxDays = 366;
@@ -134,7 +135,13 @@ public sealed class LaborCostService(
     {
         var data = await workReader.LoadAsync(from, to, null, cancellationToken);
         // The people hired outside for a work-day plan cost the raft (or the zone) of the plan on top of the payroll work.
-        var outsiders = LaborCostCalculator.OutsiderPieces(await workPlans.ListOutsiderHiresAsync(from, to, cancellationToken), data.JobTypes);
+        var jobs = data.JobTypes.ToDictionary(j => j.Key, j => j.Value);
+        foreach (var job in await jobTypeRepository.ListInUseAsync(cancellationToken))
+        {
+            jobs.TryAdd(job.Id, job);
+        }
+
+        var outsiders = LaborCostCalculator.OutsiderPieces(await workPlans.ListOutsiderHiresAsync(from, to, cancellationToken), jobs);
         var employees = data.Employees.ToDictionary(e => e.Id, e => (e.Code, e.FullName));
         if (outsiders.Count > 0)
         {
@@ -143,7 +150,7 @@ public sealed class LaborCostService(
 
         return (
             [.. LaborCostCalculator.CalculatePieces(from, to, data), .. outsiders],
-            data.JobTypes.ToDictionary(j => j.Key, j => j.Value.Name),
+            jobs.ToDictionary(j => j.Key, j => j.Value.Name),
             employees);
     }
 }
