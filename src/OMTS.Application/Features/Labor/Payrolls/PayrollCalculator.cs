@@ -87,7 +87,7 @@ public static class PayrollCalculator
         var unrated = new List<UnratedDay>();
         foreach (var record in data.Attendances.Where(a => a.EmployeeId == employee.Id && a.Date >= from && a.Date <= to).OrderBy(a => a.Date))
         {
-            var setup = EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, record.Date);
+            var setup = SalaryPlan.PayingSetupOn(employee, record.Date);
             var kind = (setup?.Type ?? EmployeeSalarySetup.DefaultFor(WorkRules.TypeOn(employee, record.Date))) switch
             {
                 SalaryType.PerShift => PayLineKind.Shift,

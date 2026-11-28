@@ -16,6 +16,14 @@ public static class SalaryPlan
     public static SalaryType? TypeOn(Employee employee, DateOnly day) =>
         EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, day)?.Type ?? EmployeeSalarySetup.DefaultFor(WorkRules.TypeOn(employee, day));
 
+    /// <summary>
+    /// The setup that pays the work of <paramref name="day"/>: the one in force, else, for a Staff employee, the first setup the Owner entered (work recorded back-dated before it, e.g. an attendance
+    /// correction, is paid as the first setup says instead of being dropped). A seasonal worker with no setup in force keeps the per-shift default. <see cref="IsMissingSetup"/> still flags those days.
+    /// </summary>
+    public static EmployeeSalarySetup? PayingSetupOn(Employee employee, DateOnly day) =>
+        EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, day)
+        ?? (WorkRules.TypeOn(employee, day) == EmployeeType.Staff ? employee.SalarySetups.MinBy(s => s.EffectiveFrom) : null);
+
     /// <summary>A Staff employee who has no setup on some day of the period: there is no pay to work out ("Chưa thiết lập lương").</summary>
     public static bool IsMissingSetup(Employee employee, DateOnly from, DateOnly to) =>
         ChangeDays(employee, from, to).Any(day => EmployeeSalarySetup.EffectiveOn(employee.SalarySetups, day) is null && WorkRules.TypeOn(employee, day) == EmployeeType.Staff);
